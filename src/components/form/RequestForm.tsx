@@ -12,7 +12,7 @@ import { getGoogleSheetConfig } from "../../config/googleSheetConfig"
 import FileUpload from "./FileUpload"
 import SquadRecommendation from "./SquadRecommendation"
 import GoogleSheetSettingsModal from "../common/GoogleSheetSettingsModal"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -32,9 +32,8 @@ import {
   Database, 
   Sparkles, 
   ArrowLeft, 
-  Edit3, 
   Info,
-  Check
+  Clock
 } from "lucide-react"
 
 interface RequestFormProps {
@@ -54,6 +53,7 @@ interface FormState {
   deadline_reason: string
   preferred_squad: string
   doc_link: string
+  leader_report_note: string
 }
 
 const INIT: FormState = {
@@ -69,6 +69,7 @@ const INIT: FormState = {
   deadline_reason: "",
   preferred_squad: "",
   doc_link: "",
+  leader_report_note: "",
 }
 
 type SubmitState = "idle" | "confirming" | "submitting" | "success"
@@ -82,7 +83,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
   const [requestId, setRequestId] = useState("")
   const [sheetLogResult, setSheetLogResult] = useState<{ success: boolean; message: string } | null>(null)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
-  const [selectedOutputs, setSelectedOutputs] = useState<string[]>([])
   
   // Dynamic selections from Google Sheet
   const [selections, setSelections] = useState<SelectionsData>(FALLBACK_SELECTIONS)
@@ -102,12 +102,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
 
   const rec = recommendSquad(form.product)
 
-  const toggleOutput = (opt: string) => {
-    setSelectedOutputs((prev) =>
-      prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
-    )
-  }
-
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {}
     if (!form.requester_email.trim()) {
@@ -115,8 +109,8 @@ export default function RequestForm({ squads }: RequestFormProps) {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.requester_email.trim())) {
       e.requester_email = "Email không đúng định dạng (VD: name@mbbank.com.vn)"
     }
+    if (!form.product) e.product = "Vui lòng chọn sản phẩm / nền tảng"
     if (!form.title.trim()) e.title = "Vui lòng nhập tiêu đề yêu cầu"
-    if (!form.product) e.product = "Vui lòng chọn sản phẩm"
     if (!form.request_type) e.request_type = "Vui lòng chọn loại yêu cầu"
     if (!form.description.trim()) e.description = "Vui lòng mô tả yêu cầu"
     if (!form.business_need.trim()) e.business_need = "Vui lòng điền bối cảnh kinh doanh"
@@ -138,7 +132,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
         const res = await submitRequest({
           ...form,
           preferred_squad: form.product,
-          expected_output: selectedOutputs,
         })
         setRequestId(res.requestId)
         setSheetLogResult(res.googleSheetResult)
@@ -181,7 +174,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
             onClick={() => {
               setForm(INIT)
               setFiles([])
-              setSelectedOutputs([])
               setSubmitState("idle")
               setErrors({})
               setSheetLogResult(null)
@@ -224,26 +216,21 @@ export default function RequestForm({ squads }: RequestFormProps) {
       </div>
 
       <div className="space-y-6">
-        {/* Group 1 — Thông tin người gửi & Sản phẩm */}
+        {/* Phần 1 — Thông tin người gửi & Sản phẩm */}
         <Card>
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">1</span>
-                Thông tin người gửi & Sản phẩm
-              </CardTitle>
-            </div>
-            <CardDescription>
-              Cung cấp email MB của bạn và phân hệ sản phẩm cần hỗ trợ thiết kế UX/UI.
-            </CardDescription>
+            <CardTitle className="text-sm uppercase tracking-wider text-slate-600 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">1</span>
+              Thông tin người gửi & Sản phẩm
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {/* Hàng 1: Email MB & Sản phẩm / Nền tảng */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <Field 
                 label="Email MB người yêu cầu" 
                 required 
                 error={errors.requester_email}
-                hint="Dùng để nhận thông báo và tra cứu tiến độ"
               >
                 <Input
                   type="email"
@@ -256,28 +243,9 @@ export default function RequestForm({ squads }: RequestFormProps) {
               </Field>
 
               <Field 
-                label="Tiêu đề yêu cầu" 
-                required 
-                error={errors.title}
-                hint="Tóm tắt ngắn gọn nhu cầu thiết kế"
-              >
-                <Input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => set("title")(e.target.value)}
-                  placeholder="VD: Thiết kế lại luồng Chuyển tiền quốc tế"
-                  startIcon={<FileText className="w-4 h-4" />}
-                  error={Boolean(errors.title)}
-                />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <Field 
                 label="Sản phẩm / Nền tảng" 
                 required 
                 error={errors.product}
-                hint="Phân hệ này đồng thời là UX Squad phụ trách (1:1)"
               >
                 <Select
                   value={form.product}
@@ -285,30 +253,10 @@ export default function RequestForm({ squads }: RequestFormProps) {
                   startIcon={<Layers className="w-4 h-4" />}
                   error={Boolean(errors.product)}
                 >
-                  <option value="">-- Chọn sản phẩm / Phân hệ --</option>
+                  <option value="">-- Chọn sản phẩm / Nền tảng --</option>
                   {selections.products.map((p) => (
                     <option key={p} value={p}>
                       {p}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field 
-                label="Loại yêu cầu" 
-                required 
-                error={errors.request_type}
-                hint="Định loại công việc UX cần thực hiện"
-              >
-                <Select
-                  value={form.request_type}
-                  onChange={(e) => set("request_type")(e.target.value)}
-                  error={Boolean(errors.request_type)}
-                >
-                  <option value="">-- Chọn loại yêu cầu --</option>
-                  {selections.request_types.map((rt) => (
-                    <option key={rt} value={rt}>
-                      {rt}
                     </option>
                   ))}
                 </Select>
@@ -326,26 +274,59 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 />
               </div>
             )}
+
+            {/* Hàng 2: Tiêu đề yêu cầu & Loại yêu cầu */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field 
+                label="Tiêu đề yêu cầu" 
+                required 
+                error={errors.title}
+              >
+                <Input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => set("title")(e.target.value)}
+                  placeholder="VD: Thiết kế lại luồng Chuyển tiền quốc tế"
+                  startIcon={<FileText className="w-4 h-4" />}
+                  error={Boolean(errors.title)}
+                />
+              </Field>
+
+              <Field 
+                label="Loại yêu cầu" 
+                required 
+                error={errors.request_type}
+              >
+                <Select
+                  value={form.request_type}
+                  onChange={(e) => set("request_type")(e.target.value)}
+                  error={Boolean(errors.request_type)}
+                >
+                  <option value="">-- Chọn loại yêu cầu --</option>
+                  {selections.request_types.map((rt) => (
+                    <option key={rt} value={rt}>
+                      {rt}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Group 2 — Chi tiết yêu cầu & Bối cảnh */}
+        {/* Phần 2 — Chi tiết yêu cầu & Bài toán trải nghiệm */}
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <CardTitle className="text-sm uppercase tracking-wider text-slate-600 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">2</span>
               Chi tiết yêu cầu & Bài toán trải nghiệm
             </CardTitle>
-            <CardDescription>
-              Mô tả rõ ràng vấn đề người dùng gặp phải và kỳ vọng kinh doanh để UX Team đưa ra giải pháp chuẩn xác nhất.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <Field 
               label="Mô tả yêu cầu" 
               required 
               error={errors.description}
-              hint="Chi tiết phạm vi công việc hoặc luồng trải nghiệm cần thực hiện"
             >
               <Textarea
                 rows={3}
@@ -361,7 +342,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 label="Bối cảnh kinh doanh & Mục tiêu" 
                 required 
                 error={errors.business_need}
-                hint="Tại sao cần làm tính năng này? Chỉ số đo lường là gì?"
               >
                 <Textarea
                   rows={3}
@@ -376,7 +356,6 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 label="Vấn đề người dùng gặp phải" 
                 required 
                 error={errors.user_problem}
-                hint="Khách hàng đang gặp khó khăn hay ma sát gì ở trải nghiệm hiện tại?"
               >
                 <Textarea
                   rows={3}
@@ -388,10 +367,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
               </Field>
             </div>
 
-            <Field 
-              label="Đối tượng người dùng mục tiêu" 
-              hint="Nhóm khách hàng chính sẽ sử dụng tính năng này (VD: Khách hàng Priority, Doanh nghiệp SME, GenZ...)"
-            >
+            <Field label="Đối tượng người dùng mục tiêu">
               <Input
                 type="text"
                 value={form.target_user}
@@ -402,52 +378,20 @@ export default function RequestForm({ squads }: RequestFormProps) {
           </CardContent>
         </Card>
 
-        {/* Group 3 — Output kỳ vọng & Thời hạn */}
+        {/* Phần 3 — Kế hoạch thời hạn & Báo cáo */}
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <CardTitle className="text-sm uppercase tracking-wider text-slate-600 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">3</span>
-              Output kỳ vọng & Kế hoạch thời hạn
+              Kế hoạch thời hạn & Báo cáo
             </CardTitle>
-            <CardDescription>
-              Lựa chọn sản phẩm bàn giao mong muốn từ UX Team và mốc thời gian release dự kiến.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2.5">
-                Output kỳ vọng từ UX Team
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {selections.expected_outputs.map((opt) => {
-                  const active = selectedOutputs.includes(opt)
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => toggleOutput(opt)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium text-left transition-all cursor-pointer ${
-                        active
-                          ? "border-navy bg-navy text-white shadow-xs"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${active ? "bg-teal border-teal text-navy font-bold" : "border-slate-300 bg-white"}`}>
-                        {active && <Check className="w-2.5 h-2.5" />}
-                      </div>
-                      <span className="truncate">{opt}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <Field 
                 label="Hạn release dự kiến" 
                 required 
                 error={errors.release_date}
-                hint="Ngày dự kiến đưa tính năng lên môi trường Production"
               >
                 <Input
                   type="date"
@@ -458,10 +402,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 />
               </Field>
 
-              <Field 
-                label="Lý do mốc thời hạn" 
-                hint="Căn cứ để UX Team sắp xếp thứ tự ưu tiên"
-              >
+              <Field label="Lý do mốc thời hạn">
                 <Select
                   value={form.deadline_reason}
                   onChange={(e) => set("deadline_reason")(e.target.value)}
@@ -475,14 +416,25 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 </Select>
               </Field>
             </div>
+
+            {/* Ô Note dự kiến báo cáo lãnh đạo */}
+            <Field label="Dự kiến báo cáo lãnh đạo">
+              <Input
+                type="text"
+                value={form.leader_report_note}
+                onChange={(e) => set("leader_report_note")(e.target.value)}
+                placeholder="VD: Báo cáo Khối ngày 25/08 hoặc mốc dự kiến trình lãnh đạo..."
+                startIcon={<Clock className="w-4 h-4 text-navy" />}
+              />
+            </Field>
           </CardContent>
         </Card>
 
-        {/* Group 4 — Tài liệu đính kèm */}
+        {/* Phần 4 — Tài liệu đính kèm */}
         <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-600 flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">4</span>
                 Tài liệu đính kèm & Tham khảo
               </CardTitle>
@@ -512,7 +464,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
           </CardHeader>
           <CardContent>
             {attachMode === "link" ? (
-              <Field hint="Dán link PRD, BRD, Confluence, Jira ticket hoặc tài liệu thiết kế tham khảo">
+              <Field>
                 <Input
                   type="url"
                   value={form.doc_link}
@@ -543,12 +495,12 @@ export default function RequestForm({ squads }: RequestFormProps) {
                   <p className="text-sm font-bold text-slate-900 truncate mt-0.5">{form.requester_email}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Tiêu đề yêu cầu</p>
-                  <p className="text-sm font-bold text-slate-900 truncate mt-0.5">{form.title}</p>
+                  <p className="text-xs text-slate-400">Sản phẩm / Nền tảng</p>
+                  <p className="text-sm font-bold text-navy truncate mt-0.5">{form.product}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Squad phụ trách</p>
-                  <p className="text-sm font-bold text-navy truncate mt-0.5">{form.product}</p>
+                  <p className="text-xs text-slate-400">Tiêu đề yêu cầu</p>
+                  <p className="text-sm font-bold text-slate-900 truncate mt-0.5">{form.title}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Hạn release</p>
@@ -556,11 +508,17 @@ export default function RequestForm({ squads }: RequestFormProps) {
                     {form.release_date ? new Date(form.release_date).toLocaleDateString("vi-VN") : "—"}
                   </p>
                 </div>
+                {form.leader_report_note && (
+                  <div className="sm:col-span-2 lg:col-span-4 pt-2 border-t border-slate-100">
+                    <p className="text-xs text-slate-400">Dự kiến báo cáo lãnh đạo</p>
+                    <p className="text-sm font-medium text-slate-800 mt-0.5">{form.leader_report_note}</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <Info className="w-3.5 h-3.5 text-navy flex-shrink-0" />
-                <span>Yêu cầu sẽ được tự động cấp mã chuẩn <strong>UXMB-xxx</strong> và log JSON lên Google Sheet.</span>
+                <span>Yêu cầu sẽ được tự động cấp mã chuẩn <strong>UXMB-xxx</strong> và lưu log JSON lên Google Sheet.</span>
               </div>
             </CardContent>
           </Card>

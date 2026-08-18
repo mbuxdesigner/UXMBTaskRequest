@@ -202,12 +202,12 @@ function parseJsonToDetailSheet() {
     "Squad phụ trách",
     "Hạn release dự kiến",
     "Lý do thời hạn",
+    "Dự kiến báo cáo lãnh đạo",
     "Link tài liệu",
     "Mô tả yêu cầu",
     "Bối cảnh kinh doanh",
     "Vấn đề người dùng",
-    "Đối tượng mục tiêu",
-    "Output kỳ vọng"
+    "Đối tượng mục tiêu"
   ];
 
   detailSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -246,12 +246,12 @@ function parseJsonToDetailSheet() {
       item.preferred_squad || item.product || "",
       item.release_date || item.expected_deadline || "",
       item.deadline_reason || "",
+      item.leader_report_note || "",
       item.doc_link || "",
       item.description || "",
       item.business_need || "",
       item.user_problem || "",
-      item.target_user || "",
-      Array.isArray(item.expected_output) ? item.expected_output.join(", ") : (item.expected_output || "")
+      item.target_user || ""
     ]);
   }
 
