@@ -1,7 +1,13 @@
 {
-  "description": "Streamlines deployment processes by enabling users to efficiently manage and launch applications, enhancing productivity and reducing errors.",
+  "title": "UX Request Portal - MB Bank UX Team",
+  "description": "Cổng tiếp nhận, quản lý và theo dõi tiến độ các yêu cầu thiết kế trải nghiệm người dùng (UX/UI) cho các sản phẩm số MB Bank.",
+  "language": "vi",
   "robots": {
-    "index": false
+    "index": true
+  },
+  "openGraph": {
+    "title": "UX Request Portal - MB Bank UX Team",
+    "description": "Cổng tiếp nhận, quản lý và theo dõi tiến độ các yêu cầu thiết kế trải nghiệm người dùng (UX/UI) cho các sản phẩm số MB Bank."
   },
   "accessibility": {
     "addBypassLinks": false,
