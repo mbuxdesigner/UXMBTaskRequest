@@ -1,0 +1,10 @@
+{
+  "description": "Streamlines deployment processes by enabling users to efficiently manage and launch applications, enhancing productivity and reducing errors.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

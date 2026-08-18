@@ -1,0 +1,458 @@
+{
+  "$schema": "https://tr.designtokens.org/format/",
+  "name": "UX Request Portal Design Tokens",
+  "version": "1.0.0",
+  "description": "Functional Design Tokens for Color (text, icon, surface, stroke, background) and Typography (header, title, paragraph)",
+  "color": {
+    "text": {
+      "primary": {
+        "value": "#0F172A",
+        "type": "color",
+        "description": "Màu chữ chính cho tiêu đề và nội dung trọng tâm (Slate 900)"
+      },
+      "secondary": {
+        "value": "#475569",
+        "type": "color",
+        "description": "Màu chữ phụ, mô tả ngắn, nhãn trường dữ liệu (Slate 600)"
+      },
+      "tertiary": {
+        "value": "#64748B",
+        "type": "color",
+        "description": "Màu chữ hỗ trợ, placeholder, metadata (Slate 500)"
+      },
+      "muted": {
+        "value": "#94A3B8",
+        "type": "color",
+        "description": "Màu chữ mờ, disabled text, caption phụ (Slate 400)"
+      },
+      "inverse": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Màu chữ trên nền tối/brand (Trắng)"
+      },
+      "brand": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Màu chữ thương hiệu chính (Navy Bank Blue)"
+      },
+      "brand-accent": {
+        "value": "#0D9B97",
+        "type": "color",
+        "description": "Màu chữ điểm nhấn thương hiệu (Teal)"
+      },
+      "link": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Màu liên kết mặc định"
+      },
+      "link-hover": {
+        "value": "#122749",
+        "type": "color",
+        "description": "Màu liên kết khi di chuột"
+      },
+      "status": {
+        "info": {
+          "value": "#2563EB",
+          "type": "color",
+          "description": "Màu chữ trạng thái thông tin (Blue 600)"
+        },
+        "warning": {
+          "value": "#D97706",
+          "type": "color",
+          "description": "Màu chữ trạng thái cảnh báo / phân loại (Amber 600)"
+        },
+        "success": {
+          "value": "#059669",
+          "type": "color",
+          "description": "Màu chữ trạng thái thành công / hoàn thành (Emerald 600)"
+        },
+        "error": {
+          "value": "#DC2626",
+          "type": "color",
+          "description": "Màu chữ trạng thái lỗi / bắt buộc (Red 600)"
+        }
+      }
+    },
+    "icon": {
+      "primary": {
+        "value": "#0F172A",
+        "type": "color",
+        "description": "Màu icon chính (Slate 900)"
+      },
+      "secondary": {
+        "value": "#475569",
+        "type": "color",
+        "description": "Màu icon phụ (Slate 600)"
+      },
+      "tertiary": {
+        "value": "#64748B",
+        "type": "color",
+        "description": "Màu icon hỗ trợ trong thanh điều hướng / bộ lọc (Slate 500)"
+      },
+      "muted": {
+        "value": "#94A3B8",
+        "type": "color",
+        "description": "Màu icon mờ, trạng thái inactive, placeholder (Slate 400)"
+      },
+      "inverse": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Màu icon trên nền tối / active button (Trắng)"
+      },
+      "brand": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Màu icon thương hiệu chính (Navy)"
+      },
+      "brand-accent": {
+        "value": "#0D9B97",
+        "type": "color",
+        "description": "Màu icon điểm nhấn (Teal)"
+      },
+      "status": {
+        "info": {
+          "value": "#2563EB",
+          "type": "color",
+          "description": "Icon trạng thái thông tin (Blue 600)"
+        },
+        "warning": {
+          "value": "#D97706",
+          "type": "color",
+          "description": "Icon trạng thái cảnh báo / chờ (Amber 600)"
+        },
+        "success": {
+          "value": "#059669",
+          "type": "color",
+          "description": "Icon trạng thái hoàn thành (Emerald 600)"
+        },
+        "error": {
+          "value": "#DC2626",
+          "type": "color",
+          "description": "Icon trạng thái báo lỗi / nguy hiểm (Red 600)"
+        }
+      }
+    },
+    "surface": {
+      "default": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Nền card nội dung, form container, modal (Trắng)"
+      },
+      "subtle": {
+        "value": "#F8FAFC",
+        "type": "color",
+        "description": "Nền thứ cấp cho field input, stat header (Slate 50)"
+      },
+      "muted": {
+        "value": "#F1F5F9",
+        "type": "color",
+        "description": "Nền tag chip, pill filter, button phụ (Slate 100)"
+      },
+      "elevated": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Nền dropdown, modal popup, popover"
+      },
+      "hover": {
+        "value": "#F8FAFC",
+        "type": "color",
+        "description": "Nền khi rê chuột vào item list / row (Slate 50)"
+      },
+      "active": {
+        "value": "#F1F5F9",
+        "type": "color",
+        "description": "Nền khi nhấn chọn item (Slate 100)"
+      },
+      "brand": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Nền nút bấm chính, active navigation, logo badge (Navy)"
+      },
+      "brand-hover": {
+        "value": "#122749",
+        "type": "color",
+        "description": "Nền nút bấm chính khi hover (Navy Dark)"
+      },
+      "brand-subtle": {
+        "value": "#EEF2FA",
+        "type": "color",
+        "description": "Nền nhẹ nhận diện thương hiệu (Navy 50)"
+      },
+      "brand-accent": {
+        "value": "#0D9B97",
+        "type": "color",
+        "description": "Nền nút phụ / accent nổi bật (Teal)"
+      },
+      "brand-accent-subtle": {
+        "value": "#E6F7F7",
+        "type": "color",
+        "description": "Nền nhẹ nhận diện accent (Teal 50)"
+      },
+      "status-subtle": {
+        "info": {
+          "value": "#EFF6FF",
+          "type": "color",
+          "description": "Nền badge / alert thông tin (Blue 50)"
+        },
+        "warning": {
+          "value": "#FFFBEB",
+          "type": "color",
+          "description": "Nền badge / alert cảnh báo (Amber 50)"
+        },
+        "success": {
+          "value": "#ECFDF5",
+          "type": "color",
+          "description": "Nền badge / alert thành công (Emerald 50)"
+        },
+        "error": {
+          "value": "#FEF2F2",
+          "type": "color",
+          "description": "Nền badge / alert lỗi (Red 50)"
+        }
+      }
+    },
+    "stroke": {
+      "default": {
+        "value": "#E2E8F0",
+        "type": "color",
+        "description": "Đường viền card, bảng, input chuẩn (Slate 200)"
+      },
+      "subtle": {
+        "value": "#F1F5F9",
+        "type": "color",
+        "description": "Đường kẻ phân cách phân đoạn nhẹ (Slate 100)"
+      },
+      "strong": {
+        "value": "#CBD5E1",
+        "type": "color",
+        "description": "Đường viền nhấn, thanh cuộn scrollbar (Slate 300)"
+      },
+      "brand": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Đường viền active/brand (Navy)"
+      },
+      "focus": {
+        "value": "#1B3A6B",
+        "type": "color",
+        "description": "Đường viền khi focus trường dữ liệu"
+      },
+      "status": {
+        "info": {
+          "value": "#BFDBFE",
+          "type": "color",
+          "description": "Đường viền trạng thái thông tin (Blue 200)"
+        },
+        "warning": {
+          "value": "#FDE68A",
+          "type": "color",
+          "description": "Đường viền trạng thái cảnh báo (Amber 200)"
+        },
+        "success": {
+          "value": "#A7F3D0",
+          "type": "color",
+          "description": "Đường viền trạng thái thành công (Emerald 200)"
+        },
+        "error": {
+          "value": "#FECACA",
+          "type": "color",
+          "description": "Đường viền trạng thái lỗi (Red 200)"
+        }
+      }
+    },
+    "background": {
+      "app": {
+        "value": "#F4F6FB",
+        "type": "color",
+        "description": "Màu nền nền tảng toàn ứng dụng (Canvas Base)"
+      },
+      "sidebar": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Màu nền thanh điều hướng Sidebar"
+      },
+      "header": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Màu nền thanh Header trên Mobile/Desktop"
+      },
+      "overlay": {
+        "value": "rgba(15, 23, 42, 0.4)",
+        "type": "color",
+        "description": "Màu nền lớp phủ mờ Backdrop Modal & Drawer"
+      },
+      "canvas": {
+        "value": "#F4F6FB",
+        "type": "color",
+        "description": "Màu nền khung làm việc chính"
+      }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": {
+        "value": "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        "type": "fontFamily",
+        "description": "Font chữ mặc định cho toàn bộ giao diện"
+      },
+      "mono": {
+        "value": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        "type": "fontFamily",
+        "description": "Font chữ hiển thị mã Request ID, code, dữ liệu kỹ thuật"
+      }
+    },
+    "header": {
+      "h1": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1.75rem",
+        "fontSizePx": "28px",
+        "lineHeight": "2.25rem",
+        "fontWeight": 700,
+        "letterSpacing": "-0.025em",
+        "description": "Tiêu đề trang chính (VD: 'Tổng quan hệ thống', 'Tạo yêu cầu', 'Tra cứu yêu cầu')"
+      },
+      "h2": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1.375rem",
+        "fontSizePx": "22px",
+        "lineHeight": "1.75rem",
+        "fontWeight": 700,
+        "letterSpacing": "-0.02em",
+        "description": "Tiêu đề khối lớn / Section Header (VD: 'Tình trạng UX Squad', 'Chi tiết yêu cầu')"
+      },
+      "h3": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1.125rem",
+        "fontSizePx": "18px",
+        "lineHeight": "1.5rem",
+        "fontWeight": 600,
+        "letterSpacing": "-0.015em",
+        "description": "Tiêu đề cụm tính năng / Modal Header / Step Header"
+      },
+      "h4": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1rem",
+        "fontSizePx": "16px",
+        "lineHeight": "1.375rem",
+        "fontWeight": 600,
+        "letterSpacing": "-0.01em",
+        "description": "Tiêu đề nhóm chức năng con / Card Title lớn"
+      }
+    },
+    "title": {
+      "large": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1.125rem",
+        "fontSizePx": "18px",
+        "lineHeight": "1.5rem",
+        "fontWeight": 700,
+        "letterSpacing": "-0.01em",
+        "description": "Tiêu đề thẻ chính, tiêu đề tên task/request"
+      },
+      "medium": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.9375rem",
+        "fontSizePx": "15px",
+        "lineHeight": "1.375rem",
+        "fontWeight": 600,
+        "letterSpacing": "0em",
+        "description": "Tiêu đề mục con, tên trường quan trọng"
+      },
+      "small": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.875rem",
+        "fontSizePx": "14px",
+        "lineHeight": "1.25rem",
+        "fontWeight": 600,
+        "letterSpacing": "0em",
+        "description": "Tiêu đề thẻ nhỏ, tên nút nhấn quan trọng"
+      },
+      "card-title": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.9375rem",
+        "fontSizePx": "15px",
+        "lineHeight": "1.375rem",
+        "fontWeight": 600,
+        "letterSpacing": "0em",
+        "description": "Tiêu đề các Request Card trong danh sách"
+      },
+      "section-kicker": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.75rem",
+        "fontSizePx": "12px",
+        "lineHeight": "1rem",
+        "fontWeight": 600,
+        "letterSpacing": "0.08em",
+        "textTransform": "uppercase",
+        "description": "Tiêu đề mục nhỏ dạng nhãn viết hoa (VD: 'TỔNG QUAN YÊU CẦU', 'KHỐI LƯỢNG UX SQUAD')"
+      },
+      "badge": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.75rem",
+        "fontSizePx": "12px",
+        "lineHeight": "1rem",
+        "fontWeight": 500,
+        "letterSpacing": "0em",
+        "description": "Nhãn trạng thái (Status Badge, Tag, Chip)"
+      }
+    },
+    "paragraph": {
+      "lead": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "1rem",
+        "fontSizePx": "16px",
+        "lineHeight": "1.625rem",
+        "fontWeight": 400,
+        "description": "Đoạn văn mở đầu, đoạn mô tả nổi bật"
+      },
+      "body-large": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.9375rem",
+        "fontSizePx": "15px",
+        "lineHeight": "1.5rem",
+        "fontWeight": 400,
+        "description": "Văn bản nội dung lớn, mô tả dài"
+      },
+      "body-medium": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.875rem",
+        "fontSizePx": "14px",
+        "lineHeight": "1.375rem",
+        "fontWeight": 400,
+        "description": "Văn bản nội dung tiêu chuẩn toàn hệ thống (Body Text)"
+      },
+      "body-small": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.8125rem",
+        "fontSizePx": "13px",
+        "lineHeight": "1.25rem",
+        "fontWeight": 400,
+        "description": "Văn bản phụ, mô tả dưới nhãn, hint text"
+      },
+      "caption": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.75rem",
+        "fontSizePx": "12px",
+        "lineHeight": "1rem",
+        "fontWeight": 400,
+        "description": "Chú thích, mốc thời gian, ghi chú ngày tháng"
+      },
+      "tiny": {
+        "fontFamily": "{typography.fontFamily.sans.value}",
+        "fontSize": "0.625rem",
+        "fontSizePx": "10px",
+        "lineHeight": "0.875rem",
+        "fontWeight": 400,
+        "description": "Văn bản phụ nhỏ ở chân trang / version info"
+      },
+      "code": {
+        "fontFamily": "{typography.fontFamily.mono.value}",
+        "fontSize": "0.75rem",
+        "fontSizePx": "12px",
+        "lineHeight": "1rem",
+        "fontWeight": 500,
+        "description": "Văn bản hiển thị mã Request ID, hash hoặc code snippet"
+      }
+    }
+  }
+}

@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+:root {
+  /* ==========================================================================
+     1. TYPOGRAPHY TOKENS (Font Family)
+     ========================================================================== */
+  --font-family-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* ==========================================================================
+     2. COLOR TOKENS: TEXT
+     ========================================================================== */
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-inverse: #FFFFFF;
+  --color-text-brand: #1B3A6B;
+  --color-text-brand-accent: #0D9B97;
+  --color-text-link: #1B3A6B;
+  --color-text-link-hover: #122749;
+
+  --color-text-status-info: #2563EB;
+  --color-text-status-warning: #D97706;
+  --color-text-status-success: #059669;
+  --color-text-status-error: #DC2626;
+
+  /* ==========================================================================
+     3. COLOR TOKENS: ICON
+     ========================================================================== */
+  --color-icon-primary: #0F172A;
+  --color-icon-secondary: #475569;
+  --color-icon-tertiary: #64748B;
+  --color-icon-muted: #94A3B8;
+  --color-icon-inverse: #FFFFFF;
+  --color-icon-brand: #1B3A6B;
+  --color-icon-brand-accent: #0D9B97;
+
+  --color-icon-status-info: #2563EB;
+  --color-icon-status-warning: #D97706;
+  --color-icon-status-success: #059669;
+  --color-icon-status-error: #DC2626;
+
+  /* ==========================================================================
+     4. COLOR TOKENS: SURFACE
+     ========================================================================== */
+  --color-surface-default: #FFFFFF;
+  --color-surface-subtle: #F8FAFC;
+  --color-surface-muted: #F1F5F9;
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-hover: #F8FAFC;
+  --color-surface-active: #F1F5F9;
+
+  --color-surface-brand: #1B3A6B;
+  --color-surface-brand-hover: #122749;
+  --color-surface-brand-subtle: #EEF2FA;
+  --color-surface-brand-accent: #0D9B97;
+  --color-surface-brand-accent-subtle: #E6F7F7;
+
+  --color-surface-status-info-subtle: #EFF6FF;
+  --color-surface-status-warning-subtle: #FFFBEB;
+  --color-surface-status-success-subtle: #ECFDF5;
+  --color-surface-status-error-subtle: #FEF2F2;
+
+  /* ==========================================================================
+     5. COLOR TOKENS: STROKE (Border)
+     ========================================================================== */
+  --color-stroke-default: #E2E8F0;
+  --color-stroke-subtle: #F1F5F9;
+  --color-stroke-strong: #CBD5E1;
+  --color-stroke-brand: #1B3A6B;
+  --color-stroke-focus: #1B3A6B;
+
+  --color-stroke-status-info: #BFDBFE;
+  --color-stroke-status-warning: #FDE68A;
+  --color-stroke-status-success: #A7F3D0;
+  --color-stroke-status-error: #FECACA;
+
+  /* ==========================================================================
+     6. COLOR TOKENS: BACKGROUND
+     ========================================================================== */
+  --color-bg-app: #F4F6FB;
+  --color-bg-sidebar: #FFFFFF;
+  --color-bg-header: #FFFFFF;
+  --color-bg-overlay: rgba(15, 23, 42, 0.4);
+  --color-bg-canvas: #F4F6FB;
+}
+
+@theme {
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+
+  --color-navy: #1B3A6B;
+  --color-navy-dark: #122749;
+  --color-navy-50: #EEF2FA;
+  --color-navy-100: #D4DEED;
+  --color-teal: #0D9B97;
+  --color-teal-50: #E6F7F7;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--color-stroke-strong) transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
