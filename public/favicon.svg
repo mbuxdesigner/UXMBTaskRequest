@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <rect width="100" height="100" rx="22" fill="#1B3A6B"/>
+  <!-- MB Style Star/Geometric motif -->
+  <path d="M50 20L58 38L78 40L63 54L67 74L50 64L33 74L37 54L22 40L42 38L50 20Z" fill="#0D9B97"/>
+  <rect x="25" y="25" width="22" height="22" rx="5" fill="#FFFFFF"/>
+  <rect x="53" y="25" width="22" height="22" rx="5" fill="#FFFFFF" fill-opacity="0.6"/>
+  <rect x="25" y="53" width="22" height="22" rx="5" fill="#FFFFFF" fill-opacity="0.6"/>
+  <rect x="53" y="53" width="22" height="22" rx="5" fill="#0D9B97"/>
+</svg>
