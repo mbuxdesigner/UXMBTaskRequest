@@ -12,6 +12,30 @@ import { getGoogleSheetConfig } from "../../config/googleSheetConfig"
 import FileUpload from "./FileUpload"
 import SquadRecommendation from "./SquadRecommendation"
 import GoogleSheetSettingsModal from "../common/GoogleSheetSettingsModal"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Field } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { 
+  Mail, 
+  FileText, 
+  Layers, 
+  Calendar, 
+  Link as LinkIcon, 
+  Paperclip, 
+  CheckCircle2, 
+  Send, 
+  Database, 
+  Sparkles, 
+  ArrowLeft, 
+  Edit3, 
+  Info,
+  Check
+} from "lucide-react"
 
 interface RequestFormProps {
   squads: Squad[]
@@ -50,32 +74,6 @@ const INIT: FormState = {
 type SubmitState = "idle" | "confirming" | "submitting" | "success"
 type AttachMode = "link" | "file"
 
-function Field({
-  label,
-  required,
-  children,
-  hint,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-  hint?: string
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-slate-700">
-        {label}
-        {required && <span className="text-red-400 ml-0.5">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-xs text-slate-400">{hint}</p>}
-    </div>
-  )
-}
-
-const inputCls =
-  "w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy transition-colors"
-
 export default function RequestForm({ squads }: RequestFormProps) {
   const [form, setForm] = useState<FormState>(INIT)
   const [files, setFiles] = useState<File[]>([])
@@ -84,6 +82,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
   const [requestId, setRequestId] = useState("")
   const [sheetLogResult, setSheetLogResult] = useState<{ success: boolean; message: string } | null>(null)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
+  const [selectedOutputs, setSelectedOutputs] = useState<string[]>([])
   
   // Dynamic selections from Google Sheet
   const [selections, setSelections] = useState<SelectionsData>(FALLBACK_SELECTIONS)
@@ -102,6 +101,12 @@ export default function RequestForm({ squads }: RequestFormProps) {
     setForm((f) => ({ ...f, [field]: val }))
 
   const rec = recommendSquad(form.product)
+
+  const toggleOutput = (opt: string) => {
+    setSelectedOutputs((prev) =>
+      prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
+    )
+  }
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {}
@@ -133,6 +138,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
         const res = await submitRequest({
           ...form,
           preferred_squad: form.product,
+          expected_output: selectedOutputs,
         })
         setRequestId(res.requestId)
         setSheetLogResult(res.googleSheetResult)
@@ -145,387 +151,458 @@ export default function RequestForm({ squads }: RequestFormProps) {
 
   if (submitState === "success") {
     return (
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center max-w-lg mx-auto">
-        <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M5 13L9 17L19 7"
-              stroke="#10B981"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">
-          Yêu cầu đã được gửi
-        </p>
-        <h3 className="font-bold text-3xl text-slate-900 mb-1">{requestId}</h3>
-        <p className="text-sm text-slate-500 mt-3 mb-2">
-          Yêu cầu của bạn đã được UX team tiếp nhận. Bạn có thể dùng mã trên hoặc email{" "}
-          <strong className="text-slate-800">{form.requester_email}</strong> để tra cứu tiến độ.
-        </p>
+      <Card className="max-w-xl mx-auto text-center p-8 shadow-lg border-slate-200">
+        <CardContent className="p-0 space-y-6">
+          <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs border border-emerald-100">
+            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+          </div>
+          <div>
+            <Badge variant="success" size="default" className="mb-2">
+              Yêu cầu đã tiếp nhận thành công
+            </Badge>
+            <p className="text-xs text-slate-400 uppercase tracking-widest mt-2">Mã Request ID chính thức</p>
+            <h2 className="text-3xl font-extrabold text-slate-900 mt-1 tracking-tight">{requestId}</h2>
+          </div>
 
-        {/* Google Sheet Log status alert */}
-        <div className="my-5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-left text-xs">
-          <p className="font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-            Trạng thái ghi log Google Sheet:
+          <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
+            Yêu cầu của bạn đã được chuyển tới UX Squad phụ trách. Bạn có thể dùng mã <strong className="text-slate-800">{requestId}</strong> hoặc email <strong className="text-slate-800">{form.requester_email}</strong> để theo dõi tiến độ thời gian thực.
           </p>
-          <p className="text-slate-600">
-            {sheetLogResult?.message || "Đã lưu bản ghi JSON vào hệ thống."}
-          </p>
-        </div>
 
-        <button
-          onClick={() => {
-            setForm(INIT)
-            setFiles([])
-            setSubmitState("idle")
-            setErrors({})
-            setSheetLogResult(null)
-          }}
-          className="px-5 py-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
-        >
-          Gửi yêu cầu khác
-        </button>
-      </div>
+          <Alert variant="navy" icon={<Database className="w-4 h-4 text-navy" />}>
+            <AlertTitle>Đồng bộ Google Sheet</AlertTitle>
+            <AlertDescription>
+              {sheetLogResult?.message || "Đã lưu bản ghi RAW JSON vào Google Sheet thành công."}
+            </AlertDescription>
+          </Alert>
+
+          <Button
+            variant="default"
+            size="lg"
+            onClick={() => {
+              setForm(INIT)
+              setFiles([])
+              setSelectedOutputs([])
+              setSubmitState("idle")
+              setErrors({})
+              setSheetLogResult(null)
+            }}
+            className="w-full sm:w-auto"
+          >
+            <Sparkles className="w-4 h-4 text-teal" />
+            Tạo yêu cầu UX khác
+          </Button>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <section>
+    <section className="space-y-6">
       {/* Header bar with Google Sheet Sync button */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Gửi yêu cầu UX</h2>
-          <p className="text-sm text-slate-500 mt-1.5">
-            Mô tả nhu cầu của bạn. UX team sẽ xem xét và phản hồi trong thời gian sớm nhất.
+          <div className="flex items-center gap-2">
+            <Badge variant="navy" size="sm">Biểu mẫu</Badge>
+            <span className="text-xs text-slate-400">Tiếp nhận yêu cầu UX</span>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mt-1">Gửi yêu cầu UX</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Mô tả chi tiết nhu cầu và bài toán trải nghiệm. UX team sẽ tiếp nhận và phản hồi sớm nhất.
           </p>
         </div>
 
         {/* Google Sheet Manager Button */}
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setIsSettingsOpen(true)}
-          className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs self-start sm:self-auto"
+          className="self-start sm:self-auto gap-2"
         >
-          <span className={`w-2 h-2 rounded-full ${sheetConfigured ? "bg-emerald-500" : "bg-amber-400"}`} />
-          <span>Quản lý Selections từ Google Sheet</span>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-slate-400">
-            <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          </svg>
-        </button>
+          <span className={`w-2 h-2 rounded-full ${sheetConfigured ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`} />
+          <span>Google Sheet API</span>
+        </Button>
       </div>
 
       <div className="space-y-6">
-        {/* Group 1 — Thông tin yêu cầu */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-            01 · Thông tin người gửi & Yêu cầu
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Email MB người yêu cầu" required hint="Email MB để liên hệ và tra cứu tiến độ">
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 3.5H14C14.55 3.5 15 3.95 15 4.5V11.5C15 12.05 14.55 12.5 14 12.5H2C1.45 12.5 1 12.05 1 11.5V4.5C1 3.95 1.45 3.5 2 3.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14.5 4L8 8.5L1.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <input
+        {/* Group 1 — Thông tin người gửi & Sản phẩm */}
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">1</span>
+                Thông tin người gửi & Sản phẩm
+              </CardTitle>
+            </div>
+            <CardDescription>
+              Cung cấp email MB của bạn và phân hệ sản phẩm cần hỗ trợ thiết kế UX/UI.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field 
+                label="Email MB người yêu cầu" 
+                required 
+                error={errors.requester_email}
+                hint="Dùng để nhận thông báo và tra cứu tiến độ"
+              >
+                <Input
                   type="email"
                   value={form.requester_email}
                   onChange={(e) => set("requester_email")(e.target.value)}
-                  placeholder="VD: hoanten@mbbank.com.vn"
-                  className={inputCls + " pl-8.5"}
+                  placeholder="name@mbbank.com.vn"
+                  startIcon={<Mail className="w-4 h-4" />}
+                  error={Boolean(errors.requester_email)}
+                />
+              </Field>
+
+              <Field 
+                label="Tiêu đề yêu cầu" 
+                required 
+                error={errors.title}
+                hint="Tóm tắt ngắn gọn nhu cầu thiết kế"
+              >
+                <Input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => set("title")(e.target.value)}
+                  placeholder="VD: Thiết kế lại luồng Chuyển tiền quốc tế"
+                  startIcon={<FileText className="w-4 h-4" />}
+                  error={Boolean(errors.title)}
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field 
+                label="Sản phẩm / Nền tảng" 
+                required 
+                error={errors.product}
+                hint="Phân hệ này đồng thời là UX Squad phụ trách (1:1)"
+              >
+                <Select
+                  value={form.product}
+                  onChange={(e) => set("product")(e.target.value)}
+                  startIcon={<Layers className="w-4 h-4" />}
+                  error={Boolean(errors.product)}
+                >
+                  <option value="">-- Chọn sản phẩm / Phân hệ --</option>
+                  {selections.products.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field 
+                label="Loại yêu cầu" 
+                required 
+                error={errors.request_type}
+                hint="Định loại công việc UX cần thực hiện"
+              >
+                <Select
+                  value={form.request_type}
+                  onChange={(e) => set("request_type")(e.target.value)}
+                  error={Boolean(errors.request_type)}
+                >
+                  <option value="">-- Chọn loại yêu cầu --</option>
+                  {selections.request_types.map((rt) => (
+                    <option key={rt} value={rt}>
+                      {rt}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+
+            {/* Smart Squad Recommendation Card */}
+            {form.product && (
+              <div className="pt-1">
+                <SquadRecommendation
+                  recommendedSquad={rec}
+                  squads={squads}
+                  preferredSquad={form.product}
+                  onPreferredChange={() => {}}
                 />
               </div>
-              {errors.requester_email && (
-                <p className="text-xs text-red-500 mt-1">{errors.requester_email}</p>
-              )}
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Group 2 — Chi tiết yêu cầu & Bối cảnh */}
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">2</span>
+              Chi tiết yêu cầu & Bài toán trải nghiệm
+            </CardTitle>
+            <CardDescription>
+              Mô tả rõ ràng vấn đề người dùng gặp phải và kỳ vọng kinh doanh để UX Team đưa ra giải pháp chuẩn xác nhất.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <Field 
+              label="Mô tả yêu cầu" 
+              required 
+              error={errors.description}
+              hint="Chi tiết phạm vi công việc hoặc luồng trải nghiệm cần thực hiện"
+            >
+              <Textarea
+                rows={3}
+                value={form.description}
+                onChange={(e) => set("description")(e.target.value)}
+                placeholder="Mô tả cụ thể màn hình, hành trình hoặc tính năng cần thiết kế..."
+                error={Boolean(errors.description)}
+              />
             </Field>
 
-            <Field label="Tiêu đề yêu cầu" required>
-              <input
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field 
+                label="Bối cảnh kinh doanh & Mục tiêu" 
+                required 
+                error={errors.business_need}
+                hint="Tại sao cần làm tính năng này? Chỉ số đo lường là gì?"
+              >
+                <Textarea
+                  rows={3}
+                  value={form.business_need}
+                  onChange={(e) => set("business_need")(e.target.value)}
+                  placeholder="VD: Tăng tỷ lệ hoàn thành giao dịch thêm 20%, giảm tỷ lệ drop-off..."
+                  error={Boolean(errors.business_need)}
+                />
+              </Field>
+
+              <Field 
+                label="Vấn đề người dùng gặp phải" 
+                required 
+                error={errors.user_problem}
+                hint="Khách hàng đang gặp khó khăn hay ma sát gì ở trải nghiệm hiện tại?"
+              >
+                <Textarea
+                  rows={3}
+                  value={form.user_problem}
+                  onChange={(e) => set("user_problem")(e.target.value)}
+                  placeholder="VD: Người dùng không hiểu cách nhập SWIFT code và biểu phí hiển thị không rõ..."
+                  error={Boolean(errors.user_problem)}
+                />
+              </Field>
+            </div>
+
+            <Field 
+              label="Đối tượng người dùng mục tiêu" 
+              hint="Nhóm khách hàng chính sẽ sử dụng tính năng này (VD: Khách hàng Priority, Doanh nghiệp SME, GenZ...)"
+            >
+              <Input
                 type="text"
-                value={form.title}
-                onChange={(e) => set("title")(e.target.value)}
-                placeholder="VD: Thiết kế lại màn hình chuyển tiền quốc tế"
-                className={inputCls}
+                value={form.target_user}
+                onChange={(e) => set("target_user")(e.target.value)}
+                placeholder="VD: Toàn bộ khách hàng cá nhân sử dụng App MBBank"
               />
-              {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
             </Field>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Nền tảng / Sản phẩm" required hint="Dữ liệu đồng bộ từ Google Sheet">
-              <select
-                value={form.product}
-                onChange={(e) => set("product")(e.target.value)}
-                className={inputCls}
+        {/* Group 3 — Output kỳ vọng & Thời hạn */}
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">3</span>
+              Output kỳ vọng & Kế hoạch thời hạn
+            </CardTitle>
+            <CardDescription>
+              Lựa chọn sản phẩm bàn giao mong muốn từ UX Team và mốc thời gian release dự kiến.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2.5">
+                Output kỳ vọng từ UX Team
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {selections.expected_outputs.map((opt) => {
+                  const active = selectedOutputs.includes(opt)
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => toggleOutput(opt)}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium text-left transition-all cursor-pointer ${
+                        active
+                          ? "border-navy bg-navy text-white shadow-xs"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${active ? "bg-teal border-teal text-navy font-bold" : "border-slate-300 bg-white"}`}>
+                        {active && <Check className="w-2.5 h-2.5" />}
+                      </div>
+                      <span className="truncate">{opt}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
+              <Field 
+                label="Hạn release dự kiến" 
+                required 
+                error={errors.release_date}
+                hint="Ngày dự kiến đưa tính năng lên môi trường Production"
               >
-                <option value="">Chọn nền tảng…</option>
-                {selections.products.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              {errors.product && <p className="text-xs text-red-500 mt-1">{errors.product}</p>}
-            </Field>
+                <Input
+                  type="date"
+                  value={form.release_date}
+                  onChange={(e) => set("release_date")(e.target.value)}
+                  startIcon={<Calendar className="w-4 h-4" />}
+                  error={Boolean(errors.release_date)}
+                />
+              </Field>
 
-            <Field label="Loại yêu cầu" required hint="Dữ liệu đồng bộ từ Google Sheet">
-              <select
-                value={form.request_type}
-                onChange={(e) => set("request_type")(e.target.value)}
-                className={inputCls}
+              <Field 
+                label="Lý do mốc thời hạn" 
+                hint="Căn cứ để UX Team sắp xếp thứ tự ưu tiên"
               >
-                <option value="">Chọn loại yêu cầu…</option>
-                {selections.request_types.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              {errors.request_type && (
-                <p className="text-xs text-red-500 mt-1">{errors.request_type}</p>
-              )}
-            </Field>
-          </div>
-
-          <Field label="Mô tả yêu cầu" required>
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description")(e.target.value)}
-              rows={4}
-              placeholder="Mô tả chi tiết nhu cầu cần UX team hỗ trợ…"
-              className={inputCls + " resize-none"}
-            />
-            {errors.description && (
-              <p className="text-xs text-red-500 mt-1">{errors.description}</p>
-            )}
-          </Field>
-        </div>
-
-        {/* Squad Recommendation */}
-        {form.product && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6">
-            <SquadRecommendation
-              recommendedSquad={rec}
-              squads={squads}
-              preferredSquad={form.preferred_squad}
-              onPreferredChange={set("preferred_squad")}
-            />
-          </div>
-        )}
-
-        {/* Group 2 — Bối cảnh kinh doanh */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-            02 · Bối cảnh kinh doanh
-          </p>
-
-          <Field label="Tại sao yêu cầu này cần thiết?" required>
-            <textarea
-              value={form.business_need}
-              onChange={(e) => set("business_need")(e.target.value)}
-              rows={3}
-              placeholder="Vấn đề kinh doanh bạn đang muốn giải quyết là gì?"
-              className={inputCls + " resize-none"}
-            />
-            {errors.business_need && (
-              <p className="text-xs text-red-500 mt-1">{errors.business_need}</p>
-            )}
-          </Field>
-
-          <Field label="Vấn đề người dùng cần giải quyết?" required>
-            <textarea
-              value={form.user_problem}
-              onChange={(e) => set("user_problem")(e.target.value)}
-              rows={3}
-              placeholder="Điểm đau hoặc nhu cầu chưa được đáp ứng của người dùng…"
-              className={inputCls + " resize-none"}
-            />
-            {errors.user_problem && (
-              <p className="text-xs text-red-500 mt-1">{errors.user_problem}</p>
-            )}
-          </Field>
-
-          <Field label="Đối tượng người dùng mục tiêu">
-            <input
-              type="text"
-              value={form.target_user}
-              onChange={(e) => set("target_user")(e.target.value)}
-              placeholder="VD: Khách hàng retail banking, độ tuổi 25–45"
-              className={inputCls}
-            />
-          </Field>
-        </div>
-
-        {/* Group 3 — Kế hoạch release */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-            03 · Kế hoạch release
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Ngày release dự kiến" required>
-              <input
-                type="date"
-                value={form.release_date}
-                onChange={(e) => set("release_date")(e.target.value)}
-                className={inputCls}
-              />
-              {errors.release_date && (
-                <p className="text-xs text-red-500 mt-1">{errors.release_date}</p>
-              )}
-            </Field>
-
-            <Field label="Lý do thời hạn này quan trọng?" hint="Dữ liệu đồng bộ từ Google Sheet">
-              <select
-                value={form.deadline_reason}
-                onChange={(e) => set("deadline_reason")(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">Chọn lý do…</option>
-                {selections.deadline_reasons.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </div>
+                <Select
+                  value={form.deadline_reason}
+                  onChange={(e) => set("deadline_reason")(e.target.value)}
+                >
+                  <option value="">-- Chọn lý do thời hạn --</option>
+                  {selections.deadline_reasons.map((dr) => (
+                    <option key={dr} value={dr}>
+                      {dr}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Group 4 — Tài liệu đính kèm */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-            04 · Tài liệu đính kèm
-          </p>
-
-          {/* Toggle */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-            {(["link", "file"] as AttachMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setAttachMode(mode)}
-                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
-                  attachMode === mode
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {mode === "link" ? "Gửi link tài liệu" : "Tải file lên"}
-              </button>
-            ))}
-          </div>
-
-          {attachMode === "link" ? (
-            <Field
-              label="Link tài liệu"
-              hint="Dán link Google Docs, Confluence, Notion, Figma hoặc bất kỳ tài liệu trực tuyến nào."
-            >
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M5.5 8.5L8.5 5.5M6.5 3.5L7.207 2.793A3.536 3.536 0 0110.707 7.793L10 8.5M7.5 10.5L6.793 11.207A3.536 3.536 0 013.293 6.207L4 5.5"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-                <input
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-navy/10 text-navy flex items-center justify-center text-xs font-bold">4</span>
+                Tài liệu đính kèm & Tham khảo
+              </CardTitle>
+              <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200/50">
+                <button
+                  type="button"
+                  onClick={() => setAttachMode("link")}
+                  className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    attachMode === "link" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <LinkIcon className="w-3 h-3" />
+                  Link tài liệu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAttachMode("file")}
+                  className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    attachMode === "file" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Paperclip className="w-3 h-3" />
+                  Tải file
+                </button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {attachMode === "link" ? (
+              <Field hint="Dán link PRD, BRD, Confluence, Jira ticket hoặc tài liệu thiết kế tham khảo">
+                <Input
                   type="url"
                   value={form.doc_link}
                   onChange={(e) => set("doc_link")(e.target.value)}
-                  placeholder="https://docs.google.com/…"
-                  className={inputCls + " pl-8"}
+                  placeholder="https://jira.mbbank.com.vn/browse/... hoặc Google Drive link"
+                  startIcon={<LinkIcon className="w-4 h-4" />}
                 />
-              </div>
-            </Field>
-          ) : (
-            <div>
-              <p className="text-sm text-slate-500 mb-3">
-                Đính kèm tài liệu hỗ trợ, ảnh chụp màn hình, hoặc tài liệu tham khảo.
-              </p>
+              </Field>
+            ) : (
               <FileUpload files={files} onChange={setFiles} />
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Confirm summary */}
+        {/* Confirmation card in review step */}
         {submitState === "confirming" && (
-          <div className="bg-navy-50 border border-navy-100 rounded-2xl p-6 space-y-4">
-            <p className="text-xs font-semibold text-navy uppercase tracking-widest">
-              Xác nhận trước khi gửi
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-slate-500 mb-0.5">Email người yêu cầu</p>
-                <p className="text-sm font-medium text-slate-900">{form.requester_email}</p>
+          <Card variant="accent" className="border-navy-200 animate-in fade-in-50 duration-200">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="navy">Xác nhận thông tin</Badge>
+                <CardTitle className="text-sm">Kiểm tra thông tin trước khi gửi chính thức</CardTitle>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-0.5">Yêu cầu</p>
-                <p className="text-sm font-medium text-slate-900">{form.title}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-white/90 rounded-xl border border-slate-200/80">
+                <div>
+                  <p className="text-xs text-slate-400">Email người gửi</p>
+                  <p className="text-sm font-bold text-slate-900 truncate mt-0.5">{form.requester_email}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Tiêu đề yêu cầu</p>
+                  <p className="text-sm font-bold text-slate-900 truncate mt-0.5">{form.title}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Squad phụ trách</p>
+                  <p className="text-sm font-bold text-navy truncate mt-0.5">{form.product}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Hạn release</p>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">
+                    {form.release_date ? new Date(form.release_date).toLocaleDateString("vi-VN") : "—"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-0.5">Squad phụ trách</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {form.product || "Chưa chọn"}
-                </p>
+
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Info className="w-3.5 h-3.5 text-navy flex-shrink-0" />
+                <span>Yêu cầu sẽ được tự động cấp mã chuẩn <strong>UXMB-xxx</strong> và log JSON lên Google Sheet.</span>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-0.5">Ngày release dự kiến</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {form.release_date
-                    ? new Date(form.release_date).toLocaleDateString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })
-                    : "—"}
-                </p>
-              </div>
-            </div>
-            <div className="text-xs text-slate-500 border-t border-navy-100/60 pt-3 flex items-center gap-2">
-              <span>📋</span>
-              <span>Dữ liệu sẽ được tự động đồng bộ và log dạng JSON lên Google Sheet.</span>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          {submitState === "confirming" && (
-            <button
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+          {submitState === "confirming" ? (
+            <Button
               type="button"
+              variant="outline"
+              size="lg"
               onClick={() => setSubmitState("idle")}
-              className="px-5 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors order-last sm:order-first"
+              className="gap-2 order-last sm:order-first w-full sm:w-auto"
             >
+              <ArrowLeft className="w-4 h-4" />
               Quay lại chỉnh sửa
-            </button>
+            </Button>
+          ) : (
+            <div />
           )}
-          <button
+
+          <Button
             type="button"
+            variant="default"
+            size="lg"
             onClick={handleSubmit}
-            disabled={submitState === "submitting"}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 ${
-              submitState === "submitting"
-                ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                : "bg-navy text-white hover:bg-navy-dark active:scale-95"
-            } ${submitState !== "confirming" ? "sm:ml-auto" : ""}`}
+            loading={submitState === "submitting"}
+            className="gap-2 w-full sm:w-auto"
           >
-            {submitState === "submitting"
-              ? "Đang gửi…"
-              : submitState === "confirming"
-                ? "Xác nhận & Gửi yêu cầu"
-                : "Gửi yêu cầu UX"}
-          </button>
+            {submitState === "confirming" ? (
+              <>
+                <Send className="w-4 h-4 text-teal" />
+                Xác nhận & Gửi yêu cầu
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 text-teal" />
+                Gửi yêu cầu UX
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

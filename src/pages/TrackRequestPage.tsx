@@ -3,6 +3,11 @@ import { UXRequest } from "../data/mockData"
 import { searchRequests } from "../api/api"
 import RequestCard from "../components/track/RequestCard"
 import RequestDetail from "../components/track/RequestDetail"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+import { Search, Inbox, AlertCircle, Sparkles, Clock, CheckCircle2 } from "lucide-react"
 
 export default function TrackRequestPage() {
   const [query, setQuery] = useState("")
@@ -36,53 +41,55 @@ export default function TrackRequestPage() {
   }
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Tra cứu yêu cầu</h1>
-        <p className="text-sm text-slate-500 mt-1.5">
-          Nhập email hoặc Request ID để xem trạng thái yêu cầu UX của bạn.
+    <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+      <div>
+        <div className="flex items-center gap-2">
+          <Badge variant="navy" size="sm">Tra cứu</Badge>
+          <span className="text-xs text-slate-400">Theo dõi tiến trình UX</span>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900 mt-1">Tra cứu tiến độ yêu cầu</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Nhập Email MB hoặc Request ID (ví dụ <strong>UXMB-001</strong>) để theo dõi trạng thái tiếp nhận và kết quả bàn giao.
         </p>
       </div>
 
-      <form onSubmit={handleSearch} className="max-w-2xl mb-10">
+      <form onSubmit={handleSearch} className="max-w-2xl">
         <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <input
+          <div className="flex-1">
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="email@mbbank.com.vn hoặc UXMB-001"
-              className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy transition-colors"
+              placeholder="email@mbbank.com.vn hoặc UXMB-001..."
+              startIcon={<Search className="w-4 h-4" />}
+              className="h-12 text-base"
             />
           </div>
-          <button
+          <Button
             type="submit"
-            disabled={loading || !query.trim()}
-            className="px-6 py-3 bg-navy text-white text-sm font-semibold rounded-xl hover:bg-navy-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            size="lg"
+            disabled={!query.trim()}
+            loading={loading}
+            className="gap-2 px-6 flex-shrink-0"
           >
-            {loading ? "Đang tìm…" : "Tìm kiếm"}
-          </button>
+            <Search className="w-4 h-4 text-teal" />
+            <span>Tìm kiếm</span>
+          </Button>
         </div>
       </form>
 
       {loading && (
         <div className="space-y-4 max-w-3xl">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 h-36 animate-pulse">
-              <div className="h-3 bg-slate-100 rounded w-1/4 mb-2" />
-              <div className="h-4 bg-slate-100 rounded w-3/4 mb-6" />
+            <Card key={i} className="p-6 h-36 animate-pulse">
+              <div className="h-4 bg-slate-100 rounded w-1/4 mb-3" />
+              <div className="h-5 bg-slate-100 rounded w-3/4 mb-6" />
               <div className="grid grid-cols-4 gap-3">
                 {[...Array(4)].map((_, j) => (
-                  <div key={j} className="h-8 bg-slate-100 rounded" />
+                  <div key={j} className="h-6 bg-slate-100 rounded" />
                 ))}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -90,26 +97,25 @@ export default function TrackRequestPage() {
       {!loading && hasSearched && results !== null && (
         <>
           {results.length === 0 ? (
-            <div className="max-w-sm text-center py-16">
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <circle cx="9" cy="9" r="7.5" stroke="#94A3B8" strokeWidth="1.5" />
-                  <path d="M15 15L18.5 18.5" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M9 6V10M9 12.5V13" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <p className="font-medium text-slate-700 mb-1">Không tìm thấy yêu cầu</p>
-              <p className="text-sm text-slate-400">
-                Không có kết quả cho "{query}". Thử nhập email MB hoặc Request ID hợp lệ như
-                UXMB-001.
-              </p>
-            </div>
+            <Card className="max-w-md text-center p-10 border-dashed">
+              <CardContent className="p-0 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                  <Inbox className="w-6 h-6" />
+                </div>
+                <h3 className="font-bold text-slate-800 text-base">Không tìm thấy yêu cầu nào</h3>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                  Không tìm thấy kết quả phù hợp cho từ khóa "{query}". Bạn vui lòng kiểm tra lại email MB hoặc mã Request ID (VD: UXMB-001).
+                </p>
+              </CardContent>
+            </Card>
           ) : (
-            <div>
-              <p className="text-sm text-slate-500 mb-4">
-                Tìm thấy {results.length} yêu cầu
-              </p>
-              <div className="space-y-3 max-w-3xl">
+            <div className="space-y-4 max-w-3xl">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Kết quả tìm kiếm ({results.length} yêu cầu)
+                </p>
+              </div>
+              <div className="space-y-3">
                 {results.map((r) => (
                   <RequestCard key={r.request_id} request={r} onClick={setSelectedRequest} />
                 ))}
@@ -120,24 +126,31 @@ export default function TrackRequestPage() {
       )}
 
       {!hasSearched && (
-        <div className="max-w-2xl">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
-            Thử tìm kiếm với
+        <div className="max-w-2xl space-y-3">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Gợi ý tìm kiếm nhanh
           </p>
           <div className="flex flex-wrap gap-2">
             {[
               "minhnb@mbbank.com.vn",
               "UXMB-001",
               "UXMB-002",
+              "UXMB-003",
               "anhld@mbbank.com.vn",
             ].map((example) => (
-              <button
+              <Button
                 key={example}
-                onClick={() => setQuery(example)}
-                className="px-3 py-1.5 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setQuery(example)
+                }}
+                className="text-xs rounded-xl"
               >
+                <Sparkles className="w-3 h-3 text-teal" />
                 {example}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

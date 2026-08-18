@@ -2,6 +2,10 @@ import { useState } from "react"
 import { mockRequests, UXRequest } from "../data/mockData"
 import RequestCard from "../components/track/RequestCard"
 import RequestDetail from "../components/track/RequestDetail"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent } from "@/components/ui/card"
+import { FolderKanban, Inbox, Sparkles, Filter } from "lucide-react"
 
 const STATUS_FILTERS = ["Tất cả", "Đang thực hiện", "Đang phân loại", "Hoàn thành"]
 
@@ -22,47 +26,55 @@ export default function QuanLyPage() {
       ? mockRequests
       : mockRequests.filter((r) => r.status === statusFilter)
 
+  const getCount = (status: string) => {
+    if (status === "Tất cả") return mockRequests.length
+    return mockRequests.filter((r) => r.status === status).length
+  }
+
   return (
-    <main className="max-w-7xl mx-auto px-6 py-10">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Quản lý yêu cầu</h1>
-          <p className="text-sm text-slate-500 mt-1.5">
-            Toàn bộ yêu cầu UX đang được theo dõi. Nhấn vào yêu cầu để xem chi tiết.
+          <div className="flex items-center gap-2">
+            <Badge variant="navy" size="sm">Quản lý</Badge>
+            <span className="text-xs text-slate-400">Danh mục yêu cầu UX</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Quản lý danh sách yêu cầu</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Toàn bộ các yêu cầu thiết kế trải nghiệm đang được điều phối và theo dõi.
           </p>
         </div>
-        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 flex-shrink-0">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
-                statusFilter === f
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+
+        {/* ReUI Tabs for Status Filter */}
+        <div className="flex-shrink-0">
+          <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+            <TabsList variant="pill">
+              {STATUS_FILTERS.map((f) => (
+                <TabsTrigger
+                  key={f}
+                  value={f}
+                  badge={getCount(f)}
+                >
+                  {f}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path
-                d="M10 6V10M10 14H10.01M19 10C19 14.9706 14.9706 19 10 19C5.02944 19 1 14.9706 1 10C1 5.02944 5.02944 1 10 1C14.9706 1 19 5.02944 19 10Z"
-                stroke="#94A3B8"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
-          <p className="font-medium text-slate-700 mb-1">Không có yêu cầu nào</p>
-          <p className="text-sm text-slate-400">Không có yêu cầu nào với trạng thái "{statusFilter}".</p>
-        </div>
+        <Card className="max-w-md mx-auto text-center p-10 border-dashed">
+          <CardContent className="p-0 space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+              <Inbox className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-800 text-base">Không có yêu cầu nào</h3>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+              Hiện không có yêu cầu nào thuộc trạng thái "{statusFilter}".
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
           {filtered.map((r) => (
