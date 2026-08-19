@@ -2,6 +2,7 @@ import { Squad, deriveCapacityStatus } from "../../data/mockData"
 import { Frame, FrameBody } from "@/components/reui/frame"
 import { Badge } from "@/components/ui/badge"
 import { IconTile } from "@/components/reui/icon-tile"
+import { getCapacityStatusConfig } from "@/config/statusConfig"
 import { Sparkles, Activity, ShieldCheck, Users } from "lucide-react"
 
 interface SquadRecommendationProps {
@@ -11,23 +12,13 @@ interface SquadRecommendationProps {
   onPreferredChange: (name: string) => void
 }
 
-const statusBadgeVariant: Record<
-  string,
-  { variant: "success" | "warning" | "destructive" | "default"; dotColor?: string }
-> = {
-  "Sẵn sàng": { variant: "success", dotColor: "bg-emerald-500" },
-  "Bình thường": { variant: "warning", dotColor: "bg-amber-500" },
-  "Đang bận": { variant: "warning", dotColor: "bg-amber-500" },
-  "Quá tải": { variant: "destructive", dotColor: "bg-rose-500" },
-}
-
 export default function SquadRecommendation({
   recommendedSquad,
 }: SquadRecommendationProps) {
   if (!recommendedSquad) return null
 
   const status = deriveCapacityStatus(recommendedSquad)
-  const statusCfg = statusBadgeVariant[status] || { variant: "default", dotColor: "bg-slate-400" }
+  const statusCfg = getCapacityStatusConfig(status)
 
   return (
     <Frame 

@@ -6,12 +6,12 @@ import {
   FolderKanban, 
   Menu, 
   X,
-  Sparkles,
   ShieldCheck,
   User,
   LogOut
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import BrandLogo from "@/components/common/BrandLogo"
 import { preloadPage } from "../App"
 import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession } from "../services/otpAuthService"
 
@@ -75,22 +75,12 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     <>
       {/* Brand Header */}
       <div className="px-6 py-5.5 border-b border-slate-100/90 flex-shrink-0 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-tr from-[#1B3A6B] to-[#0D9B97] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-[#1B3A6B]/20">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-black text-slate-900 leading-tight tracking-tight">
-              UX Portal
-            </p>
-            <p className="text-[11px] font-semibold text-slate-400 leading-tight mt-0.5">MB Bank Digital</p>
-          </div>
-        </div>
+        <BrandLogo size="md" />
       </div>
 
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto">
-        <p className="px-3 pb-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+        <p className="px-3 pb-2 text-xs font-bold text-slate-400">
           Phân hệ chức năng
         </p>
         {navItems.map(({ page, label, icon: Icon }) => {
@@ -168,7 +158,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
 
       {/* Sidebar Footer */}
       <div className="p-3.5 border-t border-slate-100/90 flex-shrink-0 flex items-center justify-between text-[11px] text-slate-400 bg-slate-50/50">
-        <span className="font-semibold text-slate-500">UX Portal MB</span>
+        <span className="font-semibold text-slate-500">MB UXTeam</span>
         <Badge variant="navy" size="xs" className="font-bold">v3.0</Badge>
       </div>
     </>
@@ -178,12 +168,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     <>
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-4 z-40">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gradient-to-tr from-[#1B3A6B] to-[#0D9B97] rounded-xl flex items-center justify-center shadow-xs">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-sm font-extrabold text-slate-900">UX Portal</span>
-        </div>
+        <BrandLogo size="sm" />
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"

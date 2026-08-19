@@ -67,10 +67,10 @@ export function DropdownMenu({
           <div className="flex items-center gap-3 min-w-0">
             {icon && <span className="text-slate-400 flex-shrink-0">{icon}</span>}
             <div className="min-w-0">
-              <p className="text-[11px] text-slate-500 font-medium leading-none mb-1 truncate">
+              <p className="text-xs text-slate-500 font-medium leading-none mb-1 truncate">
                 {label}
               </p>
-              <p className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">
+              <p className="text-sm sm:text-base font-semibold text-slate-900 leading-tight truncate">
                 {selectedOption && selectedOption.value ? selectedOption.label : placeholder}
               </p>
             </div>

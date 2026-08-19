@@ -2,39 +2,365 @@
 
 :root {
   /* ==========================================================================
-     1. TYPOGRAPHY TOKENS (Font Family)
+     1. TYPOGRAPHY TOKENS FROM token.json
+     (Font Family, Font Size, Weight, Line Height, Letter Spacing)
      ========================================================================== */
   --font-family-sans: 'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-mono: 'DM Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 450;
+  --font-weight-semibold: 500;
+
+  /* Letter Spacing (Độ dãn chữ) */
+  --tracking-tight: -0.01em;  /* -1% trong token.json */
+  --tracking-normal: 0em;     /* 0% trong token.json */
+
+  /* Line Heights (Độ cao dòng) */
+  --leading-h1: 1.28;         /* 128% trong token.json H1 */
+  --leading-flat: 1.0;        /* 100% trong H2, H3, H4 & Label */
+  --leading-body: 1.36;       /* 136% trong Body XLarge, Large, Medium, Small */
+
+  /* Font Sizes (Kích thước chữ) */
+  --text-h1: 32px;
+  --text-h2: 28px;
+  --text-h3: 24px;
+  --text-h4: 20px;
+  --text-body-xl: 18px;
+  --text-body-lg: 16px;
+  --text-body-md: 14px;
+  --text-body-sm: 12px;
+
   /* ==========================================================================
-     2. COLOR TOKENS: BRAND & UI
+     2. PRIMARY COLOR PALETTE (token.json Primary)
      ========================================================================== */
-  --color-navy: #1B3A6B;
-  --color-navy-dark: #122749;
-  --color-navy-light: #2A5298;
-  --color-teal: #0D9B97;
-  --color-teal-dark: #0A7E7B;
-  --color-teal-light: #14B8B3;
+  --color-primary-50: #e7eeff;
+  --color-primary-100: #b5cbfe;
+  --color-primary-200: #91b2fd;
+  --color-primary-300: #5f8efc;
+  --color-primary-400: #4079fc;
+  --color-primary-500: #1057fb;
+  --color-primary-600: #0f4fe4;
+  --color-primary-700: #0b3eb2;
+  --color-primary-800: #09308a;
+  --color-primary-900: #072569;
 
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #64748B;
-  --color-text-muted: #94A3B8;
+  /* Brand Aliases */
+  --color-navy: #1057fb;
+  --color-navy-dark: #072569;
+  --color-navy-light: #4079fc;
 
-  --color-bg-app: #FCFCFD;
+  /* ==========================================================================
+     3. SECONDARY COLOR PALETTE (token.json Secondary)
+     ========================================================================== */
+  --color-secondary-50: #e6e6e9;
+  --color-secondary-100: #b0b0ba;
+  --color-secondary-200: #8a8a98;
+  --color-secondary-300: #555569;
+  --color-secondary-400: #34344c;
+  --color-secondary-500: #01011f;
+  --color-secondary-600: #01011c;
+  --color-secondary-700: #010116;
+  --color-secondary-800: #010111;
+  --color-secondary-900: #00000d;
+
+  /* ==========================================================================
+     4. NEUTRAL COLOR TOKENS (token.json Neutral_Color)
+     ========================================================================== */
+  /* Background */
+  --color-bg-white: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-disabled: #f8fafb;
+  --color-bg-normal: #f6f8fa;
+  --color-bg-hover: #eceff3;
+  --color-bg-pressed: #dfe1e6;
+  --color-bg-loud: #0d0d12;
+  --color-bg-app: #f6f8fa;
+
+  /* Border */
+  --color-border-white: #ffffff;
+  --color-border-disabled: #f6f8fa;
+  --color-border-normal: #ebeff3;
+  --color-border-hover: #dfe1e6;
+  --color-border-pressed: #c1c7d0;
+
+  /* Icon & Text */
+  --color-text-white: #ffffff;
+  --color-text-disabled: #a3acb9;
+  --color-text-subdued: #808898;
+  --color-text-normal: #666d80;
+  --color-text-muted: #37394a;
+  --color-text-loud: #0d0d12;
+  --color-text-primary: #0d0d12;
+  --color-text-secondary: #37394a;
+  --color-text-tertiary: #666d80;
+
+  /* ==========================================================================
+     5. STATUS & ACCENT COLORS (token.json Status & Accents)
+     ========================================================================== */
+  /* Success */
+  --color-success-50: #e9f7f3;
+  --color-success-100: #b9e7d9;
+  --color-success-200: #98dbc7;
+  --color-success-500: #1eb185;
+  --color-success-600: #1ba179;
+  --color-success-700: #157e5e;
+
+  /* Warning */
+  --color-warning-50: #fff7e9;
+  --color-warning-100: #fee7ba;
+  --color-warning-500: #fdb022;
+  --color-warning-600: #e6a01f;
+  --color-warning-700: #b47d18;
+
+  /* Error */
+  --color-error-50: #fde7e7;
+  --color-error-100: #f9b4b5;
+  --color-error-500: #ed0c0f;
+  --color-error-600: #d80b0e;
+  --color-error-700: #a8090b;
+
+  /* Teal Accent */
+  --color-teal: #1eb185;
+  --color-teal-dark: #157e5e;
+  --color-teal-light: #4bc19d;
+
+  /* Special Tokens */
+  --color-stroke-6: #0000000f;
+  --color-card-stroke: #0000000f;
+  --color-shadow-4: #0000000a;
+  --color-popup-bg: #ffffff;
+  --color-overlay-70: #eeeff2b2;
 }
 
 @theme {
+  /* Fonts */
   --font-sans: var(--font-family-sans);
   --font-mono: var(--font-family-mono);
 
-  --color-navy: #1B3A6B;
-  --color-navy-dark: #122749;
-  --color-navy-50: #EEF2FA;
-  --color-navy-100: #D4DEED;
-  --color-teal: #0D9B97;
-  --color-teal-50: #E6F7F7;
+  /* Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+
+  /* Letter Spacing */
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0em;
+
+  /* Line Heights */
+  --leading-h1: 1.28;
+  --leading-flat: 1.0;
+  --leading-body: 1.36;
+
+  /* Colors */
+  --color-primary-50: #e7eeff;
+  --color-primary-100: #b5cbfe;
+  --color-primary-200: #91b2fd;
+  --color-primary-300: #5f8efc;
+  --color-primary-400: #4079fc;
+  --color-primary-500: #1057fb;
+  --color-primary-600: #0f4fe4;
+  --color-primary-700: #0b3eb2;
+  --color-primary-800: #09308a;
+  --color-primary-900: #072569;
+
+  --color-secondary-50: #e6e6e9;
+  --color-secondary-100: #b0b0ba;
+  --color-secondary-200: #8a8a98;
+  --color-secondary-300: #555569;
+  --color-secondary-400: #34344c;
+  --color-secondary-500: #01011f;
+  --color-secondary-600: #01011c;
+  --color-secondary-700: #010116;
+  --color-secondary-800: #010111;
+  --color-secondary-900: #00000d;
+
+  --color-navy: #1057fb;
+  --color-navy-dark: #072569;
+  --color-navy-50: #e7eeff;
+  --color-navy-100: #b5cbfe;
+
+  --color-teal: #1eb185;
+  --color-teal-50: #e9f7f3;
+
+  --color-success-50: #e9f7f3;
+  --color-success-500: #1eb185;
+  --color-success-700: #157e5e;
+
+  --color-warning-50: #fff7e9;
+  --color-warning-500: #fdb022;
+  --color-warning-700: #b47d18;
+
+  --color-error-50: #fde7e7;
+  --color-error-500: #ed0c0f;
+  --color-error-700: #a8090b;
+}
+
+/* ==========================================================================
+   TYPOGRAPHY PRESET UTILITIES (Từ token.json)
+   ========================================================================== */
+
+/* Heading Typography Presets */
+.text-token-h1-semibold {
+  font-family: var(--font-family-sans);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: 0em;
+}
+.text-token-h1-medium {
+  font-family: var(--font-family-sans);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.28;
+  letter-spacing: 0em;
+}
+.text-token-h1-regular {
+  font-family: var(--font-family-sans);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+
+.text-token-h2-semibold {
+  font-family: var(--font-family-sans);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h2-medium {
+  font-family: var(--font-family-sans);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h2-regular {
+  font-family: var(--font-family-sans);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+
+.text-token-h3-semibold {
+  font-family: var(--font-family-sans);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h3-medium {
+  font-family: var(--font-family-sans);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h3-regular {
+  font-family: var(--font-family-sans);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+
+.text-token-h4-semibold {
+  font-family: var(--font-family-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h4-medium {
+  font-family: var(--font-family-sans);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: 0em;
+}
+.text-token-h4-regular {
+  font-family: var(--font-family-sans);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+
+/* Body Typography Presets (lineHeight: 136%) */
+.text-token-body-xl {
+  font-family: var(--font-family-sans);
+  font-size: 18px;
+  line-height: 1.36;
+}
+.text-token-body-lg {
+  font-family: var(--font-family-sans);
+  font-size: 16px;
+  line-height: 1.36;
+}
+.text-token-body-md {
+  font-family: var(--font-family-sans);
+  font-size: 14px;
+  line-height: 1.36;
+}
+.text-token-body-sm {
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  line-height: 1.36;
+}
+
+/* Label Typography Presets (lineHeight: 100%) */
+.text-token-label-xl {
+  font-family: var(--font-family-sans);
+  font-size: 18px;
+  line-height: 1.0;
+}
+.text-token-label-lg {
+  font-family: var(--font-family-sans);
+  font-size: 16px;
+  line-height: 1.0;
+}
+.text-token-label-md {
+  font-family: var(--font-family-sans);
+  font-size: 14px;
+  line-height: 1.0;
+}
+.text-token-label-sm {
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  line-height: 1.0;
+}
+
+/* Label Mono Presets (DM Mono) */
+.text-token-mono-xl {
+  font-family: var(--font-family-mono);
+  font-size: 32px;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+.text-token-mono-md {
+  font-family: var(--font-family-mono);
+  font-size: 16px;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+.text-token-mono-sm {
+  font-family: var(--font-family-mono);
+  font-size: 14px;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+.text-token-mono-xs {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
 }
 
 * {
@@ -69,9 +395,47 @@ body {
 }
 
 .gradient-brand {
-  background: linear-gradient(135deg, #1B3A6B 0%, #1e498a 60%, #0D9B97 100%);
+  background: linear-gradient(135deg, #1057fb 0%, #0f4fe4 60%, #1eb185 100%);
 }
 
 .gradient-accent {
-  background: linear-gradient(135deg, rgba(27, 58, 107, 0.06) 0%, rgba(13, 155, 151, 0.08) 100%);
+  background: linear-gradient(135deg, rgba(16, 87, 251, 0.06) 0%, rgba(30, 177, 133, 0.08) 100%);
 }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* BorderBeam v2 — Liquid-metal-inspired animations */
+@keyframes border-beam-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes border-beam-glow {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.border-beam-spinner {
+  animation-name: border-beam-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* animationDuration and animationDelay set via inline style */
+  animation-duration: 4s;
+  animation-delay: 0s;
+}
+

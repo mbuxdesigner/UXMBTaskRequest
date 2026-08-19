@@ -160,7 +160,7 @@ export default function UpdateProgressModal({
           {/* Khâu thiết kế UX & Trạng thái */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label className="text-xs font-bold text-slate-700">
                 Giai đoạn UX hiện tại
               </label>
               <select
@@ -177,7 +177,7 @@ export default function UpdateProgressModal({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label className="text-xs font-bold text-slate-700">
                 Trạng thái tổng thể
               </label>
               <select
@@ -199,7 +199,7 @@ export default function UpdateProgressModal({
                 <Activity className="w-4 h-4 text-[#1B3A6B]" />
                 % Tiến độ hoàn thành
               </span>
-              <span className="text-sm font-black text-[#1B3A6B]">{progress}%</span>
+              <span className="text-sm font-bold text-[#1B3A6B]">{progress}%</span>
             </div>
             <input
               type="range"
@@ -231,7 +231,7 @@ export default function UpdateProgressModal({
           {/* Re-assign Designer (Chỉ Design Owner / Admin) */}
           {isOwnerOrAdmin && (
             <div className="space-y-1.5 p-3.5 bg-purple-50/60 border border-purple-100 rounded-2xl">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900 uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
                 <UserCheck className="w-4 h-4 text-purple-700" />
                 <span>Phân công Designer phụ trách (Đặc quyền Design Owner / Admin)</span>
               </div>
@@ -247,7 +247,7 @@ export default function UpdateProgressModal({
 
           {/* Ghi chú / Note bàn giao */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
               <span>Ghi chú / Nhật ký bàn giao chi tiết (*)</span>
               <span className="text-[10px] text-slate-400 normal-case">Tạo mốc nhật ký mới</span>
             </label>
@@ -263,7 +263,7 @@ export default function UpdateProgressModal({
 
           {/* Deliverables Link (Figma / Prototype) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Link className="w-3.5 h-3.5 text-slate-400" />
               <span>Link Sản phẩm bàn giao (Figma / Prototype / Specs)</span>
             </label>

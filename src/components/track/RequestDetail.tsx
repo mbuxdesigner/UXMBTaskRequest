@@ -8,6 +8,7 @@ import { IconTile } from "@/components/reui/icon-tile"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { getStatusConfig } from "@/config/statusConfig"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { 
@@ -39,16 +40,7 @@ interface RequestDetailProps {
   onUpdated?: () => void
 }
 
-const statusBadgeVariant: Record<
-  string,
-  { variant: "info" | "warning" | "success" | "purple" | "secondary" | "navy" | "teal"; dotColor?: string }
-> = {
-  "Đang thực hiện": { variant: "navy", dotColor: "bg-[#1B3A6B]" },
-  "Đang phân loại": { variant: "warning", dotColor: "bg-amber-500" },
-  "Đang khám phá": { variant: "purple", dotColor: "bg-purple-500" },
-  "Hoàn thành": { variant: "success", dotColor: "bg-emerald-500" },
-  "Đã gửi": { variant: "secondary", dotColor: "bg-slate-400" },
-}
+
 
 function DetailRow({
   icon,
@@ -80,10 +72,7 @@ export default function RequestDetail({ request, onBack, onUpdated }: RequestDet
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
 
   const session = getStoredSession()
-  const statusConfig = statusBadgeVariant[request.status] ?? {
-    variant: "secondary",
-    dotColor: "bg-slate-400",
-  }
+  const statusConfig = getStatusConfig(request.status)
 
   // RBAC Permission Check
   const canEdit = (() => {
@@ -151,7 +140,7 @@ export default function RequestDetail({ request, onBack, onUpdated }: RequestDet
                 • {request.product}
               </span>
             </div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">
               {request.title}
             </h1>
           </div>
@@ -188,13 +177,13 @@ export default function RequestDetail({ request, onBack, onUpdated }: RequestDet
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="text-xs uppercase font-bold text-slate-400 tracking-wider">Tiến độ thiết kế UX & Bàn giao</p>
+              <p className="text-xs font-bold text-slate-400">Tiến độ thiết kế UX & Bàn giao</p>
               <p className="text-sm font-bold text-slate-900 mt-0.5">
                 Giai đoạn: <span className="text-[#1B3A6B]">{request.current_phase}</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-2xl font-black text-[#1B3A6B]">{request.progress}%</span>
+              <span className="text-2xl font-bold text-[#1B3A6B]">{request.progress}%</span>
               <Badge variant={request.progress === 100 ? "success" : "navy"} size="sm">
                 {request.progress === 100 ? "Hoàn tất" : "Đang xử lý"}
               </Badge>
@@ -505,13 +494,13 @@ export default function RequestDetail({ request, onBack, onUpdated }: RequestDet
             </FrameHeader>
             <FrameBody className="space-y-3">
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">UX Squad đảm nhiệm</p>
+                <p className="text-xs text-slate-400 font-bold">UX Squad đảm nhiệm</p>
                 <p className="text-sm font-bold text-slate-900">{request.squad_name}</p>
               </div>
 
               {/* Assigned Designer */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Designer chuyên trách</p>
+                <p className="text-xs text-slate-400 font-bold">Designer chuyên trách</p>
                 <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <UserCheck className="w-3.5 h-3.5 text-[#0D9B97]" />
                   <span>{request.assigned_designer || request.ux_owner || "Đang phân công"}</span>

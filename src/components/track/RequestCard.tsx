@@ -2,6 +2,7 @@ import { UXRequest } from "../../data/mockData"
 import { Frame, FrameBody } from "@/components/reui/frame"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { getStatusConfig } from "@/config/statusConfig"
 import { ChevronRight, Calendar, UserCheck, Sparkles, Layers, ArrowUpRight } from "lucide-react"
 
 interface RequestCardProps {
@@ -9,22 +10,8 @@ interface RequestCardProps {
   onClick: (request: UXRequest) => void
 }
 
-const statusBadgeVariant: Record<
-  string,
-  { variant: "info" | "warning" | "success" | "purple" | "secondary" | "navy" | "teal"; dotColor?: string }
-> = {
-  "Đang thực hiện": { variant: "navy", dotColor: "bg-[#1B3A6B]" },
-  "Đang phân loại": { variant: "warning", dotColor: "bg-amber-500" },
-  "Đang khám phá": { variant: "purple", dotColor: "bg-purple-500" },
-  "Hoàn thành": { variant: "success", dotColor: "bg-emerald-500" },
-  "Đã gửi": { variant: "secondary", dotColor: "bg-slate-400" },
-}
-
 export default function RequestCard({ request, onClick }: RequestCardProps) {
-  const statusConfig = statusBadgeVariant[request.status] ?? {
-    variant: "secondary",
-    dotColor: "bg-slate-400",
-  }
+  const statusConfig = getStatusConfig(request.status)
 
   const isCompleted = request.progress === 100
 
@@ -61,7 +48,7 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
                 </Badge>
               )}
             </div>
-            <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-[#1B3A6B] transition-colors line-clamp-2">
+            <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-[#1B3A6B] transition-colors line-clamp-3 break-words">
               {request.title}
             </h3>
           </div>
@@ -84,19 +71,19 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
         {/* Metadata info grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-50/80 border border-slate-100 text-xs">
           <div>
-            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">UX Squad</p>
+            <p className="text-slate-400 text-xs font-semibold mb-0.5">UX Squad</p>
             <p className="font-semibold text-slate-800 truncate">{request.squad_name}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Giai đoạn</p>
+            <p className="text-slate-400 text-xs font-semibold mb-0.5">Giai đoạn</p>
             <p className="font-semibold text-[#1B3A6B] truncate">{request.current_phase}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Cập nhật</p>
+            <p className="text-slate-400 text-xs font-semibold mb-0.5">Cập nhật</p>
             <p className="font-semibold text-slate-700">{request.last_updated}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Deadline</p>
+            <p className="text-slate-400 text-xs font-semibold mb-0.5">Deadline</p>
             <p className="font-semibold text-slate-700">{request.expected_deadline || "—"}</p>
           </div>
         </div>
@@ -108,7 +95,7 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-[#0D9B97]" />
               Tiến độ {request.current_phase}
             </span>
-            <span className="font-extrabold text-slate-900">{request.progress}%</span>
+            <span className="font-bold text-slate-900">{request.progress}%</span>
           </div>
           <Progress
             value={request.progress}

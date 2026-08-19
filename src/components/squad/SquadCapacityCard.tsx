@@ -3,6 +3,7 @@ import { Frame } from "@/components/reui/frame"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { getCapacityStatusConfig } from "@/config/statusConfig"
 import { ArrowRight, UserCheck, Layers, Clock, Activity, CheckCircle2 } from "lucide-react"
 
 interface SquadCapacityCardProps {
@@ -11,23 +12,13 @@ interface SquadCapacityCardProps {
   interactive?: boolean
 }
 
-const statusBadgeVariant: Record<
-  CapacityStatus,
-  { variant: "success" | "warning" | "destructive" | "default"; dotColor?: string }
-> = {
-  "Sẵn sàng": { variant: "success", dotColor: "bg-emerald-500" },
-  "Bình thường": { variant: "warning", dotColor: "bg-amber-500" },
-  "Đang bận": { variant: "warning", dotColor: "bg-amber-500" },
-  "Quá tải": { variant: "destructive", dotColor: "bg-rose-500" },
-}
-
 export default function SquadCapacityCard({
   squad,
   onViewDetails,
   interactive = true,
 }: SquadCapacityCardProps) {
   const status = deriveCapacityStatus(squad)
-  const statusConfig = statusBadgeVariant[status] || { variant: "default", dotColor: "bg-slate-400" }
+  const statusConfig = getCapacityStatusConfig(status)
   const total = squad.active_tasks + squad.queued_tasks
   const pct = Math.min(100, Math.round((total / squad.capacity_threshold) * 100))
 
@@ -95,11 +86,11 @@ export default function SquadCapacityCard({
         {/* Task Counts Summary */}
         <div className="grid grid-cols-3 gap-2 py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 items-center text-center">
           <div>
-            <p className="text-lg font-black text-slate-900 leading-none">{squad.active_tasks}</p>
+            <p className="text-lg font-bold text-slate-900 leading-none">{squad.active_tasks}</p>
             <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Đang làm</p>
           </div>
           <div className="border-x border-slate-200 px-1">
-            <p className="text-lg font-black text-slate-900 leading-none">{squad.queued_tasks}</p>
+            <p className="text-lg font-bold text-slate-900 leading-none">{squad.queued_tasks}</p>
             <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Hàng đợi</p>
           </div>
           <div className="min-w-0 px-1">

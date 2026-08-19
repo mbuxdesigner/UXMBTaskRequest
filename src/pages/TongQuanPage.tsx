@@ -55,7 +55,7 @@ function StatCard({
       </div>
       <div className="mt-4 space-y-1">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{value}</p>
+        <p className="text-2xl font-bold text-slate-900 tracking-tight">{value}</p>
         {sub && <p className="text-[11px] text-slate-500 font-medium pt-0.5">{sub}</p>}
       </div>
     </Frame>
@@ -130,7 +130,7 @@ export default function TongQuanPage() {
             </Badge>
             <span className="text-xs text-slate-400 font-medium">Đồng bộ Google Sheet realtime</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Tổng quan Hệ sinh thái UX MB
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">

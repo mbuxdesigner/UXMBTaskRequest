@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
+import { getStatusConfig } from "@/config/statusConfig"
 import { UXRequest } from "../data/mockData"
 import { fetchRequests } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
@@ -13,6 +14,10 @@ import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogBody } from "@/components/ui/dialog"
+import { NumberTicker } from "@/components/jolyui/number-ticker"
+import { BlurFade } from "@/components/jolyui/blur-fade"
+import { EmptyState } from "@/components/reui/empty-state"
 import {
   Search,
   Plus,
@@ -180,17 +185,18 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     {
       value: "Đang thực hiện",
       label: "Đang thực hiện",
-      badge: <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />,
+      badge: <span className={`w-2 h-2 rounded-full ${getStatusConfig("Đang thực hiện").dotColor} flex-shrink-0`} />,
     },
     {
       value: "Hoàn thành",
       label: "Hoàn thành",
-      badge: <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />,
+      badge: <span className={`w-2 h-2 rounded-full ${getStatusConfig("Hoàn thành").dotColor} flex-shrink-0`} />,
     },
     {
       value: "Đang phân loại",
       label: "Đang phân loại",
-      badge: <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />,
+      badge: <span className={`w-2 h-2 rounded-full ${getStatusConfig("Đang phân loại").dotColor} flex-shrink-0`} />,
+
     },
     {
       value: "Đã gửi",
@@ -271,37 +277,14 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
   // Render status dot badge (giữ nguyên kích thước chuẩn)
   const renderStatusBadge = (status: string) => {
-    switch (status) {
-      case "Hoàn thành":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span>Hoàn thành</span>
-          </span>
-        )
-      case "Đang thực hiện":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-            <span>Đang thực hiện</span>
-          </span>
-        )
-      case "Đang khám phá":
-      case "Đang phân loại":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-            <span>{status}</span>
-          </span>
-        )
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 whitespace-nowrap shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-            <span>{status || "Đã gửi"}</span>
-          </span>
-        )
-    }
+    const cfg = getStatusConfig(status)
+    const isActive = status === "Đang thực hiện"
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap shrink-0`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0 ${isActive ? "animate-pulse" : ""}`} />
+        <span>{status || "Đã gửi"}</span>
+      </span>
+    )
   }
 
   const getDesignerAvatar = (name?: string) => {
@@ -319,22 +302,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     return "Gần đây"
   }
 
-  if (selectedRequest) {
-    return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <RequestDetail
-          request={selectedRequest}
-          onBack={() => setSelectedRequest(null)}
-          onUpdated={async () => {
-            const reqs = await fetchRequests(true)
-            setAllRequests(reqs)
-            const found = reqs.find((r) => r.request_id === selectedRequest.request_id)
-            if (found) setSelectedRequest(found)
-          }}
-        />
-      </main>
-    )
-  }
+
 
   const activeCount = allRequests.filter((r) => r.status === "Đang thực hiện").length
   const completedCount = allRequests.filter((r) => r.status === "Hoàn thành").length
@@ -347,57 +315,44 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         {/* Card Header: Title + Action Button */}
         <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {session?.role === "PO" ? "Danh sách yêu cầu của bạn" : "Danh sách yêu cầu"}
             </h1>
-            <p className="text-xs text-slate-500 font-medium">
-              <span>{totalItems} bài toán hiển thị</span>
-              <span className="mx-1.5">•</span>
-              <span className="text-amber-600 font-semibold">{activeCount} đang thực hiện</span>
-              <span className="mx-1.5">•</span>
-              <span className="text-emerald-600 font-semibold">{completedCount} hoàn thành</span>
+            <p className="text-xs text-slate-500 font-medium flex flex-wrap items-center gap-1.5">
+              <span>
+                <NumberTicker value={totalItems} className="font-bold text-slate-800" /> bài toán hiển thị
+              </span>
+              <span className="mx-0.5 text-slate-300">•</span>
+              <span className="text-amber-600 font-semibold">
+                <NumberTicker value={activeCount} className="font-bold text-amber-600" /> đang thực hiện
+              </span>
+              <span className="mx-0.5 text-slate-300">•</span>
+              <span className="text-emerald-600 font-semibold">
+                <NumberTicker value={completedCount} className="font-bold text-emerald-600" /> hoàn thành
+              </span>
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* User Session Info Pill */}
-            {session && (
-              <div className="hidden lg:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-                {session.avatarUrl ? (
-                  <img
-                    src={session.avatarUrl}
-                    alt={session.displayName}
-                    className="w-6 h-6 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-lg bg-[#1B3A6B] text-white font-bold text-[10px] flex items-center justify-center">
-                    {getUserInitials(session.displayName)}
-                  </div>
-                )}
-                <span className="font-bold text-slate-900">{session.displayName.split(" ")[0]}</span>
-                <Badge variant="navy" size="xs" className="text-[9px] px-1.5 py-0 font-extrabold">
-                  {session.role}
-                </Badge>
-              </div>
-            )}
-
-            {/* New Ticket / Request Button */}
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                if (onNavigateToCreate) {
-                  onNavigateToCreate()
-                } else {
-                  window.location.hash = "#create"
-                }
-              }}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1.5 rounded-xl h-10 px-4 shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo yêu cầu</span>
-            </Button>
-          </div>
+          {totalItems > 0 && (
+            <div className="flex items-center gap-3">
+              {/* New Ticket / Request Button */}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (onNavigateToCreate) {
+                    onNavigateToCreate()
+                  } else {
+                    window.location.hash = "#create"
+                  }
+                }}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1.5 rounded-xl h-10 px-4 shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tạo yêu cầu</span>
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filter & Toolbar Bar (Căn trái toàn bộ công cụ) */}
@@ -457,19 +412,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <tr>
                 <th className="py-3 px-3 sm:px-4 w-[20%]">
                   <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                    <span>Tên task</span>
+                    <span>Tên yêu cầu</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                   </div>
                 </th>
                 <th className="py-3 px-2.5 sm:px-4 w-[20%]">
                   <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                    <span>Designer working</span>
+                    <span>Người thực hiện</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                   </div>
                 </th>
                 <th className="py-3 px-2.5 sm:px-4 w-[20%]">
                   <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                    <span>Status</span>
+                    <span>Trạng thái</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                   </div>
                 </th>
@@ -594,14 +549,35 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 })
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center bg-white">
-                    <div className="max-w-xs mx-auto space-y-2">
-                      <Inbox className="w-8 h-8 text-slate-300 mx-auto" />
-                      <p className="text-sm font-bold text-slate-800">Không tìm thấy yêu cầu nào</p>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử đổi từ khóa hoặc bộ lọc.
-                      </p>
-                    </div>
+                  <td colSpan={4} className="py-6 text-center bg-white">
+                    <EmptyState
+                      title="Không tìm thấy bài toán nào"
+                      description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
+                      secondaryAction={
+                        query || productFilter !== "all" || statusFilter !== "all"
+                          ? {
+                              label: "Đặt lại bộ lọc",
+                              onClick: () => {
+                                setQuery("")
+                                setProductFilter("all")
+                                setStatusFilter("all")
+                              },
+                              icon: <RefreshCw className="w-4 h-4" />,
+                            }
+                          : undefined
+                      }
+                      primaryAction={
+                        session?.role === "PO"
+                          ? {
+                              label: "Tạo yêu cầu mới",
+                              onClick: () => {
+                                if (onNavigateToCreate) onNavigateToCreate()
+                              },
+                              icon: <Plus className="w-4 h-4" />,
+                            }
+                          : undefined
+                      }
+                    />
                   </td>
                 </tr>
               )}
@@ -613,7 +589,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         <div className="p-4 sm:px-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 text-xs text-slate-500 overflow-x-auto">
           {/* Left: Rows per page custom selector */}
           <div className="flex items-center gap-2 shrink-0">
-            <span>Rows per page</span>
+            <span>Số dòng mỗi trang</span>
             <DropdownMenu
               options={rowsPerPageOptions}
               value={String(rowsPerPage)}
@@ -628,8 +604,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-xs text-slate-500 font-medium">
               {totalItems === 0
-                ? "0 - 0 of 0"
-                : `${startIndex + 1} - ${Math.min(startIndex + rowsPerPage, totalItems)} of ${totalItems}`}
+                ? "0 – 0 trên 0"
+                : `${startIndex + 1} – ${Math.min(startIndex + rowsPerPage, totalItems)} trên ${totalItems}`}
             </span>
 
             <div className="flex items-center gap-1">
@@ -677,6 +653,28 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         </div>
 
       </div>
+
+      {/* POPUP MODAL XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
+      <Dialog
+        open={Boolean(selectedRequest)}
+        onClose={() => setSelectedRequest(null)}
+        size="2xl"
+      >
+        <DialogBody className="p-4 sm:p-6 max-h-[88vh] overflow-y-auto">
+          {selectedRequest && (
+            <RequestDetail
+              request={selectedRequest}
+              onBack={() => setSelectedRequest(null)}
+              onUpdated={async () => {
+                const reqs = await fetchRequests(true)
+                setAllRequests(reqs)
+                const found = reqs.find((r) => r.request_id === selectedRequest.request_id)
+                if (found) setSelectedRequest(found)
+              }}
+            />
+          )}
+        </DialogBody>
+      </Dialog>
     </main>
   )
 }

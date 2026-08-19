@@ -12,27 +12,18 @@ import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { IconTile } from "@/components/reui/icon-tile"
 import { X, CheckCircle2, Clock, UserCheck, Activity, Layers, ArrowUpRight } from "lucide-react"
+import { getCapacityStatusConfig } from "@/config/statusConfig"
 
 interface SquadDetailModalProps {
   squad: Squad | null
   onClose: () => void
 }
 
-const statusBadgeVariant: Record<
-  string,
-  { variant: "success" | "warning" | "destructive" | "default"; dotColor?: string }
-> = {
-  "Sẵn sàng": { variant: "success", dotColor: "bg-emerald-500" },
-  "Bình thường": { variant: "warning", dotColor: "bg-amber-500" },
-  "Đang bận": { variant: "warning", dotColor: "bg-amber-500" },
-  "Quá tải": { variant: "destructive", dotColor: "bg-rose-500" },
-}
-
 export default function SquadDetailModal({ squad, onClose }: SquadDetailModalProps) {
   if (!squad) return null
 
   const status = deriveCapacityStatus(squad)
-  const statusCfg = statusBadgeVariant[status] || { variant: "default", dotColor: "bg-slate-400" }
+  const statusCfg = getCapacityStatusConfig(status)
   const total = squad.active_tasks + squad.queued_tasks
   const pct = Math.min(100, Math.round((total / squad.capacity_threshold) * 100))
 
@@ -73,15 +64,15 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
         {/* Metric KPI cards */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900">{squad.active_tasks}</p>
+            <p className="text-2xl font-bold text-slate-900">{squad.active_tasks}</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Task đang làm</p>
           </div>
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900">{squad.queued_tasks}</p>
+            <p className="text-2xl font-bold text-slate-900">{squad.queued_tasks}</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Hàng đợi</p>
           </div>
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl sm:text-3xl font-black text-[#1B3A6B]">{pct}%</p>
+            <p className="text-2xl font-bold text-[#1B3A6B]">{pct}%</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Tải định mức</p>
           </div>
         </div>
