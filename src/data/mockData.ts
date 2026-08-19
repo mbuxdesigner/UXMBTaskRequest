@@ -1,3 +1,5 @@
+export type UserRole = "Admin" | "Design Owner" | "Designer" | "PO"
+
 export interface Squad {
   squad_id: string
   squad_name: string
@@ -39,6 +41,20 @@ export interface Deliverables {
   spec_url?: string
 }
 
+export interface TaskUpdateRecord {
+  id: string
+  request_id: string
+  timestamp: string
+  updated_by: string
+  author_role: UserRole
+  previous_phase?: string
+  new_phase: string
+  previous_progress?: number
+  new_progress: number
+  note: string
+  deliverable_link?: string
+}
+
 export interface UXRequest {
   request_id: string
   title: string
@@ -54,6 +70,8 @@ export interface UXRequest {
   deadline_reason: string
   preferred_squad: string
   requester_email: string
+  assigned_designer?: string
+  design_owner?: string
   squad_name: string
   ux_owner: string
   current_phase: string
@@ -64,6 +82,7 @@ export interface UXRequest {
   latest_update: LatestUpdate
   deliverables: Deliverables
   submitted_at: string
+  task_updates?: TaskUpdateRecord[]
 }
 
 export const ALL_PHASES = [
@@ -94,227 +113,83 @@ export const mockSquads: Squad[] = [
     squad_id: "SQ_CARD",
     squad_name: "App/Card",
     domain: "Thẻ & Thanh toán",
-    active_tasks: 6,
-    queued_tasks: 4,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
-    active_task_titles: [
-      "Phát hành thẻ phi vật lý nhanh",
-      "Quản lý hạn mức thẻ tín dụng",
-      "QR Payment & Hoàn tiền thẻ",
-      "Chuyển đổi trả góp thẻ tín dụng",
-      "Đổi mã PIN thẻ trên App",
-      "Tích điểm & Đổi quà MB Card",
-    ],
-    queued_task_titles: [
-      "Khóa / Mở khóa thẻ tạm thời",
-      "Lịch sử chi tiêu theo danh mục",
-      "Liên kết thẻ vào Apple / Google Pay",
-      "Widget thẻ thông minh trên Home",
-    ],
+    ux_owner: "Nguyễn Văn Cường (Design Owner)",
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_CORE",
     squad_name: "App/Core",
     domain: "Tài khoản & Giao dịch chính",
-    active_tasks: 3,
-    queued_tasks: 2,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
-    active_task_titles: [
-      "Cải thiện màn hình Tổng quan tài khoản",
-      "Tra cứu chi tiết biến động số dư",
-      "Tối ưu luồng chuyển tiền nhanh 247",
-    ],
-    queued_task_titles: ["Xuất sao kê tài khoản online", "Cài đặt thông báo biến động"],
+    ux_owner: "Nguyễn Văn Cường (Design Owner)",
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_LENDING",
     squad_name: "App/Lending",
     domain: "Vay vốn & Thấu chi tín dụng",
-    active_tasks: 7,
-    queued_tasks: 5,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
-    active_task_titles: [
-      "Luồng đăng ký vay tín chấp online",
-      "Nâng hạn mức thấu chi tài khoản",
-      "Dashboard theo dõi lịch trả nợ",
-      "Tất toán khoản vay trước hạn",
-      "Tra cứu trạng thái hồ sơ vay",
-      "Giải thích điểm tín dụng",
-      "Gói bảo hiểm gắn với khoản vay",
-    ],
-    queued_task_titles: [
-      "Công cụ kiểm tra điều kiện vay",
-      "Đăng ký phát hành thẻ thấu chi",
-      "Công cụ tính lãi & lịch trả góp",
-      "Cơ cấu lại kỳ hạn trả nợ",
-    ],
+    ux_owner: "Trần Mai Hoa (Design Owner)",
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_SAVING",
     squad_name: "App/Saving",
     domain: "Tiết kiệm & Tích lũy số",
-    active_tasks: 2,
-    queued_tasks: 1,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
-    active_task_titles: [
-      "Mở sổ tiết kiệm online tích lũy",
-      "Tiết kiệm gửi góp tự động định kỳ",
-    ],
-    queued_task_titles: ["Tính lãi suất tiết kiệm dự kiến"],
+    ux_owner: "Lê Hoàng Nam (Design Owner)",
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_DIGI",
     squad_name: "Digi",
     domain: "Kênh số & Tiện ích mở rộng",
-    active_tasks: 3,
-    queued_tasks: 2,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
     ux_owner: "UX Designer phụ trách",
-    active_task_titles: [
-      "Mua sắm hoàn tiền DigiMall",
-      "Đặt vé máy bay & Khách sạn",
-      "Thanh toán hóa đơn tự động",
-    ],
-    queued_task_titles: ["Tích hợp bảo hiểm số DigiCare", "Mini App đối tác"],
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_BAAS",
     squad_name: "BaaS",
     domain: "Banking as a Service & Đối tác API",
-    active_tasks: 2,
-    queued_tasks: 1,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
     ux_owner: "UX Designer phụ trách",
-    active_task_titles: ["Cổng kết nối đối tác Open Banking", "Trải nghiệm nhúng thanh toán"],
-    queued_task_titles: ["Developer Portal UX Refactor"],
+    active_task_titles: [],
+    queued_task_titles: [],
   },
   {
     squad_id: "SQ_IB",
     squad_name: "Internet Banking",
     domain: "Kênh Web Internet Banking",
-    active_tasks: 2,
-    queued_tasks: 2,
+    active_tasks: 0,
+    queued_tasks: 0,
     capacity_threshold: 8,
     ux_owner: "UX Designer phụ trách",
-    active_task_titles: ["Giao diện Internet Banking mới", "Phân quyền người dùng doanh nghiệp"],
-    queued_task_titles: ["Báo cáo tài chính doanh nghiệp"],
+    active_task_titles: [],
+    queued_task_titles: [],
   },
 ]
 
-export const mockRequests: UXRequest[] = [
-  {
-    request_id: "UXMB-001",
-    title: "International Transfer Redesign",
-    product: "App/Card",
-    request_type: "Thiết kế lại trải nghiệm",
-    feature_journey: "International Transfer",
-    description:
-      "Luồng chuyển tiền quốc tế hiện tại có nhiều điểm ma sát gây drop-off cao. Cần thiết kế lại trải nghiệm streamlined, đơn giản hoá nhập SWIFT code và hiển thị phí rõ ràng.",
-    business_need:
-      "Giảm tỷ lệ bỏ giao dịch 40% và tăng khối lượng chuyển tiền quốc tế 30% trong Q3.",
-    user_problem:
-      "Người dùng gặp khó khăn với nhập SWIFT code phức tạp, phân tích phí không rõ ràng, và màn hình xác nhận gây nhầm lẫn.",
-    target_user: "Khách hàng retail banking có nhu cầu gửi tiền quốc tế",
-    expected_output: ["User Flow", "UI Design", "Prototype"],
-    expected_deadline: "2026-09-30",
-    deadline_reason: "Cam kết kinh doanh",
-    preferred_squad: "App/Card",
-    requester_email: "minhnb@mbbank.com.vn",
-    squad_name: "App/Card",
-    ux_owner: "UX Designer phụ trách",
-    current_phase: "UI Design",
-    status: "Đang thực hiện",
-    progress: 60,
-    last_updated: "03/08/2026",
-    phases: buildPhases("UI Design"),
-    latest_update: {
-      date: "03/08/2026",
-      phase: "UI Design — Đang thực hiện",
-      message:
-        "UX team đang hoàn thiện màn hình high-fidelity và chuẩn bị cho buổi review với stakeholder. Các màn hình core của luồng chuyển tiền đã hoàn thành 80%. Dự kiến sẵn sàng review: 10/08/2026.",
-    },
-    deliverables: {
-      figma_url: "https://figma.com",
-    },
-    submitted_at: "10/06/2026",
-  },
-  {
-    request_id: "UXMB-002",
-    title: "Account Overview Enhancement",
-    product: "App/Core",
-    request_type: "Cải thiện trải nghiệm hiện tại",
-    feature_journey: "Account Overview",
-    description:
-      "Cải thiện màn hình tổng quan tài khoản để cung cấp khả năng hiển thị tài chính tốt hơn với tóm tắt số dư, giao dịch gần đây và thao tác nhanh.",
-    business_need:
-      "Tăng daily active usage bằng cách cải thiện trải nghiệm màn hình đầu tiên và rút ngắn thời gian đến hành động chính.",
-    user_problem:
-      "Người dùng không thể nhanh chóng xem vị thế tài chính hoặc thực hiện thao tác phổ biến từ màn hình chính mà không cần nhiều bước.",
-    target_user: "Toàn bộ khách hàng retail banking",
-    expected_output: ["UI Design", "Prototype"],
-    expected_deadline: "2026-07-15",
-    deadline_reason: "Ra mắt sản phẩm",
-    preferred_squad: "App/Core",
-    requester_email: "lantt@mbbank.com.vn",
-    squad_name: "App/Core",
-    ux_owner: "UX Designer phụ trách",
-    current_phase: "Bàn giao",
-    status: "Hoàn thành",
-    progress: 100,
-    last_updated: "20/07/2026",
-    phases: ALL_PHASES.map((name) => ({ name, status: "completed" as PhaseStatus })),
-    latest_update: {
-      date: "20/07/2026",
-      phase: "Bàn giao — Hoàn thành",
-      message:
-        "Toàn bộ deliverable đã bàn giao cho engineering team. File Figma có annotation, UX spec và clickable prototype có sẵn bên dưới.",
-    },
-    deliverables: {
-      figma_url: "https://figma.com",
-      prototype_url: "https://figma.com",
-      spec_url: "https://notion.so",
-    },
-    submitted_at: "15/05/2026",
-  },
-  {
-    request_id: "UXMB-003",
-    title: "Personal Loan Application Flow",
-    product: "App/Lending",
-    request_type: "Tính năng mới",
-    feature_journey: "Loan Application",
-    description:
-      "Thiết kế hành trình nộp đơn vay cá nhân kỹ thuật số end-to-end cho mobile banking, từ kiểm tra điều kiện đến xác nhận giải ngân.",
-    business_need:
-      "Ra mắt sản phẩm vay cá nhân kỹ thuật số hoàn toàn vào Q4 2026 để chiếm lĩnh thị trường tín dụng không có tài sản đảm bảo đang tăng trưởng.",
-    user_problem:
-      "Khách hàng hiện tại phải đến chi nhánh để nộp đơn vay. Họ mong đợi hành trình tự phục vụ kỹ thuật số như các đối thủ fintech.",
-    target_user: "Nhân viên văn phòng và người tự kinh doanh, độ tuổi 25–45",
-    expected_output: ["UX Research", "User Flow", "UI Design", "Prototype"],
-    expected_deadline: "2026-10-31",
-    deadline_reason: "Ra mắt sản phẩm",
-    preferred_squad: "App/Lending",
-    requester_email: "anhld@mbbank.com.vn",
-    squad_name: "App/Lending",
-    ux_owner: "UX Designer phụ trách",
-    current_phase: "Phân loại",
-    status: "Đang phân loại",
-    progress: 15,
-    last_updated: "01/08/2026",
-    phases: buildPhases("Phân loại"),
-    latest_update: {
-      date: "01/08/2026",
-      phase: "Phân loại — Đang thực hiện",
-      message:
-        "UX Lead đang xem xét phạm vi yêu cầu và align với product team và compliance. Buổi kickoff discovery dự kiến vào 07/08/2026.",
-    },
-    deliverables: {},
-    submitted_at: "28/07/2026",
-  },
-]
+// Real requests storage (No fake data)
+export const mockRequests: UXRequest[] = []
 
 export const PRODUCTS = [
   "App/Core",
@@ -370,4 +245,3 @@ export function recommendSquad(product: string): Squad | null {
     queued_task_titles: [],
   }
 }
-

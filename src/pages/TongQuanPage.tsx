@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react"
-import { Squad, mockRequests } from "../data/mockData"
-import { fetchSquads } from "../api/api"
+import { Squad, UXRequest } from "../data/mockData"
+import { fetchSquads, fetchRequests } from "../api/api"
 import SquadCapacityOverview from "../components/squad/SquadCapacityOverview"
-import { Card, CardContent } from "@/components/ui/card"
+import RequestCard from "../components/track/RequestCard"
+import RequestDetail from "../components/track/RequestDetail"
+import { Frame, FrameHeader, FrameTitle, FrameDescription, FrameBody, FrameActions } from "@/components/reui/frame"
+import { IconTile } from "@/components/reui/icon-tile"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { 
   Layers, 
   Clock, 
@@ -12,7 +17,12 @@ import {
   Users, 
   Boxes, 
   Activity,
-  BarChart3
+  BarChart3,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  ArrowRight,
+  ShieldCheck
 } from "lucide-react"
 
 function StatCard({
@@ -21,163 +31,251 @@ function StatCard({
   sub,
   icon: Icon,
   variant = "default",
+  trend,
 }: {
   label: string
   value: number
   sub?: string
   icon: React.ComponentType<{ className?: string }>
-  variant?: "default" | "info" | "warning" | "success" | "navy"
+  variant?: "navy" | "teal" | "emerald" | "amber" | "purple" | "blue"
+  trend?: string
 }) {
-  const iconColor = {
-    default: "text-slate-600 bg-slate-100",
-    info: "text-blue-600 bg-blue-50",
-    warning: "text-amber-600 bg-amber-50",
-    success: "text-emerald-600 bg-emerald-50",
-    navy: "text-navy bg-navy-50",
-  }[variant]
-
   return (
-    <Card className="hover:shadow-md hover:border-slate-300 transition-all">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconColor}`}>
-            <Icon className="w-5 h-5" />
-          </div>
-          <Badge variant={variant === "default" ? "secondary" : variant} size="sm">
-            {label}
+    <Frame variant="default" padding="default" className="relative overflow-hidden group hover:border-[#1B3A6B]/30 hover:shadow-md transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <IconTile variant={variant} size="default">
+          <Icon className="w-5 h-5" />
+        </IconTile>
+        {trend && (
+          <Badge variant="success" size="xs" className="font-bold gap-1">
+            <TrendingUp className="w-3 h-3" />
+            {trend}
           </Badge>
-        </div>
-        <div className="mt-4">
-          <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{value}</p>
-          {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
-        </div>
-      </CardContent>
-    </Card>
+        )}
+      </div>
+      <div className="mt-4 space-y-1">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{value}</p>
+        {sub && <p className="text-[11px] text-slate-500 font-medium pt-0.5">{sub}</p>}
+      </div>
+    </Frame>
   )
 }
 
 export default function TongQuanPage() {
   const [squads, setSquads] = useState<Squad[]>([])
+  const [requests, setRequests] = useState<UXRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
+
+  const loadData = async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
+    try {
+      const [squadsData, requestsData] = await Promise.all([
+        fetchSquads(),
+        fetchRequests(forceRefresh),
+      ])
+      setSquads(squadsData)
+      setRequests(requestsData)
+    } catch {
+      setError("Không thể tải dữ liệu từ Google Sheet.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    fetchSquads()
-      .then(setSquads)
-      .catch(() => setError("Không thể tải dữ liệu Squad."))
-      .finally(() => setLoading(false))
+    loadData()
   }, [])
 
-  const total = mockRequests.length
-  const inProgress = mockRequests.filter((r) => r.status === "Đang thực hiện").length
-  const completed = mockRequests.filter((r) => r.status === "Hoàn thành").length
-  const inTriage = mockRequests.filter((r) => r.status === "Đang phân loại").length
+  if (selectedRequest) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <RequestDetail
+          request={selectedRequest}
+          onBack={() => setSelectedRequest(null)}
+          onUpdated={async () => {
+            await loadData(true)
+            const allReqs = await fetchRequests()
+            const found = allReqs.find((r) => r.request_id === selectedRequest.request_id)
+            if (found) setSelectedRequest(found)
+          }}
+        />
+      </main>
+    )
+  }
+
+  const total = requests.length
+  const inProgress = requests.filter((r) => r.status === "Đang thực hiện").length
+  const completed = requests.filter((r) => r.status === "Hoàn thành").length
+  const inTriage = requests.filter((r) => r.status === "Đang phân loại" || r.status === "Chờ tiếp nhận").length
 
   const totalActiveTasks = squads.reduce((s, q) => s + q.active_tasks, 0)
   const totalQueuedTasks = squads.reduce((s, q) => s + q.queued_tasks, 0)
+  const recentRequests = requests.slice(0, 4)
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-      <div>
-        <div className="flex items-center gap-2">
-          <Badge variant="navy" size="sm">Tổng quan</Badge>
-          <span className="text-xs text-slate-400">Dashboard thời gian thực</span>
-        </div>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">Tổng quan hệ thống</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Theo dõi trạng thái tổng thể của các yêu cầu UX và năng lực tiếp nhận của từng Squad.
-        </p>
-      </div>
-
-      {/* Summary stats */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-navy" />
-            Tổng quan yêu cầu
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 pb-16">
+      {/* Top Welcome & Sync Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="navy" size="xs" dot dotColor="bg-emerald-400" dotPulse>
+              Hệ thống trực tuyến
+            </Badge>
+            <span className="text-xs text-slate-400 font-medium">Đồng bộ Google Sheet realtime</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Tổng quan Hệ sinh thái UX MB
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Theo dõi khối lượng yêu cầu, công suất tiếp nhận của các Squad và sản phẩm bàn giao thiết kế.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadData(true)}
+            loading={refreshing}
+            className="gap-2 font-semibold text-xs rounded-xl"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <span>Làm mới dữ liệu</span>
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <Alert variant="destructive" onDismiss={() => setError(null)}>
+          <AlertTitle>Lỗi kết nối dữ liệu</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* KPI Stats Grid */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[#1B3A6B]" />
+            Chỉ số vận hành yêu cầu UX ({total} yêu cầu)
+          </p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Tổng yêu cầu"
             value={total}
-            sub="Toàn bộ yêu cầu trong hệ thống"
+            sub="Đã tiếp nhận vào cổng"
             icon={Layers}
-            variant="default"
+            variant="navy"
+            trend="+18%"
           />
           <StatCard
-            label="Đang thực hiện"
+            label="Đang thiết kế"
             value={inProgress}
-            sub="Đang trong quy trình thiết kế UX"
+            sub="Trong các khâu UX/UI"
             icon={Clock}
-            variant="info"
+            variant="blue"
           />
           <StatCard
             label="Đang phân loại"
             value={inTriage}
-            sub="Chờ UX Lead & Squad tiếp nhận"
+            sub="Chờ Squad tiếp nhận"
             icon={AlertCircle}
-            variant="warning"
+            variant="amber"
           />
           <StatCard
-            label="Hoàn thành"
+            label="Đã hoàn thành"
             value={completed}
-            sub="Đã bàn giao và nghiệm thu"
+            sub="Đã bàn giao Design Spec"
             icon={CheckCircle2}
-            variant="success"
+            variant="emerald"
+            trend="+24%"
           />
         </div>
       </section>
 
-      {/* Squad workload stats */}
+      {/* Squad Workload Stats */}
       {!loading && squads.length > 0 && (
-        <section className="space-y-4">
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5 text-teal" />
-              Khối lượng UX Squad
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-[#0D9B97]" />
+              Năng lực & Tải trọng 4 UX Squads
             </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              label="Task đang làm"
+              label="Task đang thực hiện"
               value={totalActiveTasks}
-              sub="Trên tất cả các Squad"
+              sub="Phân bổ trên 4 Squad"
               icon={Activity}
-              variant="navy"
+              variant="teal"
             />
             <StatCard
-              label="Hàng đợi (Queue)"
+              label="Hàng đợi (Backlog)"
               value={totalQueuedTasks}
-              sub="Yêu cầu đang chờ xử lý"
+              sub="Yêu cầu chờ xử lý"
               icon={Clock}
-              variant="warning"
+              variant="amber"
             />
             <StatCard
-              label="Squad hoạt động"
+              label="UX Squads"
               value={squads.length}
-              sub="Phân hệ số đang vận hành"
+              sub="Đang vận hành chuyên sâu"
               icon={Boxes}
-              variant="default"
+              variant="purple"
             />
             <StatCard
-              label="UX Lead / Owner"
+              label="UX Design Leads"
               value={squads.filter((s) => s.ux_owner).length}
-              sub="Đang phụ trách trực tiếp"
+              sub="Chịu trách nhiệm trực tiếp"
               icon={Users}
-              variant="success"
+              variant="emerald"
             />
           </div>
         </section>
       )}
 
-      {/* Squad capacity */}
-      <div className="border-t border-slate-200 pt-8">
+      {/* Recent Requests Section */}
+      {recentRequests.length > 0 && (
+        <Frame variant="default">
+          <FrameHeader>
+            <FrameTitle>
+              <IconTile size="xs" variant="navy"><Sparkles className="w-3.5 h-3.5" /></IconTile>
+              Yêu cầu thiết kế cập nhật gần nhất
+            </FrameTitle>
+            <FrameDescription>
+              Các yêu cầu UX đang trong giai đoạn triển khai hoặc vừa được tạo mới.
+            </FrameDescription>
+          </FrameHeader>
+          <FrameBody className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recentRequests.map((req) => (
+                <RequestCard
+                  key={req.request_id}
+                  request={req}
+                  onClick={setSelectedRequest}
+                />
+              ))}
+            </div>
+          </FrameBody>
+        </Frame>
+      )}
+
+      {/* Squad Capacity Overview Component */}
+      <div className="pt-4 border-t border-slate-200/80">
         <SquadCapacityOverview
           squads={squads}
           loading={loading}
           error={error}
-          interactive={false}
+          interactive={true}
         />
       </div>
     </main>

@@ -1,7 +1,8 @@
 import { Squad, deriveCapacityStatus } from "../../data/mockData"
-import { Card, CardContent } from "@/components/ui/card"
+import { Frame, FrameBody } from "@/components/reui/frame"
 import { Badge } from "@/components/ui/badge"
-import { Sparkles, Activity } from "lucide-react"
+import { IconTile } from "@/components/reui/icon-tile"
+import { Sparkles, Activity, ShieldCheck, Users } from "lucide-react"
 
 interface SquadRecommendationProps {
   recommendedSquad: Squad | null
@@ -10,12 +11,15 @@ interface SquadRecommendationProps {
   onPreferredChange: (name: string) => void
 }
 
-const statusBadgeVariant = {
-  "Sẵn sàng": "success",
-  "Bình thường": "warning",
-  "Đang bận": "warning",
-  "Quá tải": "destructive",
-} as const
+const statusBadgeVariant: Record<
+  string,
+  { variant: "success" | "warning" | "destructive" | "default"; dotColor?: string }
+> = {
+  "Sẵn sàng": { variant: "success", dotColor: "bg-emerald-500" },
+  "Bình thường": { variant: "warning", dotColor: "bg-amber-500" },
+  "Đang bận": { variant: "warning", dotColor: "bg-amber-500" },
+  "Quá tải": { variant: "destructive", dotColor: "bg-rose-500" },
+}
 
 export default function SquadRecommendation({
   recommendedSquad,
@@ -23,40 +27,57 @@ export default function SquadRecommendation({
   if (!recommendedSquad) return null
 
   const status = deriveCapacityStatus(recommendedSquad)
+  const statusCfg = statusBadgeVariant[status] || { variant: "default", dotColor: "bg-slate-400" }
 
   return (
-    <Card variant="accent" className="border-navy-200/80 bg-gradient-to-r from-navy-50/90 to-blue-50/50">
-      <CardContent className="p-4.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <Frame 
+      variant="accent" 
+      padding="sm"
+      className="bg-gradient-to-r from-white via-slate-50/50 to-[#1B3A6B]/5 border-slate-200/90 shadow-xs"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <IconTile variant="navy" size="default">
+            <Sparkles className="w-5 h-5 text-[#1B3A6B]" />
+          </IconTile>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Badge variant="navy" size="sm" className="gap-1">
-                <Sparkles className="w-3 h-3 text-teal" />
-                UX Squad phụ trách
+              <Badge variant="navy" size="xs" className="font-bold uppercase tracking-wider">
+                UX Squad chuyên trách (1:1)
               </Badge>
-              <span className="font-bold text-base text-slate-900">{recommendedSquad.squad_name}</span>
+              <h4 className="font-bold text-sm sm:text-base text-slate-900">
+                {recommendedSquad.squad_name}
+              </h4>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {recommendedSquad.domain || `Phụ trách trực tiếp trải nghiệm phân hệ ${recommendedSquad.squad_name}`}
+            <p className="text-xs text-slate-500 leading-tight">
+              {recommendedSquad.domain || `Chuyên trách trải nghiệm phân hệ ${recommendedSquad.squad_name}`}
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-3 bg-white/80 border border-slate-200/80 p-2.5 rounded-xl flex-shrink-0">
-            <Activity className="w-4 h-4 text-navy flex-shrink-0" />
-            <div className="text-xs">
-              <p className="text-slate-400 text-[10px] leading-tight">Trạng thái Squad</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="font-semibold text-slate-700">
-                  {recommendedSquad.active_tasks} đang làm · {recommendedSquad.queued_tasks} chờ
-                </span>
-                <Badge variant={statusBadgeVariant[status] || "default"} dot size="sm">
-                  {status}
-                </Badge>
-              </div>
+        <div className="flex items-center gap-3 bg-white border border-slate-200/80 p-2.5 px-3.5 rounded-xl shrink-0 shadow-2xs">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+            <Activity className="w-4 h-4 text-[#1B3A6B]" />
+          </div>
+          <div className="text-xs">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Tải công việc</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="font-bold text-slate-800">
+                {recommendedSquad.active_tasks} đang làm · {recommendedSquad.queued_tasks} chờ
+              </span>
+              <Badge
+                variant={statusCfg.variant}
+                dot
+                dotColor={statusCfg.dotColor}
+                size="xs"
+                className="font-bold"
+              >
+                {status}
+              </Badge>
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Frame>
   )
 }

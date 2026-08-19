@@ -1,82 +1,97 @@
 import { Phase } from "../../data/mockData"
 import { Badge } from "@/components/ui/badge"
-import { Check, Clock, Circle } from "lucide-react"
+import {
+  Timeline,
+  TimelineItem,
+  TimelineIcon,
+  TimelineContent,
+  TimelineHeader,
+  TimelineTitle,
+  TimelineTime,
+  TimelineDescription,
+} from "@/components/reui/timeline"
+import { Check, Clock, CircleDot, AlertCircle } from "lucide-react"
 
 interface UXProgressTimelineProps {
   phases: Phase[]
+  interactive?: boolean
 }
 
 export default function UXProgressTimeline({ phases }: UXProgressTimelineProps) {
   return (
-    <div className="relative space-y-1">
-      {phases.map((phase, i) => {
-        const isLast = i === phases.length - 1
+    <Timeline className="py-2">
+      {phases.map((phase) => {
         const isCompleted = phase.status === "completed"
         const isInProgress = phase.status === "in_progress"
+        const isPending = phase.status === "pending"
+
+        const timelineStatus = isCompleted
+          ? "completed"
+          : isInProgress
+          ? "current"
+          : "pending"
 
         return (
-          <div key={phase.name} className="flex gap-3.5 group">
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                  isCompleted
-                    ? "bg-emerald-600 text-white shadow-2xs"
-                    : isInProgress
-                      ? "bg-navy text-white ring-4 ring-navy/15 shadow-2xs"
-                      : "bg-slate-100 text-slate-400 border border-slate-200"
-                }`}
-              >
-                {isCompleted ? (
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                ) : isInProgress ? (
-                  <Clock className="w-3.5 h-3.5 stroke-[2.5] animate-spin" />
-                ) : (
-                  <Circle className="w-2 h-2 fill-slate-300 text-slate-300" />
-                )}
-              </div>
-              {!isLast && (
-                <div
-                  className={`w-0.5 flex-1 my-1 min-h-[22px] rounded-full transition-colors ${
-                    isCompleted ? "bg-emerald-500" : "bg-slate-200"
-                  }`}
-                />
+          <TimelineItem key={phase.name} status={timelineStatus}>
+            <TimelineIcon status={timelineStatus}>
+              {isCompleted ? (
+                <Check className="w-4 h-4 stroke-[2.5]" />
+              ) : isInProgress ? (
+                <Clock className="w-4 h-4 animate-spin stroke-[2]" />
+              ) : (
+                <CircleDot className="w-3.5 h-3.5 text-slate-400" />
               )}
-            </div>
+            </TimelineIcon>
 
-            <div className="pb-5 pt-0.5 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={`text-xs font-medium ${
-                    isInProgress
-                      ? "text-slate-900 font-bold"
-                      : isCompleted
-                        ? "text-slate-700"
-                        : "text-slate-400"
-                  }`}
-                >
-                  {phase.name}
-                </p>
+            <TimelineContent className="bg-slate-50/70 hover:bg-slate-50 transition-colors p-3.5 rounded-xl border border-slate-200/60 mb-2">
+              <TimelineHeader>
+                <div className="flex items-center gap-2">
+                  <TimelineTitle
+                    className={
+                      isInProgress
+                        ? "text-[#1B3A6B] font-bold"
+                        : isCompleted
+                        ? "text-slate-900"
+                        : "text-slate-500"
+                    }
+                  >
+                    {phase.name}
+                  </TimelineTitle>
+                </div>
                 <Badge
                   variant={
                     isCompleted
                       ? "success"
                       : isInProgress
-                        ? "navy"
-                        : "secondary"
+                      ? "navy"
+                      : "secondary"
                   }
-                  size="sm"
+                  size="xs"
+                  dot={isInProgress}
+                  dotColor="bg-[#1B3A6B]"
+                  dotPulse={isInProgress}
                 >
                   {isCompleted
-                    ? "Hoàn thành"
+                    ? "Đã hoàn thành"
                     : isInProgress
-                      ? "Đang làm"
-                      : "Chưa tới"}
+                    ? "Đang thực hiện"
+                    : "Chờ xử lý"}
                 </Badge>
-              </div>
-            </div>
-          </div>
+              </TimelineHeader>
+
+              {phase.assignee && (
+                <TimelineDescription className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Phụ trách: <strong className="text-slate-700">{phase.assignee}</strong></span>
+                  {phase.completionDate && (
+                    <TimelineTime>{phase.completionDate}</TimelineTime>
+                  )}
+                </TimelineDescription>
+              )}
+            </TimelineContent>
+          </TimelineItem>
         )
       })}
-    </div>
+    </Timeline>
   )
 }
+export { UXProgressTimeline }

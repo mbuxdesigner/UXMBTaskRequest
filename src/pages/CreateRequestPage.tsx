@@ -11,7 +11,7 @@ export default function CreateRequestPage() {
   }, [])
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <RequestForm squads={squads} />
     </main>
   )

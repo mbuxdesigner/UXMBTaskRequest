@@ -1,4 +1,5 @@
 import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface DialogProps {
@@ -32,8 +33,6 @@ export function Dialog({
     }
   }, [open, onClose])
 
-  if (!open) return null
-
   const sizeClasses = {
     sm: "max-w-md",
     md: "max-w-lg",
@@ -43,27 +42,39 @@ export function Dialog({
   }[size]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            onClick={onClose}
+            aria-hidden="true"
+          />
 
-      {/* Modal Box */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          "relative z-50 bg-white rounded-2xl shadow-xl border border-slate-200 w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150",
-          sizeClasses,
-          className
-        )}
-      >
-        {children}
-      </div>
-    </div>
+          {/* Modal Box with Spring Physics */}
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 6 }}
+            transition={{ type: "spring", stiffness: 450, damping: 30 }}
+            className={cn(
+              "relative z-50 bg-white rounded-3xl shadow-2xl border border-slate-200 w-full overflow-hidden flex flex-col max-h-[90vh]",
+              sizeClasses,
+              className
+            )}
+          >
+            {children}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   )
 }
 

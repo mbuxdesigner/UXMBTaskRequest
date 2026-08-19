@@ -1,9 +1,9 @@
 import { Squad, CapacityStatus, deriveCapacityStatus } from "../../data/mockData"
-import { Card, CardContent } from "@/components/ui/card"
+import { Frame } from "@/components/reui/frame"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, UserCheck } from "lucide-react"
+import { ArrowRight, UserCheck, Layers, Clock, Activity, CheckCircle2 } from "lucide-react"
 
 interface SquadCapacityCardProps {
   squad: Squad
@@ -11,18 +11,14 @@ interface SquadCapacityCardProps {
   interactive?: boolean
 }
 
-const statusBadgeVariant: Record<CapacityStatus, "success" | "warning" | "destructive" | "default"> = {
-  "Sẵn sàng": "success",
-  "Bình thường": "warning",
-  "Đang bận": "warning",
-  "Quá tải": "destructive",
-}
-
-const progressVariant: Record<CapacityStatus, "success" | "warning" | "destructive" | "default"> = {
-  "Sẵn sàng": "success",
-  "Bình thường": "warning",
-  "Đang bận": "warning",
-  "Quá tải": "destructive",
+const statusBadgeVariant: Record<
+  CapacityStatus,
+  { variant: "success" | "warning" | "destructive" | "default"; dotColor?: string }
+> = {
+  "Sẵn sàng": { variant: "success", dotColor: "bg-emerald-500" },
+  "Bình thường": { variant: "warning", dotColor: "bg-amber-500" },
+  "Đang bận": { variant: "warning", dotColor: "bg-amber-500" },
+  "Quá tải": { variant: "destructive", dotColor: "bg-rose-500" },
 }
 
 export default function SquadCapacityCard({
@@ -31,66 +27,104 @@ export default function SquadCapacityCard({
   interactive = true,
 }: SquadCapacityCardProps) {
   const status = deriveCapacityStatus(squad)
+  const statusConfig = statusBadgeVariant[status] || { variant: "default", dotColor: "bg-slate-400" }
   const total = squad.active_tasks + squad.queued_tasks
   const pct = Math.min(100, Math.round((total / squad.capacity_threshold) * 100))
 
   return (
-    <Card className="flex flex-col hover:border-slate-300 hover:shadow-md transition-all duration-200">
-      <CardContent className="p-5 flex flex-col gap-4 flex-1">
+    <Frame
+      variant="default"
+      padding="none"
+      className="flex flex-col hover:border-[#1B3A6B]/40 hover:shadow-lg transition-all duration-200 group bg-white relative overflow-hidden"
+    >
+      {/* Top accent status indicator line */}
+      <div
+        className={`h-1 w-full ${
+          status === "Sẵn sàng"
+            ? "bg-emerald-500"
+            : status === "Bình thường"
+            ? "bg-blue-500"
+            : status === "Đang bận"
+            ? "bg-amber-500"
+            : "bg-rose-500"
+        }`}
+      />
+
+      <div className="p-5 flex flex-col gap-4 flex-1">
+        {/* Squad header */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-bold text-slate-900 text-sm leading-snug truncate">
+            <h4 className="font-bold text-slate-900 text-base leading-snug group-hover:text-[#1B3A6B] transition-colors truncate">
               {squad.squad_name}
-            </p>
+            </h4>
             <p className="text-xs text-slate-500 mt-0.5 truncate">{squad.domain}</p>
           </div>
-          <Badge variant={statusBadgeVariant[status] || "default"} dot size="sm">
+          <Badge
+            variant={statusConfig.variant}
+            dot
+            dotColor={statusConfig.dotColor}
+            size="xs"
+            className="font-bold"
+          >
             {status}
           </Badge>
         </div>
 
-        <div className="space-y-1.5">
+        {/* Capacity utilization */}
+        <div className="space-y-1.5 pt-1">
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-500">Khối lượng công việc</span>
-            <span className="font-semibold text-slate-800">{pct}%</span>
+            <span className="text-slate-500 font-medium flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-[#1B3A6B]" />
+              Tải trọng định mức
+            </span>
+            <span className="font-bold text-slate-900">{pct}%</span>
           </div>
-          <Progress 
-            value={pct} 
-            variant={progressVariant[status] || "default"} 
-            size="sm" 
+          <Progress
+            value={pct}
+            variant={
+              status === "Sẵn sàng"
+                ? "success"
+                : status === "Quá tải"
+                ? "destructive"
+                : "default"
+            }
+            size="sm"
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 items-center text-center">
+        {/* Task Counts Summary */}
+        <div className="grid grid-cols-3 gap-2 py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-100 items-center text-center">
           <div>
-            <p className="text-lg font-bold text-slate-900 leading-none">{squad.active_tasks}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Đang làm</p>
+            <p className="text-lg font-black text-slate-900 leading-none">{squad.active_tasks}</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Đang làm</p>
           </div>
-          <div className="border-x border-slate-100 px-1">
-            <p className="text-lg font-bold text-slate-900 leading-none">{squad.queued_tasks}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Hàng đợi</p>
+          <div className="border-x border-slate-200 px-1">
+            <p className="text-lg font-black text-slate-900 leading-none">{squad.queued_tasks}</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">Hàng đợi</p>
           </div>
           <div className="min-w-0 px-1">
-            <p className="text-xs font-semibold text-slate-800 leading-none truncate flex items-center justify-center gap-1">
-              <UserCheck className="w-3 h-3 text-teal flex-shrink-0" />
+            <p className="text-xs font-bold text-[#1B3A6B] leading-none truncate flex items-center justify-center gap-1">
+              <UserCheck className="w-3 h-3 text-[#0D9B97] shrink-0" />
               <span className="truncate">{squad.ux_owner.split(" ")[0]}</span>
             </p>
-            <p className="text-[11px] text-slate-400 mt-1">UX Owner</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-1">UX Lead</p>
           </div>
         </div>
 
+        {/* Details action button */}
         {interactive && onViewDetails && (
           <Button
             variant="outline"
             size="sm"
             onClick={() => onViewDetails(squad)}
-            className="mt-auto w-full group"
+            className="mt-auto w-full justify-between font-semibold text-xs rounded-xl group-hover:border-[#1B3A6B]/30"
           >
-            <span>Xem chi tiết</span>
-            <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-navy group-hover:translate-x-0.5 transition-all" />
+            <span>Chi tiết năng lực Squad</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#1B3A6B] group-hover:translate-x-0.5 transition-all" />
           </Button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Frame>
   )
 }
+export { SquadCapacityCard }

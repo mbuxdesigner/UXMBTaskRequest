@@ -122,10 +122,16 @@ export default function GoogleSheetSettingsModal({
                 Cấu hình Web App URL
               </span>
             </TabsTrigger>
+            <TabsTrigger value="teams_otp">
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-teal" />
+                Xác thực Teams OTP
+              </span>
+            </TabsTrigger>
             <TabsTrigger value="guide">
               <span className="flex items-center gap-2">
                 <BookOpen className="w-3.5 h-3.5" />
-                Hướng dẫn cài đặt (1 phút)
+                Hướng dẫn cài đặt Apps Script
               </span>
             </TabsTrigger>
           </TabsList>
@@ -178,23 +184,59 @@ export default function GoogleSheetSettingsModal({
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-2 text-xs text-slate-600">
               <p className="font-bold text-slate-800 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                Cơ chế tối ưu siêu tốc:
+                Cơ chế bảo mật & vận hành 2 lớp:
               </p>
               <ul className="space-y-1.5 text-slate-600 pl-1">
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
-                  <span><strong>1. Quản lý Selections:</strong> Tự động tải dropdown Sản phẩm, Loại yêu cầu từ sheet <code className="bg-slate-200 px-1 py-0.5 rounded font-mono">Selections</code>.</span>
+                  <span><strong>1. Xác thực Teams OTP:</strong> Người dùng nhập email cá nhân, hệ thống gửi OTP 6 số qua Teams Workflow, tạo phiên làm việc 15 phút.</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
-                  <span><strong>2. Ghi Log RAW JSON:</strong> Khi nộp yêu cầu, chỉ ghi 3 cột tối giản giúp phản hồi tức thì và không làm chậm web.</span>
+                  <span><strong>2. Bảo mật Sheet [DATA]:</strong> Dữ liệu chỉ được trả về khi có Session Token hợp lệ, không lưu lộ OTP trên ô tính.</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-600 font-bold">•</span>
-                  <span><strong>3. Tách cột chi tiết:</strong> Dùng nút Menu <em>"🚀 Tiện ích UX Portal"</em> trên Google Sheet để bóc tách dữ liệu ra cột bất kỳ lúc nào.</span>
+                  <span><strong>3. Ghi vết [LOGS]:</strong> Lưu vết đầy đủ các yêu cầu OTP, xác thực và từ khóa tìm kiếm.</span>
                 </li>
               </ul>
             </div>
+          </div>
+        ) : activeTab === "teams_otp" ? (
+          <div className="space-y-3.5 text-xs text-slate-600 leading-relaxed">
+            <div className="p-3 bg-navy-50/70 border border-navy-100 rounded-xl space-y-1">
+              <p className="font-bold text-navy text-sm flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-teal" />
+                Cấu hình Xác thực Microsoft Teams Workflow
+              </p>
+              <p className="text-slate-600 text-xs">
+                Để mã OTP được gửi tự động tới tin nhắn Teams của nhân sự:
+              </p>
+            </div>
+
+            <ol className="list-decimal list-inside space-y-2 text-slate-600">
+              <li>
+                <strong>Tạo Teams Workflow:</strong> Trong Microsoft Teams, vào mục <em>Workflows</em> (hoặc Power Automate) &gt; Chọn mẫu <em>"Post to a chat when a webhook request is received"</em> (hoặc <em>"Send an Adaptive Card to a user"</em>).
+              </li>
+              <li>
+                <strong>Payload gửi sang Teams:</strong>
+                <pre className="bg-slate-900 text-slate-100 p-2.5 rounded-lg mt-1 text-[11px] font-mono overflow-x-auto">
+{`{
+  "teamsEmail": "abc@mbbank.com.vn",
+  "otp": "583921"
+}`}
+                </pre>
+              </li>
+              <li>
+                <strong>Lưu Webhook URL vào Google Sheet:</strong>
+                <p className="mt-1 text-slate-500">
+                  Mở Google Sheet &gt; Chọn Menu <strong>🚀 Tiện ích UX Portal</strong> &gt; <strong>🔗 Cấu hình Teams Webhook URL</strong> &gt; Dán URL webhook. URL này được lưu an toàn trong <code>ScriptProperties</code>.
+                </p>
+              </li>
+              <li>
+                <strong>Bảng [USERS]:</strong> Điền email cá nhân và email Teams tương ứng. Đặt <code>Status = Active</code> để kích hoạt cấp mã OTP.
+              </li>
+            </ol>
           </div>
         ) : (
           <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
@@ -221,6 +263,9 @@ export default function GoogleSheetSettingsModal({
                 </ul>
               </li>
               <li>Copy <strong>URL ứng dụng web</strong> và dán vào tab Cấu hình bên cạnh.</li>
+              <li>
+                Tải lại Google Sheet và bấm Menu <strong>🚀 Tiện ích UX Portal</strong> &gt; <strong>⚙️ Khởi tạo cấu trúc các Sheet</strong> để tạo sẵn các sheet USERS, DATA, LOGS.
+              </li>
             </ol>
           </div>
         )}
