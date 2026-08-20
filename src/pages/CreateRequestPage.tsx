@@ -13,47 +13,31 @@ interface CreateRequestPageProps {
 export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   const [squads, setSquads] = useState<Squad[]>([])
   const session = getStoredSession()
+  const isPo = session?.role === "PO"
 
   useEffect(() => {
     fetchSquads().then(setSquads).catch(() => {})
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#FCFCFD] pb-16">
-      {/* Top Header Bar for Create Screen (No Sidebar Nav) */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-4">
+      {isPo && (
+        <div>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
-              if (onBack) {
-                onBack()
-              } else {
-                window.location.hash = "#track"
-              }
+              if (onBack) onBack()
+              else window.location.hash = "#track"
             }}
-            className="text-slate-600 hover:text-slate-900 font-semibold gap-2 rounded-xl"
+            className="text-slate-600 hover:text-slate-900 font-semibold gap-2 rounded-xl -ml-2.5 cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 text-[#1E5AF6]" />
+            <ArrowLeft className="w-4 h-4 text-[#1057FB]" />
             <span>Quay lại Danh sách yêu cầu</span>
           </Button>
-
-          {session && (
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60">
-              <span className="text-slate-400 font-medium">Phiên đăng nhập:</span>
-              <span className="text-slate-900 font-bold">{session.displayName}</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#1B3A6B] text-white text-[10px] font-bold">
-                {session.role}
-              </span>
-            </div>
-          )}
         </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <RequestForm squads={squads} />
-      </main>
-    </div>
+      )}
+      <RequestForm squads={squads} />
+    </main>
   )
 }

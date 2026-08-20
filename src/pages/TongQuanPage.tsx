@@ -121,8 +121,8 @@ export default function TongQuanPage() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 pb-16">
-      {/* Top Welcome & Sync Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      {/* Top Header matching Create Task clean style */}
+      <div className="border-b border-slate-200/80 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Badge variant="navy" size="xs" dot dotColor="bg-emerald-400" dotPulse>
@@ -138,13 +138,13 @@ export default function TongQuanPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={() => loadData(true)}
             loading={refreshing}
-            className="gap-2 font-semibold text-xs rounded-xl"
+            className="gap-2 font-semibold text-xs rounded-xl bg-white border-slate-200"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
             <span>Làm mới dữ liệu</span>

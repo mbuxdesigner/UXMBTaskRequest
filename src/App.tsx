@@ -60,11 +60,22 @@ function PageLoadingSkeleton() {
 
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("app_sidebar_collapsed") === "true"
+  })
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
     if (s?.role === "PO") return "track"
     return "overview"
   })
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem("app_sidebar_collapsed", String(next))
+      return next
+    })
+  }
 
   // Lắng nghe sự kiện thay đổi phiên (Đăng nhập / Đăng xuất)
   useEffect(() => {
@@ -133,18 +144,47 @@ export default function App() {
 
   const isPo = session.role === "PO"
   // Role PO KHÔNG BAO GIỜ HIỂN THỊ SIDEBAR NAV!
-  const showSidebar = !isPo && page !== "create"
+  // Tất cả các role khác (Designer, Design Owner, Admin): BẮT BUỘC có Sidebar kể cả trang Tạo yêu cầu (create)!
+  const showSidebar = !isPo
 
   return (
     <div className="min-h-screen bg-[#FCFCFD]">
-      {showSidebar && <Sidebar currentPage={page} onNavigate={setPage} />}
+      {showSidebar && (
+        <Sidebar
+          currentPage={page}
+          onNavigate={setPage}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+        />
+      )}
 
       {/* Header riêng cho Role PO (Không có Sidebar Navigation) */}
       {isPo && (
         <header className="bg-white border-b border-slate-200/90 sticky top-0 z-40 shadow-2xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-            {/* Logo & Brand */}
-            <BrandLogo size="sm" />
+            {/* Logo & Brand + Back button */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPage("track")}
+                className="hover:opacity-85 transition-opacity text-left cursor-pointer"
+                title="Về danh sách yêu cầu"
+              >
+                <BrandLogo size="sm" />
+              </button>
+
+              {page === "create" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage("track")}
+                  className="text-slate-600 hover:text-slate-900 font-semibold gap-1.5 rounded-xl border border-slate-200/80 bg-slate-50/80 hover:bg-slate-100 px-3 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-[#1057FB]" />
+                  <span>Quay lại</span>
+                </Button>
+              )}
+            </div>
 
             {/* User Info & Logout */}
             <div className="flex items-center gap-3">
@@ -181,8 +221,12 @@ export default function App() {
         </header>
       )}
 
-      {/* Container chính: PO role mở 100% full-width, không offset md:ml-60 */}
-      <div className={`${showSidebar ? "md:ml-60 pt-14 md:pt-0" : "w-full"} min-h-screen`}>
+      {/* Container chính: Offset theo sidebar w-60 (240px) */}
+      <div
+        className={`${
+          showSidebar ? "md:ml-60 pt-14 md:pt-0" : "w-full"
+        } min-h-screen bg-[#FCFCFD]`}
+      >
         <Suspense fallback={<PageLoadingSkeleton />}>
           {page === "overview" && <TongQuanPage />}
           {page === "create" && (

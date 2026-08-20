@@ -16,6 +16,8 @@ import {
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { DatePicker } from "@/components/reui/date-picker"
 import FileUpload from "./FileUpload"
+import RequestReviewSheet from "./RequestReviewSheet"
+import SuccessCelebrationCard from "./SuccessCelebrationCard"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -247,70 +249,36 @@ export default function RequestForm({ squads }: RequestFormProps) {
   // ==========================================
   if (viewMode === "success") {
     return (
-      <div className="max-w-xl mx-auto text-center p-8 sm:p-10 bg-white border border-slate-200 rounded-3xl shadow-xl my-8 space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto ring-8 ring-emerald-500/10">
-          <CheckCircle2 className="w-9 h-9" />
-        </div>
-
-        <div>
-          <Badge variant="success" size="default" className="mb-2 font-bold">
-            Tiếp nhận yêu cầu thành công
-          </Badge>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-3">Mã Request ID chính thức</p>
-          <h2 className="text-2xl font-bold text-[#1B3A6B] mt-1 tracking-tight">{requestId}</h2>
-        </div>
-
-        <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
-          Yêu cầu đã được tự động phân loại và gửi đến <strong className="text-slate-900 font-bold">{rec?.squad_name || "UX Squad"}</strong>. Bạn có thể sử dụng mã tra cứu để xem tiến độ trực tiếp.
-        </p>
-
-        <Alert variant="primary" icon={<Database className="w-4.5 h-4.5 text-[#1B3A6B]" />}>
-          <AlertTitle className="font-bold">Hệ thống đồng bộ</AlertTitle>
-          <AlertDescription>
-            {sheetLogResult?.message || "Đã ghi nhận dữ liệu vào Google Sheet trung tâm thành công."}
-          </AlertDescription>
-        </Alert>
-
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={() => {
-              setForm({
-                title: "",
-                requester_email: session?.teamsEmail || session?.personalEmail || "",
-                product: "",
-                request_type: "",
-                description: "",
-                business_need: "",
-                user_problem: "",
-                target_user: "",
-                release_date: "",
-                deadline_reason: "",
-                preferred_squad: "",
-                doc_links: [""],
-                leader_report_note: "",
-                expected_output: ["Wireframe", "Prototype tương tác"],
-              })
-              setFiles([])
-              setViewMode("edit")
-              setErrors({})
-            }}
-            className="w-full sm:w-auto gap-2 bg-[#1E5AF6] hover:bg-[#1546CC] font-bold rounded-xl"
-          >
-            <Sparkles className="w-4 h-4 text-white" />
-            <span>Tạo thêm yêu cầu mới</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => window.location.reload()}
-            className="w-full sm:w-auto rounded-xl"
-          >
-            <span>Về màn hình chính</span>
-          </Button>
-        </div>
-      </div>
+      <SuccessCelebrationCard
+        requestId={requestId}
+        squad={rec}
+        syncMessage={sheetLogResult?.message}
+        onCreateAnother={() => {
+          setForm({
+            title: "",
+            requester_email: session?.teamsEmail || session?.personalEmail || "",
+            product: "",
+            request_type: "",
+            description: "",
+            business_need: "",
+            user_problem: "",
+            target_user: "",
+            release_date: "",
+            deadline_reason: "",
+            preferred_squad: "",
+            doc_links: [""],
+            leader_report_note: "",
+            expected_output: ["Wireframe", "Prototype tương tác"],
+          })
+          setFiles([])
+          setViewMode("edit")
+          setErrors({})
+        }}
+        onGoToTrack={() => {
+          window.location.hash = "#track"
+          window.dispatchEvent(new HashChangeEvent("hashchange"))
+        }}
+      />
     )
   }
 
@@ -631,177 +599,16 @@ export default function RequestForm({ squads }: RequestFormProps) {
 
       </div>
 
-      {/* POPUP MODAL XEM LẠI HỒ SƠ YÊU CẦU */}
-      <Dialog
+      {/* REUI APPLICATION SHEET-11: XÁC NHẬN THÔNG TIN ĐỀ BÀI */}
+      <RequestReviewSheet
         open={viewMode === "review"}
         onClose={() => setViewMode("edit")}
-        size="2xl"
-      >
-        <DialogHeader className="bg-slate-50/80 border-b border-slate-100 px-6 py-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Badge variant="navy" size="xs">
-                Bước kiểm tra cuối
-              </Badge>
-              <span className="text-xs text-slate-400 font-medium">
-                Xác nhận thông tin đề bài
-              </span>
-            </div>
-            <DialogTitle className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <FileCheck className="w-5.5 h-5.5 text-[#1E5AF6]" />
-              Xem lại hồ sơ yêu cầu UX
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 mt-0.5">
-              Vui lòng kiểm tra kỹ các nội dung trước khi gửi chính thức đến Squad UX.
-            </DialogDescription>
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewMode("edit")}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0"
-            title="Đóng"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </DialogHeader>
-
-        <DialogBody className="p-6 space-y-6 max-h-[72vh] overflow-y-auto">
-          {/* Mục 1: Thông tin chung */}
-          <div className="space-y-3 pb-5 border-b border-slate-100">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#1E5AF6]" />
-              01 · THÔNG TIN CHUNG
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div className="sm:col-span-2">
-                <span className="text-xs text-slate-400 block font-medium">Tiêu đề bài toán:</span>
-                <p className="text-base font-semibold text-slate-900 mt-0.5">{form.title}</p>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 block font-medium">Sản phẩm / Nền tảng:</span>
-                <p className="font-bold text-slate-800 mt-0.5">{form.product}</p>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 block font-medium">Loại yêu cầu:</span>
-                <p className="font-bold text-slate-800 mt-0.5">{form.request_type}</p>
-              </div>
-              {rec && (
-                <div className="sm:col-span-2 p-3 bg-blue-50/60 rounded-2xl border border-blue-100/90 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-medium">Squad tiếp nhận dự kiến:</span>
-                  <Badge variant="navy" size="xs" className="font-bold">{rec.squad_name}</Badge>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Mục 2: Chi tiết bài toán UX */}
-          <div className="space-y-4 pb-5 border-b border-slate-100">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#1E5AF6]" />
-              02 · BỐI CẢNH & CHI TIẾT BÀI TOÁN
-            </h3>
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="text-xs text-slate-400 block font-medium">Mô tả nhu cầu UX:</span>
-                <div className="mt-1 p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl text-slate-800 whitespace-pre-wrap leading-relaxed">
-                  {form.description}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div>
-                  <span className="text-xs text-slate-400 block font-medium">Tại sao yêu cầu này cần thiết:</span>
-                  <div className="mt-1 p-3 bg-slate-50 border border-slate-200/70 rounded-2xl text-slate-700 text-xs leading-relaxed">
-                    {form.business_need || "Không có"}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 block font-medium">Vấn đề người dùng cần giải quyết:</span>
-                  <div className="mt-1 p-3 bg-slate-50 border border-slate-200/70 rounded-2xl text-slate-700 text-xs leading-relaxed">
-                    {form.user_problem || "Không có"}
-                  </div>
-                </div>
-              </div>
-              {form.target_user && (
-                <div>
-                  <span className="text-xs text-slate-400 block font-medium">Đối tượng người dùng mục tiêu:</span>
-                  <p className="font-semibold text-slate-800 mt-0.5">{form.target_user}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Mục 3: Tài liệu đính kèm */}
-          <div className="space-y-3 pb-5 border-b border-slate-100">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <LinkIcon className="w-4 h-4 text-[#1E5AF6]" />
-              03 · TÀI LIỆU ĐÍNH KÈM ({validLinks.length} liên kết)
-            </h3>
-            {validLinks.length > 0 ? (
-              <div className="space-y-2">
-                {validLinks.map((link, idx) => (
-                  <div key={idx} className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
-                    <LinkIcon className="w-3.5 h-3.5 text-[#1E5AF6] shrink-0" />
-                    <a href={link} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate font-medium">
-                      {link}
-                    </a>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">Chưa đính kèm liên kết tài liệu.</p>
-            )}
-          </div>
-
-          {/* Mục 4: Kế hoạch & Thời hạn */}
-          <div className="space-y-3 pb-2">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#1E5AF6]" />
-              04 · KẾ HOẠCH & THỜI HẠN
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-blue-50/40 p-4 rounded-2xl border border-blue-100">
-              <div>
-                <span className="text-xs text-slate-500 block font-medium">Ngày release dự kiến:</span>
-                <p className="text-base font-semibold text-[#1B3A6B] mt-0.5">{form.release_date}</p>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block font-medium">Lý do thời hạn:</span>
-                <p className="font-bold text-slate-800 mt-0.5">{form.deadline_reason || "Chưa xác định"}</p>
-              </div>
-              {form.leader_report_note && (
-                <div className="sm:col-span-2 pt-2 border-t border-blue-100/80">
-                  <span className="text-xs text-slate-500 block font-medium">Kế hoạch báo cáo Lãnh đạo:</span>
-                  <p className="text-slate-800 text-xs mt-0.5 font-semibold">{form.leader_report_note}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </DialogBody>
-
-        <DialogFooter className="px-6 py-4 bg-slate-50/90 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode("edit")}
-            className="w-full sm:w-auto gap-2 rounded-xl font-bold text-xs"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Quay lại chỉnh sửa</span>
-          </Button>
-
-          <Button
-            type="button"
-            size="default"
-            loading={submitLoading}
-            disabled={submitLoading}
-            onClick={handleFinalSubmit}
-            className="w-full sm:w-auto px-6 h-11 bg-[#1E5AF6] hover:bg-[#1546CC] text-white font-bold rounded-xl shadow-md gap-2 text-xs"
-          >
-            <Send className="w-4 h-4" />
-            <span>Xác nhận & Gửi chính thức</span>
-          </Button>
-        </DialogFooter>
-      </Dialog>
+        onConfirm={handleFinalSubmit}
+        isSubmitting={submitLoading}
+        form={form}
+        recommendedSquad={rec}
+        session={session}
+      />
     </form>
   )
 }

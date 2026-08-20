@@ -55,20 +55,16 @@ function UXStarIcon({ className }: { className?: string }) {
 }
 
 const SIZES = {
-  sm: "w-8 h-8 rounded-[10px]",
-  md: "w-10 h-10 rounded-xl",
+  sm: "w-8 h-8",
+  md: "w-10 h-10",
 } as const
 
 export default function BrandLogo({ size = "md", iconOnly = false, className = "" }: BrandLogoProps) {
-  const iconSize = size === "sm" ? "w-[26px] h-[26px]" : "w-[32px] h-[32px]"
-
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      {/* Icon container – gradient background matching original */}
-      <div
-        className={`${SIZES[size]} bg-gradient-to-tr from-[#1B3A6B] to-[#0D9B97] flex items-center justify-center flex-shrink-0 shadow-md shadow-[#1B3A6B]/20 p-[3px]`}
-      >
-        <UXStarIcon className={iconSize} />
+    <div className={`flex items-center gap-2.5 ${className}`}>
+      {/* Icon container - clean without border */}
+      <div className={`${SIZES[size]} flex items-center justify-center flex-shrink-0`}>
+        <UXStarIcon className="w-full h-full text-slate-900" />
       </div>
 
       {!iconOnly && (

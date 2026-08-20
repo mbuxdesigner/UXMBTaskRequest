@@ -439,3 +439,27 @@ body {
   animation-delay: 0s;
 }
 
+/* Falling Text Confetti Animation */
+@keyframes falling-text {
+  0% {
+    opacity: 0;
+    transform: translateY(-25px) scale(0.8) rotate(-10deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(25px) scale(1.05) rotate(5deg);
+  }
+  70% {
+    opacity: 0.9;
+    transform: translateY(95px) scale(1) rotate(-3deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(145px) scale(0.9) rotate(8deg);
+  }
+}
+
+.animate-falling-text {
+  animation: falling-text 2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
