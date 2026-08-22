@@ -1,50 +1,237 @@
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import { UXRequest } from "@/data/mockData"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { getStatusConfig } from "@/config/statusConfig"
 import { getUserInitials } from "@/services/otpAuthService"
 import { 
   Calendar, 
-  Layers, 
-  GripVertical
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Send,
+  Filter,
+  Compass,
+  GitFork,
+  Palette,
+  PlaySquare,
+  CheckCircle2,
+  Flag
 } from "lucide-react"
 
-interface KanbanBoardProps {
+export interface KanbanBoardProps {
   requests: UXRequest[]
   onSelectRequest: (request: UXRequest) => void
   onUpdateStatus?: (requestId: string, newStatus: string) => Promise<void> | void
+  onUpdatePhase?: (
+    requestId: string,
+    newPhase: string,
+    newStatus: string,
+    newProgress: number
+  ) => Promise<void> | void
 }
 
-interface ColumnDef {
+export interface KanbanColumnDef {
   id: string
+  step: number
+  phase: string
   title: string
   status: string
+  defaultProgress: number
   dotColor: string
+  bgClass: string
+  borderClass: string
+  icon: React.ReactNode
 }
 
-const COLUMNS: ColumnDef[] = [
+export const KANBAN_PROCESS_COLUMNS: KanbanColumnDef[] = [
+  {
+    id: "submitted",
+    step: 1,
+    phase: "Chờ tiếp nhận",
+    title: "Chờ tiếp nhận",
+    status: "Chờ tiếp nhận",
+    defaultProgress: 10,
+    dotColor: "bg-slate-400",
+    bgClass: "bg-slate-100/70",
+    borderClass: "border-slate-200/90",
+    icon: <Send className="w-3.5 h-3.5 text-slate-500" />
+  },
   {
     id: "classify",
-    title: "Đang phân loại",
+    step: 2,
+    phase: "Phân loại",
+    title: "Phân loại",
     status: "Đang phân loại",
+    defaultProgress: 20,
     dotColor: "bg-amber-500",
+    bgClass: "bg-[#FFF9EE]",
+    borderClass: "border-amber-200/90",
+    icon: <Filter className="w-3.5 h-3.5 text-amber-600" />
   },
   {
-    id: "in_progress",
-    title: "Đang thực hiện",
+    id: "discovery",
+    step: 3,
+    phase: "Discovery",
+    title: "Discovery",
     status: "Đang thực hiện",
-    dotColor: "bg-[#1057FB]",
+    defaultProgress: 35,
+    dotColor: "bg-purple-500",
+    bgClass: "bg-[#FAF5FF]",
+    borderClass: "border-purple-200/90",
+    icon: <Compass className="w-3.5 h-3.5 text-purple-600" />
   },
   {
-    id: "completed",
-    title: "Hoàn thành",
+    id: "user_flow",
+    step: 4,
+    phase: "User Flow",
+    title: "User Flow",
+    status: "Đang thực hiện",
+    defaultProgress: 55,
+    dotColor: "bg-indigo-500",
+    bgClass: "bg-[#F5F7FF]",
+    borderClass: "border-indigo-200/90",
+    icon: <GitFork className="w-3.5 h-3.5 text-indigo-600" />
+  },
+  {
+    id: "ui_design",
+    step: 5,
+    phase: "UI Design",
+    title: "UI Design",
+    status: "Đang thực hiện",
+    defaultProgress: 75,
+    dotColor: "bg-[#1057FB]",
+    bgClass: "bg-[#F0F6FF]",
+    borderClass: "border-blue-200/90",
+    icon: <Palette className="w-3.5 h-3.5 text-[#1057FB]" />
+  },
+  {
+    id: "prototype",
+    step: 6,
+    phase: "Prototype",
+    title: "Prototype",
+    status: "Đang thực hiện",
+    defaultProgress: 90,
+    dotColor: "bg-teal-500",
+    bgClass: "bg-[#F0FDFB]",
+    borderClass: "border-teal-200/90",
+    icon: <PlaySquare className="w-3.5 h-3.5 text-teal-600" />
+  },
+  {
+    id: "handoff",
+    step: 7,
+    phase: "Bàn giao",
+    title: "Bàn giao",
     status: "Hoàn thành",
+    defaultProgress: 100,
     dotColor: "bg-emerald-500",
+    bgClass: "bg-[#F2FBF6]",
+    borderClass: "border-emerald-200/90",
+    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
   }
 ]
 
-// Bảng màu avatar text đa dạng phân biệt theo tên
+// Determine which column a request belongs to based on current_phase & status
+export function getRequestKanbanPhase(req: UXRequest): string {
+  if (req.current_phase) {
+    const p = req.current_phase.trim().toLowerCase()
+    if (p.includes("bàn giao") || p.includes("nghiệm thu") || p.includes("hoàn thành")) return "Bàn giao"
+    if (p.includes("prototype") || p.includes("kiểm thử") || p.includes("test")) return "Prototype"
+    if (p.includes("ui design") || p.includes("hi-fi") || p.includes("giao diện")) return "UI Design"
+    if (p.includes("user flow") || p.includes("wireframe") || p.includes("luồng")) return "User Flow"
+    if (p.includes("discovery") || p.includes("khám phá") || p.includes("nghiên cứu")) return "Discovery"
+    if (p.includes("phân loại")) return "Phân loại"
+    if (p.includes("chờ tiếp nhận") || p.includes("đã gửi") || p.includes("mới tạo") || p.includes("tiếp nhận")) return "Chờ tiếp nhận"
+  }
+
+  // Fallbacks based on status
+  if (req.status === "Hoàn thành") return "Bàn giao"
+  if (req.status === "Đang phân loại") return "Phân loại"
+  if (req.status === "Chờ tiếp nhận" || req.status === "Đã gửi" || req.status === "Đã gửi yêu cầu" || req.status === "Mới tạo") return "Chờ tiếp nhận"
+
+  // Fallbacks based on progress percentage
+  if (req.progress >= 100) return "Bàn giao"
+  if (req.progress >= 85) return "Prototype"
+  if (req.progress >= 65) return "UI Design"
+  if (req.progress >= 45) return "User Flow"
+  if (req.progress >= 25) return "Discovery"
+  if (req.progress >= 15) return "Phân loại"
+
+  return "Chờ tiếp nhận"
+}
+
+// Product / Category Pill style (Forms, Access, Auth, API, Mobile, Export style)
+function getProductPillStyle(product?: string): string {
+  if (!product) return "bg-slate-100 text-slate-700 border-slate-200"
+  const p = product.toLowerCase()
+  if (p.includes("card") || p.includes("thẻ")) return "bg-rose-50 text-rose-600 border-rose-200/80"
+  if (p.includes("core")) return "bg-blue-50 text-blue-600 border-blue-200/80"
+  if (p.includes("lending") || p.includes("vay")) return "bg-amber-50 text-amber-700 border-amber-200/80"
+  if (p.includes("saving") || p.includes("tiết kiệm")) return "bg-emerald-50 text-emerald-700 border-emerald-200/80"
+  if (p.includes("digi")) return "bg-purple-50 text-purple-700 border-purple-200/80"
+  if (p.includes("baas")) return "bg-cyan-50 text-cyan-700 border-cyan-200/80"
+  if (p.includes("internet") || p.includes("ib")) return "bg-indigo-50 text-indigo-700 border-indigo-200/80"
+  return "bg-slate-100 text-slate-700 border-slate-200/80"
+}
+
+// Status badge dot + label (RELEASE, IN PROGRESS, TRIAGE, QUEUED, BLOCKED)
+function getStatusBadgeDetails(status?: string, phase?: string): { label: string; dotClass: string } {
+  if (status === "Hoàn thành" || phase === "Bàn giao") {
+    return { label: "RELEASE", dotClass: "bg-emerald-500" }
+  }
+  if (status === "Bị chặn") {
+    return { label: "BLOCKED", dotClass: "bg-rose-500" }
+  }
+  if (status === "Đang thực hiện" || phase === "UI Design" || phase === "Prototype" || phase === "User Flow" || phase === "Discovery") {
+    return { label: "IN PROGRESS", dotClass: "bg-[#1057FB]" }
+  }
+  if (status === "Đang phân loại" || phase === "Phân loại") {
+    return { label: "TRIAGE", dotClass: "bg-amber-500" }
+  }
+  if (status === "Chờ tiếp nhận" || phase === "Chờ tiếp nhận") {
+    return { label: "QUEUED", dotClass: "bg-slate-400" }
+  }
+  return { label: "IN PROGRESS", dotClass: "bg-[#1057FB]" }
+}
+
+// Circular SVG progress ring component
+function CircularProgress({ value }: { value: number }) {
+  const radius = 6
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, value)) / 100) * circumference
+
+  const strokeColor =
+    value >= 100
+      ? "text-emerald-500"
+      : value >= 70
+      ? "text-[#1057FB]"
+      : value >= 40
+      ? "text-amber-500"
+      : value >= 20
+      ? "text-rose-500"
+      : "text-slate-300"
+
+  return (
+    <svg className="w-3.5 h-3.5 -rotate-90 shrink-0" viewBox="0 0 16 16">
+      <circle
+        cx="8"
+        cy="8"
+        r={radius}
+        className="stroke-slate-200/90 fill-none"
+        strokeWidth="2"
+      />
+      <circle
+        cx="8"
+        cy="8"
+        r={radius}
+        className={`fill-none transition-all duration-300 stroke-current ${strokeColor}`}
+        strokeWidth="2"
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+// Avatar color palettes
 const AVATAR_COLOR_PALETTES = [
   "bg-blue-100 text-blue-700 border-blue-200",
   "bg-teal-100 text-teal-700 border-teal-200",
@@ -66,7 +253,6 @@ function getAvatarColorClass(name: string): string {
   return AVATAR_COLOR_PALETTES[index]
 }
 
-// Chuyển email sang tên hiển thị người dùng thân thiện
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName) return "Đang phân công"
   const clean = rawName.trim()
@@ -96,44 +282,15 @@ function getDesignerAvatar(name?: string) {
   return ""
 }
 
-// Bảng màu cho thanh tiến độ theo từng giai đoạn UX
-function getPhaseProgressColor(phase?: string, status?: string, progress?: number): string {
-  if (status === "Hoàn thành" || progress === 100 || phase === "Bàn giao" || phase?.toLowerCase().includes("hoàn thành")) {
-    return "bg-emerald-500"
-  }
-  if (!phase) return "bg-[#1057FB]"
-  const p = phase.toLowerCase()
-  if (p.includes("prototype") || p.includes("kiểm thử")) {
-    return "bg-teal-500"
-  }
-  if (p.includes("ui design") || p.includes("hi-fi") || p.includes("giao diện")) {
-    return "bg-[#1057FB]"
-  }
-  if (p.includes("user flow") || p.includes("wireframe") || p.includes("luồng")) {
-    return "bg-purple-500"
-  }
-  if (p.includes("discovery") || p.includes("khám phá") || p.includes("nghiên cứu")) {
-    return "bg-amber-500"
-  }
-  if (p.includes("phân loại") || p.includes("tiếp nhận")) {
-    return "bg-sky-500"
-  }
-  if (p.includes("đã gửi") || p.includes("ghi nhận")) {
-    return "bg-slate-400"
-  }
-  if (progress && progress > 70) return "bg-[#1057FB]"
-  if (progress && progress > 40) return "bg-purple-500"
-  if (progress && progress > 20) return "bg-amber-500"
-  return "bg-[#1057FB]"
-}
-
 export default function KanbanBoard({
   requests,
   onSelectRequest,
-  onUpdateStatus
+  onUpdateStatus,
+  onUpdatePhase,
 }: KanbanBoardProps) {
   const [draggedRequestId, setDraggedRequestId] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const handleDragStart = (e: React.DragEvent, reqId: string) => {
     e.dataTransfer.setData("text/plain", reqId)
@@ -143,14 +300,14 @@ export default function KanbanBoard({
 
   const handleDragEnd = () => {
     setDraggedRequestId(null)
-    setDragOverColumn(null)
+    setDragOverColumnId(null)
   }
 
-  const handleDragOver = (e: React.DragEvent, columnStatus: string) => {
+  const handleDragOver = (e: React.DragEvent, colId: string) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
-    if (dragOverColumn !== columnStatus) {
-      setDragOverColumn(columnStatus)
+    if (dragOverColumnId !== colId) {
+      setDragOverColumnId(colId)
     }
   }
 
@@ -158,170 +315,222 @@ export default function KanbanBoard({
     e.preventDefault()
   }
 
-  const handleDrop = async (e: React.DragEvent, targetStatus: string) => {
+  const handleDrop = async (e: React.DragEvent, column: KanbanColumnDef) => {
     e.preventDefault()
-    setDragOverColumn(null)
+    setDragOverColumnId(null)
     const reqId = e.dataTransfer.getData("text/plain") || draggedRequestId
     if (!reqId) return
 
     const targetReq = requests.find((r) => r.request_id === reqId)
-    if (targetReq && targetReq.status !== targetStatus) {
-      if (onUpdateStatus) {
-        await onUpdateStatus(reqId, targetStatus)
+    if (!targetReq) {
+      setDraggedRequestId(null)
+      return
+    }
+
+    const currentPhase = getRequestKanbanPhase(targetReq)
+    if (currentPhase !== column.phase) {
+      if (onUpdatePhase) {
+        await onUpdatePhase(reqId, column.phase, column.status, column.defaultProgress)
+      } else if (onUpdateStatus) {
+        await onUpdateStatus(reqId, column.status)
       }
     }
     setDraggedRequestId(null)
   }
 
+  const handleScroll = (direction: "left" | "right") => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 320 * 2
+      scrollContainerRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      })
+    }
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
-      {COLUMNS.map((column) => {
-        const columnRequests = requests.filter((r) => {
-          if (column.status === "Đang phân loại") {
-            return r.status === "Đang phân loại" || r.status === "Chờ tiếp nhận" || r.status === "Đã gửi"
-          }
-          return r.status === column.status
-        })
-
-        const isOver = dragOverColumn === column.status
-
-        return (
-          <div
-            key={column.id}
-            onDragOver={(e) => handleDragOver(e, column.status)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, column.status)}
-            className={`flex flex-col rounded-2xl bg-slate-50/70 p-3.5 border transition-all duration-200 min-h-[580px] ${
-              isOver 
-                ? "border-[#1057FB] bg-blue-50/50 ring-2 ring-[#1057FB]/20" 
-                : "border-slate-200/80"
-            }`}
+    <div className="relative group/kanban">
+      {/* Scroll Navigation Buttons */}
+      <div className="flex items-center justify-end mb-2.5 px-1">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleScroll("left")}
+            className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+            title="Cuộn sang trái"
           >
-            {/* Column Header */}
-            <div className="flex items-center justify-between px-2 py-1.5 mb-3">
-              <div className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${column.dotColor} shadow-2xs`} />
-                <h3 className="font-bold text-sm text-slate-900 tracking-tight">
-                  {column.title}
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white text-slate-700 border border-slate-200/80 shadow-2xs">
-                  {columnRequests.length}
-                </span>
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleScroll("right")}
+            className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+            title="Cuộn sang phải"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Kanban Horizontal Container */}
+      <div
+        ref={scrollContainerRef}
+        className="flex gap-4 overflow-x-auto pb-4 pt-1 items-start scroll-smooth snap-x select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+        style={{ scrollbarGutter: "stable" }}
+      >
+        {KANBAN_PROCESS_COLUMNS.map((column) => {
+          const columnRequests = requests.filter(
+            (r) => getRequestKanbanPhase(r) === column.phase
+          )
+
+          const isOver = dragOverColumnId === column.id
+
+          return (
+            <div
+              key={column.id}
+              onDragOver={(e) => handleDragOver(e, column.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, column)}
+              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[620px] snap-start ${
+                column.bgClass
+              } ${column.borderClass} ${
+                isOver
+                  ? "border-[#1057FB] ring-2 ring-[#1057FB]/30 scale-[1.01] shadow-md"
+                  : "shadow-2xs"
+              }`}
+            >
+              {/* Column Header */}
+              <div className="flex items-center justify-between px-1.5 py-1 mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-[13px] sm:text-sm text-slate-800 tracking-tight">
+                    {column.step}. {column.title}
+                  </h3>
+                  <span className="px-1.5 py-0.5 min-w-[20px] text-center rounded-md text-[11px] font-bold bg-white text-slate-600 border border-slate-200/90 shadow-2xs">
+                    {columnRequests.length}
+                  </span>
+                </div>
+                <MoreHorizontal className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+              </div>
+
+              {/* Column Body / Cards */}
+              <div className="flex-1 space-y-2.5">
+                {columnRequests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-44 rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
+                    <p className="text-xs font-medium text-slate-400">No cards</p>
+                  </div>
+                ) : (
+                  columnRequests.map((req, idx) => {
+                    const isDragging = draggedRequestId === req.request_id
+                    const displayName = formatDesignerDisplayName(
+                      req.assigned_designer || req.ux_owner
+                    )
+                    const designerAvatar = getDesignerAvatar(displayName)
+                    const avatarColorClass = getAvatarColorClass(displayName)
+                    const progressVal =
+                      req.progress ||
+                      (column.phase === "Bàn giao"
+                        ? 100
+                        : column.defaultProgress)
+
+                    const statusBadge = getStatusBadgeDetails(req.status, req.current_phase || column.phase)
+
+                    return (
+                      <div
+                        key={`${req.request_id}-${idx}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, req.request_id)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => onSelectRequest(req)}
+                        className={`group relative bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-grab active:cursor-grabbing select-none space-y-2.5 ${
+                          isDragging
+                            ? "opacity-35 scale-[0.98] rotate-1 ring-2 ring-[#1057FB]"
+                            : "opacity-100"
+                        }`}
+                      >
+                        {/* Top Line: [Product Tag] [ID] ... [Status Badge with dot] */}
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${getProductPillStyle(
+                                req.product
+                              )} truncate max-w-[95px]`}
+                            >
+                              {req.product || "App"}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-400 font-medium truncate shrink-0">
+                              {req.request_id}
+                            </span>
+                          </div>
+
+                          {/* Status Pill Badge with dot */}
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200/90 bg-white text-[11px] font-medium text-slate-700 shrink-0 shadow-2xs">
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dotClass} shrink-0`} />
+                            <span className="text-[11px] font-medium text-slate-700">
+                              {statusBadge.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Title */}
+                        <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors">
+                          {req.title}
+                        </h4>
+
+                        {/* Bottom Row: Assignee Avatar + Name | Date Pill | Circular Progress */}
+                        <div className="flex items-center justify-between gap-1.5 pt-0.5 text-xs">
+                          {/* Assignee */}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {designerAvatar ? (
+                              <img
+                                src={designerAvatar}
+                                alt={displayName}
+                                className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
+                              />
+                            ) : (
+                              <div
+                                className={`w-5 h-5 rounded-full font-bold text-[9px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
+                              >
+                                {getUserInitials(displayName)}
+                              </div>
+                            )}
+                            <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">
+                              {displayName}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Priority Flag */}
+                            <div className="flex items-center gap-0.5 text-[11px] font-bold text-amber-600 px-1.5 py-0.5 rounded bg-amber-50/70 border border-amber-200/60" title="Độ ưu tiên: Cao">
+                              <Flag className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                              <span className="text-[10px]">High</span>
+                            </div>
+
+                            {/* Date Pill: [ 📅 Apr 26 / 19/08 ] */}
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50/70 text-[10.5px] text-slate-600 font-medium">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span>
+                                {req.expected_deadline || req.submitted_at || "—"}
+                              </span>
+                            </div>
+
+                            {/* Circular Progress: [ ⭕ 26% ] */}
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-slate-700">
+                              <CircularProgress value={progressVal} />
+                              <span className="font-mono text-[10.5px] text-slate-600 font-bold">
+                                {progressVal}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
-
-            {/* Column Body / Cards */}
-            <div className="flex-1 space-y-3">
-              {columnRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 rounded-xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
-                  <Layers className="w-6 h-6 text-slate-300 mb-1.5" />
-                  <p className="text-xs font-medium text-slate-500">Chưa có yêu cầu nào</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Kéo thả thẻ vào đây để đổi trạng thái</p>
-                </div>
-              ) : (
-                columnRequests.map((req, idx) => {
-                  const isDragging = draggedRequestId === req.request_id
-                  const displayName = formatDesignerDisplayName(req.assigned_designer || req.ux_owner)
-                  const designerAvatar = getDesignerAvatar(displayName)
-                  const avatarColorClass = getAvatarColorClass(displayName)
-                  const progressVal = req.progress || (req.status === "Hoàn thành" ? 100 : req.status === "Đang thực hiện" ? 55 : 15)
-
-                  return (
-                    <div
-                      key={`${req.request_id}-${idx}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, req.request_id)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => onSelectRequest(req)}
-                      className={`group relative bg-white rounded-xl p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-[#1057FB] transition-all duration-200 cursor-grab active:cursor-grabbing select-none ${
-                        isDragging ? "opacity-40 scale-[0.98] rotate-1" : "opacity-100"
-                      }`}
-                    >
-                      {/* Card Header */}
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-xs text-[#1057FB] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
-                            {req.request_id}
-                          </span>
-                          <Badge variant="outline" size="xs" className="text-slate-600 bg-slate-50">
-                            {req.product}
-                          </Badge>
-                        </div>
-                        <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
-                      </div>
-
-                      {/* Card Title */}
-                      <h4 className="font-bold text-sm text-slate-900 line-clamp-2 group-hover:text-[#1057FB] transition-colors leading-snug mb-2">
-                        {req.title}
-                      </h4>
-
-                      {/* Squad / Phase info */}
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-3">
-                        <span className="truncate max-w-[140px] font-medium">{req.squad_name || "UX Core Squad"}</span>
-                        {req.current_phase && (
-                          <>
-                            <span>•</span>
-                            <span className="text-[#1057FB] font-semibold truncate">
-                              {req.current_phase}
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="mb-3 space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500 font-medium">{req.current_phase || "Tiến độ"}</span>
-                          <span className="font-mono font-bold text-slate-800">{progressVal}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-200/70 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${getPhaseProgressColor(
-                              req.current_phase,
-                              req.status,
-                              progressVal
-                            )}`}
-                            style={{ width: `${progressVal}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Card Footer */}
-                      <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
-                        {/* Assignee */}
-                        <div className="flex items-center gap-2 min-w-0">
-                          {designerAvatar ? (
-                            <img
-                              src={designerAvatar}
-                              alt={displayName}
-                              className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
-                            />
-                          ) : (
-                            <div
-                              className={`w-6 h-6 rounded-full font-bold text-[10px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
-                            >
-                              {getUserInitials(displayName)}
-                            </div>
-                          )}
-                          <span className="text-[11px] font-bold text-slate-900 truncate max-w-[110px]">
-                            {displayName}
-                          </span>
-                        </div>
-
-                        {/* Deadline / Submitted Date */}
-                        <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          <span>{req.expected_deadline || req.submitted_at || "—"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

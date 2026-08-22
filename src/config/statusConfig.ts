@@ -7,12 +7,19 @@
 
 // ─── Request Status (UX workflow) ─────────────────────────────
 export type RequestStatus =
+  | "Chờ tiếp nhận"
   | "Đã gửi yêu cầu"
   | "Đã gửi"
   | "Mới tạo"
+  | "Phân loại"
   | "Đang phân loại"
-  | "Đang thực hiện"
+  | "Discovery"
   | "Đang khám phá"
+  | "User Flow"
+  | "UI Design"
+  | "Prototype"
+  | "Bàn giao"
+  | "Đang thực hiện"
   | "Đang review"
   | "Hoàn thành"
   | "Bị chặn"
@@ -35,7 +42,7 @@ export interface StatusBadgeConfig {
  * Unified status → color mapping.
  * 
  * Semantic logic:
- * - Slate    → Neutral / waiting (submitted, new)
+ * - Slate    → Neutral / waiting (submitted, new, pending receipt)
  * - Amber    → Processing / attention (classifying)
  * - Blue     → Active / in progress
  * - Purple   → Review stage / discovery
@@ -43,6 +50,16 @@ export interface StatusBadgeConfig {
  * - Red      → Blocked / error
  */
 export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
+  "Chờ tiếp nhận": {
+    variant: "secondary",
+    dotColor: "bg-slate-400",
+    inlineClasses: {
+      bg: "bg-slate-50",
+      text: "text-slate-600",
+      border: "border-slate-200",
+      dot: "bg-slate-400",
+    },
+  },
   "Đã gửi yêu cầu": {
     variant: "secondary",
     dotColor: "bg-slate-400",
@@ -73,6 +90,16 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       dot: "bg-slate-400",
     },
   },
+  "Phân loại": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
+      dot: "bg-amber-500",
+    },
+  },
   "Đang phân loại": {
     variant: "warning",
     dotColor: "bg-amber-500",
@@ -83,14 +110,14 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       dot: "bg-amber-500",
     },
   },
-  "Đang thực hiện": {
-    variant: "info",
-    dotColor: "bg-blue-500",
+  "Discovery": {
+    variant: "purple",
+    dotColor: "bg-purple-500",
     inlineClasses: {
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-      border: "border-blue-200",
-      dot: "bg-blue-500",
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
+      dot: "bg-purple-500",
     },
   },
   "Đang khám phá": {
@@ -101,6 +128,56 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       text: "text-purple-700",
       border: "border-purple-200",
       dot: "bg-purple-500",
+    },
+  },
+  "User Flow": {
+    variant: "navy",
+    dotColor: "bg-indigo-500",
+    inlineClasses: {
+      bg: "bg-indigo-50",
+      text: "text-indigo-700",
+      border: "border-indigo-200",
+      dot: "bg-indigo-500",
+    },
+  },
+  "UI Design": {
+    variant: "info",
+    dotColor: "bg-blue-600",
+    inlineClasses: {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
+      dot: "bg-blue-600",
+    },
+  },
+  "Prototype": {
+    variant: "teal",
+    dotColor: "bg-teal-500",
+    inlineClasses: {
+      bg: "bg-teal-50",
+      text: "text-teal-700",
+      border: "border-teal-200",
+      dot: "bg-teal-500",
+    },
+  },
+  "Bàn giao": {
+    variant: "success",
+    dotColor: "bg-emerald-500",
+    inlineClasses: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      border: "border-emerald-200",
+      dot: "bg-emerald-500",
+    },
+  },
+  "Đang thực hiện": {
+    variant: "info",
+    dotColor: "bg-blue-500",
+    inlineClasses: {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
+      dot: "bg-blue-500",
     },
   },
   "Đang review": {

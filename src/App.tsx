@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, ArrowLeft, LogOut } from "lucide-react"
 import BrandLogo from "@/components/common/BrandLogo"
+import { Toaster } from "@/components/ui/toast"
 import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession } from "./services/otpAuthService"
 
 // Code-splitting via React.lazy
@@ -236,6 +237,9 @@ export default function App() {
           {page === "manage" && <QuanLyPage />}
         </Suspense>
       </div>
+
+      {/* Global Toast Provider */}
+      <Toaster />
     </div>
   )
 }

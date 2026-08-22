@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { getStatusConfig } from "@/config/statusConfig"
 import { UXRequest } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
-import KanbanBoard from "../components/kanban/KanbanBoard"
+import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
+import TaskFilterPopover from "@/components/reui/task-filter-popover"
+import { AnimatedTableRow, tableContainerVariants } from "@/components/jolyui/animated-table"
 import {
   getStoredSession,
   logoutTeamsSession,
@@ -20,6 +23,7 @@ import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { EmptyState } from "@/components/reui/empty-state"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "@/components/ui/toast"
 import {
   Search,
   Plus,
@@ -131,7 +135,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(6)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
 
   // Session state
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
@@ -162,12 +166,22 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     return () => clearInterval(timer)
   }, [])
 
-  const handleUpdateStatus = async (requestId: string, newStatus: string) => {
+  const handleUpdatePhase = async (
+    requestId: string,
+    newPhase: string,
+    newStatus: string,
+    newProgress: number
+  ) => {
+    // Show loading toast immediately while processing
+    const toastId = toast.loading(
+      "Đang cập nhật trạng thái...",
+      `Chuyển yêu cầu ${requestId} sang khâu [${newPhase}]`
+    )
+
+    // Optimistic UI update
     setAllRequests((prev) =>
       prev.map((r) => {
         if (r.request_id === requestId) {
-          const newProgress = newStatus === "Hoàn thành" ? 100 : newStatus === "Đang thực hiện" ? Math.max(r.progress, 30) : 10
-          const newPhase = newStatus === "Hoàn thành" ? "Nghiệm thu & Bàn giao" : newStatus === "Đang thực hiện" ? "Đang thiết kế UX" : "Đã tiếp nhận"
           return {
             ...r,
             status: newStatus as any,
@@ -181,19 +195,34 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
     try {
       const target = allRequests.find((r) => r.request_id === requestId)
-      if (target) {
-        const newProgress = newStatus === "Hoàn thành" ? 100 : newStatus === "Đang thực hiện" ? Math.max(target.progress, 30) : 10
-        const newPhase = newStatus === "Hoàn thành" ? "Nghiệm thu & Bàn giao" : newStatus === "Đang thực hiện" ? "Đang thiết kế UX" : "Đã tiếp nhận"
-        await updateTaskProgress(requestId, {
-          new_status: newStatus,
-          new_phase: newPhase,
-          new_progress: newProgress,
-          note: `Trạng thái đã được chuyển sang [${newStatus}] qua Kanban Board.`,
-          assigned_designer: target.assigned_designer,
-        })
+      const res = await updateTaskProgress(requestId, {
+        new_status: newStatus,
+        new_phase: newPhase,
+        new_progress: newProgress,
+        note: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+        assigned_designer: target?.assigned_designer,
+      })
+
+      if (res.success) {
+        toast.success(
+          "Cập nhật trạng thái thành công!",
+          `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}] (${newProgress}%).`,
+          { id: toastId }
+        )
+      } else {
+        toast.error(
+          "Cập nhật không thành công",
+          res.message || "Vui lòng thử lại sau.",
+          { id: toastId }
+        )
       }
     } catch (err) {
-      console.error("Error updating status:", err)
+      console.error("Error updating phase:", err)
+      toast.error(
+        "Lỗi cập nhật",
+        "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!",
+        { id: toastId }
+      )
     }
   }
 
@@ -210,11 +239,14 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }, [allRequests])
 
   const rowsPerPageOptions: DropdownOption[] = [
-    { value: "6", label: "6" },
     { value: "10", label: "10" },
     { value: "20", label: "20" },
     { value: "50", label: "50" },
+    { value: "100", label: "100" },
   ]
+
+  const [selectedPhases, setSelectedPhases] = useState<string[]>([])
+  const [selectedSquads, setSelectedSquads] = useState<string[]>([])
 
   // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
   const filteredRequests = useMemo(() => {
@@ -243,18 +275,14 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       }
     }
 
-    // 2. Lọc theo trạng thái
-    if (statusFilter !== "Tất cả") {
-      if (statusFilter === "Đang phân loại") {
-        list = list.filter((r) => r.status === "Đang phân loại" || r.status === "Chờ tiếp nhận" || r.status === "Đã gửi")
-      } else {
-        list = list.filter((r) => r.status === statusFilter)
-      }
+    // 2. Lọc theo Workstream / Phase
+    if (selectedPhases.length > 0) {
+      list = list.filter((r) => selectedPhases.includes(getRequestKanbanPhase(r)))
     }
 
-    // 3. Lọc theo sản phẩm / queue
-    if (productFilter !== "all") {
-      list = list.filter((r) => r.product === productFilter)
+    // 3. Lọc theo Squad
+    if (selectedSquads.length > 0) {
+      list = list.filter((r) => selectedSquads.includes(r.squad_name || r.product || "Khác"))
     }
 
     // 4. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
@@ -266,12 +294,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           (r.request_id && r.request_id.toLowerCase().includes(q)) ||
           (r.product && r.product.toLowerCase().includes(q)) ||
           (r.assigned_designer && r.assigned_designer.toLowerCase().includes(q)) ||
-          (r.current_phase && r.current_phase.toLowerCase().includes(q))
+          (r.current_phase && r.current_phase.toLowerCase().includes(q)) ||
+          (r.squad_name && r.squad_name.toLowerCase().includes(q))
       )
     }
 
     return list
-  }, [allRequests, session, statusFilter, productFilter, query])
+  }, [allRequests, session, selectedPhases, selectedSquads, query])
+
+  const handleClearAllFilters = () => {
+    setQuery("")
+    setSelectedPhases([])
+    setSelectedSquads([])
+  }
 
   const getCount = (status: string) => {
     let baseList = allRequests
@@ -378,293 +413,303 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
         {/* Unified Filter & Toolbar Bar */}
         <div className="p-4 sm:px-6 bg-slate-50/50 border-b border-slate-100">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
-            {/* Left: Status Filter Tabs */}
-            <div className="overflow-x-auto pb-1 lg:pb-0">
-              <Tabs value={statusFilter} onValueChange={setStatusFilter} variant="pills">
-                <TabsList className="bg-slate-100/90 p-1 rounded-xl">
-                  {STATUS_FILTERS.map((f) => (
-                    <TabsTrigger
-                      key={f}
-                      value={f}
-                      badge={getCount(f)}
-                      className="text-xs rounded-lg font-semibold"
-                    >
-                      {f}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            {/* Left: Search input */}
+            <div className="relative w-full sm:w-96 lg:w-[460px] max-w-xl">
+              <Input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Tìm kiếm yêu cầu, designer, squad..."
+                startIcon={<Search className="w-4 h-4 text-slate-400" />}
+                className="h-10 text-xs sm:text-sm bg-white rounded-xl border-slate-200 shadow-2xs w-full"
+              />
             </div>
 
-            {/* Right: Search, Product Dropdown, View Mode Switcher */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Search input */}
-              <div className="relative w-full sm:w-56 lg:w-60">
-                <Input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Tìm kiếm theo tên task, mã..."
-                  startIcon={<Search className="w-4 h-4 text-slate-400" />}
-                  className="h-10 text-xs sm:text-sm bg-white rounded-xl border-slate-200"
-                />
-              </div>
-
-              {/* Product dropdown */}
-              <DropdownMenu
-                options={productOptions}
-                value={productFilter}
-                onChange={setProductFilter}
-                placeholder="Tất cả sản phẩm"
-                icon={<Layers className="w-3.5 h-3.5" />}
-                className="w-full sm:w-auto"
-                buttonClassName="w-full sm:w-40 h-10 text-xs font-semibold"
-              />
-
-              {/* View Mode Switcher: Bảng | Kanban | Lưới */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("table")}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "table" ? "bg-white text-[#1057FB] shadow-2xs font-bold" : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  title="Dạng bảng chi tiết"
-                >
-                  <ListFilter className="w-3.5 h-3.5" />
-                  <span className="font-semibold">Bảng</span>
-                </button>
+            {/* Right: View Mode Switcher + Filter Popover */}
+            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+              {/* View Mode Switcher: Kanban | Lưới | Bảng */}
+              <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setViewMode("kanban")}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "kanban" ? "bg-white text-[#1057FB] shadow-2xs font-bold" : "text-slate-500 hover:text-slate-900"
+                    viewMode === "kanban"
+                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
+                      : "text-slate-500 hover:text-slate-900 font-medium"
                   }`}
-                  title="Bảng Kanban kéo thả"
+                  title="Bảng Kanban"
                 >
                   <Columns3 className="w-3.5 h-3.5" />
-                  <span className="font-semibold">Kanban</span>
+                  <span>Kanban</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "grid" ? "bg-white text-[#1057FB] shadow-2xs font-bold" : "text-slate-500 hover:text-slate-900"
+                    viewMode === "grid"
+                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
+                      : "text-slate-500 hover:text-slate-900 font-medium"
                   }`}
                   title="Dạng lưới thẻ"
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
-                  <span className="font-semibold">Lưới</span>
+                  <span>Lưới</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
+                    viewMode === "table"
+                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
+                      : "text-slate-500 hover:text-slate-900 font-medium"
+                  }`}
+                  title="Dạng bảng chi tiết"
+                >
+                  <ListFilter className="w-3.5 h-3.5" />
+                  <span>Bảng</span>
                 </button>
               </div>
+
+              {/* ReUI Task Filter Popover */}
+              <TaskFilterPopover
+                requests={allRequests}
+                selectedPhases={selectedPhases}
+                selectedSquads={selectedSquads}
+                onPhasesChange={setSelectedPhases}
+                onSquadsChange={setSelectedSquads}
+                onClearAll={handleClearAllFilters}
+              />
             </div>
           </div>
         </div>
 
         {/* Content Body based on View Mode */}
-        {viewMode === "kanban" ? (
-          <div className="p-4 sm:p-6">
-            <KanbanBoard
-              requests={filteredRequests}
-              onSelectRequest={setSelectedRequest}
-              onUpdateStatus={handleUpdateStatus}
-            />
-          </div>
-        ) : viewMode === "grid" ? (
-          <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredRequests.map((r) => (
-              <RequestCard key={r.request_id} request={r} onClick={setSelectedRequest} />
-            ))}
-          </div>
-        ) : (
-          /* Table View */
-          <div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm min-w-full">
-                <thead className="bg-slate-50/90 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-3 sm:px-4 w-[20%]">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                        <span>Tên yêu cầu</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                      </div>
-                    </th>
-                    <th className="py-3 px-2.5 sm:px-4 w-[20%]">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                        <span>Người thực hiện</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                      </div>
-                    </th>
-                    <th className="py-3 px-2.5 sm:px-4 w-[20%]">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                        <span>Trạng thái</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                      </div>
-                    </th>
-                    <th className="py-3 px-3 sm:px-6 w-[40%]">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                        <span>Tiến độ</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {loading ? (
-                    [...Array(6)].map((_, i) => (
-                      <tr key={i} className={`animate-pulse ${i % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}`}>
-                        <td className="py-4 px-4 sm:px-6">
-                          <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
-                          <div className="h-3 bg-slate-100 rounded w-1/3" />
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
-                            <div className="h-3.5 bg-slate-100 rounded w-24" />
+        <AnimatePresence mode="wait">
+          {viewMode === "kanban" ? (
+            <motion.div
+              key="kanban"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="p-4 sm:p-6"
+            >
+              <KanbanBoard
+                requests={filteredRequests}
+                onSelectRequest={setSelectedRequest}
+                onUpdatePhase={handleUpdatePhase}
+              />
+            </motion.div>
+          ) : viewMode === "grid" ? (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+            >
+              {filteredRequests.map((r) => (
+                <RequestCard key={r.request_id} request={r} onClick={setSelectedRequest} />
+              ))}
+            </motion.div>
+          ) : (
+            /* Table View with JolyUI Animated Rows */
+            <motion.div
+              key="table"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="p-4 sm:p-6"
+            >
+              <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm min-w-full">
+                    <thead className="bg-slate-50/90 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3 px-3 sm:px-4 w-[20%]">
+                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
+                            <span>Tên yêu cầu</span>
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                           </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="h-6 bg-slate-100 rounded-full w-24" />
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="h-3.5 bg-slate-100 rounded w-16 mb-1.5" />
-                          <div className="h-2 bg-slate-100 rounded-full w-full" />
-                        </td>
+                        </th>
+                        <th className="py-3 px-2.5 sm:px-4 w-[20%]">
+                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
+                            <span>Người thực hiện</span>
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
+                          </div>
+                        </th>
+                        <th className="py-3 px-2.5 sm:px-4 w-[20%]">
+                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
+                            <span>Trạng thái</span>
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
+                          </div>
+                        </th>
+                        <th className="py-3 px-3 sm:px-6 w-[40%]">
+                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
+                            <span>Tiến độ</span>
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
+                          </div>
+                        </th>
                       </tr>
-                    ))
-                  ) : paginatedRequests.length > 0 ? (
-                    paginatedRequests.map((req, index) => {
-                      const displayName = formatDesignerDisplayName(req.assigned_designer || req.ux_owner)
-                      const designerAvatar = getDesignerAvatar(displayName)
-                      const avatarColorClass = getAvatarColorClass(displayName)
-                      const progressVal = req.progress || (req.status === "Hoàn thành" ? 100 : req.status === "Đang thực hiện" ? 55 : 15)
-                      const lastUpdatedStr = formatLastUpdated(req)
+                    </thead>
 
-                      return (
-                        <tr
-                          key={`${req.request_id}-${index}`}
-                          onClick={() => setSelectedRequest(req)}
-                          className={`${
-                            index % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"
-                          } hover:bg-blue-50/50 transition-colors cursor-pointer group`}
-                        >
-                          <td className="py-3 px-3 sm:px-5">
-                            <div className="space-y-1">
-                              <p className="text-sm font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug line-clamp-1 break-words">
-                                {req.title}
-                              </p>
-                              <div className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
-                                <span className="font-mono text-slate-400 font-normal tracking-[-0.005em] truncate max-w-[85px] sm:max-w-[130px] shrink">
-                                  {req.request_id}
-                                </span>
-                                <span className="shrink-0">•</span>
-                                <span className="truncate shrink-0">Cập nhật: {lastUpdatedStr}</span>
+                    <tbody className="divide-y divide-slate-100">
+                      {loading ? (
+                        [...Array(6)].map((_, i) => (
+                          <tr key={i} className={`animate-pulse ${i % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}`}>
+                            <td className="py-4 px-4 sm:px-6">
+                              <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                              <div className="h-3 bg-slate-100 rounded w-1/3" />
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
+                                <div className="h-3.5 bg-slate-100 rounded w-24" />
                               </div>
-                            </div>
-                          </td>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="h-6 bg-slate-100 rounded-full w-24" />
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="h-3.5 bg-slate-100 rounded w-16 mb-1.5" />
+                              <div className="h-2 bg-slate-100 rounded-full w-full" />
+                            </td>
+                          </tr>
+                        ))
+                      ) : paginatedRequests.length > 0 ? (
+                        paginatedRequests.map((req, index) => {
+                          const displayName = formatDesignerDisplayName(req.assigned_designer || req.ux_owner)
+                          const designerAvatar = getDesignerAvatar(displayName)
+                          const avatarColorClass = getAvatarColorClass(displayName)
+                          const progressVal = req.progress || (req.status === "Hoàn thành" ? 100 : req.status === "Đang thực hiện" ? 55 : 15)
+                          const lastUpdatedStr = formatLastUpdated(req)
 
-                          <td className="py-3 px-2.5 sm:px-4">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {designerAvatar ? (
-                                <img
-                                  src={designerAvatar}
-                                  alt={displayName}
-                                  className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
-                                />
-                              ) : (
-                                <div
-                                  className={`w-7 h-7 rounded-full font-bold text-[11px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
-                                >
-                                  {getUserInitials(displayName)}
+                          return (
+                            <AnimatedTableRow
+                              key={`${req.request_id}-${index}`}
+                              index={index}
+                              onClick={() => setSelectedRequest(req)}
+                              className={index % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}
+                            >
+                              <td className="py-3 px-3 sm:px-5">
+                                <div className="space-y-1">
+                                  <p className="text-sm font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug line-clamp-1 break-words">
+                                    {req.title}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
+                                    <span className="font-mono text-slate-400 font-normal tracking-[-0.005em] truncate max-w-[85px] sm:max-w-[130px] shrink">
+                                      {req.request_id}
+                                    </span>
+                                    <span className="shrink-0">•</span>
+                                    <span className="truncate shrink-0">Cập nhật: {lastUpdatedStr}</span>
+                                  </div>
                                 </div>
-                              )}
-                              <p className="text-xs font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px] min-w-0">
-                                {displayName}
-                              </p>
-                            </div>
-                          </td>
+                              </td>
 
-                          <td className="py-3 px-2.5 sm:px-4">
-                            {renderStatusBadge(req.status)}
-                          </td>
+                              <td className="py-3 px-2.5 sm:px-4">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {designerAvatar ? (
+                                    <img
+                                      src={designerAvatar}
+                                      alt={displayName}
+                                      className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
+                                    />
+                                  ) : (
+                                    <div
+                                      className={`w-7 h-7 rounded-full font-bold text-[11px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
+                                    >
+                                      {getUserInitials(displayName)}
+                                    </div>
+                                  )}
+                                  <p className="text-xs font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px] min-w-0">
+                                    {displayName}
+                                  </p>
+                                </div>
+                              </td>
 
-                          <td className="py-3 px-3 sm:px-6">
-                            <div className="space-y-1">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 text-xs">
-                                <span className="text-[11px] font-medium text-slate-600 leading-tight break-words line-clamp-1">
-                                  {req.current_phase || "Ghi nhận"}
-                                </span>
-                                <span className="font-mono font-bold text-slate-800 text-[11px] shrink-0">
-                                  {progressVal}%
-                                </span>
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-200/60 rounded-full overflow-hidden shrink-0 mt-0.5">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-300 ${getPhaseProgressColor(
-                                    req.current_phase,
-                                    req.status,
-                                    progressVal
-                                  )}`}
-                                  style={{ width: `${progressVal}%` }}
-                                />
-                              </div>
-                            </div>
+                              <td className="py-3 px-2.5 sm:px-4">
+                                {renderStatusBadge(req.status)}
+                              </td>
+
+                              <td className="py-3 px-3 sm:px-6">
+                                <div className="space-y-1">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 text-xs">
+                                    <span className="text-[11px] font-medium text-slate-600 leading-tight break-words line-clamp-1">
+                                      {req.current_phase || "Ghi nhận"}
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-800 text-[11px] shrink-0">
+                                      {progressVal}%
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-200/60 rounded-full overflow-hidden shrink-0 mt-0.5">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-300 ${getPhaseProgressColor(
+                                        req.current_phase,
+                                        req.status,
+                                        progressVal
+                                      )}`}
+                                      style={{ width: `${progressVal}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                            </AnimatedTableRow>
+                          )
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="py-6 text-center bg-white">
+                            <EmptyState
+                              title="Không tìm thấy bài toán nào"
+                              description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
+                              secondaryAction={
+                                query || selectedPhases.length > 0 || selectedSquads.length > 0
+                                  ? {
+                                      label: "Đặt lại bộ lọc",
+                                      onClick: handleClearAllFilters,
+                                      icon: <RefreshCw className="w-4 h-4" />,
+                                    }
+                                  : undefined
+                              }
+                              primaryAction={
+                                session?.role === "PO"
+                                  ? {
+                                      label: "Tạo yêu cầu mới",
+                                      onClick: () => {
+                                        if (onNavigateToCreate) onNavigateToCreate()
+                                      },
+                                      icon: <Plus className="w-4 h-4" />,
+                                    }
+                                  : undefined
+                              }
+                            />
                           </td>
                         </tr>
-                      )
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center bg-white">
-                        <EmptyState
-                          title="Không tìm thấy bài toán nào"
-                          description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
-                          secondaryAction={
-                            query || productFilter !== "all" || statusFilter !== "Tất cả"
-                              ? {
-                                  label: "Đặt lại bộ lọc",
-                                  onClick: () => {
-                                    setQuery("")
-                                    setProductFilter("all")
-                                    setStatusFilter("Tất cả")
-                                  },
-                                  icon: <RefreshCw className="w-4 h-4" />,
-                                }
-                              : undefined
-                          }
-                          primaryAction={
-                            session?.role === "PO"
-                              ? {
-                                  label: "Tạo yêu cầu mới",
-                                  onClick: () => {
-                                    if (onNavigateToCreate) onNavigateToCreate()
-                                  },
-                                  icon: <Plus className="w-4 h-4" />,
-                                }
-                              : undefined
-                          }
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
             {/* Pagination Footer */}
-            <div className="p-4 sm:px-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 text-xs text-slate-500 overflow-x-auto">
+            <div className="p-4 sm:px-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 text-xs text-slate-500">
               <div className="flex items-center gap-2 shrink-0">
                 <span>Số dòng mỗi trang</span>
-                <DropdownMenu
-                  options={rowsPerPageOptions}
-                  value={String(rowsPerPage)}
-                  onChange={(v) => setRowsPerPage(Number(v))}
-                  position="top"
-                  buttonClassName="h-8 px-2.5 bg-slate-50 text-xs font-semibold"
-                  menuClassName="w-20 min-w-[75px]"
-                />
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => {
+                    setRowsPerPage(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none cursor-pointer focus:border-[#1057FB] shadow-2xs transition-colors"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
@@ -713,35 +758,27 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* POPUP MODAL XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
-      <Dialog
+      {/* SLIDE-OVER DRAWER XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
+      <RequestDetail
         open={Boolean(selectedRequest)}
+        request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        size="2xl"
-      >
-        <DialogBody className="p-4 sm:p-6 max-h-[88vh] overflow-y-auto">
-          {selectedRequest && (
-            <RequestDetail
-              request={selectedRequest}
-              onBack={() => setSelectedRequest(null)}
-              onUpdated={async () => {
-                const reqs = await fetchRequests(true)
-                setAllRequests(reqs)
-                const found = reqs.find((r) => r.request_id === selectedRequest.request_id)
-                if (found) setSelectedRequest(found)
-              }}
-            />
-          )}
-        </DialogBody>
-      </Dialog>
+        onUpdated={async () => {
+          const reqs = await fetchRequests(true)
+          setAllRequests(reqs)
+          const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
+          if (found) setSelectedRequest(found)
+        }}
+      />
     </main>
   )
 }

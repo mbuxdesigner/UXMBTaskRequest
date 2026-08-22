@@ -86,7 +86,7 @@ export interface UXRequest {
 }
 
 export const ALL_PHASES = [
-  "Đã gửi yêu cầu",
+  "Chờ tiếp nhận",
   "Phân loại",
   "Discovery",
   "User Flow",
@@ -96,7 +96,11 @@ export const ALL_PHASES = [
 ]
 
 export function buildPhases(currentPhase: string): Phase[] {
-  const currentIdx = ALL_PHASES.indexOf(currentPhase)
+  let normalized = currentPhase
+  if (normalized === "Đã gửi yêu cầu" || normalized === "Đã gửi" || normalized === "Mới tạo") {
+    normalized = "Chờ tiếp nhận"
+  }
+  const currentIdx = ALL_PHASES.indexOf(normalized)
   return ALL_PHASES.map((name, i) => ({
     name,
     status:

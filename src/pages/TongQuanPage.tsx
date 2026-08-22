@@ -93,23 +93,6 @@ export default function TongQuanPage() {
     loadData()
   }, [])
 
-  if (selectedRequest) {
-    return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <RequestDetail
-          request={selectedRequest}
-          onBack={() => setSelectedRequest(null)}
-          onUpdated={async () => {
-            await loadData(true)
-            const allReqs = await fetchRequests()
-            const found = allReqs.find((r) => r.request_id === selectedRequest.request_id)
-            if (found) setSelectedRequest(found)
-          }}
-        />
-      </main>
-    )
-  }
-
   const total = requests.length
   const inProgress = requests.filter((r) => r.status === "Đang thực hiện").length
   const completed = requests.filter((r) => r.status === "Hoàn thành").length
@@ -278,6 +261,19 @@ export default function TongQuanPage() {
           interactive={true}
         />
       </div>
+
+      {/* Slide-over Drawer Xem chi tiết bài toán */}
+      <RequestDetail
+        open={Boolean(selectedRequest)}
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onUpdated={async () => {
+          await loadData(true)
+          const allReqs = await fetchRequests()
+          const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
+          if (found) setSelectedRequest(found)
+        }}
+      />
     </main>
   )
 }
