@@ -171,7 +171,9 @@ export default function TeamsOtpModal({
       demo.teamsEmail,
       demo.role,
       demo.squad,
-      900
+      demo.displayName,
+      demo.avatarUrl,
+      28800
     )
     onSuccess(session)
     onClose()

@@ -100,6 +100,32 @@ export default function App() {
     }
   }, [session])
 
+  // Lắng nghe và đồng bộ URL Hash (#track, #overview, #create, #admin) và Custom Navigation Event
+  useEffect(() => {
+    const syncFromHash = () => {
+      const hash = window.location.hash.replace(/^#/, "").split("?")[0]
+      if (hash === "track" || hash === "overview" || hash === "create" || hash === "manage" || hash === "admin") {
+        const targetPage = hash === "admin" ? "manage" : (hash as Page)
+        setPage(targetPage)
+      }
+    }
+    syncFromHash()
+    window.addEventListener("hashchange", syncFromHash)
+
+    const handleCustomNav = (e: Event) => {
+      const customEvent = e as CustomEvent
+      if (customEvent.detail?.page) {
+        setPage(customEvent.detail.page)
+      }
+    }
+    window.addEventListener("app_navigate", handleCustomNav)
+
+    return () => {
+      window.removeEventListener("hashchange", syncFromHash)
+      window.removeEventListener("app_navigate", handleCustomNav)
+    }
+  }, [])
+
   // Tự động chuyển PO về màn hình "Yêu cầu của tôi" khi đăng nhập
   useEffect(() => {
     if (session?.role === "PO" && page === "overview") {
@@ -143,91 +169,17 @@ export default function App() {
     )
   }
 
-  const isPo = session.role === "PO"
-  // Role PO KHÔNG BAO GIỜ HIỂN THỊ SIDEBAR NAV!
-  // Tất cả các role khác (Designer, Design Owner, Admin): BẮT BUỘC có Sidebar kể cả trang Tạo yêu cầu (create)!
-  const showSidebar = !isPo
-
   return (
     <div className="min-h-screen bg-[#FCFCFD]">
-      {showSidebar && (
-        <Sidebar
-          currentPage={page}
-          onNavigate={setPage}
-          isCollapsed={sidebarCollapsed}
-          onToggleCollapse={toggleSidebarCollapse}
-        />
-      )}
-
-      {/* Header riêng cho Role PO (Không có Sidebar Navigation) */}
-      {isPo && (
-        <header className="bg-white border-b border-slate-200/90 sticky top-0 z-40 shadow-2xs">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-            {/* Logo & Brand + Back button */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setPage("track")}
-                className="hover:opacity-85 transition-opacity text-left cursor-pointer"
-                title="Về danh sách yêu cầu"
-              >
-                <BrandLogo size="sm" />
-              </button>
-
-              {page === "create" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage("track")}
-                  className="text-slate-600 hover:text-slate-900 font-semibold gap-1.5 rounded-xl border border-slate-200/80 bg-slate-50/80 hover:bg-slate-100 px-3 cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4 text-[#1057FB]" />
-                  <span>Quay lại</span>
-                </Button>
-              )}
-            </div>
-
-            {/* User Info & Logout */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl text-xs">
-                {session.avatarUrl ? (
-                  <img
-                    src={session.avatarUrl}
-                    alt={session.displayName}
-                    className="w-6 h-6 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-lg bg-[#1057FB] text-white font-bold text-[10px] flex items-center justify-center">
-                    {getUserInitials(session.displayName)}
-                  </div>
-                )}
-                <span className="font-bold text-slate-900 hidden md:inline">
-                  {session.displayName}
-                </span>
-                <Badge variant="navy" size="xs" className="text-[10px] font-bold px-1.5 py-0 bg-blue-50 text-[#1057FB] border-blue-200">
-                  PO
-                </Badge>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-9 h-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/70 flex items-center justify-center transition-colors cursor-pointer"
-                title="Đăng xuất"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </header>
-      )}
+      <Sidebar
+        currentPage={page}
+        onNavigate={setPage}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+      />
 
       {/* Container chính: Offset theo sidebar w-60 (240px) */}
-      <div
-        className={`${
-          showSidebar ? "md:ml-60 pt-14 md:pt-0" : "w-full"
-        } min-h-screen bg-[#FCFCFD]`}
-      >
+      <div className="md:ml-60 pt-14 md:pt-0 min-h-screen bg-[#FCFCFD]">
         <Suspense fallback={<PageLoadingSkeleton />}>
           {page === "overview" && <TongQuanPage />}
           {page === "create" && (

@@ -8,7 +8,11 @@ import {
   ExternalLink,
   Target,
   FileText,
-  Paperclip
+  Paperclip,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  FileBox,
+  File
 } from "lucide-react"
 import { Squad } from "../../data/mockData"
 import { UserSession } from "../../services/otpAuthService"
@@ -18,6 +22,7 @@ interface RequestReviewSheetProps {
   onClose: () => void
   onConfirm: () => void
   isSubmitting: boolean
+  files?: File[]
   form: {
     title: string
     product: string
@@ -40,6 +45,7 @@ export default function RequestReviewSheet({
   onClose,
   onConfirm,
   isSubmitting,
+  files = [],
   form
 }: RequestReviewSheetProps) {
   const validLinks = form.doc_links.filter((l) => l.trim().length > 0)
@@ -207,14 +213,68 @@ export default function RequestReviewSheet({
                 <div className="pt-5 space-y-3.5">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                     <span>TÀI LIỆU & FILE ĐÍNH KÈM</span>
-                    <span className="text-[11px] font-normal text-slate-400">({validLinks.length})</span>
+                    <span className="text-[11px] font-normal text-slate-400">({validLinks.length + files.length})</span>
                   </p>
 
-                  {validLinks.length > 0 ? (
+                  {/* Uploaded Files */}
+                  {files.length > 0 && (
                     <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Tệp từ máy tính sẽ tải lên Drive:
+                      </span>
+                      {files.map((file, idx) => {
+                        const hasExt = file.name.includes(".")
+                        const ext = hasExt ? file.name.split(".").pop()?.toLowerCase() || "" : ""
+                        
+                        let iconEl = <FileText className="w-4 h-4 text-[#1057FB]" />
+                        let bgClass = "bg-blue-100/80 border-blue-200"
+                        
+                        if (ext === "pdf") {
+                          iconEl = <FileText className="w-4 h-4 text-rose-600" />
+                          bgClass = "bg-rose-100/80 border-rose-200"
+                        } else if (["doc", "docx"].includes(ext)) {
+                          iconEl = <FileText className="w-4 h-4 text-blue-600" />
+                          bgClass = "bg-blue-100/80 border-blue-200"
+                        } else if (["xls", "xlsx", "csv"].includes(ext)) {
+                          iconEl = <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                          bgClass = "bg-emerald-100/80 border-emerald-200"
+                        } else if (["png", "jpg", "jpeg", "svg", "webp", "gif"].includes(ext)) {
+                          iconEl = <ImageIcon className="w-4 h-4 text-purple-600" />
+                          bgClass = "bg-purple-100/80 border-purple-200"
+                        } else if (["zip", "rar", "7z", "tar"].includes(ext)) {
+                          iconEl = <FileBox className="w-4 h-4 text-amber-600" />
+                          bgClass = "bg-amber-100/80 border-amber-200"
+                        }
+
+                        return (
+                          <div
+                            key={`file-${idx}`}
+                            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200/70 shadow-2xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded-xl ${bgClass} flex items-center justify-center shrink-0 shadow-2xs border`}>
+                                {iconEl}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 truncate">{file.name}</p>
+                                <p className="text-[10px] text-slate-400">{(file.size / 1024).toFixed(0)} KB · Tải lên Drive tự động</p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Web Links */}
+                  {validLinks.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Liên kết tài liệu online:
+                      </span>
                       {validLinks.map((link, idx) => (
                         <div
-                          key={idx}
+                          key={`link-${idx}`}
                           className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 transition-colors group"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -238,7 +298,9 @@ export default function RequestReviewSheet({
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  )}
+
+                  {validLinks.length === 0 && files.length === 0 && (
                     <div className="text-xs text-slate-400 italic py-1">
                       Không có tài liệu hoặc file đính kèm nào.
                     </div>

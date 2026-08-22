@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge"
 
 interface FileUploadProps {
   files: File[]
-  onChange: (files: File[]) => void
+  onChange?: (files: File[]) => void
+  onFilesChange?: (files: any) => void
 }
 
 const ACCEPTED = [".pdf", ".docx", ".pptx", ".xlsx", ".png", ".jpg", ".jpeg"]
@@ -27,20 +28,25 @@ function getFileIcon(ext: string) {
   return <FileBox className="w-4 h-4 text-slate-600" />
 }
 
-export default function FileUpload({ files, onChange }: FileUploadProps) {
+export default function FileUpload({ files, onChange, onFilesChange }: FileUploadProps) {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleUpdate = (newFiles: File[]) => {
+    if (onChange) onChange(newFiles)
+    if (onFilesChange) onFilesChange(newFiles)
+  }
 
   const addFiles = (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles)
     const deduped = [...files, ...arr].filter(
       (f, i, a) => a.findIndex((x) => x.name === f.name && x.size === f.size) === i,
     )
-    onChange(deduped)
+    handleUpdate(deduped)
   }
 
   const removeFile = (index: number) => {
-    onChange(files.filter((_, i) => i !== index))
+    handleUpdate(files.filter((_, i) => i !== index))
   }
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {

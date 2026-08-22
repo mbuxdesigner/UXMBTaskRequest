@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Loader2, CheckCircle2, AlertCircle, Info, X } from "lucide-react"
+import { Check, X, AlertTriangle, Loader2, Info, Sparkles } from "lucide-react"
 
 export interface ToastItem {
   id: string
-  type: "loading" | "success" | "error" | "info"
+  type: "success" | "error" | "info" | "loading"
   title: string
   description?: string
   duration?: number
@@ -20,11 +20,11 @@ function notify() {
 }
 
 export const toast = {
-  loading: (title: string, description?: string, options?: { id?: string }): string => {
+  loading: (title: string, description?: string, options?: { id?: string }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const existingIndex = toasts.findIndex((t) => t.id === id)
     const newToast: ToastItem = { id, type: "loading", title, description }
-    
+
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
     } else {
@@ -34,7 +34,7 @@ export const toast = {
     return id
   },
 
-  success: (title: string, description?: string, options?: { id?: string; duration?: number }): string => {
+  success: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 3500
     const existingIndex = toasts.findIndex((t) => t.id === id)
@@ -55,7 +55,7 @@ export const toast = {
     return id
   },
 
-  error: (title: string, description?: string, options?: { id?: string; duration?: number }): string => {
+  error: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 4500
     const existingIndex = toasts.findIndex((t) => t.id === id)
@@ -76,7 +76,7 @@ export const toast = {
     return id
   },
 
-  info: (title: string, description?: string, options?: { id?: string; duration?: number }): string => {
+  info: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 3500
     const existingIndex = toasts.findIndex((t) => t.id === id)
@@ -108,6 +108,9 @@ export const toast = {
   }
 }
 
+/**
+ * Premium ReUI / Sonner-Grade Toast Notification Container
+ */
 export function Toaster() {
   const [activeToasts, setActiveToasts] = useState<ToastItem[]>([])
 
@@ -124,7 +127,7 @@ export function Toaster() {
   return (
     <div
       aria-live="polite"
-      className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"
+      className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"
     >
       <AnimatePresence mode="popLayout">
         {activeToasts.map((item) => {
@@ -136,64 +139,70 @@ export function Toaster() {
             <motion.div
               key={item.id}
               layout
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              initial={{ opacity: 0, y: 24, scale: 0.92 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10, transition: { duration: 0.15 } }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              className={`pointer-events-auto flex items-start gap-3 p-4 rounded-2xl border shadow-lg backdrop-blur-md transition-all ${
-                isLoading
-                  ? "bg-white/95 text-slate-900 border-blue-200 shadow-blue-500/5 ring-1 ring-blue-500/10"
-                  : isSuccess
-                  ? "bg-white/95 text-slate-900 border-emerald-200 shadow-emerald-500/5 ring-1 ring-emerald-500/10"
-                  : isError
-                  ? "bg-white/95 text-slate-900 border-rose-200 shadow-rose-500/5 ring-1 ring-rose-500/10"
-                  : "bg-white/95 text-slate-900 border-slate-200 shadow-slate-500/5"
-              }`}
+              exit={{ opacity: 0, scale: 0.88, y: 12, transition: { duration: 0.18, ease: "easeOut" } }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              className="pointer-events-auto relative group flex items-start gap-3 p-3.5 bg-[#0F172A]/95 text-slate-100 rounded-2xl border border-slate-700/60 shadow-2xl shadow-slate-950/60 backdrop-blur-xl ring-1 ring-white/10 select-none overflow-hidden"
             >
-              {/* Icon */}
+              {/* Subtle Top Glow Gradient */}
+              <div 
+                className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${
+                  isLoading
+                    ? "from-transparent via-blue-400 to-transparent"
+                    : isSuccess
+                    ? "from-transparent via-emerald-400 to-transparent"
+                    : isError
+                    ? "from-transparent via-rose-400 to-transparent"
+                    : "from-transparent via-indigo-400 to-transparent"
+                }`} 
+              />
+
+              {/* Status Icon with Glow Backlight */}
               <div className="shrink-0 mt-0.5">
                 {isLoading && (
-                  <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#1057FB] flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  <div className="w-6 h-6 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-xs shadow-blue-500/20">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   </div>
                 )}
                 {isSuccess && (
-                  <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <div className="w-6 h-6 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shadow-xs shadow-emerald-500/20">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
                   </div>
                 )}
                 {isError && (
-                  <div className="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                    <AlertCircle className="w-4 h-4 stroke-[2.5]" />
+                  <div className="w-6 h-6 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center justify-center shadow-xs shadow-rose-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
                   </div>
                 )}
                 {!isLoading && !isSuccess && !isError && (
-                  <div className="w-7 h-7 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
-                    <Info className="w-4 h-4" />
+                  <div className="w-6 h-6 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shadow-xs shadow-indigo-500/20">
+                    <Info className="w-3.5 h-3.5" />
                   </div>
                 )}
               </div>
 
-              {/* Text content */}
+              {/* Text Content */}
               <div className="flex-1 min-w-0 pr-1">
-                <p className="text-xs font-bold text-slate-900 leading-snug">
+                <p className="text-xs font-semibold text-slate-100 leading-snug tracking-tight">
                   {item.title}
                 </p>
                 {item.description && (
-                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-normal">
                     {item.description}
                   </p>
                 )}
               </div>
 
-              {/* Close button */}
+              {/* Dismiss Close Button */}
               {!isLoading && (
                 <button
                   type="button"
                   onClick={() => toast.dismiss(item.id)}
-                  className="shrink-0 -mr-1 -mt-1 w-6 h-6 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+                  className="shrink-0 -mr-1 -mt-0.5 w-5 h-5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Đóng thông báo"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               )}
             </motion.div>

@@ -6,6 +6,8 @@ import {
 import {
   testGoogleSheetConnection,
   fetchSelectionsFromSheet,
+  syncProjectionsFromSheet,
+  initSheetsViaApi,
   SelectionsData,
 } from "../../services/googleSheetService"
 import {
@@ -32,8 +34,12 @@ import {
   X, 
   Save, 
   Check,
-  Zap
+  Zap,
+  ShieldCheck,
+  FolderPlus
 } from "lucide-react"
+
+import { toast } from "@/components/ui/toast"
 
 interface GoogleSheetSettingsModalProps {
   isOpen: boolean
@@ -49,17 +55,20 @@ export default function GoogleSheetSettingsModal({
   const [url, setUrl] = useState("")
   const [testing, setTesting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [syncingProjections, setSyncingProjections] = useState(false)
+  const [initializingSheets, setInitializingSheets] = useState(false)
   const [testResult, setTestResult] = useState<{
     connected: boolean
     message: string
+    selectionsCount?: { products: number; request_types: number }
   } | null>(null)
-  const [savedSuccess, setSavedSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("config")
+  const [savedSuccess, setSavedSuccess] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
-      const cfg = getGoogleSheetConfig()
-      setUrl(cfg.scriptUrl || "")
+      const config = getGoogleSheetConfig()
+      setUrl(config?.scriptUrl || "")
       setTestResult(null)
       setSavedSuccess(false)
     }
@@ -70,7 +79,8 @@ export default function GoogleSheetSettingsModal({
   const handleSave = () => {
     saveGoogleSheetConfig({ scriptUrl: url.trim() })
     setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 2500)
+    setTimeout(() => setSavedSuccess(false), 2000)
+    toast.success("Đã lưu cấu hình Google Sheet Web App!")
   }
 
   const handleTestConnection = async () => {
@@ -89,6 +99,31 @@ export default function GoogleSheetSettingsModal({
     if (onSynced) onSynced(selections)
     setSavedSuccess(true)
     setTimeout(() => setSavedSuccess(false), 2500)
+    toast.success("Đã đồng bộ danh mục cấu hình thành công!")
+  }
+
+  const handleSyncProjections = async () => {
+    setSyncingProjections(true)
+    saveGoogleSheetConfig({ scriptUrl: url.trim() })
+    const res = await syncProjectionsFromSheet()
+    setSyncingProjections(false)
+    if (res.success) {
+      toast.success(res.message || "Đã phân tách và đồng bộ các bảng View thành công!")
+    } else {
+      toast.error("Lỗi đồng bộ", res.message)
+    }
+  }
+
+  const handleInitAllSheets = async () => {
+    setInitializingSheets(true)
+    saveGoogleSheetConfig({ scriptUrl: url.trim() })
+    const res = await initSheetsViaApi()
+    setInitializingSheets(false)
+    if (res.success) {
+      toast.success(res.message || "Đã khởi tạo hoàn tất cấu trúc Sheet!")
+    } else {
+      toast.error("Lỗi khởi tạo", res.message)
+    }
   }
 
   return (
@@ -114,8 +149,8 @@ export default function GoogleSheetSettingsModal({
       </DialogHeader>
 
       <div className="px-6 pt-4 border-b border-slate-100">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList variant="underline">
+        <Tabs value={activeTab} onValueChange={setActiveTab} variant="line">
+          <TabsList>
             <TabsTrigger value="config">
               <span className="flex items-center gap-2">
                 <Sliders className="w-3.5 h-3.5" />
@@ -294,6 +329,30 @@ export default function GoogleSheetSettingsModal({
           >
             <RefreshCw className="w-3.5 h-3.5" />
             Đồng bộ Selections
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={syncingProjections || !url.trim()}
+            loading={syncingProjections}
+            onClick={handleSyncProjections}
+            className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
+            Phân tách View
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={initializingSheets || !url.trim()}
+            loading={initializingSheets}
+            onClick={handleInitAllSheets}
+            className="text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200"
+          >
+            <FolderPlus className="w-3.5 h-3.5 text-indigo-600" />
+            Khởi tạo cấu trúc Sheet
           </Button>
         </div>
 

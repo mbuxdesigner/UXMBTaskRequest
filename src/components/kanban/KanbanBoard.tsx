@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { 
   Calendar, 
   ChevronLeft,
@@ -26,6 +27,7 @@ export interface KanbanBoardProps {
     newStatus: string,
     newProgress: number
   ) => Promise<void> | void
+  loading?: boolean
 }
 
 export interface KanbanColumnDef {
@@ -254,7 +256,7 @@ function getAvatarColorClass(name: string): string {
 }
 
 function formatDesignerDisplayName(rawName?: string): string {
-  if (!rawName) return "Đang phân công"
+  if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
   const clean = rawName.trim()
   if (clean.toLowerCase().includes("nam.designer") || clean.toLowerCase().includes("nam.")) {
     return "Lê Hoàng Nam"
@@ -275,11 +277,44 @@ function formatDesignerDisplayName(rawName?: string): string {
 }
 
 function getDesignerAvatar(name?: string) {
-  if (!name) return ""
+  if (!name || name === "Chưa phân công") return ""
+  try {
+    const cached = localStorage.getItem("mbbank_team_members")
+    if (cached) {
+      const members: any[] = JSON.parse(cached)
+      const found = members.find((m) => m.name === name || (name && m.name && (name.includes(m.name) || m.name.includes(name))))
+      if (found && found.avatarUrl) return found.avatarUrl
+    }
+  } catch {}
   if (name.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
   if (name.includes("Cường")) return "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
   if (name.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
   return ""
+}
+
+function formatDateOnly(rawDate?: string): string {
+  if (!rawDate || !rawDate.trim()) return "—"
+  const clean = rawDate.trim()
+  // If format is "dd/MM/yyyy HH:mm:ss" or "dd/MM/yyyy HH:mm"
+  if (clean.includes(" ")) {
+    const parts = clean.split(" ")
+    if (parts[0].includes("/") || parts[0].includes("-")) {
+      return parts[0]
+    }
+  }
+  // If format is ISO date e.g. "2026-08-22T..."
+  if (clean.includes("T")) {
+    try {
+      const d = new Date(clean)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, "0")
+        const mm = String(d.getMonth() + 1).padStart(2, "0")
+        const yyyy = d.getFullYear()
+        return `${dd}/${mm}/${yyyy}`
+      }
+    } catch {}
+  }
+  return clean
 }
 
 export default function KanbanBoard({
@@ -287,6 +322,7 @@ export default function KanbanBoard({
   onSelectRequest,
   onUpdateStatus,
   onUpdatePhase,
+  loading = false,
 }: KanbanBoardProps) {
   const [draggedRequestId, setDraggedRequestId] = useState<string | null>(null)
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
@@ -375,7 +411,7 @@ export default function KanbanBoard({
       {/* Kanban Horizontal Container */}
       <div
         ref={scrollContainerRef}
-        className="flex gap-4 overflow-x-auto pb-4 pt-1 items-start scroll-smooth snap-x select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+        className="flex gap-4 overflow-x-auto pb-4 pt-1 px-1 items-start scroll-smooth select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
         style={{ scrollbarGutter: "stable" }}
       >
         {KANBAN_PROCESS_COLUMNS.map((column) => {
@@ -391,7 +427,7 @@ export default function KanbanBoard({
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, column)}
-              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[620px] snap-start ${
+              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[620px] ${
                 column.bgClass
               } ${column.borderClass} ${
                 isOver
@@ -414,18 +450,37 @@ export default function KanbanBoard({
 
               {/* Column Body / Cards */}
               <div className="flex-1 space-y-2.5">
-                {columnRequests.length === 0 ? (
+                {loading ? (
+                  <div className="space-y-2.5">
+                    {[1, 2].map((k) => (
+                      <div key={`kskel-${column.id}-${k}`} className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5 animate-pulse">
+                        <div className="flex justify-between items-center">
+                          <div className="h-4 bg-slate-100 rounded w-16" />
+                          <div className="h-4 bg-slate-100 rounded-full w-14" />
+                        </div>
+                        <div className="h-4 bg-slate-100 rounded w-full" />
+                        <div className="h-3 bg-slate-100 rounded w-2/3" />
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-slate-100" />
+                            <div className="h-3 bg-slate-100 rounded w-14" />
+                          </div>
+                          <div className="h-4 bg-slate-100 rounded w-12" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : columnRequests.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-44 rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
                     <p className="text-xs font-medium text-slate-400">No cards</p>
                   </div>
                 ) : (
                   columnRequests.map((req, idx) => {
                     const isDragging = draggedRequestId === req.request_id
-                    const displayName = formatDesignerDisplayName(
-                      req.assigned_designer || req.ux_owner
-                    )
-                    const designerAvatar = getDesignerAvatar(displayName)
-                    const avatarColorClass = getAvatarColorClass(displayName)
+                    const rawDesigner = req.assigned_designer || (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công" ? req.ux_owner : "") || ""
+                    const isAssigned = Boolean(rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công")
+                    const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
+                    const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
                     const progressVal =
                       req.progress ||
                       (column.phase === "Bàn giao"
@@ -436,29 +491,26 @@ export default function KanbanBoard({
 
                     return (
                       <div
-                        key={`${req.request_id}-${idx}`}
+                        key={req.request_id ? `kcard-${req.request_id}-${idx}` : `kcard-idx-${idx}`}
                         draggable
                         onDragStart={(e) => handleDragStart(e, req.request_id)}
                         onDragEnd={handleDragEnd}
                         onClick={() => onSelectRequest(req)}
-                        className={`group relative bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-grab active:cursor-grabbing select-none space-y-2.5 ${
+                        className={`group relative bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all duration-200 cursor-grab active:cursor-grabbing select-none space-y-2.5 ${
                           isDragging
                             ? "opacity-35 scale-[0.98] rotate-1 ring-2 ring-[#1057FB]"
                             : "opacity-100"
                         }`}
                       >
-                        {/* Top Line: [Product Tag] [ID] ... [Status Badge with dot] */}
+                        {/* Top Line: [Product Tag] ... [Status Badge with dot] */}
                         <div className="flex items-center justify-between gap-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span
                               className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${getProductPillStyle(
                                 req.product
-                              )} truncate max-w-[95px]`}
+                              )} truncate max-w-[130px]`}
                             >
                               {req.product || "App"}
-                            </span>
-                            <span className="font-mono text-[11px] text-slate-400 font-medium truncate shrink-0">
-                              {req.request_id}
                             </span>
                           </div>
 
@@ -472,7 +524,7 @@ export default function KanbanBoard({
                         </div>
 
                         {/* Title */}
-                        <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors">
+                        <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:anywhere] break-all max-w-full">
                           {req.title}
                         </h4>
 
@@ -480,36 +532,29 @@ export default function KanbanBoard({
                         <div className="flex items-center justify-between gap-1.5 pt-0.5 text-xs">
                           {/* Assignee */}
                           <div className="flex items-center gap-1.5 min-w-0">
-                            {designerAvatar ? (
-                              <img
-                                src={designerAvatar}
-                                alt={displayName}
-                                className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
-                              />
+                            {isAssigned ? (
+                              <>
+                                <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
+                                <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">
+                                  {displayName}
+                                </span>
+                              </>
                             ) : (
-                              <div
-                                className={`w-5 h-5 rounded-full font-bold text-[9px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
-                              >
-                                {getUserInitials(displayName)}
-                              </div>
+                              <span className="text-[11px] text-slate-400 font-medium italic truncate">
+                                Chưa phân công
+                              </span>
                             )}
-                            <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">
-                              {displayName}
-                            </span>
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
-                            {/* Priority Flag */}
-                            <div className="flex items-center gap-0.5 text-[11px] font-bold text-amber-600 px-1.5 py-0.5 rounded bg-amber-50/70 border border-amber-200/60" title="Độ ưu tiên: Cao">
-                              <Flag className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                              <span className="text-[10px]">High</span>
-                            </div>
-
-                            {/* Date Pill: [ 📅 Apr 26 / 19/08 ] */}
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50/70 text-[10.5px] text-slate-600 font-medium">
+                            {/* Date Pill: Ngày cập nhật cuối */}
+                            <div 
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50/70 text-[10.5px] text-slate-600 font-medium"
+                              title="Ngày cập nhật cuối"
+                            >
                               <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                               <span>
-                                {req.expected_deadline || req.submitted_at || "—"}
+                                {formatDateOnly(req.last_updated || req.submitted_at)}
                               </span>
                             </div>
 

@@ -20,7 +20,7 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   }, [])
 
   return (
-    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-4">
+    <main className="w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
       {isPo && (
         <div>
           <Button

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getStatusConfig } from "@/config/statusConfig"
-import { UXRequest } from "../data/mockData"
+import { UXRequest, TaskUpdateRecord } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { EmptyState } from "@/components/reui/empty-state"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
 import {
@@ -35,7 +36,8 @@ import {
   ArrowUpDown,
   Columns3,
   LayoutGrid,
-  ListFilter
+  ListFilter,
+  Flag
 } from "lucide-react"
 
 interface TrackRequestPageProps {
@@ -66,7 +68,7 @@ function getAvatarColorClass(name: string): string {
 }
 
 function formatDesignerDisplayName(rawName?: string): string {
-  if (!rawName) return "Đang phân công"
+  if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
   const clean = rawName.trim()
   if (clean.toLowerCase().includes("nam.designer") || clean.toLowerCase().includes("nam.")) {
     return "Lê Hoàng Nam"
@@ -87,7 +89,15 @@ function formatDesignerDisplayName(rawName?: string): string {
 }
 
 function getDesignerAvatar(name?: string) {
-  if (!name) return ""
+  if (!name || name === "Chưa phân công") return ""
+  try {
+    const cached = localStorage.getItem("mbbank_team_members")
+    if (cached) {
+      const members: any[] = JSON.parse(cached)
+      const found = members.find((m) => m.name === name || (name && m.name && (name.includes(m.name) || m.name.includes(name))))
+      if (found && found.avatarUrl) return found.avatarUrl
+    }
+  } catch {}
   if (name.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
   if (name.includes("Cường")) return "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
   if (name.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
@@ -143,11 +153,25 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
   const loadData = async (forceRefresh = false) => {
     setLoading(true)
+    const startTime = Date.now()
     try {
       const reqs = await fetchRequests(forceRefresh)
+      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 400ms khi bấm làm mới
+      if (forceRefresh) {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 400) {
+          await new Promise((r) => setTimeout(r, 400 - elapsed))
+        }
+      }
       setAllRequests(reqs)
+      if (forceRefresh) {
+        toast.success("Đã làm mới dữ liệu từ Google Sheet!")
+      }
     } catch (err) {
       console.warn("Could not load requests:", err)
+      if (forceRefresh) {
+        toast.error("Lỗi làm mới dữ liệu", "Không thể tải danh sách yêu cầu.")
+      }
     } finally {
       setLoading(false)
     }
@@ -156,6 +180,35 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   useEffect(() => {
     loadData()
   }, [])
+
+  // Lắng nghe sự kiện điều hướng từ màn hình Thành công (Tạo bài toán) -> Tự động mở chi tiết bài toán
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent
+      const targetId = customEvent.detail?.requestId
+      if (targetId) {
+        loadData(true).then(() => {
+          try {
+            const cached = localStorage.getItem("ux_portal_real_requests")
+            if (cached) {
+              const list: UXRequest[] = JSON.parse(cached)
+              const found = list.find((r) => r.request_id === targetId)
+              if (found) {
+                setSelectedRequest(found)
+                return
+              }
+            }
+          } catch {}
+          const found = allRequests.find((r) => r.request_id === targetId)
+          if (found) {
+            setSelectedRequest(found)
+          }
+        })
+      }
+    }
+    window.addEventListener("app_navigate", handleNavEvent)
+    return () => window.removeEventListener("app_navigate", handleNavEvent)
+  }, [allRequests])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -178,16 +231,46 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       `Chuyển yêu cầu ${requestId} sang khâu [${newPhase}]`
     )
 
+    const currentSession = getStoredSession()
+    const now = new Date()
+    const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`
+
+    const newLogRecord: TaskUpdateRecord = {
+      id: `LOG-${Date.now()}`,
+      request_id: requestId,
+      timestamp: formattedDate,
+      updated_by: currentSession ? (currentSession.displayName || currentSession.teamsEmail) : "Lê Hoàng Nam",
+      author_role: currentSession ? currentSession.role : "Designer",
+      new_phase: newPhase,
+      new_progress: newProgress,
+      note: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+    }
+
     // Optimistic UI update
     setAllRequests((prev) =>
       prev.map((r) => {
         if (r.request_id === requestId) {
-          return {
+          const updated = {
             ...r,
             status: newStatus as any,
             progress: newProgress,
             current_phase: newPhase,
+            last_updated: formattedDate,
+            latest_update: {
+              date: formattedDate,
+              phase: newPhase,
+              message: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+            },
+            task_updates: [newLogRecord, ...(r.task_updates || [])],
           }
+          if (selectedRequest?.request_id === requestId) {
+            setSelectedRequest(updated)
+          }
+          return updated
         }
         return r
       })
@@ -345,6 +428,40 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     )
   }
 
+  const renderPriorityBadge = (priority?: string) => {
+    const p = (priority || "Normal").toLowerCase()
+    if (p.includes("urgent") || p.includes("khẩn")) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+          <Flag className="w-3 h-3 fill-rose-500 text-rose-500" />
+          <span>Khẩn cấp</span>
+        </span>
+      )
+    }
+    if (p.includes("high") || p.includes("cao")) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+          <Flag className="w-3 h-3 fill-amber-500 text-amber-500" />
+          <span>High (Cao)</span>
+        </span>
+      )
+    }
+    if (p.includes("low") || p.includes("thấp")) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200 shadow-2xs">
+          <Flag className="w-3 h-3 text-slate-400" />
+          <span>Thấp</span>
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
+        <Flag className="w-3 h-3 fill-blue-500 text-blue-500" />
+        <span>Bình thường</span>
+      </span>
+    )
+  }
+
   const formatLastUpdated = (req: UXRequest) => {
     if (req.latest_update?.date) return req.latest_update.date
     if (req.last_updated) return req.last_updated
@@ -356,7 +473,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const completedCount = filteredRequests.filter((r) => r.status === "Hoàn thành").length
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6 pb-16">
+    <main className="w-full max-w-[1680px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 pb-16">
       {/* Top Header matching Create Task clean style */}
       <div className="border-b border-slate-200/80 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -497,6 +614,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             >
               <KanbanBoard
                 requests={filteredRequests}
+                loading={loading}
                 onSelectRequest={setSelectedRequest}
                 onUpdatePhase={handleUpdatePhase}
               />
@@ -508,11 +626,62 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+              className="p-4 sm:p-6"
             >
-              {filteredRequests.map((r) => (
-                <RequestCard key={r.request_id} request={r} onClick={setSelectedRequest} />
-              ))}
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={`grid-skel-${i}`} className="p-5 rounded-2xl border border-slate-200 bg-white animate-pulse space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div className="h-5 bg-slate-100 rounded-md w-24" />
+                        <div className="h-5 bg-slate-100 rounded-full w-16" />
+                      </div>
+                      <div className="h-5 bg-slate-100 rounded w-3/4" />
+                      <div className="h-4 bg-slate-100 rounded w-1/2" />
+                      <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-slate-100" />
+                          <div className="h-3.5 bg-slate-100 rounded w-20" />
+                        </div>
+                        <div className="h-4 bg-slate-100 rounded w-12" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredRequests.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredRequests.map((r, idx) => (
+                    <RequestCard key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`} request={r} onClick={setSelectedRequest} />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 shadow-2xs">
+                  <EmptyState
+                    title="Không tìm thấy bài toán nào"
+                    description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
+                    secondaryAction={
+                      query || selectedPhases.length > 0 || selectedSquads.length > 0
+                        ? {
+                            label: "Đặt lại bộ lọc",
+                            onClick: handleClearAllFilters,
+                            icon: <RefreshCw className="w-4 h-4" />,
+                          }
+                        : undefined
+                    }
+                    primaryAction={
+                      session?.role === "PO"
+                        ? {
+                            label: "Tạo yêu cầu mới",
+                            onClick: () => {
+                              if (onNavigateToCreate) onNavigateToCreate()
+                            },
+                            icon: <Plus className="w-4 h-4" />,
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
             </motion.div>
           ) : (
             /* Table View with JolyUI Animated Rows */
@@ -529,25 +698,31 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   <table className="w-full text-left text-sm min-w-full">
                     <thead className="bg-slate-50/90 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       <tr>
-                        <th className="py-3 px-3 sm:px-4 w-[20%]">
+                        <th className="py-3 px-3 sm:px-4 w-[28%]">
                           <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
                             <span>Tên yêu cầu</span>
                             <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                           </div>
                         </th>
-                        <th className="py-3 px-2.5 sm:px-4 w-[20%]">
+                        <th className="py-3 px-2 sm:px-3 w-[15%]">
+                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
+                            <span>Độ ưu tiên</span>
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
+                          </div>
+                        </th>
+                        <th className="py-3 px-2.5 sm:px-4 w-[18%]">
                           <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
                             <span>Người thực hiện</span>
                             <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                           </div>
                         </th>
-                        <th className="py-3 px-2.5 sm:px-4 w-[20%]">
+                        <th className="py-3 px-2.5 sm:px-4 w-[15%]">
                           <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
                             <span>Trạng thái</span>
                             <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
                           </div>
                         </th>
-                        <th className="py-3 px-3 sm:px-6 w-[40%]">
+                        <th className="py-3 px-3 sm:px-6 w-[24%]">
                           <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
                             <span>Tiến độ</span>
                             <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
@@ -559,10 +734,13 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                     <tbody className="divide-y divide-slate-100">
                       {loading ? (
                         [...Array(6)].map((_, i) => (
-                          <tr key={i} className={`animate-pulse ${i % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}`}>
+                          <tr key={`table-skel-${i}`} className={`animate-pulse ${i % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}`}>
                             <td className="py-4 px-4 sm:px-6">
                               <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
                               <div className="h-3 bg-slate-100 rounded w-1/3" />
+                            </td>
+                            <td className="py-4 px-3">
+                              <div className="h-5 bg-slate-100 rounded-md w-20" />
                             </td>
                             <td className="py-4 px-4">
                               <div className="flex items-center gap-2.5">
@@ -581,22 +759,24 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                         ))
                       ) : paginatedRequests.length > 0 ? (
                         paginatedRequests.map((req, index) => {
-                          const displayName = formatDesignerDisplayName(req.assigned_designer || req.ux_owner)
-                          const designerAvatar = getDesignerAvatar(displayName)
+                          const rawDesigner = req.assigned_designer || (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công" ? req.ux_owner : "") || ""
+                          const isAssigned = Boolean(rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công")
+                          const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
+                          const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
                           const avatarColorClass = getAvatarColorClass(displayName)
                           const progressVal = req.progress || (req.status === "Hoàn thành" ? 100 : req.status === "Đang thực hiện" ? 55 : 15)
                           const lastUpdatedStr = formatLastUpdated(req)
 
                           return (
                             <AnimatedTableRow
-                              key={`${req.request_id}-${index}`}
+                              key={req.request_id ? `${req.request_id}-${index}` : `tablerow-${index}`}
                               index={index}
                               onClick={() => setSelectedRequest(req)}
                               className={index % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}
                             >
                               <td className="py-3 px-3 sm:px-5">
                                 <div className="space-y-1">
-                                  <p className="text-sm font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug line-clamp-1 break-words">
+                                  <p className="text-sm font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug line-clamp-1 break-words [overflow-wrap:anywhere] break-all">
                                     {req.title}
                                   </p>
                                   <div className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
@@ -609,25 +789,23 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                                 </div>
                               </td>
 
+                              <td className="py-3 px-2 sm:px-3">
+                                {renderPriorityBadge(req.priority)}
+                              </td>
+
                               <td className="py-3 px-2.5 sm:px-4">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  {designerAvatar ? (
-                                    <img
-                                      src={designerAvatar}
-                                      alt={displayName}
-                                      className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 shadow-2xs"
-                                    />
-                                  ) : (
-                                    <div
-                                      className={`w-7 h-7 rounded-full font-bold text-[11px] flex items-center justify-center border shrink-0 shadow-2xs ${avatarColorClass}`}
-                                    >
-                                      {getUserInitials(displayName)}
-                                    </div>
-                                  )}
-                                  <p className="text-xs font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px] min-w-0">
-                                    {displayName}
-                                  </p>
-                                </div>
+                                {isAssigned ? (
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <UserAvatar name={displayName} avatarUrl={designerAvatar} size="md" />
+                                    <p className="text-xs font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px] min-w-0">
+                                      {displayName}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 font-medium italic">
+                                    Chưa phân công
+                                  </span>
+                                )}
                               </td>
 
                               <td className="py-3 px-2.5 sm:px-4">
@@ -661,7 +839,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                         })
                       ) : (
                         <tr>
-                          <td colSpan={4} className="py-6 text-center bg-white">
+                          <td colSpan={5} className="py-6 text-center bg-white">
                             <EmptyState
                               title="Không tìm thấy bài toán nào"
                               description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."

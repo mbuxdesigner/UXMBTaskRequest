@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { IconTile } from "@/components/reui/icon-tile"
 import { OtpInput } from "@/components/reui/otp-input"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import {
   requestTeamsOtp,
   verifyTeamsOtp,
@@ -148,7 +149,9 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
       demo.squad,
       demo.displayName,
       demo.avatarUrl,
-      SESSION_DURATION_SECONDS
+      SESSION_DURATION_SECONDS,
+      demo.squads,
+      demo.products
     )
     onAuthSuccess(session)
   }
@@ -285,23 +288,13 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                     const role = acc.role
                     return (
                       <button
-                        key={role}
+                        key={acc.personalEmail || acc.teamsEmail || acc.role}
                         type="button"
                         onClick={() => handleQuickDemoLogin(acc)}
-                        className="p-3 rounded-2xl border border-slate-200/90 bg-slate-50/80 hover:bg-white hover:border-[#1B3A6B] hover:shadow-md transition-all text-left group cursor-pointer"
+                        className="p-3 rounded-2xl border border-slate-200/90 bg-slate-50/80 hover:bg-white hover:border-[#1057FB] hover:shadow-md transition-all text-left group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5">
-                          {acc.avatarUrl ? (
-                            <img
-                              src={acc.avatarUrl}
-                              alt={acc.displayName}
-                              className="w-8 h-8 rounded-xl object-cover border border-slate-200 flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#1B3A6B] to-[#0D9B97] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                              {acc.role.slice(0, 2)}
-                            </div>
-                          )}
+                          <UserAvatar name={acc.displayName} avatarUrl={acc.avatarUrl} size="lg" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-slate-900 group-hover:text-[#1B3A6B] truncate">

@@ -7,6 +7,7 @@ import { submitRequest, fetchFormSelections } from "../../api/api"
 import {
   SelectionsData,
   FALLBACK_SELECTIONS,
+  uploadFileToDrive,
 } from "../../services/googleSheetService"
 import {
   getStoredSession,
@@ -15,6 +16,7 @@ import {
 } from "../../services/otpAuthService"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { DatePicker } from "@/components/reui/date-picker"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import FileUpload from "./FileUpload"
 import RequestReviewSheet from "./RequestReviewSheet"
 import SuccessCelebrationCard from "./SuccessCelebrationCard"
@@ -185,19 +187,37 @@ export default function RequestForm({ squads }: RequestFormProps) {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  // Khi bấm "Xác nhận & Gửi chính thức" ở màn Review -> Gửi lên Google Sheet
+  // Khi bấm "Xác nhận & Gửi chính thức" ở màn Review -> Upload Drive & Gửi lên Google Sheet
   const handleFinalSubmit = async () => {
     setSubmitLoading(true)
     const finalEmail = session?.teamsEmail || form.requester_email || "user@mbbank.com.vn"
-    const validLinks = form.doc_links.filter((l) => l.trim().length > 0)
+    const validLinks = [...form.doc_links.filter((l) => l.trim().length > 0)]
+    const uploadedAttachments: { name: string; url: string; size: number }[] = []
 
     try {
+      // 1. Tải các file đính kèm lên Google Drive (Folder: UX_Portal_Attachments)
+      if (files.length > 0) {
+        for (const file of files) {
+          const upRes = await uploadFileToDrive(file)
+          if (upRes.success && upRes.fileUrl) {
+            uploadedAttachments.push({
+              name: upRes.fileName || file.name,
+              url: upRes.fileUrl,
+              size: upRes.fileSize || file.size,
+            })
+            validLinks.push(upRes.fileUrl)
+          }
+        }
+      }
+
+      // 2. Gửi bản ghi Task hoàn chỉnh lên Google Sheet
       const res = await submitRequest({
         ...form,
         doc_link: validLinks.join("\n"),
         requester_email: finalEmail,
         requester_name: session?.displayName || "PO",
         preferred_squad: form.product,
+        attachments: uploadedAttachments,
       })
       setRequestId(res.requestId)
       setSheetLogResult(res.googleSheetResult)
@@ -210,8 +230,50 @@ export default function RequestForm({ squads }: RequestFormProps) {
     }
   }
 
+  // Lấy cấu hình phân bổ cho PO từ session hoặc Admin Settings trong LocalStorage
+  const userRole = session?.role || "PO"
+  const userEmail = (session?.teamsEmail || session?.personalEmail || "").toLowerCase()
+  
+  let allocatedProducts: string[] = session?.products || []
+  let allocatedSquads: string[] = session?.squads || []
+
+  try {
+    const rawTeam = localStorage.getItem("mbbank_admin_team")
+    if (rawTeam) {
+      const parsedTeam: any[] = JSON.parse(rawTeam)
+      const found = parsedTeam.find(
+        (m) =>
+          m.email?.toLowerCase() === userEmail ||
+          (session?.displayName && m.name?.toLowerCase() === session.displayName.toLowerCase())
+      )
+      if (found) {
+        if (found.products && found.products.length > 0) allocatedProducts = found.products
+        if (found.squads && found.squads.length > 0) allocatedSquads = found.squads
+      }
+    }
+  } catch {}
+
+  const isRestrictedPo = userRole === "PO" && allocatedProducts.length > 0
+  const availableProductList = isRestrictedPo
+    ? selections.products.filter((p) =>
+        allocatedProducts.some(
+          (ap) =>
+            ap.toLowerCase().includes(p.toLowerCase()) ||
+            p.toLowerCase().includes(ap.toLowerCase())
+        )
+      ).length > 0
+      ? selections.products.filter((p) =>
+          allocatedProducts.some(
+            (ap) =>
+              ap.toLowerCase().includes(p.toLowerCase()) ||
+              p.toLowerCase().includes(ap.toLowerCase())
+          )
+        )
+      : allocatedProducts
+    : selections.products
+
   // Options for custom ReUI dropdowns
-  const productOptions: DropdownOption[] = selections.products.map((p) => ({
+  const productOptions: DropdownOption[] = availableProductList.map((p) => ({
     value: p,
     label: p,
   }))
@@ -276,6 +338,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
         }}
         onGoToTrack={() => {
           window.location.hash = "#track"
+          window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: "track", requestId } }))
           window.dispatchEvent(new HashChangeEvent("hashchange"))
         }}
       />
@@ -329,9 +392,16 @@ export default function RequestForm({ squads }: RequestFormProps) {
             {/* 2-Column: Nền tảng / Sản phẩm & Loại yêu cầu */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Nền tảng / Sản phẩm <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Nền tảng / Sản phẩm <span className="text-rose-500">*</span>
+                  </label>
+                  {isRestrictedPo && (
+                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                      ⚡ Phân bổ theo PO ({allocatedProducts.length} SP)
+                    </span>
+                  )}
+                </div>
                 <DropdownMenu
                   options={productOptions}
                   value={form.product}
@@ -526,17 +596,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
                 </h3>
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 font-medium">
                   <span>Người gửi</span>
-                  {session?.avatarUrl ? (
-                    <img
-                      src={session.avatarUrl}
-                      alt={hostName}
-                      className="w-5 h-5 rounded-full object-cover border border-slate-200"
-                    />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-[#1B3A6B] text-white text-[10px] font-bold flex items-center justify-center">
-                      {getUserInitials(hostName)}
-                    </div>
-                  )}
+                  <UserAvatar name={hostName} avatarUrl={session?.avatarUrl} size="xs" />
                   <span className="font-semibold text-slate-900">{hostName}</span>
                 </div>
               </div>
@@ -605,6 +665,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
         onClose={() => setViewMode("edit")}
         onConfirm={handleFinalSubmit}
         isSubmitting={submitLoading}
+        files={files}
         form={form}
         recommendedSquad={rec}
         session={session}

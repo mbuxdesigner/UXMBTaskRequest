@@ -89,22 +89,6 @@ export function AiPromptBox({
 
   return (
     <div className={`space-y-2.5 ${className}`}>
-      {/* Quick Suggestion Chips */}
-      {quickSuggestions && quickSuggestions.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 text-[11px]">
-          {quickSuggestions.map((sug, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleApplySuggestion(sug)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100/90 hover:bg-blue-50 hover:text-[#1057FB] hover:border-blue-200 border border-slate-200/80 text-slate-600 font-medium whitespace-nowrap transition-all duration-150 cursor-pointer shadow-2xs text-[10.5px]"
-            >
-              <span>{sug}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Main Comment Box Card */}
       <div className="relative rounded-2xl border border-slate-200/90 focus-within:border-[#1057FB] focus-within:ring-2 focus-within:ring-[#1057FB]/15 transition-all duration-200 bg-white shadow-2xs">
         {/* Text Area */}

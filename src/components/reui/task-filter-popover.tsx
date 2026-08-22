@@ -57,7 +57,7 @@ export default function TaskFilterPopover({
   const squadCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
-      const squad = r.squad_name || r.product || "Khác"
+      const squad = (r.squad_name && r.squad_name.trim()) || (r.product && r.product.trim()) || "Khác"
       counts[squad] = (counts[squad] || 0) + 1
     })
     return counts
@@ -179,13 +179,13 @@ export default function TaskFilterPopover({
             <div className="pt-2 border-t border-slate-100">
               <p className="text-xs font-bold text-slate-500 mb-2">Squad</p>
               <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                {availableSquads.map((squad) => {
+                {availableSquads.map((squad, sIdx) => {
                   const isChecked = selectedSquads.includes(squad)
                   const count = squadCounts[squad] || 0
 
                   return (
                     <label
-                      key={squad}
+                      key={`sq-opt-${squad || sIdx}-${sIdx}`}
                       onClick={() => toggleSquad(squad)}
                       className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer select-none transition-colors"
                     >

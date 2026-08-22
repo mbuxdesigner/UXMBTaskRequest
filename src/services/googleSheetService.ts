@@ -73,6 +73,29 @@ export function normalizeSheetRequest(data: any): UXRequest {
       ]
     : []
 
+  const rawDocLink = String(data.doc_link || "")
+  let docLinks: string[] = []
+  if (Array.isArray(data.doc_links) && data.doc_links.length > 0) {
+    docLinks = data.doc_links
+  } else if (rawDocLink) {
+    docLinks = rawDocLink.split("\n").map((s: string) => s.trim()).filter(Boolean)
+  }
+
+  let attachments: Array<{ name: string; url: string; size?: number }> = []
+  if (Array.isArray(data.attachments) && data.attachments.length > 0) {
+    attachments = data.attachments
+  } else if (data.raw_data && Array.isArray(data.raw_data.attachments)) {
+    attachments = data.raw_data.attachments
+  } else if (docLinks.length > 0) {
+    attachments = docLinks.map((url, idx) => {
+      const fileName = url.includes("/") ? url.split("/").pop() || `Tài liệu ${idx + 1}` : `Tài liệu ${idx + 1}`
+      return {
+        name: decodeURIComponent(fileName.split("?")[0]),
+        url,
+      }
+    })
+  }
+
   return {
     request_id: String(data.request_id || "UXMB-PENDING"),
     title: String(data.title || "Yêu cầu thiết kế UX"),
@@ -90,10 +113,14 @@ export function normalizeSheetRequest(data: any): UXRequest {
     deadline_reason: String(data.deadline_reason || "Ra mắt sản phẩm"),
     preferred_squad: String(data.preferred_squad || data.product || "Chưa phân công"),
     requester_email: String(data.requester_email || ""),
-    assigned_designer: String(data.assigned_designer || data.ux_owner || "nam.designer@mbbank.com.vn"),
+    requester_name: String(data.requester_name || data.requester_email?.split("@")[0] || "PO"),
+    assigned_designer: data.assigned_designer ? String(data.assigned_designer) : "",
     design_owner: String(data.design_owner || "lead.cuong@mbbank.com.vn"),
     squad_name: String(data.preferred_squad || data.product || "Triage Squad"),
-    ux_owner: String(data.ux_owner || "Đang phân công"),
+    ux_owner: data.ux_owner ? String(data.ux_owner) : "Chưa phân công",
+    doc_link: rawDocLink,
+    doc_links: docLinks,
+    attachments: attachments,
     current_phase: currentPhase,
     status: String(data.status || "Đang phân loại"),
     progress: typeof data.progress === "number" ? data.progress : 15,
@@ -199,7 +226,10 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       console.warn("Could not read cached requests:", e)
     }
 
-    return []
+    // Return starter mock requests if cache/sheet is empty
+    const fallback = mockRequests.map(normalizeSheetRequest)
+    cachedRequestsMemory = fallback
+    return fallback
   })().finally(() => {
     inflightRequestsPromise = null
   })
@@ -482,7 +512,7 @@ export async function updateTaskProgressInSheet(
         new_phase: params.new_phase,
         new_status: params.new_status,
         new_progress: params.new_progress,
-        note: params.note,
+        note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
         figma_url: params.figma_url || "",
         assigned_designer: params.assigned_designer || "",
         timestamp: now.toISOString(),
@@ -558,4 +588,392 @@ export async function testGoogleSheetConnection(scriptUrl: string): Promise<{
       message: `Không thể kết nối đến Web App: ${errorMsg}. Đảm bảo bạn đã Deploy Web App ở chế độ 'Anyone' (Bất kỳ ai).`,
     }
   }
+}
+
+/**
+ * Trigger Auto-Projection on Google Apps Script Backend (Sync JSON Core -> Views)
+ */
+export async function syncProjectionsFromSheet(): Promise<{
+  success: boolean
+  message: string
+  tasksCount?: number
+  logsCount?: number
+}> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      message: "Chưa cấu hình URL Google Apps Script Web App trong Cài đặt.",
+    }
+  }
+
+  try {
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "sync_projections" }),
+    })
+
+    if (!res.ok) {
+      return {
+        success: false,
+        message: `Lỗi máy chủ Google: HTTP ${res.status}`,
+      }
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      return {
+        success: true,
+        message: data.message || "Đồng bộ phân tách dữ liệu thành công!",
+        tasksCount: data.result?.tasks?.tasksCount,
+        logsCount: data.result?.tasks?.logsCount,
+      }
+    }
+    return {
+      success: false,
+      message: data.message || "Không thể đồng bộ phân tách bảng.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      message: `Lỗi kết nối khi đồng bộ: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Convert browser File to Base64 data string (without header)
+ */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => {
+      const result = reader.result as string
+      // Tách bỏ header "data:image/jpeg;base64," lấy chuỗi raw base64
+      const base64 = result.includes(",") ? result.split(",")[1] : result
+      resolve(base64)
+    }
+    reader.onerror = (error) => reject(error)
+  })
+}
+
+/**
+ * Tải file đính kèm lên Google Drive (Folder: UX_Portal_Attachments)
+ */
+export async function uploadFileToDrive(
+  file: File,
+  folderName: string = "UX_Portal_Attachments"
+): Promise<{
+  success: boolean
+  fileUrl?: string
+  downloadUrl?: string
+  fileName?: string
+  fileSize?: number
+  error?: string
+}> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    // Fallback URL blob cục bộ nếu chưa kết nối Google Sheet
+    return {
+      success: true,
+      fileUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      fileSize: file.size,
+    }
+  }
+
+  try {
+    const base64Data = await fileToBase64(file)
+    const payload = {
+      action: "upload_file",
+      base64Data,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      folderName,
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Google Apps Script trả về lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      return {
+        success: true,
+        fileUrl: data.file_url,
+        downloadUrl: data.download_url,
+        fileName: data.file_name || file.name,
+        fileSize: data.file_size || file.size,
+      }
+    }
+    return {
+      success: false,
+      error: data.message || "Không thể tải tệp lên Google Drive.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      error: `Lỗi tải file lên Drive: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Tải ảnh Avatar lên Google Drive (Folder: UX_Portal_Avatars) và tự động cập nhật vào Google Sheet
+ */
+export async function uploadAvatarToDrive(
+  file: File,
+  email: string
+): Promise<{
+  success: boolean
+  avatarUrl?: string
+  error?: string
+}> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    // Persistent Base64 Data URL for Local/Offline Mode
+    try {
+      const b64 = await fileToBase64(file)
+      const mime = file.type || "image/jpeg"
+      return {
+        success: true,
+        avatarUrl: `data:${mime};base64,${b64}`,
+      }
+    } catch {
+      return {
+        success: true,
+        avatarUrl: URL.createObjectURL(file),
+      }
+    }
+  }
+
+  try {
+    const base64Data = await fileToBase64(file)
+    const payload = {
+      action: "upload_avatar",
+      base64Data,
+      email: email.trim().toLowerCase(),
+      fileName: file.name,
+      mimeType: file.type || "image/jpeg",
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Google Apps Script trả về lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success" && data.avatar_url) {
+      return {
+        success: true,
+        avatarUrl: data.avatar_url,
+      }
+    }
+    return {
+      success: false,
+      error: data.message || "Không thể tải Avatar lên Google Drive.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      error: `Lỗi tải Avatar lên Drive: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Khởi tạo toàn bộ cấu trúc Google Sheet thông qua Apps Script Backend
+ */
+export async function initSheetsViaApi(): Promise<{ success: boolean; message: string; sheets_created?: string[] }> {
+  const config = getGoogleSheetConfig()
+  if (!config.scriptUrl) {
+    return { success: false, message: "Chưa cấu hình Google Sheet Web App URL" }
+  }
+
+  try {
+    const url = `${config.scriptUrl}${config.scriptUrl.includes("?") ? "&" : "?"}action=init_sheets`
+    const res = await fetch(url)
+    const data = await res.json()
+    return {
+      success: data.status === "success",
+      message: data.message || "Đã khởi tạo cấu trúc Sheet thành công!",
+      sheets_created: data.result?.sheets_created
+    }
+  } catch (err: any) {
+    return { success: false, message: err.message || "Lỗi kết nối tới Google Apps Script" }
+  }
+}
+
+/**
+ * Đồng bộ danh sách nhân sự lên Google Sheet (RAW_SETTINGS, USERS, Users_View)
+ */
+export async function syncTeamMembersToSheet(
+  members: any[],
+  actorEmail?: string
+): Promise<{ success: boolean; message: string; membersCount?: number }> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: true,
+      message: "Đã lưu nhân sự nội bộ (Chế độ Local).",
+      membersCount: members.length,
+    }
+  }
+
+  try {
+    const session = getStoredSession()
+    const payload = {
+      action: "sync_team_members",
+      members,
+      user_email: actorEmail || session?.teamsEmail || session?.personalEmail || "admin@mbbank.com.vn",
+      updated_by: session?.displayName || "Admin Portal",
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Máy chủ Google Sheet trả về mã lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
+      return {
+        success: true,
+        message: data.message || `Đã đồng bộ ${members.length} nhân sự lên Google Sheet thành công!`,
+        membersCount: data.members_count || members.length,
+      }
+    }
+
+    return {
+      success: false,
+      message: data.message || "Không thể đồng bộ nhân sự lên Google Sheet.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      message: `Lỗi đồng bộ nhân sự: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Đồng bộ Master Data (Squads, Products, Phases) lên Google Sheet
+ */
+export async function syncMasterDataToSheet(params: {
+  squads?: any[]
+  products?: any[]
+  phases?: any[]
+  selections?: any
+  actorEmail?: string
+}): Promise<{ success: boolean; message: string }> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: true,
+      message: "Đã lưu cấu hình nội bộ (Chế độ Local).",
+    }
+  }
+
+  try {
+    const session = getStoredSession()
+    const payload = {
+      action: "sync_master_data",
+      ...params,
+      user_email: params.actorEmail || session?.teamsEmail || session?.personalEmail || "admin@mbbank.com.vn",
+      updated_by: session?.displayName || "Admin Portal",
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Máy chủ Google Sheet trả về mã lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
+      return {
+        success: true,
+        message: data.message || "Đã đồng bộ Master Data lên Google Sheet!",
+      }
+    }
+
+    return {
+      success: false,
+      message: data.message || "Không thể đồng bộ Master Data lên Google Sheet.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      message: `Lỗi đồng bộ Master Data: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Lấy danh sách nhân sự từ Google Sheet (nếu có)
+ */
+export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) return null
+
+  try {
+    const url = new URL(scriptUrl.trim())
+    url.searchParams.set("action", "get_team_members")
+    url.searchParams.set("_t", Date.now().toString())
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      if (data.status === "success" && Array.isArray(data.members) && data.members.length > 0) {
+        return data.members
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch team members from Google Sheet:", e)
+  }
+  return null
 }

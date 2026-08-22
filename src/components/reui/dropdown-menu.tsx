@@ -111,11 +111,11 @@ export function DropdownMenu({
           } ${menuClassName || "w-full min-w-56 max-h-72 overflow-y-auto"}`}
         >
           <div className="space-y-0.5">
-            {options.map((opt) => {
+            {options.map((opt, idx) => {
               const isSelected = opt.value === value
               return (
                 <button
-                  key={opt.value}
+                  key={opt.value !== "" ? `opt-val-${opt.value}` : `opt-idx-${idx}`}
                   type="button"
                   onClick={() => {
                     onChange(opt.value)

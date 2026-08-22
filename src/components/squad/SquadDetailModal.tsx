@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { IconTile } from "@/components/reui/icon-tile"
-import { X, CheckCircle2, Clock, UserCheck, Activity, Layers, ArrowUpRight } from "lucide-react"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { X, CheckCircle2, Clock, Activity, Layers } from "lucide-react"
 import { getCapacityStatusConfig } from "@/config/statusConfig"
 
 interface SquadDetailModalProps {
@@ -32,7 +33,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
       <DialogHeader className="border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
           <IconTile size="default" variant="navy">
-            <Layers className="w-5 h-5 text-[#1B3A6B]" />
+            <Layers className="w-5 h-5 text-[#1057FB]" />
           </IconTile>
           <div>
             <div className="flex items-center gap-2">
@@ -54,7 +55,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
         </div>
         <button
           onClick={onClose}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -64,27 +65,27 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
         {/* Metric KPI cards */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{squad.active_tasks}</p>
+            <p className="text-2xl font-bold text-slate-900 font-mono">{squad.active_tasks}</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Task đang làm</p>
           </div>
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{squad.queued_tasks}</p>
+            <p className="text-2xl font-bold text-slate-900 font-mono">{squad.queued_tasks}</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Hàng đợi</p>
           </div>
           <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 text-center">
-            <p className="text-2xl font-bold text-[#1B3A6B]">{pct}%</p>
+            <p className="text-2xl font-bold text-[#1057FB] font-mono">{pct}%</p>
             <p className="text-xs text-slate-500 font-medium mt-1">Tải định mức</p>
           </div>
         </div>
 
         {/* Workload bar */}
-        <div className="space-y-2 p-4 rounded-2xl bg-[#1B3A6B]/5 border border-[#1B3A6B]/15">
+        <div className="space-y-2 p-4 rounded-2xl bg-blue-50/50 border border-blue-100/70">
           <div className="flex justify-between text-xs font-semibold text-slate-700">
             <span className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-[#1B3A6B]" />
+              <Activity className="w-3.5 h-3.5 text-[#1057FB]" />
               Tiến độ công suất định mức ({total} / {squad.capacity_threshold} điểm task)
             </span>
-            <span className="font-bold text-[#1B3A6B]">{pct}%</span>
+            <span className="font-bold text-[#1057FB] font-mono">{pct}%</span>
           </div>
           <Progress
             value={pct}
@@ -103,9 +104,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
         {squad.ux_owner && (
           <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#1B3A6B] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                <UserCheck className="w-4.5 h-4.5 text-[#0D9B97]" />
-              </div>
+              <UserAvatar name={squad.ux_owner} size="lg" />
               <div>
                 <p className="text-sm font-bold text-slate-900">{squad.ux_owner}</p>
                 <p className="text-xs text-slate-500">UX Design Lead / Chuyên trách chính</p>
@@ -126,7 +125,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
               <ul className="space-y-2">
                 {squad.active_task_titles.map((t, i) => (
                   <li
-                    key={i}
+                    key={`active-${t}-${i}`}
                     className="flex items-center gap-2.5 text-xs font-medium text-slate-800 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100"
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
@@ -151,7 +150,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
               <ul className="space-y-2">
                 {squad.queued_task_titles.map((t, i) => (
                   <li
-                    key={i}
+                    key={`queued-${t}-${i}`}
                     className="flex items-center gap-2.5 text-xs font-medium text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200/70"
                   >
                     <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
@@ -166,7 +165,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
       </DialogBody>
 
       <DialogFooter className="border-t border-slate-100 pt-4">
-        <Button variant="outline" size="sm" onClick={onClose} className="font-semibold">
+        <Button variant="outline" size="sm" onClick={onClose} className="font-semibold cursor-pointer">
           Đóng cửa sổ
         </Button>
       </DialogFooter>

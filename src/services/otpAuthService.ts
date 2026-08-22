@@ -8,7 +8,9 @@ export interface UserSession {
   displayName: string
   avatarUrl?: string
   role: UserRole
-  squad?: string
+  squad?: string // Legacy single squad fallback
+  squads?: string[] // Danh sách các Squads được phân công (1 Designer -> nhiều Squad, 1 PO -> nhiều Squad)
+  products?: string[] // Danh sách các Sản phẩm phụ trách (1 PO -> nhiều Sản phẩm)
   expiresAt: number // Timestamp in ms
 }
 
@@ -25,6 +27,8 @@ export const DEMO_ACCOUNTS: Array<{
   avatarUrl?: string
   role: UserRole
   squad?: string
+  squads?: string[]
+  products?: string[]
 }> = [
   {
     name: "Admin Quản Trị",
@@ -34,6 +38,8 @@ export const DEMO_ACCOUNTS: Array<{
     avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     role: "Admin",
     squad: "All Squads",
+    squads: ["Design System & Core", "Lending & Vay vốn", "Cards & Thanh toán số", "Core Banking & Tài khoản", "Digital Wealth & Đầu tư", "BaaS & Open API"],
+    products: ["App MBBank", "Lending & Vay vốn", "Cards & Digital Payment", "Digital Wealth", "Private Banking & VIP", "SME Banking"],
   },
   {
     name: "Nguyễn Văn Cường",
@@ -43,6 +49,8 @@ export const DEMO_ACCOUNTS: Array<{
     avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
     role: "Design Owner",
     squad: "Daily Banking Squad",
+    squads: ["Design System & Core", "Core Banking & Tài khoản", "Lending & Vay vốn"],
+    products: ["App MBBank", "Core Banking & Tài khoản", "Design System MB"],
   },
   {
     name: "Lê Hoàng Nam",
@@ -52,6 +60,8 @@ export const DEMO_ACCOUNTS: Array<{
     avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
     role: "Designer",
     squad: "Daily Banking Squad",
+    squads: ["Lending & Vay vốn", "Cards & Thanh toán số", "BaaS & Open API"],
+    products: ["Lending & Vay vốn", "Cards & Digital Payment"],
   },
   {
     name: "Trần Mai Lan",
@@ -61,17 +71,19 @@ export const DEMO_ACCOUNTS: Array<{
     avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
     role: "PO",
     squad: "App/Core Product",
+    squads: ["Lending & Vay vốn", "Cards & Thanh toán số"],
+    products: ["Lending & Vay vốn", "Cards & Digital Payment"],
   },
 ]
 
 /**
- * Trích xuất 2 chữ cái đầu của tên để làm Avatar dự phòng
+ * Trích xuất 1 chữ cái đầu của tên (Tên chính) để làm Avatar dự phòng
  */
 export function getUserInitials(name?: string): string {
-  if (!name || !name.trim()) return "UX"
+  if (!name || !name.trim()) return "U"
   const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  const mainName = parts[parts.length - 1]
+  return (mainName[0] || parts[0][0] || "U").toUpperCase()
 }
 
 /**
@@ -80,7 +92,10 @@ export function getUserInitials(name?: string): string {
  */
 export function getStoredSession(): UserSession | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    let raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    if (!raw) {
+      raw = localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem("ux_portal_session")
+    }
     if (!raw) return null
     const session: UserSession = JSON.parse(raw)
     // Kiểm tra quá 8 tiếng (expiresAt)
@@ -96,7 +111,7 @@ export function getStoredSession(): UserSession | null {
 }
 
 /**
- * Lưu phiên làm việc mới (Mặc định 8 tiếng, trong sessionStorage)
+ * Lưu phiên làm việc mới (Mặc định 8 tiếng, trong sessionStorage & localStorage)
  */
 export function saveSession(
   sessionToken: string,
@@ -106,7 +121,9 @@ export function saveSession(
   squad?: string,
   displayName?: string,
   avatarUrl?: string,
-  expiresInSeconds = SESSION_DURATION_SECONDS
+  expiresInSeconds = SESSION_DURATION_SECONDS,
+  squads?: string[],
+  products?: string[]
 ): UserSession {
   const finalDisplayName = displayName || (teamsEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
   const session: UserSession = {
@@ -116,14 +133,19 @@ export function saveSession(
     displayName: finalDisplayName,
     avatarUrl,
     role,
-    squad,
+    squad: squad || (squads && squads.length > 0 ? squads[0] : undefined),
+    squads: squads || (squad ? [squad] : undefined),
+    products: products,
     expiresAt: Date.now() + expiresInSeconds * 1000,
   }
   try {
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+    localStorage.setItem("ux_portal_session", JSON.stringify(session))
     window.dispatchEvent(new Event("auth_session_changed"))
+    window.dispatchEvent(new Event("storage"))
   } catch (err) {
-    console.warn("Could not save session to sessionStorage:", err)
+    console.warn("Could not save session to storage:", err)
   }
   return session
 }
@@ -134,7 +156,10 @@ export function saveSession(
 export function clearSession() {
   try {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+    localStorage.removeItem("ux_portal_session")
     window.dispatchEvent(new Event("auth_session_changed"))
+    window.dispatchEvent(new Event("storage"))
   } catch (err) {
     console.warn("Could not clear session:", err)
   }
@@ -273,7 +298,9 @@ export async function verifyTeamsOtp(
         squad,
         displayName,
         avatarUrl,
-        SESSION_DURATION_SECONDS
+        SESSION_DURATION_SECONDS,
+        matchedAccount?.squads,
+        matchedAccount?.products
       )
       return {
         success: true,
