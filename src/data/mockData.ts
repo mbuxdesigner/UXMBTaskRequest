@@ -92,6 +92,32 @@ export interface UXRequest {
   deliverables: Deliverables
   submitted_at: string
   task_updates?: TaskUpdateRecord[]
+  sent_to_po_at?: string
+}
+
+export function evaluatePoPendingStatus(request: UXRequest): UXRequest {
+  if (request.status === "Đã gửi PO" || request.sent_to_po_at) {
+    const sentTime = request.sent_to_po_at || request.last_updated || request.latest_update?.date
+    if (sentTime) {
+      let sentDate = new Date(sentTime)
+      if (isNaN(sentDate.getTime()) && sentTime.includes("/")) {
+        const parts = sentTime.split(/[\/\s:]/)
+        if (parts.length >= 3) {
+          sentDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
+        }
+      }
+      if (!isNaN(sentDate.getTime())) {
+        const elapsedHours = (Date.now() - sentDate.getTime()) / (1000 * 60 * 60)
+        if (elapsedHours >= 24) {
+          return {
+            ...request,
+            status: "Pending",
+          }
+        }
+      }
+    }
+  }
+  return request
 }
 
 export const ALL_PHASES = [

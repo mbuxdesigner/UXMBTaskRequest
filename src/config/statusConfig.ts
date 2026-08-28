@@ -200,6 +200,56 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       dot: "bg-emerald-500",
     },
   },
+  "Đã gửi PO": {
+    variant: "purple",
+    dotColor: "bg-purple-500",
+    inlineClasses: {
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
+      dot: "bg-purple-500",
+    },
+  },
+  "Pending": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-800",
+      border: "border-amber-300",
+      dot: "bg-amber-500",
+    },
+  },
+  "pending": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-800",
+      border: "border-amber-300",
+      dot: "bg-amber-500",
+    },
+  },
+  "PO pending": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-800",
+      border: "border-amber-300",
+      dot: "bg-amber-500",
+    },
+  },
+  "PO Pending": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-800",
+      border: "border-amber-300",
+      dot: "bg-amber-500",
+    },
+  },
   "Bị chặn": {
     variant: "destructive",
     dotColor: "bg-rose-500",

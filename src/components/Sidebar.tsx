@@ -11,6 +11,7 @@ import {
   Layers,
   Wrench,
   Camera,
+  BookOpen,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -28,7 +29,7 @@ import {
   DEFAULT_NAV_ORDER,
 } from "@/config/navVisibilityConfig"
 
-export type Page = "overview" | "create" | "track" | "manage"
+export type Page = "overview" | "create" | "track" | "manage" | "test"
 
 interface SidebarProps {
   currentPage: Page
@@ -163,9 +164,10 @@ export default function Sidebar({
 
   const displayName = session?.displayName || "Lê Hoàng Nam"
   const userRole = session?.role || "Designer"
+  const isSuperAdminOrLeader = userRole === "Admin" || userRole === "Design Owner"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
   const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create
-  const hasResourceItems = currentRoleVisibility.compressor
+  const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
 
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
@@ -292,6 +294,31 @@ export default function Sidebar({
                   </button>
                 )
               }
+
+              if (itemKey === "test" && currentRoleVisibility.test) {
+                return (
+                  <button
+                    key="nav-test"
+                    type="button"
+                    onClick={() => onNavigate("test")}
+                    onMouseEnter={() => preloadPage("test")}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                      currentPage === "test"
+                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                      <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
+                    </div>
+                    <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-semibold text-blue-700">
+                      Exam
+                    </span>
+                  </button>
+                )
+              }
+
               return null
             })}
           </div>
@@ -300,8 +327,8 @@ export default function Sidebar({
 
       {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
       <div className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" ref={userMenuRef}>
-        {/* Admin setting - Hiển thị theo cấu hình phân quyền Nav */}
-        {currentRoleVisibility.manage && (
+        {/* Admin setting - Chỉ hiển thị cho Admin & Design Owner có quyền */}
+        {isSuperAdminOrLeader && currentRoleVisibility.manage && (
           <button
             type="button"
             onClick={() => onNavigate("manage")}

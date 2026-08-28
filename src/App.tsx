@@ -15,6 +15,7 @@ const TongQuanPage = lazy(() => import("./pages/TongQuanPage"))
 const CreateRequestPage = lazy(() => import("./pages/CreateRequestPage"))
 const TrackRequestPage = lazy(() => import("./pages/TrackRequestPage"))
 const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
+const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
 
 // Route Preloaders
 export const preloadPage = (page: Page) => {
@@ -30,6 +31,9 @@ export const preloadPage = (page: Page) => {
       break
     case "manage":
       import("./pages/QuanLyPage")
+      break
+    case "test":
+      import("./pages/TestAssessmentPage")
       break
   }
 }
@@ -104,7 +108,7 @@ export default function App() {
   useEffect(() => {
     const syncFromHash = () => {
       const hash = window.location.hash.replace(/^#/, "").split("?")[0]
-      if (hash === "track" || hash === "overview" || hash === "create" || hash === "manage" || hash === "admin") {
+      if (hash === "track" || hash === "overview" || hash === "create" || hash === "manage" || hash === "admin" || hash === "test") {
         const targetPage = hash === "admin" ? "manage" : (hash as Page)
         setPage(targetPage)
       }
@@ -187,6 +191,7 @@ export default function App() {
           )}
           {page === "track" && <TrackRequestPage onNavigateToCreate={() => setPage("create")} />}
           {page === "manage" && <QuanLyPage />}
+          {page === "test" && <TestAssessmentPage />}
         </Suspense>
       </div>
 

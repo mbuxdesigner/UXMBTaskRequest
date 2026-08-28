@@ -64,7 +64,11 @@ import {
   ArrowDown,
   FolderKanban,
   Wrench,
+  BookOpen,
 } from "lucide-react"
+import TestManagementView from "@/components/test-assessment/TestManagementView"
+import TestRunnerView from "@/components/test-assessment/TestRunnerView"
+import { TestExam } from "@/types/testAssessment"
 import {
   getRoleNavConfig,
   saveRoleNavConfig,
@@ -276,37 +280,26 @@ const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
   { id: "log-4", timestamp: "21/08/2026 16:20", actor: "Hệ thống Google Sheet", action: "Đồng bộ Realtime", target: "RAW_SETTINGS", details: "Lưu trữ thành công cấu hình USERS_LIST & SQUADS_LIST", type: "integration" },
 ]
 
-type AdminTab = "team" | "evaluation" | "workflow" | "integrations" | "masterdata" | "audit"
+type AdminTab = "team" | "test_bank" | "evaluation" | "workflow" | "integrations" | "masterdata" | "audit"
 
 export default function QuanLyPage() {
   const session = getStoredSession()
-  const isAdmin = session?.role === "Admin"
+  const isAdmin = session?.role === "Admin" || session?.role === "Design Owner"
 
-  // RBAC Access Guard
+  // Tự động chuyển hướng về trang chủ nếu user không có quyền quản trị
+  useEffect(() => {
+    if (!isAdmin) {
+      window.location.hash = session?.role === "PO" ? "track" : "overview"
+      window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: session?.role === "PO" ? "track" : "overview" } }))
+    }
+  }, [isAdmin, session?.role])
+
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#FCFCFD] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200/90 shadow-xl p-8 text-center space-y-5">
-          <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto text-rose-600 shadow-xs">
-            <Lock className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-xs font-bold px-3 py-1">
-              403 Access Denied
-            </Badge>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              Giới hạn quyền truy cập
-            </h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Trang <strong>Admin & System Settings</strong> chỉ dành riêng cho tài khoản Quản trị viên (<strong>Role Admin</strong>).
-            </p>
-          </div>
-        </div>
-      </div>
-    )
+    return null
   }
 
   const [activeTab, setActiveTab] = useState<AdminTab>("team")
+  const [adminRunningTest, setAdminRunningTest] = useState<TestExam | null>(null)
   const [roleFilter, setRoleFilter] = useState<string>("ALL")
   const [memberSearchQuery, setMemberSearchQuery] = useState<string>("")
 
@@ -916,7 +909,7 @@ export default function QuanLyPage() {
   })
 
   return (
-    <div className="w-full max-w-[1680px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 animate-in fade-in-50 duration-200 pb-16">
+    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
       
       {/* 1. Page Header */}
       <BlurFade delay={0.02}>
@@ -985,6 +978,22 @@ export default function QuanLyPage() {
 
           <button
             type="button"
+            onClick={() => setActiveTab("test_bank")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "test_bank"
+                ? "bg-white text-blue-600 shadow-2xs font-bold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-blue-600" />
+            <span>2. Quản lý Đề thi & Chấm bài Test</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10.5px] font-bold">
+              Excel + Sheet
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("evaluation")}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "evaluation"
@@ -993,9 +1002,9 @@ export default function QuanLyPage() {
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>2. Đánh giá Hiệu suất & Năng lực</span>
+            <span>3. Đánh giá Hiệu suất & Năng lực</span>
             <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10.5px] font-bold">
-              Feature
+              KPI Matrix
             </span>
           </button>
 
@@ -1009,7 +1018,7 @@ export default function QuanLyPage() {
             }`}
           >
             <Workflow className="w-4 h-4 text-indigo-600" />
-            <span>3. Quy trình & Khâu UX (SLA)</span>
+            <span>4. Quy trình & Khâu UX (SLA)</span>
             <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 text-[10.5px]">
               {uxPhases.length} Khâu
             </span>
@@ -1025,7 +1034,7 @@ export default function QuanLyPage() {
             }`}
           >
             <Boxes className="w-4 h-4 text-purple-600" />
-            <span>4. Squads & Sản phẩm</span>
+            <span>5. Squads & Sản phẩm</span>
             <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-700 text-[10.5px]">
               {squads.length} Squads
             </span>
@@ -1041,7 +1050,7 @@ export default function QuanLyPage() {
             }`}
           >
             <Database className="w-4 h-4 text-emerald-600" />
-            <span>5. Tích hợp & Kết nối</span>
+            <span>6. Tích hợp & Kết nối</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
           </button>
 
@@ -1055,7 +1064,7 @@ export default function QuanLyPage() {
             }`}
           >
             <History className="w-4 h-4 text-slate-600" />
-            <span>5. Audit Logs & Lịch sử</span>
+            <span>7. Audit Logs & Lịch sử</span>
           </button>
         </div>
       </BlurFade>
@@ -1518,6 +1527,7 @@ export default function QuanLyPage() {
                     {navOrder.resources.map((key, idx) => {
                       const itemMeta = {
                         compressor: { label: "Nén ảnh (Built-in Tool)", icon: <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />, desc: "Công cụ nén ảnh tối ưu dung lượng dưới 500KB" },
+                        test: { label: "Bài test & Đánh giá (Khảo sát/Thi chuyên môn)", icon: <BookOpen className="w-4 h-4 text-blue-600" />, desc: "Đánh giá năng lực chuyên môn, bài thi trắc nghiệm & tự luận" },
                         manage: { label: "Admin setting (Quản trị hệ thống)", icon: <ShieldCheck className="w-4 h-4 text-slate-500" />, desc: "Cấu hình nhân sự, SLA, phân bổ Squad, tích hợp Webhook" },
                       }[key]
 
@@ -1613,7 +1623,36 @@ export default function QuanLyPage() {
           </div>
         )}
 
-        {/* TAB 2: ĐÁNH GIÁ HIỆU SUẤT & NĂNG LỰC NHÂN SỰ (FEATURE RIÊNG) */}
+        {/* TAB 2: QUẢN LÝ ĐỀ THI & CHẤM BÀI TEST (EXCEL + SHEET) */}
+        {activeTab === "test_bank" && (
+          <div className="space-y-6">
+            {adminRunningTest ? (
+              <TestRunnerView
+                test={adminRunningTest}
+                user={{
+                  name: session?.displayName || "Admin Quản Trị",
+                  email: session?.teamsEmail || "admin@mbbank.com.vn",
+                  role: "Admin",
+                  squad: "Toàn hàng (Enterprise)",
+                }}
+                onFinish={() => {
+                  toast.success("Đã hoàn tất làm thử đề thi!")
+                }}
+                onExit={() => setAdminRunningTest(null)}
+              />
+            ) : (
+              <TestManagementView
+                userRole="Admin"
+                currentUserName={session?.displayName || "Admin Quản Trị"}
+                currentUserEmail={session?.teamsEmail || "admin@mbbank.com.vn"}
+                currentUserSquad="Toàn hàng (Enterprise)"
+                onStartExam={(test) => setAdminRunningTest(test)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: ĐÁNH GIÁ HIỆU SUẤT & NĂNG LỰC NHÂN SỰ (FEATURE RIÊNG) */}
         {activeTab === "evaluation" && (
           <div className="space-y-6">
             {/* Top Scorecard */}
@@ -3087,6 +3126,6 @@ export default function QuanLyPage() {
         )}
       </AnimatePresence>
 
-    </div>
+    </main>
   )
 }

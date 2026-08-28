@@ -122,7 +122,29 @@ export function normalizeSheetRequest(data: any): UXRequest {
     doc_links: docLinks,
     attachments: attachments,
     current_phase: currentPhase,
-    status: String(data.status || "Đang phân loại"),
+    status: (() => {
+      let currentSt = String(data.status || "Đang phân loại")
+      const sentToPo = data.sent_to_po_at ? String(data.sent_to_po_at) : undefined
+      if (currentSt === "Đã gửi PO" || sentToPo) {
+        const referenceTime = sentToPo || data.last_updated || data.latest_update?.date
+        if (referenceTime) {
+          let sentDate = new Date(referenceTime)
+          if (isNaN(sentDate.getTime()) && referenceTime.includes("/")) {
+            const parts = referenceTime.split(/[\/\s:]/)
+            if (parts.length >= 3) {
+              sentDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
+            }
+          }
+          if (!isNaN(sentDate.getTime())) {
+            const elapsedHours = (Date.now() - sentDate.getTime()) / (1000 * 60 * 60)
+            if (elapsedHours >= 24) {
+              currentSt = "Pending"
+            }
+          }
+        }
+      }
+      return currentSt
+    })(),
     progress: typeof data.progress === "number" ? data.progress : 15,
     last_updated: String(data.last_updated || formattedDate),
     phases: Array.isArray(data.phases) && data.phases.length ? data.phases : buildPhases(currentPhase),
@@ -136,6 +158,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
     },
     submitted_at: formattedDate,
     task_updates: taskUpdates,
+    sent_to_po_at: data.sent_to_po_at ? String(data.sent_to_po_at) : undefined,
   }
 }
 
@@ -443,6 +466,7 @@ export async function updateTaskProgressInSheet(
     note: string
     figma_url?: string
     assigned_designer?: string
+    sent_to_po_at?: string
   }
 ): Promise<{ success: boolean; message: string; updatedRequest?: UXRequest }> {
   const session = getStoredSession()
@@ -481,6 +505,7 @@ export async function updateTaskProgressInSheet(
         progress: params.new_progress,
         last_updated: formattedDate,
         assigned_designer: params.assigned_designer || oldReq.assigned_designer,
+        sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : oldReq.sent_to_po_at,
         phases: buildPhases(params.new_phase),
         latest_update: {
           date: formattedDate,
@@ -515,6 +540,7 @@ export async function updateTaskProgressInSheet(
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
         figma_url: params.figma_url || "",
         assigned_designer: params.assigned_designer || "",
+        sent_to_po_at: params.sent_to_po_at || "",
         timestamp: now.toISOString(),
       }
 

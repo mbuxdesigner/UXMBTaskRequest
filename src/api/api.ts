@@ -186,6 +186,7 @@ export async function updateTaskProgress(
     note: string
     figma_url?: string
     assigned_designer?: string
+    sent_to_po_at?: string
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

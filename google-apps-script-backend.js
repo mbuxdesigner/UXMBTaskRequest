@@ -25,6 +25,8 @@ const SHEET_TASKS_VIEW = "Tasks_View";
 const SHEET_LOGS_VIEW = "Activity_Logs_View";
 const SHEET_USERS_VIEW = "Users_View";
 const SHEET_SELECTIONS_VIEW = "Selections_View";
+const SHEET_TEST_BANK = "TEST_BANK";
+const SHEET_TEST_SUBMISSIONS = "TEST_SUBMISSIONS";
 
 // Legacy sheet names for compatibility
 const SHEET_USERS_NAME = "USERS";
@@ -172,6 +174,23 @@ function doGet(e) {
       });
     }
 
+    if (action === "get_team_members" || action === "get_users") {
+      const users = getAllUsersFromSheet();
+      return createJsonResponse({
+        status: "success",
+        users: users,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "get_tests") {
+      return handleGetTests();
+    }
+
+    if (action === "get_submissions") {
+      return handleGetSubmissions();
+    }
+
     if (action === "sync_projections") {
       const result = syncAllProjections();
       return createJsonResponse({
@@ -311,6 +330,23 @@ function doPost(e) {
     // 12. ACTION: SYNC MASTER DATA (SQUADS, PRODUCTS, PHASES, SELECTIONS)
     if (action === "sync_master_data" || action === "save_settings") {
       return handleSyncMasterData(data);
+    }
+
+    // 13. ACTION: TEST EXAMS & SUBMISSIONS
+    if (action === "save_test") {
+      return handleSaveTest(data);
+    }
+    if (action === "submit_test") {
+      return handleSubmitTest(data);
+    }
+    if (action === "grade_essay") {
+      return handleGradeEssay(data);
+    }
+    if (action === "get_tests") {
+      return handleGetTests();
+    }
+    if (action === "get_submissions") {
+      return handleGetSubmissions();
     }
 
     return createJsonResponse({ status: "error", message: "Unknown POST action: " + action });
@@ -2305,6 +2341,255 @@ function handleSyncMasterData(data) {
     message: "Đã đồng bộ Master Data cấu hình vào Google Sheet thành công!",
     timestamp: formattedDate
   });
+}
+
+/**
+ * ==============================================================================
+ * 13. HỆ THỐNG BÀI TEST & ĐÁNH GIÁ NĂNG LỰC NHÂN SỰ
+ * ==============================================================================
+ */
+
+/**
+ * Khởi tạo hoặc lấy Sheet TEST_BANK
+ */
+function getOrInitTestBankSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_TEST_BANK);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_TEST_BANK);
+    const headers = [
+      "Test_ID",
+      "Title",
+      "Description",
+      "Category",
+      "TimeLimit_Minutes",
+      "Total_Points",
+      "Total_Questions",
+      "MCQ_Count",
+      "Essay_Count",
+      "Questions_JSON",
+      "Created_At",
+      "Created_By",
+      "Status"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#E2E8F0");
+  }
+  return sheet;
+}
+
+/**
+ * Khởi tạo hoặc lấy Sheet TEST_SUBMISSIONS
+ */
+function getOrInitTestSubmissionsSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_TEST_SUBMISSIONS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_TEST_SUBMISSIONS);
+    const headers = [
+      "Submission_ID",
+      "Test_ID",
+      "Test_Title",
+      "User_Name",
+      "User_Email",
+      "User_Squad",
+      "Submitted_At",
+      "Score_MCQ",
+      "Score_Essay",
+      "Total_Score",
+      "Max_Score",
+      "Percentage",
+      "Status",
+      "Graded_By",
+      "Graded_At",
+      "Answers_JSON"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#E2E8F0");
+  }
+  return sheet;
+}
+
+/**
+ * Lưu đề thi mới từ Admin vào TEST_BANK
+ */
+function handleSaveTest(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrInitTestBankSheet(ss);
+  const test = data.test || data;
+
+  const row = [
+    test.id || "TEST_" + Date.now(),
+    test.title || "Đề thi mới",
+    test.description || "",
+    test.category || "Chuyên môn",
+    test.timeLimitMinutes || 30,
+    test.totalPoints || 10,
+    test.totalQuestions || (test.questions ? test.questions.length : 0),
+    test.mcqCount || 0,
+    test.essayCount || 0,
+    JSON.stringify(test.questions || []),
+    test.createdAt || new Date().toISOString(),
+    test.createdBy || "Admin",
+    test.status || "Active"
+  ];
+
+  sheet.appendRow(row);
+
+  return createJsonResponse({
+    status: "success",
+    message: "Đã lưu đề thi vào Google Sheet thành công!",
+    test_id: test.id
+  });
+}
+
+/**
+ * Lưu kết quả nộp bài của thí sinh vào TEST_SUBMISSIONS
+ */
+function handleSubmitTest(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrInitTestSubmissionsSheet(ss);
+  const sub = data.submission || data;
+
+  const row = [
+    sub.id || "SUB_" + Date.now(),
+    sub.testId || "",
+    sub.testTitle || "",
+    sub.userName || "",
+    sub.userEmail || "",
+    sub.userSquad || "",
+    sub.submittedAt || new Date().toISOString(),
+    sub.scoreMcq || 0,
+    sub.scoreEssay || 0,
+    sub.totalScore || 0,
+    sub.maxScore || 10,
+    (sub.percentage || 0) + "%",
+    sub.status || "Chờ chấm tự luận",
+    sub.gradedBy || "",
+    sub.gradedAt || "",
+    JSON.stringify(sub.answers || [])
+  ];
+
+  sheet.appendRow(row);
+
+  return createJsonResponse({
+    status: "success",
+    message: "Đã ghi nhận bài thi của nhân sự vào Google Sheet!",
+    submission_id: sub.id
+  });
+}
+
+/**
+ * Admin chấm điểm câu tự luận
+ */
+function handleGradeEssay(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrInitTestSubmissionsSheet(ss);
+  const subId = data.submissionId;
+  const updatedSub = data.updatedSubmission || {};
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (ids[i][0] === subId) {
+        const rowIdx = i + 2;
+        sheet.getRange(rowIdx, 9).setValue(updatedSub.scoreEssay || 0); // Score_Essay
+        sheet.getRange(rowIdx, 10).setValue(updatedSub.totalScore || 0); // Total_Score
+        sheet.getRange(rowIdx, 12).setValue((updatedSub.percentage || 0) + "%"); // Percentage
+        sheet.getRange(rowIdx, 13).setValue("Đã hoàn thành"); // Status
+        sheet.getRange(rowIdx, 14).setValue(updatedSub.gradedBy || "Admin"); // Graded_By
+        sheet.getRange(rowIdx, 15).setValue(new Date().toISOString()); // Graded_At
+        if (updatedSub.answers) {
+          sheet.getRange(rowIdx, 16).setValue(JSON.stringify(updatedSub.answers));
+        }
+        return createJsonResponse({
+          status: "success",
+          message: "Đã cập nhật điểm tự luận vào Google Sheet thành công!"
+        });
+      }
+    }
+  }
+
+  return createJsonResponse({ status: "error", message: "Không tìm thấy bài nộp: " + subId });
+}
+
+/**
+ * Lấy danh sách đề thi
+ */
+function handleGetTests() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrInitTestBankSheet(ss);
+  const lastRow = sheet.getLastRow();
+  const tests = [];
+
+  if (lastRow > 1) {
+    const data = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+    for (let i = 0; i < data.length; i++) {
+      let questions = [];
+      try {
+        questions = JSON.parse(data[i][9] || "[]");
+      } catch (e) {}
+
+      tests.push({
+        id: data[i][0],
+        title: data[i][1],
+        description: data[i][2],
+        category: data[i][3],
+        timeLimitMinutes: Number(data[i][4]) || 30,
+        totalPoints: Number(data[i][5]) || 10,
+        totalQuestions: Number(data[i][6]) || questions.length,
+        mcqCount: Number(data[i][7]) || 0,
+        essayCount: Number(data[i][8]) || 0,
+        questions: questions,
+        createdAt: data[i][10],
+        createdBy: data[i][11],
+        status: data[i][12] || "Active"
+      });
+    }
+  }
+
+  return createJsonResponse({ status: "success", tests: tests });
+}
+
+/**
+ * Lấy danh sách bài nộp
+ */
+function handleGetSubmissions() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrInitTestSubmissionsSheet(ss);
+  const lastRow = sheet.getLastRow();
+  const submissions = [];
+
+  if (lastRow > 1) {
+    const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
+    for (let i = 0; i < data.length; i++) {
+      let answers = [];
+      try {
+        answers = JSON.parse(data[i][15] || "[]");
+      } catch (e) {}
+
+      const pctStr = String(data[i][11] || "0").replace("%", "");
+      submissions.push({
+        id: data[i][0],
+        testId: data[i][1],
+        testTitle: data[i][2],
+        userName: data[i][3],
+        userEmail: data[i][4],
+        userSquad: data[i][5],
+        submittedAt: data[i][6],
+        scoreMcq: Number(data[i][7]) || 0,
+        scoreEssay: Number(data[i][8]) || 0,
+        totalScore: Number(data[i][9]) || 0,
+        maxScore: Number(data[i][10]) || 10,
+        percentage: Number(pctStr) || 0,
+        status: data[i][12] || "Chờ chấm tự luận",
+        gradedBy: data[i][13],
+        gradedAt: data[i][14],
+        answers: answers
+      });
+    }
+  }
+
+  return createJsonResponse({ status: "success", submissions: submissions });
 }
 
 

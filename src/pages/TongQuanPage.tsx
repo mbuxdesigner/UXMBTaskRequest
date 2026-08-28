@@ -209,7 +209,7 @@ export default function TongQuanPage() {
   }, [requests])
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-900 bg-[#f8fafc]/50 min-h-screen">
+    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-900 min-h-screen animate-in fade-in-50 duration-200 pb-16">
       {/* =========================================================================
           REUI HEADER BREADCRUMB & COMMAND BAR
           ========================================================================= */}

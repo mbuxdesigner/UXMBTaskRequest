@@ -469,11 +469,12 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     return "Gần đây"
   }
 
-  const activeCount = filteredRequests.filter((r) => r.status === "Đang thực hiện").length
+  const activeCount = filteredRequests.filter((r) => r.status === "Đang thực hiện" || r.status === "Đã gửi PO").length
+  const pendingCount = filteredRequests.filter((r) => r.status === "Pending" || r.status === "PO pending").length
   const completedCount = filteredRequests.filter((r) => r.status === "Hoàn thành").length
 
   return (
-    <main className="w-full max-w-[1680px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 pb-16">
+    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
       {/* Top Header matching Create Task clean style */}
       <div className="border-b border-slate-200/80 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -485,9 +486,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <NumberTicker value={totalItems} className="font-bold text-slate-800" /> bài toán hiển thị
             </span>
             <span className="mx-0.5 text-slate-300">•</span>
-            <span className="text-amber-600 font-semibold">
-              <NumberTicker value={activeCount} className="font-bold text-amber-600" /> đang thực hiện
+            <span className="text-blue-600 font-semibold">
+              <NumberTicker value={activeCount} className="font-bold text-blue-600" /> đang thực hiện
             </span>
+            {pendingCount > 0 && (
+              <>
+                <span className="mx-0.5 text-slate-300">•</span>
+                <span className="text-amber-600 font-bold">
+                  <NumberTicker value={pendingCount} className="font-bold text-amber-600" /> Pending ({">"}24h)
+                </span>
+              </>
+            )}
             <span className="mx-0.5 text-slate-300">•</span>
             <span className="text-emerald-600 font-semibold">
               <NumberTicker value={completedCount} className="font-bold text-emerald-600" /> hoàn thành

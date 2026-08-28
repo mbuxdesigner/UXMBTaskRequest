@@ -473,12 +473,14 @@ export default function RequestDetail({
     setOpenDropdown(null)
     const toastId = toast.loading(`Đang chuyển trạng thái sang [${newStatus}]...`)
     try {
+      const nowIso = new Date().toISOString()
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: newStatus,
         new_progress: newStatus === "Hoàn thành" ? 100 : request.progress,
         note: `Cập nhật trạng thái bài toán sang: ${newStatus}`,
         assigned_designer: request.assigned_designer,
+        sent_to_po_at: newStatus === "Đã gửi PO" ? nowIso : request.sent_to_po_at,
       })
       if (res.success) {
         toast.success(`Đã chuyển trạng thái sang: ${newStatus}`, undefined, { id: toastId })
@@ -534,6 +536,114 @@ export default function RequestDetail({
       }
     } catch {
       toast.error("Lỗi khi chuyển khâu", undefined, { id: toastId })
+    }
+  }
+
+  const handleSendToPo = async (customNote?: string) => {
+    if (!request) return
+    const toastId = toast.loading("Đang gửi thiết kế cho PO...")
+    try {
+      const nowIso = new Date().toISOString()
+      const noteContent = customNote && typeof customNote === "string" && customNote.trim()
+        ? `[Gửi PO] ${customNote.trim()}`
+        : `Designer (${session?.displayName || "Designer"}) đã gửi phương án thiết kế cho PO xem xét (Bắt đầu tính hạn phản hồi 24h).`
+
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: "Đã gửi PO",
+        new_progress: request.progress,
+        note: noteContent,
+        figma_url: commentLink.trim() || undefined,
+        assigned_designer: request.assigned_designer,
+        sent_to_po_at: nowIso,
+      })
+      if (res.success) {
+        setNewCommentText("")
+        setCommentLink("")
+        setShowLinkInput(false)
+        toast.success("Đã gửi PO thành công!", "Hệ thống sẽ theo dõi thời hạn phản hồi 24h. Sau 1 ngày sẽ tự động chuyển sang trạng thái PO pending.", { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.error("Không thể gửi PO", res.message, { id: toastId })
+      }
+    } catch {
+      toast.error("Lỗi kết nối khi gửi PO", undefined, { id: toastId })
+    }
+  }
+
+  const handlePending = async (customNote?: string) => {
+    if (!request) return
+    const toastId = toast.loading("Đang chuyển trạng thái Pending...")
+    try {
+      const nowIso = new Date().toISOString()
+      const noteContent = customNote && typeof customNote === "string" && customNote.trim()
+        ? `[Pending] ${customNote.trim()}`
+        : `Bài toán được đánh dấu Pending (Tạm dừng/Chờ phản hồi).`
+
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: "Pending",
+        new_progress: request.progress,
+        note: noteContent,
+        figma_url: commentLink.trim() || undefined,
+        assigned_designer: request.assigned_designer,
+        sent_to_po_at: request.sent_to_po_at || nowIso,
+      })
+      if (res.success) {
+        setNewCommentText("")
+        setCommentLink("")
+        setShowLinkInput(false)
+        toast.success("Đã chuyển trạng thái Pending!", undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.error("Không thể chuyển trạng thái", res.message, { id: toastId })
+      }
+    } catch {
+      toast.error("Lỗi khi chuyển trạng thái", undefined, { id: toastId })
+    }
+  }
+
+  const handlePoApprove = async () => {
+    if (!request) return
+    const toastId = toast.loading("PO đang duyệt thiết kế...")
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: "Bàn giao",
+        new_status: "Hoàn thành",
+        new_progress: 100,
+        note: `PO (${session?.displayName || "PO"}) đã duyệt phương án thiết kế và chấp thuận bàn giao.`,
+        assigned_designer: request.assigned_designer,
+      })
+      if (res.success) {
+        toast.success("PO đã duyệt thành công!", "Bài toán đã chuyển sang trạng thái Hoàn thành / Bàn giao.", { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.error("Không thể duyệt", res.message, { id: toastId })
+      }
+    } catch {
+      toast.error("Lỗi khi duyệt thiết kế", undefined, { id: toastId })
+    }
+  }
+
+  const handlePoRequestChanges = async (feedbackNote?: string) => {
+    if (!request) return
+    const toastId = toast.loading("Đang gửi yêu cầu chỉnh sửa...")
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: "Đang thực hiện",
+        new_progress: Math.max(50, request.progress - 10),
+        note: `PO (${session?.displayName || "PO"}) yêu cầu chỉnh sửa: ${feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX."}`,
+        assigned_designer: request.assigned_designer,
+      })
+      if (res.success) {
+        toast.success("Đã gửi yêu cầu chỉnh sửa cho Designer!", undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.error("Không thể gửi yêu cầu", res.message, { id: toastId })
+      }
+    } catch {
+      toast.error("Lỗi khi gửi yêu cầu chỉnh sửa", undefined, { id: toastId })
     }
   }
 
@@ -767,23 +877,42 @@ export default function RequestDetail({
     if (!request || !newCommentText.trim()) return
 
     setSubmittingComment(true)
+    const rawText = newCommentText.trim()
+    let newStatus = request.status
+    let sentToPoAt: string | undefined = undefined
+    let toastMessage = "Đã đăng trao đổi & cập nhật Activity!"
+
+    // 1. Cú pháp @SenToPO: hoặc @SendToPO: -> chuyển sang Đã gửi PO
+    if (/^@sen(d)?topo:/i.test(rawText)) {
+      newStatus = "Đã gửi PO"
+      sentToPoAt = new Date().toISOString()
+      toastMessage = "Đã gửi PO thành công! (Bắt đầu đếm SLA 24h tự động chuyển Pending)"
+    } 
+    // 2. Cú pháp @Pending: -> chuyển sang Pending
+    else if (/^@(po_)?pending:/i.test(rawText)) {
+      newStatus = "Pending"
+      sentToPoAt = request.sent_to_po_at || new Date().toISOString()
+      toastMessage = "Đã chuyển trạng thái sang Pending!"
+    }
+
     const toastId = toast.loading("Đang gửi trao đổi...")
 
     try {
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
-        new_status: request.status,
+        new_status: newStatus,
         new_progress: request.progress,
-        note: newCommentText.trim(),
+        note: rawText,
         figma_url: commentLink.trim() || undefined,
         assigned_designer: request.assigned_designer,
+        sent_to_po_at: sentToPoAt,
       })
 
       if (res.success) {
         setNewCommentText("")
         setCommentLink("")
         setShowLinkInput(false)
-        toast.success("Đã đăng trao đổi & cập nhật Activity!", undefined, { id: toastId })
+        toast.success(toastMessage, undefined, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể gửi bình luận", res.message, { id: toastId })
@@ -859,8 +988,46 @@ export default function RequestDetail({
                   )}
                 </div>
 
-                {/* Right: Window Controls */}
-                <div className="flex items-center gap-1">
+                {/* Right: Action & Window Controls */}
+                <div className="flex items-center gap-2">
+                  {/* Action "Đã gửi PO" (dành cho Designer / Admin khi cần gửi bàn giao/phản hồi cho PO) */}
+                  {request.status !== "Hoàn thành" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSendToPo}
+                      className="h-8 text-xs font-bold rounded-xl bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 cursor-pointer gap-1.5 shadow-2xs shrink-0"
+                      title="Gửi bài toán cho PO xem xét (Bắt đầu đếm SLA phản hồi 24h)"
+                    >
+                      <Send className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Đã gửi PO</span>
+                    </Button>
+                  )}
+
+                  {/* Nút hành động nhanh dành cho PO khi bài toán ở trạng thái Chờ phản hồi */}
+                  {(request.status === "Đã gửi PO" || request.status === "PO pending") && (session?.role === "PO" || isAuthor) && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handlePoApprove}
+                        className="h-8 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer gap-1 shadow-2xs shrink-0"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>PO Duyệt</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePoRequestChanges()}
+                        className="h-8 text-xs font-semibold rounded-xl bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 cursor-pointer gap-1 shrink-0"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Cần sửa</span>
+                      </Button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleCopyLink}
@@ -992,6 +1159,62 @@ export default function RequestDetail({
                   mobileActiveTab === "details" ? "block" : "hidden lg:block"
                 }`}>
                   
+                  {/* PO Status Banner (Đã gửi PO & Pending SLA 24h) */}
+                  {(request.status === "Pending" || request.status === "PO pending") && (
+                    <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                        <div>
+                          <p className="font-bold text-amber-950 text-[12.5px] flex items-center gap-1.5">
+                            <span>Trạng thái: Pending</span>
+                            <span className="px-1.5 py-0.2 rounded bg-amber-200/80 text-[10px] font-extrabold text-amber-900 uppercase">
+                              Tạm dừng / Quá hạn 24h
+                            </span>
+                          </p>
+                          <p className="text-amber-800 text-[11px] mt-0.5">
+                            {request.sent_to_po_at ? `Designer đã gửi phương án cho PO xem xét vào lúc ${new Date(request.sent_to_po_at).toLocaleString("vi-VN")}. Đã quá 24h chưa nhận được phản hồi.` : "Bài toán đang ở trạng thái Pending chờ phản hồi."}
+                          </p>
+                        </div>
+                      </div>
+                      {(session?.role === "PO" || isAuthor) && (
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                          <Button size="sm" onClick={handlePoApprove} className="h-7 px-3 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
+                            PO Duyệt ngay
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7 px-2.5 text-[11px] bg-white text-amber-800 border-amber-300 rounded-xl font-semibold cursor-pointer">
+                            Yêu cầu sửa
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {request.status === "Đã gửi PO" && (
+                    <div className="p-3.5 rounded-2xl bg-purple-50/90 border border-purple-200 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <Send className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-purple-950 text-[12.5px] flex items-center gap-1.5">
+                            <span>Đang chờ PO phản hồi (SLA 24h)</span>
+                          </p>
+                          <p className="text-purple-800 text-[11px] mt-0.5">
+                            Designer đã gửi bài toán cho PO xem xét {request.sent_to_po_at ? `vào lúc ${new Date(request.sent_to_po_at).toLocaleString("vi-VN")}` : ""}. Nếu sau 1 ngày chưa phản hồi, hệ thống sẽ tự động chuyển sang "PO pending".
+                          </p>
+                        </div>
+                      </div>
+                      {(session?.role === "PO" || isAuthor) && (
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                          <Button size="sm" onClick={handlePoApprove} className="h-7 px-3 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
+                            PO Duyệt
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7 px-2.5 text-[11px] bg-white text-purple-800 border-purple-200 rounded-xl font-semibold cursor-pointer">
+                            Yêu cầu sửa
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Task Title Header */}
                   <div className="group relative">
                     {isEditingTitle && isAuthor ? (
@@ -1041,30 +1264,29 @@ export default function RequestDetail({
                   {/* ClickUp Task Properties Grid (Status is Khâu UX, Dates is Start -> Estimate End Date, Assignees, Priority) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 py-5 border-y border-slate-100 text-xs">
                     
-                    {/* 1. Status (Chính là Khâu UX - Click to select) */}
+                    {/* 1. Status (Chính xác là request.status - Đã gửi PO, Đang thực hiện, PO pending, Hoàn thành, ...) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
                         <Target className="w-4 h-4 text-slate-400" />
                         <span>Status</span>
                       </div>
                       <div className="flex-1 relative">
-                        <button
-                          type="button"
-                          onClick={() => setOpenDropdown(openDropdown === "status" ? null : "status")}
-                          className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide cursor-pointer hover:opacity-90 transition-all ${
-                            request.current_phase === "Bàn giao" || request.progress >= 100
-                              ? "bg-emerald-600 text-white" 
-                              : request.current_phase === "UI Design" || request.current_phase === "Prototype"
-                              ? "bg-[#1057FB] text-white"
-                              : request.current_phase === "Discovery" || request.current_phase === "User Flow"
-                              ? "bg-indigo-600 text-white"
-                              : "bg-slate-200 text-slate-800"
-                          }`}
-                        >
-                          {request.current_phase}
-                        </button>
+                        {(() => {
+                          const cfg = getStatusConfig(request.status)
+                          const isActive = request.status === "Đang thực hiện"
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setOpenDropdown(openDropdown === "status" ? null : "status")}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0 ${isActive ? "animate-pulse" : ""}`} />
+                              <span>{request.status}</span>
+                            </button>
+                          )
+                        })()}
 
-                        {/* Status (Khâu UX) Dropdown Popover */}
+                        {/* Status Dropdown Popover */}
                         <AnimatePresence>
                           {openDropdown === "status" && (
                             <motion.div
@@ -1074,19 +1296,32 @@ export default function RequestDetail({
                               className="absolute top-full left-0 mt-1.5 z-50 w-56 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
                             >
                               <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                Chọn Khâu UX (Status)
+                                Chọn Trạng thái bài toán
                               </div>
-                              {UX_PHASES_MB.map((ph) => (
-                                <button
-                                  key={ph.key}
-                                  type="button"
-                                  onClick={() => handleUpdatePhase(ph.key, ph.progress)}
-                                  className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 cursor-pointer text-xs"
-                                >
-                                  <span className="font-bold text-slate-900">{ph.label}</span>
-                                  {request.current_phase === ph.key && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                                </button>
-                              ))}
+                              {[
+                                "Đang thực hiện",
+                                "Đã gửi PO",
+                                "Pending",
+                                "Chờ tiếp nhận",
+                                "Hoàn thành",
+                                "Bị chặn",
+                              ].map((st) => {
+                                const stCfg = getStatusConfig(st)
+                                return (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => handleUpdateStatus(st)}
+                                    className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 cursor-pointer text-xs transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full ${stCfg.inlineClasses.dot}`} />
+                                      <span className="font-semibold text-slate-800">{st}</span>
+                                    </div>
+                                    {request.status === st && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                  </button>
+                                )
+                              })}
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -1692,82 +1927,6 @@ export default function RequestDetail({
                           </button>
                         )}
                       </div>
-
-                      {/* Prototype Item Card */}
-                      <div className="p-3 rounded-xl border border-slate-200 hover:border-teal-300 bg-white transition-all shadow-2xs flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-teal-50 text-[#0D9B97] flex items-center justify-center shrink-0 border border-teal-100">
-                            <PlaySquare className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">Interactive Prototype</p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-xs">
-                              {customDeliverables?.prototype_url || "Chưa đính kèm liên kết Prototype"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {customDeliverables?.prototype_url ? (
-                          <a
-                            href={customDeliverables.prototype_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-teal-50 text-[#0D9B97] hover:bg-teal-100 font-bold text-xs transition-colors"
-                          >
-                            <span>Xem Prototype</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewDeliverableType("prototype")
-                              setShowAddDeliverableModal(true)
-                            }}
-                            className="text-[11px] text-[#0D9B97] font-bold hover:underline cursor-pointer"
-                          >
-                            + Đính kèm
-                          </button>
-                        )}
-                      </div>
-
-                      {/* UX Specs Item Card */}
-                      <div className="p-3 rounded-xl border border-slate-200 hover:border-blue-300 bg-white transition-all shadow-2xs flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
-                            <BookOpen className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">UX Specifications & Flow</p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-xs">
-                              {customDeliverables?.spec_url || "Chưa đính kèm tài liệu specs"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {customDeliverables?.spec_url ? (
-                          <a
-                            href={customDeliverables.spec_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs transition-colors"
-                          >
-                            <span>Xem Specs</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewDeliverableType("spec")
-                              setShowAddDeliverableModal(true)
-                            }}
-                            className="text-[11px] text-blue-600 font-bold hover:underline cursor-pointer"
-                          >
-                            + Đính kèm
-                          </button>
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -2105,6 +2264,8 @@ export default function RequestDetail({
                       onLinkChange={setCommentLink}
                       showLinkInput={showLinkInput}
                       onToggleLinkInput={() => setShowLinkInput(!showLinkInput)}
+                      onSendToPo={(note) => handleSendToPo(note)}
+                      onPending={(note) => handlePending(note)}
                     />
                   </div>
                 </div>

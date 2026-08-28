@@ -4,6 +4,7 @@ export interface RoleNavVisibility {
   overview: boolean
   track: boolean
   create: boolean
+  test: boolean
   compressor: boolean
   manage: boolean
 }
@@ -17,6 +18,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
+    test: true,
     compressor: true,
     manage: true,
   },
@@ -24,6 +26,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
+    test: true,
     compressor: true,
     manage: true,
   },
@@ -31,6 +34,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
+    test: true,
     compressor: true,
     manage: false,
   },
@@ -38,6 +42,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
+    test: true,
     compressor: true,
     manage: false,
   },
@@ -60,7 +65,7 @@ export function getRoleNavConfig(): RoleNavConfig {
 }
 
 export type PlatformNavItemKey = "overview" | "track" | "create"
-export type ResourceNavItemKey = "compressor" | "manage"
+export type ResourceNavItemKey = "compressor" | "test" | "manage"
 export type NavItemKey = PlatformNavItemKey | ResourceNavItemKey
 
 export interface NavOrderConfig {
@@ -70,7 +75,7 @@ export interface NavOrderConfig {
 
 export const DEFAULT_NAV_ORDER: NavOrderConfig = {
   platform: ["overview", "track", "create"],
-  resources: ["compressor", "manage"],
+  resources: ["compressor", "test", "manage"],
 }
 
 export const STORAGE_KEY_NAV_ORDER = "ux_portal_nav_order"
