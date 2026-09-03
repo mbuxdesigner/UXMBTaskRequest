@@ -67,11 +67,11 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   const [email, setEmail] = useState("")
   const [quoteIndex, setQuoteIndex] = useState(0)
 
-  // Tự động xoay chuyển 5 câu châm ngôn mỗi 6 giây
+  // Tự động xoay chuyển 5 câu châm ngôn mỗi 5 giây
   useEffect(() => {
     const timer = setInterval(() => {
       setQuoteIndex((prev) => (prev + 1) % QUOTES.length)
-    }, 6000)
+    }, 5000)
     return () => clearInterval(timer)
   }, [])
 
@@ -253,8 +253,8 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
             </div>
 
             {/* Main Headline: Chuyển động Character Morph giữa 5 câu châm ngôn */}
-            <div className="min-h-[220px] flex flex-col justify-between pt-1 pb-2">
-              <h1 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[44px] font-bold text-neutral-950 tracking-tight leading-[1.22]">
+            <div className="pt-1 pb-2">
+              <h1 className="h-[140px] sm:h-[155px] lg:h-[165px] xl:h-[175px] flex items-start text-3xl sm:text-4xl lg:text-[40px] xl:text-[44px] font-bold text-neutral-950 tracking-tight leading-[1.25] overflow-hidden">
                 <CharacterMorph
                   texts={QUOTES.map((q) => `"${q.text}"`)}
                   currentIndex={quoteIndex}
@@ -263,7 +263,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
               </h1>
 
               {/* Phân trang & Tên tác giả ở góc phải */}
-              <div className="flex items-center justify-between pt-5 border-t border-neutral-200/60 mt-6">
+              <div className="flex items-center justify-between pt-5 border-t border-neutral-200/60 mt-4">
                 {/* 5 chấm chuyển câu */}
                 <div className="flex items-center gap-2">
                   {QUOTES.map((_, idx) => (
@@ -279,9 +279,6 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                       aria-label={`Câu ${idx + 1}`}
                     />
                   ))}
-                  <span className="text-[11.5px] font-mono text-neutral-400 ml-2">
-                    0{quoteIndex + 1} / 0{QUOTES.length}
-                  </span>
                 </div>
 
                 {/* Tên tác giả ở góc phải */}
