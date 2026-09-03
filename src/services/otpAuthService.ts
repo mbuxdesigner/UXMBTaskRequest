@@ -203,7 +203,7 @@ export async function requestTeamsOtp(personalEmail: string): Promise<{
   if (!config.scriptUrl || !config.scriptUrl.trim()) {
     return {
       success: true,
-      message: "Chế độ Local: Nếu tài khoản hợp lệ, mã xác thực 6 số sẽ được gửi tới Teams.",
+      message: 'Vui lòng kiểm tra Teams "Workflowws" để lấy OTP truy cập',
       expiresIn: 180,
     }
   }
@@ -224,7 +224,7 @@ export async function requestTeamsOtp(personalEmail: string): Promise<{
     const data = await res.json()
     return {
       success: data.status === "success" || data.status === "warning",
-      message: data.message || "Nếu tài khoản hợp lệ, mã xác thực 6 số sẽ được gửi tới Teams.",
+      message: data.message || 'Vui lòng kiểm tra Teams "Workflowws" để lấy OTP truy cập',
       expiresIn: data.expires_in || 180,
       cooldown: data.cooldown || false,
     }
@@ -232,7 +232,7 @@ export async function requestTeamsOtp(personalEmail: string): Promise<{
     console.error("Lỗi khi yêu cầu OTP:", err)
     return {
       success: true,
-      message: "Nếu tài khoản hợp lệ, mã xác thực 6 số sẽ được gửi tới Teams.",
+      message: 'Vui lòng kiểm tra Teams "Workflowws" để lấy OTP truy cập',
       expiresIn: 180,
     }
   }

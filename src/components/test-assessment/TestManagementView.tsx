@@ -619,6 +619,7 @@ export default function TestManagementView({
       {/* Upload Modal */}
       <TestUploadModal
         open={uploadModalOpen}
+        creatorName={currentUserName || "Admin"}
         onClose={() => setUploadModalOpen(false)}
         onSuccess={(newTest) => {
           setTests((prev) => [newTest, ...prev])

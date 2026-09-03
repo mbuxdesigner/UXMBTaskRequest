@@ -26,14 +26,14 @@ interface TestUploadModalProps {
   open: boolean
   onClose: () => void
   onSuccess: (newTest: TestExam) => void
-  creatorName: string
+  creatorName?: string
 }
 
 export default function TestUploadModal({
   open,
   onClose,
   onSuccess,
-  creatorName,
+  creatorName = "Admin",
 }: TestUploadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)

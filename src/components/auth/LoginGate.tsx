@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { IconTile } from "@/components/reui/icon-tile"
 import { OtpInput } from "@/components/reui/otp-input"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import {
@@ -23,32 +22,70 @@ import {
   ArrowLeft,
   Lock,
   RefreshCw,
-  Layers,
-  CheckCircle2,
   Loader2,
-  ShieldAlert,
+  KeyRound,
+  Shield,
+  Send,
+  Quote,
 } from "lucide-react"
+import { CharacterMorph } from "@/components/ui/character-morph"
+
+// 5 Cụm thông tin / Châm ngôn về giải pháp và thiết kế
+const QUOTES = [
+  {
+    text: "A problem well stated is a problem half solved.",
+    author: "Charles Kettering",
+  },
+  {
+    text: "Design is not just what it looks like and feels like. Design is how it works.",
+    author: "Steve Jobs",
+  },
+  {
+    text: "We cannot solve our problems with the same thinking we used when we created them.",
+    author: "Albert Einstein",
+  },
+  {
+    text: "Simplicity is about subtracting the obvious and adding the meaningful.",
+    author: "John Maeda",
+  },
+  {
+    text: "Recognizing the need is the primary condition for design.",
+    author: "Charles Eames",
+  },
+]
 
 interface LoginGateProps {
   onAuthSuccess: (session: UserSession) => void
 }
 
+const DOMAIN_SUFFIX = "@mbbank.com.vn"
+
 export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
+  // Luồng chuẩn: "email" -> "otp"
   const [step, setStep] = useState<"email" | "otp">("email")
+  const [emailPrefix, setEmailPrefix] = useState("")
   const [email, setEmail] = useState("")
+  const [quoteIndex, setQuoteIndex] = useState(0)
+
+  // Tự động xoay chuyển 5 câu châm ngôn mỗi 6 giây
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setQuoteIndex((prev) => (prev + 1) % QUOTES.length)
+    }, 6000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // OTP State
   const [otp, setOtp] = useState("")
   const [isSendingOtp, setIsSendingOtp] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [infoMsg, setInfoMsg] = useState<string | null>(null)
+  const [infoMsg, setInfoMsg] = useState<React.ReactNode | null>(null)
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(5)
-
-  // Đếm ngược hiệu lực mã OTP (3 phút = 180s)
   const [otpCountdown, setOtpCountdown] = useState(180)
-  // Đếm ngược cooldown gửi lại mã (60s)
   const [resendCooldown, setResendCooldown] = useState(0)
 
-  // Timer cho hiệu lực OTP
+  // Timer cho hiệu lực OTP (180s)
   useEffect(() => {
     let timer: NodeJS.Timeout
     if (step === "otp" && otpCountdown > 0) {
@@ -59,7 +96,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     return () => clearInterval(timer)
   }, [step, otpCountdown])
 
-  // Timer cho resend cooldown
+  // Timer cho resend cooldown (60s)
   useEffect(() => {
     let timer: NodeJS.Timeout
     if (resendCooldown > 0) {
@@ -76,7 +113,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
   }
 
-  // Gửi OTP
+  // Bước 1: Gửi mã OTP qua Teams
   const handleSendOtp = async (targetEmail?: string) => {
     const cleanEmail = (targetEmail || email).trim()
     if (!cleanEmail) {
@@ -88,7 +125,11 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     setStep("otp")
     setIsSendingOtp(true)
     setErrorMsg(null)
-    setInfoMsg("Đang kết nối gửi mã xác thực 6 số qua Microsoft Teams...")
+    setInfoMsg(
+      <span>
+        Đang gửi OTP đến <strong>{cleanEmail}</strong>...
+      </span>
+    )
     setOtpCountdown(180)
     setResendCooldown(60)
     setOtp("")
@@ -98,15 +139,23 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
       if (res.expiresIn) {
         setOtpCountdown(res.expiresIn)
       }
-      setInfoMsg(res.message || "Mã xác thực đã được gửi tới Microsoft Teams của bạn.")
+      setInfoMsg(
+        <span>
+          Vui lòng kiểm tra Teams <strong>"Workflowws"</strong> để lấy OTP truy cập
+        </span>
+      )
     } catch {
-      setInfoMsg("Nếu tài khoản hợp lệ, mã xác thực 6 số đã được gửi tới Teams của bạn.")
+      setInfoMsg(
+        <span>
+          Vui lòng kiểm tra Teams <strong>"Workflowws"</strong> để lấy OTP truy cập
+        </span>
+      )
     } finally {
       setIsSendingOtp(false)
     }
   }
 
-  // Xác thực OTP
+  // Bước 2: Xác thực mã OTP
   const handleVerifyOtp = async (otpValue?: string) => {
     const cleanOtp = (typeof otpValue === "string" ? otpValue : otp).trim()
     if (!cleanOtp || cleanOtp.length < 6) {
@@ -139,19 +188,19 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     }
   }
 
-  // Đăng nhập nhanh Demo Role
-  const handleQuickDemoLogin = (demo: typeof DEMO_ACCOUNTS[0]) => {
+  // Đăng nhập nhanh Demo Role (1-Click)
+  const handleQuickDemoLogin = (account: typeof DEMO_ACCOUNTS[0]) => {
     const session = saveSession(
       "MOCK_TOKEN_" + Date.now(),
-      demo.personalEmail,
-      demo.teamsEmail,
-      demo.role,
-      demo.squad,
-      demo.displayName,
-      demo.avatarUrl,
+      account.personalEmail,
+      account.teamsEmail,
+      account.role,
+      account.squad,
+      account.displayName,
+      account.avatarUrl,
       SESSION_DURATION_SECONDS,
-      demo.squads,
-      demo.products
+      account.squads,
+      account.products
     )
     onAuthSuccess(session)
   }
@@ -163,285 +212,324 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A192F] via-[#1B3A6B] to-[#0A2540] flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
-      {/* Background glowing ambient orbs */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#0D9B97]/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#1B3A6B]/40 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-[#0D9B97]/10 to-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen w-full bg-[#FAFAFA] flex flex-col justify-between relative overflow-hidden font-sans select-none antialiased">
+      {/* Top subtle ambient border glow */}
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-blue-500/40 via-purple-500/30 to-amber-500/30 z-30" />
 
-      {/* Main Container */}
-      <div className="w-full max-w-xl relative z-10 space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#1B3A6B] to-[#0D9B97] shadow-xl shadow-[#0D9B97]/20 border border-white/20">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              MBBank UX Request Portal
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">
-              Cổng tiếp nhận & Quản lý bài toán Thiết kế Trải nghiệm Người dùng
-            </p>
-          </div>
+      {/* Atmospheric Pastel Gradient Mesh Blobs (ReUI Onboarding-9 Signature Aesthetic) */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden z-0">
+        {/* Top-Right Warm Peach/Amber Glow */}
+        <div className="absolute -top-16 -right-16 w-[550px] h-[550px] rounded-full bg-gradient-to-br from-[#FED7AA]/40 to-[#FDBA74]/25 blur-[120px]" />
+        {/* Center-Right Soft Rose/Magenta Glow */}
+        <div className="absolute top-[28%] -right-12 w-[600px] h-[600px] rounded-full bg-gradient-to-bl from-[#FBCFE8]/40 via-[#F472B6]/20 to-transparent blur-[130px]" />
+        {/* Lower-Right Lavender/Violet Glow */}
+        <div className="absolute bottom-[-10%] right-[10%] w-[580px] h-[580px] rounded-full bg-gradient-to-tl from-[#DDD6FE]/40 via-[#C084FC]/25 to-transparent blur-[140px]" />
+        {/* Bottom-Center Soft Cyan/Sky Blue Glow */}
+        <div className="absolute -bottom-24 right-[28%] w-[520px] h-[520px] rounded-full bg-gradient-to-tr from-[#BAE6FD]/40 to-[#7DD3FC]/25 blur-[130px]" />
+        {/* Subtle grid pattern overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000005_1px,transparent_1px),linear-gradient(to_bottom,#00000005_1px,transparent_1px)] bg-[size:4px_4px] opacity-40 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+      </div>
+
+      {/* TOP NAVIGATION BAR */}
+      <header className="w-full max-w-7xl mx-auto px-6 sm:px-12 pt-8 pb-4 flex items-center justify-end z-20">
+        {/* Right: Step Indicator */}
+        <div className="text-xs font-medium text-neutral-400 tracking-wide">
+          {step === "email" ? "Step 1 of 2" : "Step 2 of 2"}
         </div>
+      </header>
 
-        {/* Login Card */}
-        <div className="bg-white/95 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm" variant="navy">
-                <ShieldCheck className="w-4.5 h-4.5 text-[#0D9B97]" />
-              </IconTile>
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  {step === "email" ? "Xác thực bảo mật Microsoft Teams" : "Nhập mã xác thực OTP"}
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                  {step === "email"
-                    ? "Nhập email của bạn để nhận mã OTP 6 số qua Teams"
-                    : "Mã OTP 6 chữ số đã được gửi qua Microsoft Teams"}
-                </p>
+      {/* MAIN CONTENT AREA */}
+      <main className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-8 my-auto z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+          {/* LEFT COLUMN: HERO TEXT & VALUE PROPOSITION */}
+          <div className="lg:col-span-6 xl:col-span-7 space-y-6">
+            {/* Pill Badge: Design Philosophy với animation nháy màu sống động */}
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border bg-white/90 backdrop-blur-md shadow-2xs text-xs font-semibold text-neutral-800 animate-badge-color transition-all">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 animate-dot-color" />
+                <span className="relative inline-flex rounded-full h-2 w-2 animate-dot-color" />
+              </span>
+              <span className="font-semibold tracking-wide">Design Philosophy</span>
+            </div>
+
+            {/* Main Headline: Chuyển động Character Morph giữa 5 câu châm ngôn */}
+            <div className="min-h-[220px] flex flex-col justify-between pt-1 pb-2">
+              <h1 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[44px] font-bold text-neutral-950 tracking-tight leading-[1.22]">
+                <CharacterMorph
+                  texts={QUOTES.map((q) => `"${q.text}"`)}
+                  currentIndex={quoteIndex}
+                  className="font-bold text-neutral-950"
+                />
+              </h1>
+
+              {/* Phân trang & Tên tác giả ở góc phải */}
+              <div className="flex items-center justify-between pt-5 border-t border-neutral-200/60 mt-6">
+                {/* 5 chấm chuyển câu */}
+                <div className="flex items-center gap-2">
+                  {QUOTES.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setQuoteIndex(idx)}
+                      className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                        quoteIndex === idx
+                          ? "w-7 bg-neutral-900"
+                          : "w-1.5 bg-neutral-300 hover:bg-neutral-400"
+                      }`}
+                      aria-label={`Câu ${idx + 1}`}
+                    />
+                  ))}
+                  <span className="text-[11.5px] font-mono text-neutral-400 ml-2">
+                    0{quoteIndex + 1} / 0{QUOTES.length}
+                  </span>
+                </div>
+
+                {/* Tên tác giả ở góc phải */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={quoteIndex}
+                    initial={{ opacity: 0, x: 12, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, x: -12, filter: "blur(4px)" }}
+                    transition={{ duration: 0.3 }}
+                    className="text-right text-sm sm:text-base font-semibold text-neutral-600"
+                  >
+                    — {QUOTES[quoteIndex].author}
+                  </motion.div>
+                </AnimatePresence>
               </div>
             </div>
-            <Badge variant="navy" size="xs" className="font-extrabold">
-              Hiệu lực 8h trong Tab
-            </Badge>
           </div>
 
-          {/* Thông báo trạng thái */}
-          {infoMsg && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-blue-50/90 border border-blue-200/80 rounded-2xl text-xs text-blue-900 leading-relaxed animate-in fade-in-50 duration-200">
-              {isSendingOtp ? (
-                <Loader2 className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <span>{infoMsg}</span>
-                {isSendingOtp && (
-                  <span className="block text-[11px] text-blue-600 mt-0.5 font-medium">
-                    Bạn có thể nhập trước mã OTP nếu đã nhận được.
-                  </span>
-                )}
+          {/* RIGHT COLUMN: REUI ONBOARDING CARD (AUDITED SENIOR UI) */}
+          <div className="lg:col-span-6 xl:col-span-5 flex justify-center lg:justify-end">
+            <motion.div
+              layout
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-[460px] bg-white/95 backdrop-blur-2xl border border-neutral-200/80 rounded-3xl p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] transition-all"
+            >
+              {/* Header Unit */}
+              <div>
+                <p className="text-xs text-neutral-500 font-medium">
+                  Chào mừng đến với
+                </p>
+                <div className="mt-2">
+                  <img
+                    src="/img-logo-UXTeamWith.webp"
+                    alt="MB UX Team"
+                    className="h-8 w-auto object-contain"
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Thông báo lỗi */}
-          {errorMsg && (
-            <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 leading-relaxed animate-in fade-in-50 duration-200">
-              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {step === "email" ? (
-            <div className="space-y-6">
+              {/* Unified Form Area */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
-                  handleSendOtp()
+                  if (step === "email") {
+                    const cleanPrefix = emailPrefix.trim().toLowerCase().replace(/@.*$/, "")
+                    if (!cleanPrefix) {
+                      setErrorMsg("Vui lòng nhập tên tài khoản hoặc email MB.")
+                      return
+                    }
+                    const fullEmail = `${cleanPrefix}${DOMAIN_SUFFIX}`
+                    handleSendOtp(fullEmail)
+                  } else {
+                    handleVerifyOtp()
+                  }
                 }}
-                className="space-y-4"
+                className="mt-6 space-y-4"
               >
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Email của bạn (Personal Email / MB Account)
-                  </label>
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="VD: nam.designer@mbbank.com.vn hoặc email cá nhân..."
-                    startIcon={<Mail className="w-4 h-4 text-slate-400" />}
-                    required
-                    autoFocus
-                    className="h-12 text-sm rounded-2xl border-slate-200 focus:border-[#1B3A6B]"
-                  />
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Hệ thống sẽ tra cứu danh mục quyền và chuyển tiếp mã xác thực tới tài khoản Teams tương ứng của bạn.
-                  </p>
-                </div>
+                {/* Global Error Messages */}
+                {errorMsg && (
+                  <div className="flex items-center gap-2.5 p-3 bg-rose-50 border border-rose-200/80 rounded-xl text-xs text-rose-700">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
 
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={!email.trim()}
-                  className="w-full h-12 text-sm font-bold gap-2 rounded-2xl shadow-lg shadow-[#1B3A6B]/20"
-                >
-                  <span>Gửi mã xác thực qua Teams</span>
-                  <ArrowRight className="w-4 h-4 text-[#0D9B97]" />
-                </Button>
-              </form>
-
-              {/* Quick Demo Role Picker */}
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <span>⚡ Đăng nhập nhanh thử nghiệm (Demo RBAC):</span>
-                  </p>
-                  <span className="text-[10px] text-slate-400 font-medium">Bấm 1-click vào role</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {DEMO_ACCOUNTS.map((acc) => {
-                    const role = acc.role
-                    return (
+                {/* Input bên trên: Tài khoản MB */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-neutral-700 block">
+                      Tài khoản MB
+                    </label>
+                    {step === "otp" && (
                       <button
-                        key={acc.personalEmail || acc.teamsEmail || acc.role}
                         type="button"
-                        onClick={() => handleQuickDemoLogin(acc)}
-                        className="p-3 rounded-2xl border border-slate-200/90 bg-slate-50/80 hover:bg-white hover:border-[#1057FB] hover:shadow-md transition-all text-left group cursor-pointer"
+                        onClick={() => {
+                          setStep("email")
+                          setOtp("")
+                          setErrorMsg(null)
+                          setInfoMsg(null)
+                        }}
+                        className="text-[11.5px] text-neutral-500 hover:text-neutral-900 font-medium hover:underline cursor-pointer"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <UserAvatar name={acc.displayName} avatarUrl={acc.avatarUrl} size="lg" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 group-hover:text-[#1B3A6B] truncate">
-                                {acc.displayName.split(" ")[0]}
-                              </span>
-                              <Badge
-                                variant={
-                                  role === "Admin"
-                                    ? "destructive"
-                                    : role === "Design Owner"
-                                    ? "purple"
-                                    : role === "Designer"
-                                    ? "navy"
-                                    : "success"
-                                }
-                                size="xs"
-                                className="text-[9px] px-1.5 py-0 font-extrabold"
-                              >
-                                {role}
-                              </Badge>
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                              {acc.teamsEmail}
-                            </p>
-                          </div>
-                        </div>
+                        Đổi tài khoản
                       </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                handleVerifyOtp()
-              }}
-              className="space-y-6"
-            >
-              {/* Email Pill Info */}
-              <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <div className="flex items-center gap-2 text-xs text-slate-600 truncate">
-                  <Mail className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                  <span className="font-semibold text-slate-900 truncate">{email}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("email")
-                    setOtp("")
-                    setErrorMsg(null)
-                    setInfoMsg(null)
-                  }}
-                  className="text-xs text-[#1B3A6B] hover:underline font-bold flex items-center gap-1 flex-shrink-0 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Đổi email</span>
-                </button>
-              </div>
+                    )}
+                  </div>
+                  
+                  <div className="relative flex items-center h-11 rounded-xl bg-neutral-50/70 border border-neutral-200 hover:border-neutral-300 focus-within:bg-white focus-within:border-neutral-900 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all overflow-hidden shadow-2xs">
+                    <div className="pl-3.5 pr-2 text-neutral-400 pointer-events-none shrink-0">
+                      <Mail className="w-4 h-4" />
+                    </div>
 
-              {/* 6-box Segmented OTP Input */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Mã OTP 6 chữ số
-                  </label>
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span
-                      className={`font-mono font-bold ${
-                        otpCountdown < 30 ? "text-rose-600 animate-pulse" : "text-slate-600"
-                      }`}
-                    >
-                      {formatTime(otpCountdown)}
-                    </span>
+                    <input
+                      type="text"
+                      value={emailPrefix}
+                      disabled={step === "otp" || isSendingOtp}
+                      onChange={(e) => {
+                        let val = e.target.value.trim().toLowerCase()
+                        if (val.includes("@")) {
+                          val = val.split("@")[0]
+                        }
+                        setEmailPrefix(val)
+                        setErrorMsg(null)
+                      }}
+                      placeholder="Nhập mail MB"
+                      required
+                      autoFocus={step === "email"}
+                      className="flex-1 h-full bg-transparent text-sm text-neutral-900 disabled:text-neutral-600 outline-none placeholder:text-neutral-400 min-w-0 px-2 font-medium"
+                    />
+                    
+                    <div className="pr-3 pl-2.5 py-1 mr-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-lg select-none pointer-events-none shrink-0 flex items-center">
+                      @mbbank.com.vn
+                    </div>
                   </div>
                 </div>
 
-                <OtpInput
-                  value={otp}
-                  onChange={(val) => {
-                    setOtp(val)
-                    setErrorMsg(null)
-                  }}
-                  onComplete={handleOtpComplete}
-                  hasError={Boolean(errorMsg)}
-                  disabled={isVerifying}
-                  autoFocus={true}
-                />
+                {/* Phần mã OTP: Fade hiện lên sau khi bấm Tiếp tục */}
+                <AnimatePresence>
+                  {step === "otp" && (
+                    <motion.div
+                      key="otp-section"
+                      initial={{ opacity: 0, height: 0, y: -8 }}
+                      animate={{ opacity: 1, height: "auto", y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -8 }}
+                      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+                      className="space-y-3 pt-1 overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-neutral-700">
+                          Nhập OTP được gửi đến Teams
+                        </label>
+                        <div className="flex items-center gap-1 text-xs text-neutral-500">
+                          <Clock className="w-3.5 h-3.5 text-neutral-400" />
+                          <span
+                            className={`font-mono font-bold ${
+                              otpCountdown < 30 ? "text-rose-600 animate-pulse" : "text-neutral-700"
+                            }`}
+                          >
+                            {formatTime(otpCountdown)}
+                          </span>
+                        </div>
+                      </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 px-1">
-                  <span>
-                    {remainingAttempts !== null
-                      ? `Còn lại ${remainingAttempts} lần thử`
-                      : "Tối đa 5 lần thử"}
-                  </span>
-                  <span className="text-slate-500 font-medium">Tự động xác thực khi đủ 6 số</span>
-                </div>
-              </div>
+                      <OtpInput
+                        value={otp}
+                        onChange={(val) => {
+                          setOtp(val)
+                          setErrorMsg(null)
+                        }}
+                        onComplete={handleOtpComplete}
+                        hasError={Boolean(errorMsg)}
+                        disabled={isVerifying}
+                        autoFocus={true}
+                      />
 
-              <Button
-                type="submit"
-                size="lg"
-                loading={isVerifying}
-                disabled={otp.length !== 6 || otpCountdown <= 0}
-                className="w-full h-12 text-sm font-bold gap-2 rounded-2xl shadow-lg shadow-[#1B3A6B]/20"
-              >
-                <Lock className="w-4 h-4 text-[#0D9B97]" />
-                <span>{isVerifying ? "Đang kiểm tra mã..." : "Xác thực & Vào hệ thống"}</span>
-              </Button>
+                      <div className="flex items-center justify-between text-[11.5px] text-neutral-400 pt-0.5">
+                        <span>
+                          {remainingAttempts !== null
+                            ? `Còn lại ${remainingAttempts} lần thử`
+                            : "Tối đa 5 lần thử"}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={resendCooldown > 0 || isSendingOtp || isVerifying}
+                          onClick={() => handleSendOtp(email)}
+                          className="text-neutral-600 hover:text-neutral-900 disabled:text-neutral-300 font-medium inline-flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <RefreshCw
+                            className={`w-3 h-3 ${
+                              resendCooldown > 0 || isSendingOtp ? "animate-spin" : ""
+                            }`}
+                          />
+                          {resendCooldown > 0 ? (
+                            <span>Gửi lại mã sau {resendCooldown}s</span>
+                          ) : isSendingOtp ? (
+                            <span>Đang gửi mã...</span>
+                          ) : (
+                            <span>Gửi lại mã OTP</span>
+                          )}
+                        </button>
+                      </div>
 
-              {/* Gửi lại mã OTP */}
-              <div className="text-center pt-1">
+                      {/* Blue Info Message */}
+                      {infoMsg && (
+                        <div className="flex items-start gap-2.5 p-3 bg-blue-50/70 border border-blue-200/60 rounded-xl text-xs text-blue-900 leading-relaxed">
+                          <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                          <div>{infoMsg}</div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Primary Button: Đổi trạng thái từ Tiếp tục -> Đăng nhập */}
                 <button
-                  type="button"
-                  disabled={resendCooldown > 0 || isSendingOtp || isVerifying}
-                  onClick={() => handleSendOtp()}
-                  className="text-xs text-[#1B3A6B] hover:text-[#1B3A6B]/80 disabled:text-slate-400 disabled:no-underline font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  type="submit"
+                  disabled={
+                    step === "email"
+                      ? !emailPrefix.trim() || isSendingOtp
+                      : otp.length !== 6 || otpCountdown <= 0 || isVerifying
+                  }
+                  className="w-full bg-[#09090B] text-white hover:bg-neutral-800 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none rounded-xl h-11 text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer mt-4"
                 >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 ${
-                      resendCooldown > 0 || isSendingOtp ? "animate-spin" : ""
-                    }`}
-                  />
-                  {resendCooldown > 0 ? (
-                    <span>Gửi lại mã sau {resendCooldown}s</span>
-                  ) : isSendingOtp ? (
-                    <span>Đang gửi mã...</span>
+                  {step === "email" ? (
+                    isSendingOtp ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Đang gửi mã...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Tiếp tục nhận mã OTP</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )
+                  ) : isVerifying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang kiểm tra mã...</span>
+                    </>
                   ) : (
-                    <span>Gửi lại mã OTP mới</span>
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Đăng nhập</span>
+                    </>
                   )}
                 </button>
-              </div>
-            </form>
-          )}
-
-          {/* Security Footer Notice */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Hiệu lực theo Tab • Tối đa 8 tiếng</span>
-            </span>
-            <span className="font-semibold text-slate-500">MB Digital Enterprise</span>
+              </form>
+            </motion.div>
           </div>
         </div>
-      </div>
+      </main>
+
+      {/* FOOTER BAR */}
+      <footer className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-400 border-t border-neutral-200/60 z-20">
+        <div className="flex items-center gap-2">
+          <span>© 2026 MB Digital Banking Division • UX Team</span>
+        </div>
+        <div className="flex items-center gap-4 text-neutral-500">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Enterprise Security • 8h Session</span>
+          </span>
+          <span>•</span>
+          <span>Bảo mật chuẩn OTP Teams</span>
+        </div>
+      </footer>
     </div>
   )
 }

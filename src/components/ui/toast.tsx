@@ -4,7 +4,7 @@ import { Check, X, AlertTriangle, Loader2, Info, Sparkles } from "lucide-react"
 
 export interface ToastItem {
   id: string
-  type: "success" | "error" | "info" | "loading"
+  type: "success" | "error" | "info" | "loading" | "warning"
   title: string
   description?: string
   duration?: number
@@ -60,6 +60,27 @@ export const toast = {
     const duration = options?.duration ?? 4500
     const existingIndex = toasts.findIndex((t) => t.id === id)
     const newToast: ToastItem = { id, type: "error", title, description, duration }
+
+    if (existingIndex >= 0) {
+      toasts[existingIndex] = newToast
+    } else {
+      toasts.push(newToast)
+    }
+    notify()
+
+    if (duration > 0) {
+      setTimeout(() => {
+        toast.dismiss(id)
+      }, duration)
+    }
+    return id
+  },
+
+  warning: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const duration = options?.duration ?? 4000
+    const existingIndex = toasts.findIndex((t) => t.id === id)
+    const newToast: ToastItem = { id, type: "warning", title, description, duration }
 
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
@@ -134,6 +155,7 @@ export function Toaster() {
           const isSuccess = item.type === "success"
           const isLoading = item.type === "loading"
           const isError = item.type === "error"
+          const isWarning = item.type === "warning"
 
           return (
             <motion.div
@@ -154,6 +176,8 @@ export function Toaster() {
                     ? "from-transparent via-emerald-400 to-transparent"
                     : isError
                     ? "from-transparent via-rose-400 to-transparent"
+                    : isWarning
+                    ? "from-transparent via-amber-400 to-transparent"
                     : "from-transparent via-indigo-400 to-transparent"
                 }`} 
               />
@@ -175,7 +199,12 @@ export function Toaster() {
                     <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
                   </div>
                 )}
-                {!isLoading && !isSuccess && !isError && (
+                {isWarning && (
+                  <div className="w-6 h-6 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-xs shadow-amber-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </div>
+                )}
+                {!isLoading && !isSuccess && !isError && !isWarning && (
                   <div className="w-6 h-6 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shadow-xs shadow-indigo-500/20">
                     <Info className="w-3.5 h-3.5" />
                   </div>

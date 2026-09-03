@@ -170,12 +170,13 @@ export default function TongQuanPage() {
     requests.forEach((req, idx) => {
       if (req.task_updates && req.task_updates.length > 0) {
         req.task_updates.slice(0, 2).forEach((upd, uIdx) => {
+          const updateAny = upd as any
           activities.push({
             id: `upd-${idx}-${uIdx}`,
-            user: upd.author || req.assigned_designer || "Designer",
-            action: upd.type === "phase_change" ? "đã chuyển giai đoạn" : "cập nhật tiến độ",
-            detail: upd.note || upd.message || "",
-            time: upd.created_at || "Vừa xong",
+            user: upd.updated_by || updateAny.author || req.assigned_designer || "Designer",
+            action: upd.new_phase ? `chuyển sang ${upd.new_phase}` : (updateAny.type === "phase_change" ? "đã chuyển giai đoạn" : "cập nhật tiến độ"),
+            detail: upd.note || updateAny.message || "",
+            time: upd.timestamp || updateAny.created_at || "Vừa xong",
             taskTitle: req.title,
             request: req,
           })

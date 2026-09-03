@@ -995,7 +995,7 @@ export default function RequestDetail({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleSendToPo}
+                      onClick={() => handleSendToPo()}
                       className="h-8 text-xs font-bold rounded-xl bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 cursor-pointer gap-1.5 shadow-2xs shrink-0"
                       title="Gửi bài toán cho PO xem xét (Bắt đầu đếm SLA phản hồi 24h)"
                     >

@@ -56,7 +56,7 @@ export default function TeamsOtpModal({
   const [isSendingOtp, setIsSendingOtp] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [infoMsg, setInfoMsg] = useState<string | null>(null)
+  const [infoMsg, setInfoMsg] = useState<React.ReactNode | null>(null)
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(5)
 
   // Đếm ngược hiệu lực OTP (3 phút = 180s)
@@ -111,7 +111,11 @@ export default function TeamsOtpModal({
     setStep("otp")
     setIsSendingOtp(true)
     setErrorMsg(null)
-    setInfoMsg("Đang kết nối gửi mã xác thực 6 số qua Microsoft Teams...")
+    setInfoMsg(
+      <span>
+        Đang gửi OTP đến <strong>{cleanEmail}</strong>...
+      </span>
+    )
     setOtpCountdown(180)
     setResendCooldown(60)
     setOtp("")
@@ -121,9 +125,17 @@ export default function TeamsOtpModal({
       if (res.expiresIn) {
         setOtpCountdown(res.expiresIn)
       }
-      setInfoMsg(res.message || "Mã xác thực đã được gửi tới tài khoản Microsoft Teams của bạn.")
+      setInfoMsg(
+        <span>
+          Vui lòng kiểm tra Teams có tên <strong>Workflows</strong> để lấy OTP truy cập
+        </span>
+      )
     } catch {
-      setInfoMsg("Nếu tài khoản hợp lệ, mã xác thực 6 số đã được gửi tới Teams của bạn.")
+      setInfoMsg(
+        <span>
+          Vui lòng kiểm tra Teams có tên <strong>Workflows</strong> để lấy OTP truy cập
+        </span>
+      )
     } finally {
       setIsSendingOtp(false)
     }

@@ -463,3 +463,41 @@ body {
   animation: falling-text 2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
+/* Badge Color Flashing Animation (Nháy màu sống động) */
+@keyframes badgeColorCycle {
+  0%, 100% {
+    border-color: rgba(37, 99, 235, 0.45);
+    box-shadow: 0 0 14px rgba(37, 99, 235, 0.18);
+  }
+  33% {
+    border-color: rgba(16, 185, 129, 0.55);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.22);
+  }
+  66% {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.18);
+  }
+}
+
+@keyframes dotColorCycle {
+  0%, 100% {
+    background-color: #2563eb;
+    box-shadow: 0 0 8px #2563eb;
+  }
+  33% {
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+  66% {
+    background-color: #9333ea;
+    box-shadow: 0 0 8px #9333ea;
+  }
+}
+
+.animate-badge-color {
+  animation: badgeColorCycle 3.5s ease-in-out infinite;
+}
+
+.animate-dot-color {
+  animation: dotColorCycle 3.5s ease-in-out infinite;
+}
