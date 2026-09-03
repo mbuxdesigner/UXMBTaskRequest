@@ -254,7 +254,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
 
             {/* Main Headline: Chuyển động Character Morph giữa 5 câu châm ngôn */}
             <div className="pt-1 pb-2">
-              <h1 className="h-[140px] sm:h-[155px] lg:h-[165px] xl:h-[175px] flex items-start text-3xl sm:text-4xl lg:text-[40px] xl:text-[44px] font-bold text-neutral-950 tracking-tight leading-[1.25] overflow-hidden">
+              <h1 className="h-[160px] sm:h-[180px] lg:h-[195px] xl:h-[210px] flex items-start text-3xl sm:text-4xl lg:text-[40px] xl:text-[44px] font-bold text-neutral-950 tracking-tight leading-[1.25] pb-2">
                 <CharacterMorph
                   texts={QUOTES.map((q) => `"${q.text}"`)}
                   currentIndex={quoteIndex}
