@@ -9,6 +9,7 @@ import { Plus, ArrowLeft, LogOut } from "lucide-react"
 import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
 import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession } from "./services/otpAuthService"
+import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 
 // Code-splitting via React.lazy
 const TongQuanPage = lazy(() => import("./pages/TongQuanPage"))
@@ -175,6 +176,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FCFCFD]">
+      {/* Role Impersonation / Preview Floating Controller */}
+      <RolePreviewBanner session={session} />
+
       <Sidebar
         currentPage={page}
         onNavigate={setPage}

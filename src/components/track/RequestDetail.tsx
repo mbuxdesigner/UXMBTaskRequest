@@ -118,14 +118,31 @@ const PRIORITY_OPTIONS = [
   { value: "Low", label: "Low (Thấp)", color: "text-slate-600 bg-slate-50 border-slate-200", flagFill: "fill-slate-400 text-slate-400" },
 ]
 
-const UX_PHASES_MB = [
-  { key: "Phân loại", label: "1. Phân loại", progress: 15 },
-  { key: "Discovery", label: "2. Discovery", progress: 35 },
-  { key: "User Flow", label: "3. User Flow", progress: 55 },
-  { key: "UI Design", label: "4. UI Design", progress: 75 },
-  { key: "Prototype", label: "5. Prototype", progress: 90 },
-  { key: "Bàn giao", label: "6. Bàn giao", progress: 100 },
-]
+export function getAdminPhases() {
+  try {
+    const saved = localStorage.getItem("mbbank_admin_phases")
+    if (saved) {
+      const parsed: any[] = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((p, idx) => ({
+          key: p.name,
+          label: `${idx + 1}. ${p.name}`,
+          progress: p.defaultProgress,
+        }))
+      }
+    }
+  } catch {}
+  return [
+    { key: "Phân loại", label: "1. Phân loại", progress: 15 },
+    { key: "Discovery", label: "2. Discovery", progress: 35 },
+    { key: "User Flow", label: "3. User Flow", progress: 55 },
+    { key: "UI Design", label: "4. UI Design", progress: 75 },
+    { key: "Prototype", label: "5. Prototype", progress: 90 },
+    { key: "Bàn giao", label: "6. Bàn giao", progress: 100 },
+  ]
+}
+
+export const UX_PHASES_MB = getAdminPhases()
 
 const ALL_CLICKUP_FILTERS = [
   "person",
@@ -474,10 +491,24 @@ export default function RequestDetail({
     const toastId = toast.loading(`Đang chuyển trạng thái sang [${newStatus}]...`)
     try {
       const nowIso = new Date().toISOString()
+      let nextPhase = request.current_phase
+      let nextProgress = request.progress
+
+      if (newStatus === "Đang phân loại" || newStatus === "Phân loại") {
+        nextPhase = "Phân loại"
+        nextProgress = Math.max(15, request.progress || 15)
+      } else if (newStatus === "Hoàn thành") {
+        nextPhase = "Bàn giao"
+        nextProgress = 100
+      } else if (newStatus === "Chờ tiếp nhận") {
+        nextPhase = "Phân loại"
+        nextProgress = 10
+      }
+
       const res = await updateTaskProgress(request.request_id, {
-        new_phase: request.current_phase,
+        new_phase: nextPhase,
         new_status: newStatus,
-        new_progress: newStatus === "Hoàn thành" ? 100 : request.progress,
+        new_progress: nextProgress,
         note: `Cập nhật trạng thái bài toán sang: ${newStatus}`,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: newStatus === "Đã gửi PO" ? nowIso : request.sent_to_po_at,
@@ -883,13 +914,13 @@ export default function RequestDetail({
     let toastMessage = "Đã đăng trao đổi & cập nhật Activity!"
 
     // 1. Cú pháp @SenToPO: hoặc @SendToPO: -> chuyển sang Đã gửi PO
-    if (/^@sen(d)?topo:/i.test(rawText)) {
+    if (/(?:^|\s)@sen(?:d)?topo:/i.test(rawText)) {
       newStatus = "Đã gửi PO"
       sentToPoAt = new Date().toISOString()
       toastMessage = "Đã gửi PO thành công! (Bắt đầu đếm SLA 24h tự động chuyển Pending)"
     } 
     // 2. Cú pháp @Pending: -> chuyển sang Pending
-    else if (/^@(po_)?pending:/i.test(rawText)) {
+    else if (/(?:^|\s)@(po_)?pending:/i.test(rawText)) {
       newStatus = "Pending"
       sentToPoAt = request.sent_to_po_at || new Date().toISOString()
       toastMessage = "Đã chuyển trạng thái sang Pending!"
@@ -926,12 +957,27 @@ export default function RequestDetail({
 
   const activePriorityObj = PRIORITY_OPTIONS.find((p) => p.value === currentPriority) || PRIORITY_OPTIONS[1]
 
-  // Calculate current phase index for the 6-step progress bar
+  // Dynamic UX Phases from Admin Settings
+  const adminPhases = useMemo(() => getAdminPhases(), [request])
+
+  // Calculate current phase index for the dynamic progression bar
   const currentPhaseIndex = useMemo(() => {
     if (!request) return 0
-    const idx = UX_PHASES_MB.findIndex((p) => p.key === request.current_phase || request.current_phase.includes(p.key))
-    return idx >= 0 ? idx : 0
-  }, [request])
+    const curPhase = (request.current_phase || "").trim().toLowerCase()
+    const curStatus = (request.status || "").trim().toLowerCase()
+
+    const idx = adminPhases.findIndex(
+      (p) =>
+        p.key.toLowerCase() === curPhase ||
+        curPhase.includes(p.key.toLowerCase()) ||
+        p.key.toLowerCase().includes(curPhase)
+    )
+    if (idx >= 0) return idx
+
+    if (curStatus.includes("hoàn thành") || curStatus.includes("bàn giao")) return adminPhases.length - 1
+    if (curStatus.includes("phân loại") || curStatus.includes("tiếp nhận")) return 0
+    return 0
+  }, [request, adminPhases])
 
   return (
     <AnimatePresence>
@@ -990,19 +1036,6 @@ export default function RequestDetail({
 
                 {/* Right: Action & Window Controls */}
                 <div className="flex items-center gap-2">
-                  {/* Action "Đã gửi PO" (dành cho Designer / Admin khi cần gửi bàn giao/phản hồi cho PO) */}
-                  {request.status !== "Hoàn thành" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSendToPo()}
-                      className="h-8 text-xs font-bold rounded-xl bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 cursor-pointer gap-1.5 shadow-2xs shrink-0"
-                      title="Gửi bài toán cho PO xem xét (Bắt đầu đếm SLA phản hồi 24h)"
-                    >
-                      <Send className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Đã gửi PO</span>
-                    </Button>
-                  )}
 
                   {/* Nút hành động nhanh dành cho PO khi bài toán ở trạng thái Chờ phản hồi */}
                   {(request.status === "Đã gửi PO" || request.status === "PO pending") && (session?.role === "PO" || isAuthor) && (
@@ -1055,15 +1088,15 @@ export default function RequestDetail({
                 </div>
               </div>
 
-              {/* 2. ReUI Checkout-1 Style 6-Step UX Progression Stepper Bar */}
+              {/* 2. ReUI Checkout-1 Style Dynamic UX Progression Stepper Bar */}
               <div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
                 <div className="flex items-center justify-between min-w-[620px] lg:min-w-full">
-                  {UX_PHASES_MB.map((step, idx) => {
+                  {adminPhases.map((step, idx) => {
                     const isPassed = idx < currentPhaseIndex
                     const isCurrent = idx === currentPhaseIndex
-                    const isLast = idx === UX_PHASES_MB.length - 1
+                    const isLast = idx === adminPhases.length - 1
                     const stepNum = idx + 1
-                    const stepTitle = step.label.split(". ")[1]
+                    const stepTitle = step.label.includes(". ") ? step.label.split(". ")[1] : step.label
 
                     return (
                       <React.Fragment key={step.key}>
@@ -1272,8 +1305,9 @@ export default function RequestDetail({
                       </div>
                       <div className="flex-1 relative">
                         {(() => {
-                          const cfg = getStatusConfig(request.status)
-                          const isActive = request.status === "Đang thực hiện"
+                          const displayPhase = request.current_phase || request.status
+                          const cfg = getStatusConfig(displayPhase)
+                          const isActive = request.status === "Đang thực hiện" || Boolean(request.current_phase)
                           return (
                             <button
                               type="button"
@@ -1281,44 +1315,48 @@ export default function RequestDetail({
                               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0 ${isActive ? "animate-pulse" : ""}`} />
-                              <span>{request.status}</span>
+                              <span>{displayPhase}</span>
                             </button>
                           )
                         })()}
 
-                        {/* Status Dropdown Popover */}
+                        {/* Status Dropdown Popover - Dùng duy nhất bộ Khâu quy trình từ Admin Settings */}
                         <AnimatePresence>
                           {openDropdown === "status" && (
                             <motion.div
                               initial={{ opacity: 0, y: 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 mt-1.5 z-50 w-56 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
+                              className="absolute top-full left-0 mt-1.5 z-50 w-64 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
                             >
-                              <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                Chọn Trạng thái bài toán
+                              <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between border-b border-slate-100 mb-1">
+                                <span>Khâu quy trình (Admin)</span>
+                                <span className="text-[9px] font-semibold text-slate-400">Đồng bộ SLA</span>
                               </div>
-                              {[
-                                "Đang thực hiện",
-                                "Đã gửi PO",
-                                "Pending",
-                                "Chờ tiếp nhận",
-                                "Hoàn thành",
-                                "Bị chặn",
-                              ].map((st) => {
-                                const stCfg = getStatusConfig(st)
+                              {adminPhases.map((phase, pIdx) => {
+                                const isCurrent = request.current_phase === phase.key || (request.status === phase.key) || (!request.current_phase && pIdx === 0 && (request.status === "Đang phân loại" || request.status === "Phân loại"))
+                                const phaseCfg = getStatusConfig(phase.key)
                                 return (
                                   <button
-                                    key={st}
+                                    key={`drop-phase-${phase.key}`}
                                     type="button"
-                                    onClick={() => handleUpdateStatus(st)}
-                                    className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 cursor-pointer text-xs transition-colors"
+                                    onClick={() => handleUpdatePhase(phase.key, phase.progress)}
+                                    className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-50/60 cursor-pointer text-xs transition-colors group ${
+                                      isCurrent ? "bg-blue-50/80 font-bold text-[#1057FB]" : "text-slate-700 font-medium"
+                                    }`}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className={`w-2 h-2 rounded-full ${stCfg.inlineClasses.dot}`} />
-                                      <span className="font-semibold text-slate-800">{st}</span>
+                                      <span className={`w-2 h-2 rounded-full ${phaseCfg.inlineClasses?.dot || "bg-blue-500"}`} />
+                                      <span className={isCurrent ? "font-bold text-[#1057FB]" : "text-slate-800"}>
+                                        {phase.label}
+                                      </span>
                                     </div>
-                                    {request.status === st && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-mono text-slate-400 font-semibold group-hover:text-[#1057FB]">
+                                        {phase.progress}%
+                                      </span>
+                                      {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                                    </div>
                                   </button>
                                 )
                               })}

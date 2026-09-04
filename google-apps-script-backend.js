@@ -175,10 +175,12 @@ function doGet(e) {
     }
 
     if (action === "get_team_members" || action === "get_users") {
-      const users = getAllUsersFromSheet();
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const users = (typeof getOrInitTeamMembers === "function") ? getOrInitTeamMembers(ss) : [];
       return createJsonResponse({
         status: "success",
         users: users,
+        members: users,
         timestamp: new Date().toISOString()
       });
     }

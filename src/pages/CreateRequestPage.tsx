@@ -12,6 +12,7 @@ interface CreateRequestPageProps {
 
 export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   const [squads, setSquads] = useState<Squad[]>([])
+  const [isSuccess, setIsSuccess] = useState(false)
   const session = getStoredSession()
   const isPo = session?.role === "PO"
 
@@ -20,8 +21,14 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   }, [])
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
-      {isPo && (
+    <main
+      className={
+        isSuccess
+          ? "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-2 min-h-[calc(100vh-1rem)] flex flex-col justify-center animate-in fade-in-50 duration-200"
+          : "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16"
+      }
+    >
+      {isPo && !isSuccess && (
         <div>
           <Button
             variant="ghost"
@@ -37,7 +44,7 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
           </Button>
         </div>
       )}
-      <RequestForm squads={squads} />
+      <RequestForm squads={squads} onSuccessChange={setIsSuccess} />
     </main>
   )
 }

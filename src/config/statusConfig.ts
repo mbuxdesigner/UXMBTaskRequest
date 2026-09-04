@@ -276,7 +276,14 @@ export const DEFAULT_STATUS_CONFIG: StatusBadgeConfig = {
 
 /** Get status config with fallback */
 export function getStatusConfig(status: string): StatusBadgeConfig {
-  return STATUS_CONFIG[status] ?? DEFAULT_STATUS_CONFIG
+  if (!status) return DEFAULT_STATUS_CONFIG
+  const trimmed = status.trim()
+  if (STATUS_CONFIG[trimmed]) return STATUS_CONFIG[trimmed]
+  const lower = trimmed.toLowerCase()
+  for (const [key, val] of Object.entries(STATUS_CONFIG)) {
+    if (key.toLowerCase() === lower) return val
+  }
+  return DEFAULT_STATUS_CONFIG
 }
 
 // ─── Squad Capacity Status ───────────────────────────────────

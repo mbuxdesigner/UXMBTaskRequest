@@ -9,7 +9,7 @@ export interface DropdownOption {
 }
 
 interface DropdownMenuProps {
-  label?: string
+  label?: React.ReactNode
   options: DropdownOption[]
   value: string
   onChange: (value: string) => void
@@ -67,9 +67,16 @@ export function DropdownMenu({
           <div className="flex items-center gap-3 min-w-0">
             {icon && <span className="text-slate-400 flex-shrink-0">{icon}</span>}
             <div className="min-w-0">
-              <p className="text-xs text-slate-500 font-medium leading-none mb-1 truncate">
-                {label}
-              </p>
+              <div className="text-xs text-slate-500 font-medium leading-none mb-1 truncate">
+                {typeof label === "string" && label.includes("*") ? (
+                  <>
+                    <span>{label.replace("*", "").trim()} </span>
+                    <span className="text-rose-500 font-bold">*</span>
+                  </>
+                ) : (
+                  label
+                )}
+              </div>
               <p className="text-sm sm:text-base font-semibold text-slate-900 leading-tight truncate">
                 {selectedOption && selectedOption.value ? selectedOption.label : placeholder}
               </p>

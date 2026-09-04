@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/toast"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import PageHeader from "@/components/common/PageHeader"
 import { TestExam, TestSubmission } from "@/types/testAssessment"
 import {
   getStoredTests,
@@ -158,12 +159,14 @@ export default function TestManagementView({
     <div className="space-y-6">
       
       {/* 1. TOP HEADER MATCHING 'TASK CỦA TÔI' EXACTLY */}
-      <div className="border-b border-slate-200/80 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            {isAdmin ? "Bài test & Đánh giá năng lực" : "Bài test của tôi"}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium flex flex-wrap items-center gap-1.5">
+      <PageHeader
+        breadcrumb={{
+          parent: "MBBank UX Platform",
+          current: "Bài test",
+        }}
+        title={isAdmin ? "Bài test & Đánh giá năng lực" : "Bài test của tôi"}
+        subtitle={
+          <div className="flex flex-wrap items-center gap-1.5">
             <span>
               <NumberTicker value={totalItems} className="font-bold text-slate-800" /> bài làm hiển thị
             </span>
@@ -175,11 +178,10 @@ export default function TestManagementView({
             <span className="text-emerald-600 font-semibold">
               <NumberTicker value={completedCount} className="font-bold text-emerald-600" /> hoàn thành
             </span>
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 shrink-0">
-          {isAdmin && (
+          </div>
+        }
+        actions={
+          isAdmin ? (
             <>
               {/* Tải file mẫu Excel Button */}
               <Button
@@ -203,9 +205,9 @@ export default function TestManagementView({
                 <span>Upload Excel tạo đề mới</span>
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* 2. PHẦN TRÊN: BÀI TEST CẦN THỰC HIỆN */}
       <section className="space-y-3">

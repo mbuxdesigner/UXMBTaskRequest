@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useMemo } from "react"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
@@ -43,120 +43,112 @@ export interface KanbanColumnDef {
   icon: React.ReactNode
 }
 
-export const KANBAN_PROCESS_COLUMNS: KanbanColumnDef[] = [
-  {
-    id: "submitted",
-    step: 1,
-    phase: "Chờ tiếp nhận",
-    title: "Chờ tiếp nhận",
-    status: "Chờ tiếp nhận",
-    defaultProgress: 10,
-    dotColor: "bg-slate-400",
-    bgClass: "bg-slate-100/70",
-    borderClass: "border-slate-200/90",
-    icon: <Send className="w-3.5 h-3.5 text-slate-500" />
-  },
-  {
-    id: "classify",
-    step: 2,
-    phase: "Phân loại",
-    title: "Phân loại",
-    status: "Đang phân loại",
-    defaultProgress: 20,
-    dotColor: "bg-amber-500",
-    bgClass: "bg-[#FFF9EE]",
-    borderClass: "border-amber-200/90",
-    icon: <Filter className="w-3.5 h-3.5 text-amber-600" />
-  },
-  {
-    id: "discovery",
-    step: 3,
-    phase: "Discovery",
-    title: "Discovery",
-    status: "Đang thực hiện",
-    defaultProgress: 35,
-    dotColor: "bg-purple-500",
-    bgClass: "bg-[#FAF5FF]",
-    borderClass: "border-purple-200/90",
-    icon: <Compass className="w-3.5 h-3.5 text-purple-600" />
-  },
-  {
-    id: "user_flow",
-    step: 4,
-    phase: "User Flow",
-    title: "User Flow",
-    status: "Đang thực hiện",
-    defaultProgress: 55,
-    dotColor: "bg-indigo-500",
-    bgClass: "bg-[#F5F7FF]",
-    borderClass: "border-indigo-200/90",
-    icon: <GitFork className="w-3.5 h-3.5 text-indigo-600" />
-  },
-  {
-    id: "ui_design",
-    step: 5,
-    phase: "UI Design",
-    title: "UI Design",
-    status: "Đang thực hiện",
-    defaultProgress: 75,
-    dotColor: "bg-[#1057FB]",
-    bgClass: "bg-[#F0F6FF]",
-    borderClass: "border-blue-200/90",
-    icon: <Palette className="w-3.5 h-3.5 text-[#1057FB]" />
-  },
-  {
-    id: "prototype",
-    step: 6,
-    phase: "Prototype",
-    title: "Prototype",
-    status: "Đang thực hiện",
-    defaultProgress: 90,
-    dotColor: "bg-teal-500",
-    bgClass: "bg-[#F0FDFB]",
-    borderClass: "border-teal-200/90",
-    icon: <PlaySquare className="w-3.5 h-3.5 text-teal-600" />
-  },
-  {
-    id: "handoff",
-    step: 7,
-    phase: "Bàn giao",
-    title: "Bàn giao",
-    status: "Hoàn thành",
-    defaultProgress: 100,
-    dotColor: "bg-emerald-500",
-    bgClass: "bg-[#F2FBF6]",
-    borderClass: "border-emerald-200/90",
-    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-  }
-]
+export function getKanbanColumns(): KanbanColumnDef[] {
+  try {
+    const saved = localStorage.getItem("mbbank_admin_phases")
+    if (saved) {
+      const parsed: any[] = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((p, idx) => {
+          const name = p.name || `Khâu ${idx + 1}`
+          const progress = p.defaultProgress || 15
+          let status = "Đang thực hiện"
+          let dotColor = "bg-[#1057FB]"
+          let bgClass = "bg-[#F0F6FF]"
+          let borderClass = "border-blue-200/90"
+          let icon = <Palette className="w-3.5 h-3.5 text-[#1057FB]" />
+
+          const lower = name.toLowerCase()
+          if (lower.includes("phân loại") || lower.includes("tiếp nhận") || idx === 0) {
+            status = "Đang phân loại"
+            dotColor = "bg-amber-500"
+            bgClass = "bg-[#FFF9EE]"
+            borderClass = "border-amber-200/90"
+            icon = <Filter className="w-3.5 h-3.5 text-amber-600" />
+          } else if (lower.includes("discovery") || lower.includes("khám phá") || lower.includes("nghiên cứu")) {
+            dotColor = "bg-purple-500"
+            bgClass = "bg-[#FAF5FF]"
+            borderClass = "border-purple-200/90"
+            icon = <Compass className="w-3.5 h-3.5 text-purple-600" />
+          } else if (lower.includes("flow") || lower.includes("luồng") || lower.includes("wireframe")) {
+            dotColor = "bg-indigo-500"
+            bgClass = "bg-[#F5F7FF]"
+            borderClass = "border-indigo-200/90"
+            icon = <GitFork className="w-3.5 h-3.5 text-indigo-600" />
+          } else if (lower.includes("ui") || lower.includes("giao diện") || lower.includes("design")) {
+            dotColor = "bg-[#1057FB]"
+            bgClass = "bg-[#F0F6FF]"
+            borderClass = "border-blue-200/90"
+            icon = <Palette className="w-3.5 h-3.5 text-[#1057FB]" />
+          } else if (lower.includes("prototype") || lower.includes("tương tác") || lower.includes("test")) {
+            dotColor = "bg-teal-500"
+            bgClass = "bg-[#F0FDFB]"
+            borderClass = "border-teal-200/90"
+            icon = <PlaySquare className="w-3.5 h-3.5 text-teal-600" />
+          } else if (lower.includes("bàn giao") || lower.includes("nghiệm thu") || progress >= 100 || idx === parsed.length - 1) {
+            status = "Hoàn thành"
+            dotColor = "bg-emerald-500"
+            bgClass = "bg-[#F2FBF6]"
+            borderClass = "border-emerald-200/90"
+            icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          }
+
+          return {
+            id: p.id || `phase-${idx}`,
+            step: idx + 1,
+            phase: name,
+            title: name,
+            status,
+            defaultProgress: progress,
+            dotColor,
+            bgClass,
+            borderClass,
+            icon,
+          }
+        })
+      }
+    }
+  } catch {}
+
+  // Default 6 columns matching Admin Settings exactly
+  return [
+    { id: "classify", step: 1, phase: "Phân loại", title: "Phân loại", status: "Đang phân loại", defaultProgress: 15, dotColor: "bg-amber-500", bgClass: "bg-[#FFF9EE]", borderClass: "border-amber-200/90", icon: <Filter className="w-3.5 h-3.5 text-amber-600" /> },
+    { id: "discovery", step: 2, phase: "Discovery", title: "Discovery", status: "Đang thực hiện", defaultProgress: 35, dotColor: "bg-purple-500", bgClass: "bg-[#FAF5FF]", borderClass: "border-purple-200/90", icon: <Compass className="w-3.5 h-3.5 text-purple-600" /> },
+    { id: "user_flow", step: 3, phase: "User Flow", title: "User Flow", status: "Đang thực hiện", defaultProgress: 55, dotColor: "bg-indigo-500", bgClass: "bg-[#F5F7FF]", borderClass: "border-indigo-200/90", icon: <GitFork className="w-3.5 h-3.5 text-indigo-600" /> },
+    { id: "ui_design", step: 4, phase: "UI Design", title: "UI Design", status: "Đang thực hiện", defaultProgress: 75, dotColor: "bg-[#1057FB]", bgClass: "bg-[#F0F6FF]", borderClass: "border-blue-200/90", icon: <Palette className="w-3.5 h-3.5 text-[#1057FB]" /> },
+    { id: "prototype", step: 5, phase: "Prototype", title: "Prototype", status: "Đang thực hiện", defaultProgress: 90, dotColor: "bg-teal-500", bgClass: "bg-[#F0FDFB]", borderClass: "border-teal-200/90", icon: <PlaySquare className="w-3.5 h-3.5 text-teal-600" /> },
+    { id: "handoff", step: 6, phase: "Bàn giao", title: "Bàn giao", status: "Hoàn thành", defaultProgress: 100, dotColor: "bg-emerald-500", bgClass: "bg-[#F2FBF6]", borderClass: "border-emerald-200/90", icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> },
+  ]
+}
+
+export const KANBAN_PROCESS_COLUMNS: KanbanColumnDef[] = getKanbanColumns()
 
 // Determine which column a request belongs to based on current_phase & status
 export function getRequestKanbanPhase(req: UXRequest): string {
+  const columns = getKanbanColumns()
   if (req.current_phase) {
     const p = req.current_phase.trim().toLowerCase()
-    if (p.includes("bàn giao") || p.includes("nghiệm thu") || p.includes("hoàn thành")) return "Bàn giao"
-    if (p.includes("prototype") || p.includes("kiểm thử") || p.includes("test")) return "Prototype"
-    if (p.includes("ui design") || p.includes("hi-fi") || p.includes("giao diện")) return "UI Design"
-    if (p.includes("user flow") || p.includes("wireframe") || p.includes("luồng")) return "User Flow"
-    if (p.includes("discovery") || p.includes("khám phá") || p.includes("nghiên cứu")) return "Discovery"
-    if (p.includes("phân loại")) return "Phân loại"
-    if (p.includes("chờ tiếp nhận") || p.includes("đã gửi") || p.includes("mới tạo") || p.includes("tiếp nhận")) return "Chờ tiếp nhận"
+    const matched = columns.find(
+      (c) => c.phase.toLowerCase() === p || p.includes(c.phase.toLowerCase()) || c.phase.toLowerCase().includes(p)
+    )
+    if (matched) return matched.phase
   }
 
   // Fallbacks based on status
-  if (req.status === "Hoàn thành") return "Bàn giao"
-  if (req.status === "Đang phân loại") return "Phân loại"
-  if (req.status === "Chờ tiếp nhận" || req.status === "Đã gửi" || req.status === "Đã gửi yêu cầu" || req.status === "Mới tạo") return "Chờ tiếp nhận"
+  if (req.status === "Hoàn thành") return columns[columns.length - 1]?.phase || "Bàn giao"
+  if (req.status === "Đang phân loại" || req.status === "Chờ tiếp nhận" || req.status === "Đã gửi" || req.status === "Mới tạo") {
+    return columns[0]?.phase || "Phân loại"
+  }
 
   // Fallbacks based on progress percentage
-  if (req.progress >= 100) return "Bàn giao"
-  if (req.progress >= 85) return "Prototype"
-  if (req.progress >= 65) return "UI Design"
-  if (req.progress >= 45) return "User Flow"
-  if (req.progress >= 25) return "Discovery"
-  if (req.progress >= 15) return "Phân loại"
+  if (req.progress >= 100) return columns[columns.length - 1]?.phase || "Bàn giao"
+  for (let i = columns.length - 1; i >= 0; i--) {
+    if (req.progress >= columns[i].defaultProgress - 5) {
+      return columns[i].phase
+    }
+  }
 
-  return "Chờ tiếp nhận"
+  return columns[0]?.phase || "Phân loại"
 }
 
 // Product / Category Pill style (Forms, Access, Auth, API, Mobile, Export style)
@@ -324,6 +316,7 @@ export default function KanbanBoard({
   onUpdatePhase,
   loading = false,
 }: KanbanBoardProps) {
+  const kanbanColumns = useMemo(() => getKanbanColumns(), [])
   const [draggedRequestId, setDraggedRequestId] = useState<string | null>(null)
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -374,47 +367,15 @@ export default function KanbanBoard({
     setDraggedRequestId(null)
   }
 
-  const handleScroll = (direction: "left" | "right") => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = 320 * 2
-      scrollContainerRef.current.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth"
-      })
-    }
-  }
-
   return (
-    <div className="relative group/kanban">
-      {/* Scroll Navigation Buttons */}
-      <div className="flex items-center justify-end mb-2.5 px-1">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => handleScroll("left")}
-            className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-            title="Cuộn sang trái"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleScroll("right")}
-            className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-            title="Cuộn sang phải"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
+    <div className="relative group/kanban w-full">
       {/* Kanban Horizontal Container */}
       <div
         ref={scrollContainerRef}
-        className="flex gap-4 overflow-x-auto pb-4 pt-1 px-1 items-start scroll-smooth select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+        className="flex gap-4 overflow-x-auto pb-5 pt-1 px-1 sm:px-2 items-start scroll-smooth select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
         style={{ scrollbarGutter: "stable" }}
       >
-        {KANBAN_PROCESS_COLUMNS.map((column) => {
+        {kanbanColumns.map((column) => {
           const columnRequests = requests.filter(
             (r) => getRequestKanbanPhase(r) === column.phase
           )
@@ -427,7 +388,7 @@ export default function KanbanBoard({
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, column)}
-              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[620px] ${
+              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[580px] xl:min-h-[calc(100vh-17.5rem)] 2xl:min-h-[calc(100vh-16.5rem)] ${
                 column.bgClass
               } ${column.borderClass} ${
                 isOver
@@ -449,7 +410,7 @@ export default function KanbanBoard({
               </div>
 
               {/* Column Body / Cards */}
-              <div className="flex-1 space-y-2.5">
+              <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[calc(100vh-23rem)] pr-0.5 scrollbar-thin">
                 {loading ? (
                   <div className="space-y-2.5">
                     {[1, 2].map((k) => (
@@ -471,7 +432,7 @@ export default function KanbanBoard({
                     ))}
                   </div>
                 ) : columnRequests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-44 rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
+                  <div className="flex flex-col items-center justify-center flex-1 min-h-[220px] rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
                     <p className="text-xs font-medium text-slate-400">No cards</p>
                   </div>
                 ) : (
@@ -528,21 +489,21 @@ export default function KanbanBoard({
                           {req.title}
                         </h4>
 
-                        {/* Bottom Row: Assignee Avatar + Name | Date Pill | Circular Progress */}
+                        {/* Bottom Row: Assignee Avatar | Date Pill | Circular Progress */}
                         <div className="flex items-center justify-between gap-1.5 pt-0.5 text-xs">
-                          {/* Assignee */}
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          {/* Assignee Avatar (ko cần tên designer) */}
+                          <div className="flex items-center shrink-0">
                             {isAssigned ? (
-                              <>
+                              <div title={`Designer: ${displayName}`}>
                                 <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
-                                <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">
-                                  {displayName}
-                                </span>
-                              </>
+                              </div>
                             ) : (
-                              <span className="text-[11px] text-slate-400 font-medium italic truncate">
-                                Chưa phân công
-                              </span>
+                              <div
+                                className="w-5 h-5 rounded-full border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-[10px] text-slate-400 font-bold select-none"
+                                title="Chưa phân công designer"
+                              >
+                                ?
+                              </div>
                             )}
                           </div>
 
@@ -575,6 +536,9 @@ export default function KanbanBoard({
             </div>
           )
         })}
+
+        {/* Trailing spacer ensures column 6 is never cut off on horizontal scroll */}
+        <div className="w-6 sm:w-10 shrink-0 h-10 pointer-events-none" aria-hidden="true" />
       </div>
     </div>
   )

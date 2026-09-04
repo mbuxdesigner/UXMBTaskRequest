@@ -17,6 +17,7 @@ import {
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { DatePicker } from "@/components/reui/date-picker"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import PageHeader from "@/components/common/PageHeader"
 import FileUpload from "./FileUpload"
 import RequestReviewSheet from "./RequestReviewSheet"
 import SuccessCelebrationCard from "./SuccessCelebrationCard"
@@ -62,6 +63,7 @@ import {
 
 interface RequestFormProps {
   squads: Squad[]
+  onSuccessChange?: (isSuccess: boolean) => void
 }
 
 interface FormState {
@@ -81,7 +83,7 @@ interface FormState {
   expected_output: string[]
 }
 
-export default function RequestForm({ squads }: RequestFormProps) {
+export default function RequestForm({ squads, onSuccessChange }: RequestFormProps) {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [attachMode, setAttachMode] = useState<"link" | "file">("link")
   const [files, setFiles] = useState<File[]>([])
@@ -222,9 +224,11 @@ export default function RequestForm({ squads }: RequestFormProps) {
       setRequestId(res.requestId)
       setSheetLogResult(res.googleSheetResult)
       setViewMode("success")
+      onSuccessChange?.(true)
       window.scrollTo({ top: 0, behavior: "smooth" })
     } catch {
       setViewMode("edit")
+      onSuccessChange?.(false)
     } finally {
       setSubmitLoading(false)
     }
@@ -334,6 +338,7 @@ export default function RequestForm({ squads }: RequestFormProps) {
           })
           setFiles([])
           setViewMode("edit")
+          onSuccessChange?.(false)
           setErrors({})
         }}
         onGoToTrack={() => {
@@ -360,12 +365,15 @@ export default function RequestForm({ squads }: RequestFormProps) {
         {/* LEFT COLUMN: Main Form Content (8 Cols) */}
         <div className="lg:col-span-8 space-y-8">
           
-          {/* Main Title */}
-          <div className="border-b border-slate-200/80 pb-5">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Gửi yêu cầu UX
-            </h1>
-          </div>
+          {/* Main Title Đồng Bộ */}
+          <PageHeader
+            breadcrumb={{
+              parent: "MBBank UX Platform",
+              current: "Tạo task mới",
+            }}
+            title="Gửi yêu cầu thiết kế UX"
+            subtitle="Điền đầy đủ thông tin đề bài để UX Squad tiếp nhận và xử lý nhanh chóng nhất"
+          />
 
           {/* 01 · THÔNG TIN YÊU CẦU */}
           <div className="space-y-4">

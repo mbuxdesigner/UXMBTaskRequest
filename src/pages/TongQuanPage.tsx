@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import PageHeader from "@/components/common/PageHeader"
 import { 
   Sparkles, 
   RefreshCw, 
@@ -214,37 +215,31 @@ export default function TongQuanPage() {
       {/* =========================================================================
           REUI HEADER BREADCRUMB & COMMAND BAR
           ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200/80">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 mb-1">
-            <span>MBBank UX Platform</span>
-            <span>/</span>
-            <span className="text-zinc-900 font-bold">Executive Dashboard</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">
-              Bảng Điều Hành & Lộ Trình UX
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
+      <PageHeader
+        breadcrumb={{
+          parent: "MBBank UX Platform",
+          current: "Executive Dashboard",
+        }}
+        title="Bảng Điều Hành & Lộ Trình UX"
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live Sync
+          </span>
+        }
+        actions={
           <Button
             variant="outline"
             size="sm"
             onClick={() => loadData(true)}
             loading={refreshing}
-            className="h-9 px-3.5 text-xs font-bold rounded-xl bg-white border-zinc-200 text-zinc-700 shadow-2xs hover:bg-zinc-50 cursor-pointer gap-1.5"
+            className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-zinc-200 text-zinc-700 shadow-2xs hover:bg-zinc-50 cursor-pointer gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
             <span>Đồng bộ dữ liệu</span>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <Alert variant="destructive" onDismiss={() => setError(null)}>

@@ -7,6 +7,7 @@ import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
 import TaskFilterPopover from "@/components/reui/task-filter-popover"
+import SolutionAgentsTable from "@/components/track/SolutionAgentsTable"
 import { AnimatedTableRow, tableContainerVariants } from "@/components/jolyui/animated-table"
 import {
   getStoredSession,
@@ -23,6 +24,7 @@ import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { EmptyState } from "@/components/reui/empty-state"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import PageHeader from "@/components/common/PageHeader"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
 import {
@@ -143,9 +145,14 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [allRequests, setAllRequests] = useState<UXRequest[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Pagination state
+  // Pagination state: Trên màn hình lớn (chiều cao >= 850px), mặc định hiển thị 15 dòng
   const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    if (typeof window !== "undefined" && window.innerHeight >= 850) {
+      return 15
+    }
+    return 10
+  })
 
   // Session state
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
@@ -476,12 +483,14 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   return (
     <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
       {/* Top Header matching Create Task clean style */}
-      <div className="border-b border-slate-200/80 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            {session?.role === "PO" ? "Task của tôi" : "Task của tôi"}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium flex flex-wrap items-center gap-1.5">
+      <PageHeader
+        breadcrumb={{
+          parent: "MBBank UX Platform",
+          current: "Track Task",
+        }}
+        title={session?.role === "PO" ? "Task của tôi" : "Task của tôi"}
+        subtitle={
+          <div className="flex flex-wrap items-center gap-1.5">
             <span>
               <NumberTicker value={totalItems} className="font-bold text-slate-800" /> bài toán hiển thị
             </span>
@@ -501,42 +510,43 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             <span className="text-emerald-600 font-semibold">
               <NumberTicker value={completedCount} className="font-bold text-emerald-600" /> hoàn thành
             </span>
-          </p>
-        </div>
+          </div>
+        }
+        actions={
+          <>
+            {/* New Request Button */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (onNavigateToCreate) {
+                  onNavigateToCreate()
+                } else {
+                  window.location.hash = "#create"
+                }
+              }}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1.5 rounded-xl h-10 px-4 shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo task mới</span>
+            </Button>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          {/* New Request Button */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              if (onNavigateToCreate) {
-                onNavigateToCreate()
-              } else {
-                window.location.hash = "#create"
-              }
-            }}
-            className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1.5 rounded-xl h-10 px-4 shadow-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tạo task mới</span>
-          </Button>
-
-          {/* Refresh Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => loadData(true)}
-            className="h-10 text-xs gap-1.5 bg-white border-slate-200 rounded-xl text-slate-600 font-semibold cursor-pointer shrink-0"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Làm mới</span>
-          </Button>
-        </div>
-      </div>
+            {/* Refresh Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadData(true)}
+              className="h-10 text-xs gap-1.5 bg-white border-slate-200 rounded-xl text-slate-600 font-semibold cursor-pointer shrink-0 shadow-2xs hover:bg-slate-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              <span>Làm mới</span>
+            </Button>
+          </>
+        }
+      />
 
       {/* Unified Container Card */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs overflow-hidden min-h-[calc(100vh-13rem)] flex flex-col justify-between">
         {/* Unified Filter & Toolbar Bar */}
         <div className="p-4 sm:px-6 bg-slate-50/50 border-b border-slate-100">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
@@ -554,8 +564,21 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
             {/* Right: View Mode Switcher + Filter Popover */}
             <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-              {/* View Mode Switcher: Kanban | Lưới | Bảng */}
+              {/* View Mode Switcher: Bảng | Kanban | Lưới */}
               <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
+                    viewMode === "table"
+                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
+                      : "text-slate-500 hover:text-slate-900 font-medium"
+                  }`}
+                  title="Dạng bảng chi tiết"
+                >
+                  <ListFilter className="w-3.5 h-3.5" />
+                  <span>Bảng</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("kanban")}
@@ -582,19 +605,6 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   <LayoutGrid className="w-3.5 h-3.5" />
                   <span>Lưới</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("table")}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "table"
-                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-500 hover:text-slate-900 font-medium"
-                  }`}
-                  title="Dạng bảng chi tiết"
-                >
-                  <ListFilter className="w-3.5 h-3.5" />
-                  <span>Bảng</span>
-                </button>
               </div>
 
               {/* ReUI Task Filter Popover */}
@@ -619,7 +629,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="p-4 sm:p-6"
+              className="p-4 sm:p-6 flex-1 flex flex-col"
             >
               <KanbanBoard
                 requests={filteredRequests}
@@ -635,11 +645,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="p-4 sm:p-6"
+              className="p-4 sm:p-6 flex-1"
             >
               {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[...Array(4)].map((_, i) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, i) => (
                     <div key={`grid-skel-${i}`} className="p-5 rounded-2xl border border-slate-200 bg-white animate-pulse space-y-4">
                       <div className="flex justify-between items-center">
                         <div className="h-5 bg-slate-100 rounded-md w-24" />
@@ -658,7 +668,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   ))}
                 </div>
               ) : filteredRequests.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                   {filteredRequests.map((r, idx) => (
                     <RequestCard key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`} request={r} onClick={setSelectedRequest} />
                   ))}
@@ -693,262 +703,21 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               )}
             </motion.div>
           ) : (
-            /* Table View with JolyUI Animated Rows */
+            /* ReUI Solution Agents 2 Table View */
             <motion.div
               key="table"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="p-4 sm:p-6"
+              className="p-0 flex-1 flex flex-col"
             >
-              <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-2xs">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm min-w-full">
-                    <thead className="bg-slate-50/90 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3 px-3 sm:px-4 w-[28%]">
-                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                            <span>Tên yêu cầu</span>
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                          </div>
-                        </th>
-                        <th className="py-3 px-2 sm:px-3 w-[15%]">
-                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                            <span>Độ ưu tiên</span>
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                          </div>
-                        </th>
-                        <th className="py-3 px-2.5 sm:px-4 w-[18%]">
-                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                            <span>Người thực hiện</span>
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                          </div>
-                        </th>
-                        <th className="py-3 px-2.5 sm:px-4 w-[15%]">
-                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                            <span>Trạng thái</span>
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                          </div>
-                        </th>
-                        <th className="py-3 px-3 sm:px-6 w-[24%]">
-                          <div className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700 select-none">
-                            <span>Tiến độ</span>
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />
-                          </div>
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-slate-100">
-                      {loading ? (
-                        [...Array(6)].map((_, i) => (
-                          <tr key={`table-skel-${i}`} className={`animate-pulse ${i % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}`}>
-                            <td className="py-4 px-4 sm:px-6">
-                              <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
-                              <div className="h-3 bg-slate-100 rounded w-1/3" />
-                            </td>
-                            <td className="py-4 px-3">
-                              <div className="h-5 bg-slate-100 rounded-md w-20" />
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
-                                <div className="h-3.5 bg-slate-100 rounded w-24" />
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="h-6 bg-slate-100 rounded-full w-24" />
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="h-3.5 bg-slate-100 rounded w-16 mb-1.5" />
-                              <div className="h-2 bg-slate-100 rounded-full w-full" />
-                            </td>
-                          </tr>
-                        ))
-                      ) : paginatedRequests.length > 0 ? (
-                        paginatedRequests.map((req, index) => {
-                          const rawDesigner = req.assigned_designer || (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công" ? req.ux_owner : "") || ""
-                          const isAssigned = Boolean(rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công")
-                          const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
-                          const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
-                          const avatarColorClass = getAvatarColorClass(displayName)
-                          const progressVal = req.progress || (req.status === "Hoàn thành" ? 100 : req.status === "Đang thực hiện" ? 55 : 15)
-                          const lastUpdatedStr = formatLastUpdated(req)
-
-                          return (
-                            <AnimatedTableRow
-                              key={req.request_id ? `${req.request_id}-${index}` : `tablerow-${index}`}
-                              index={index}
-                              onClick={() => setSelectedRequest(req)}
-                              className={index % 2 === 0 ? "bg-white" : "bg-[#F9FAFC]"}
-                            >
-                              <td className="py-3 px-3 sm:px-5">
-                                <div className="space-y-1">
-                                  <p className="text-sm font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug line-clamp-1 break-words [overflow-wrap:anywhere] break-all">
-                                    {req.title}
-                                  </p>
-                                  <div className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
-                                    <span className="font-mono text-slate-400 font-normal tracking-[-0.005em] truncate max-w-[85px] sm:max-w-[130px] shrink">
-                                      {req.request_id}
-                                    </span>
-                                    <span className="shrink-0">•</span>
-                                    <span className="truncate shrink-0">Cập nhật: {lastUpdatedStr}</span>
-                                  </div>
-                                </div>
-                              </td>
-
-                              <td className="py-3 px-2 sm:px-3">
-                                {renderPriorityBadge(req.priority)}
-                              </td>
-
-                              <td className="py-3 px-2.5 sm:px-4">
-                                {isAssigned ? (
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <UserAvatar name={displayName} avatarUrl={designerAvatar} size="md" />
-                                    <p className="text-xs font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px] min-w-0">
-                                      {displayName}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400 font-medium italic">
-                                    Chưa phân công
-                                  </span>
-                                )}
-                              </td>
-
-                              <td className="py-3 px-2.5 sm:px-4">
-                                {renderStatusBadge(req.status)}
-                              </td>
-
-                              <td className="py-3 px-3 sm:px-6">
-                                <div className="space-y-1">
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 text-xs">
-                                    <span className="text-[11px] font-medium text-slate-600 leading-tight break-words line-clamp-1">
-                                      {req.current_phase || "Ghi nhận"}
-                                    </span>
-                                    <span className="font-mono font-bold text-slate-800 text-[11px] shrink-0">
-                                      {progressVal}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full h-1.5 bg-slate-200/60 rounded-full overflow-hidden shrink-0 mt-0.5">
-                                    <div
-                                      className={`h-full rounded-full transition-all duration-300 ${getPhaseProgressColor(
-                                        req.current_phase,
-                                        req.status,
-                                        progressVal
-                                      )}`}
-                                      style={{ width: `${progressVal}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </td>
-                            </AnimatedTableRow>
-                          )
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="py-6 text-center bg-white">
-                            <EmptyState
-                              title="Không tìm thấy bài toán nào"
-                              description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
-                              secondaryAction={
-                                query || selectedPhases.length > 0 || selectedSquads.length > 0
-                                  ? {
-                                      label: "Đặt lại bộ lọc",
-                                      onClick: handleClearAllFilters,
-                                      icon: <RefreshCw className="w-4 h-4" />,
-                                    }
-                                  : undefined
-                              }
-                              primaryAction={
-                                session?.role === "PO"
-                                  ? {
-                                      label: "Tạo yêu cầu mới",
-                                      onClick: () => {
-                                        if (onNavigateToCreate) onNavigateToCreate()
-                                      },
-                                      icon: <Plus className="w-4 h-4" />,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-            {/* Pagination Footer */}
-            <div className="p-4 sm:px-6 bg-white border-t border-slate-100 flex items-center justify-between gap-4 text-xs text-slate-500">
-              <div className="flex items-center gap-2 shrink-0">
-                <span>Số dòng mỗi trang</span>
-                <select
-                  value={rowsPerPage}
-                  onChange={(e) => {
-                    setRowsPerPage(Number(e.target.value))
-                    setCurrentPage(1)
-                  }}
-                  className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none cursor-pointer focus:border-[#1057FB] shadow-2xs transition-colors"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs text-slate-500 font-medium">
-                  {totalItems === 0
-                    ? "0 – 0 trên 0"
-                    : `${startIndex + 1} – ${Math.min(startIndex + rowsPerPage, totalItems)} trên ${totalItems}`}
-                </span>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    title="Trang trước"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {[...Array(totalPages)].map((_, i) => {
-                    const pageNum = i + 1
-                    const isActive = pageNum === currentPage
-                    return (
-                      <button
-                        key={pageNum}
-                        type="button"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          isActive
-                            ? "bg-slate-900 text-white shadow-xs"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    )
-                  })}
-
-                  <button
-                    type="button"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    title="Trang sau"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <SolutionAgentsTable
+                requests={filteredRequests}
+                loading={loading}
+                onSelectRequest={setSelectedRequest}
+                onNavigateToCreate={onNavigateToCreate}
+              />
             </motion.div>
           )}
         </AnimatePresence>

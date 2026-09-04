@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   ArrowUp, 
@@ -7,7 +7,8 @@ import {
   Globe, 
   Clock, 
   X,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Sparkles
 } from "lucide-react"
 
 // Embedded CSS for minimal custom scrollbar styles as in JolyUI
@@ -51,6 +52,43 @@ const CustomDivider: React.FC = () => (
   </div>
 )
 
+export interface CommandSuggestion {
+  id: string
+  title: string
+  syntax: string
+  insertText: string
+  description: string
+  badgeClass: string
+  iconBg: string
+  icon: React.ReactNode
+  keywords: string[]
+}
+
+const DEFAULT_COMMAND_SUGGESTIONS: CommandSuggestion[] = [
+  {
+    id: "send_to_po",
+    title: "Sent to PO",
+    syntax: "@SendToPO:",
+    insertText: "@SendToPO: ",
+    description: "Chuyển sang Đã gửi PO & theo dõi phản hồi 24h",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    iconBg: "bg-purple-100/90 text-purple-600",
+    icon: <Send className="w-4 h-4" />,
+    keywords: ["send to po", "sent to po", "send", "sent", "po", "gửi po", "gui po", "bàn giao"],
+  },
+  {
+    id: "pending",
+    title: "Pending",
+    syntax: "@Pending:",
+    insertText: "@Pending: ",
+    description: "Tạm hoãn bài toán / Chờ phản hồi đối tác",
+    badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
+    iconBg: "bg-amber-100/90 text-amber-600",
+    icon: <Clock className="w-4 h-4" />,
+    keywords: ["pending", "po pending", "tạm dừng", "tam dung", "chờ", "cho", "delay", "hoãn"],
+  },
+]
+
 export interface AiPromptBoxProps {
   value: string
   onChange: (value: string) => void
@@ -84,6 +122,12 @@ export function AiPromptBox({
   useStyleInjection()
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Mention Suggestions State
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState("")
+  const [selectedIndex, setSelectedIndex] = useState(0)
   
   // Track active modes
   const isSendPoActive = value.toLowerCase().includes("@sentopo:") || value.toLowerCase().includes("@sendtopo:")
@@ -97,13 +141,114 @@ export function AiPromptBox({
     }
   }, [value])
 
+  // Filter suggestions based on query typed after @
+  const filteredSuggestions = useMemo(() => {
+    if (!mentionQuery) return DEFAULT_COMMAND_SUGGESTIONS
+    const q = mentionQuery.toLowerCase()
+    return DEFAULT_COMMAND_SUGGESTIONS.filter((item) =>
+      item.title.toLowerCase().includes(q) ||
+      item.syntax.toLowerCase().includes(q) ||
+      item.keywords.some((k) => k.includes(q))
+    )
+  }, [mentionQuery])
+
+  // Check if cursor is immediately after @mention query
+  const checkMentionTrigger = useCallback((text: string, cursorPos: number) => {
+    const textBeforeCursor = text.slice(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
+
+    if (lastAtIndex !== -1) {
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : " "
+      // @ must be at start or preceded by whitespace / newline
+      if (/\s/.test(charBeforeAt)) {
+        const query = textBeforeCursor.slice(lastAtIndex + 1)
+        if (!/\s/.test(query)) {
+          setMentionQuery(query)
+          setShowSuggestions(true)
+          setSelectedIndex(0)
+          return
+        }
+      }
+    }
+    setShowSuggestions(false)
+  }, [])
+
+  // Handle click outside to close suggestion dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // Selecting a suggestion
+  const handleSelectSuggestion = useCallback((item: CommandSuggestion) => {
+    const textarea = textareaRef.current
+    const cursorPos = textarea ? textarea.selectionStart : value.length
+    const textBeforeCursor = value.slice(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
+
+    const prefix = lastAtIndex !== -1 ? value.slice(0, lastAtIndex) : ""
+    const suffix = value.slice(cursorPos)
+
+    const newValue = `${prefix}${item.insertText}${suffix}`
+    onChange(newValue)
+    setShowSuggestions(false)
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        const newCursor = prefix.length + item.insertText.length
+        textareaRef.current.setSelectionRange(newCursor, newCursor)
+      }
+    }, 20)
+  }, [value, onChange])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev + 1) % filteredSuggestions.length)
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length)
+        return
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault()
+        handleSelectSuggestion(filteredSuggestions[selectedIndex])
+        return
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setShowSuggestions(false)
+        return
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       if (value.trim() && !submitting) {
         onSubmit()
       }
     }
+  }
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    const cursor = e.target.selectionEnd || val.length
+    onChange(val)
+    checkMentionTrigger(val, cursor)
+  }
+
+  const handleKeyUpOrClick = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.currentTarget
+    checkMentionTrigger(target.value, target.selectionEnd || target.value.length)
   }
 
   const handleToggleMode = useCallback((mode: "send_po" | "pending") => {
@@ -140,7 +285,66 @@ export function AiPromptBox({
   const hasContent = value.trim() !== "" || Boolean(linkValue && linkValue.trim())
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div ref={containerRef} className={`relative space-y-2 ${className}`}>
+      {/* Suggestions Dropdown Popup (When typing @) */}
+      <AnimatePresence>
+        {showSuggestions && filteredSuggestions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-0 mb-2.5 w-full sm:w-[350px] bg-white rounded-2xl border border-slate-200/95 shadow-xl overflow-hidden z-50 p-2"
+          >
+            <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between border-b border-slate-100 mb-1">
+              <span className="flex items-center gap-1.5 text-[#1057FB]">
+                <Sparkles className="w-3.5 h-3.5 text-[#1057FB]" />
+                Gợi ý lệnh điều hướng
+              </span>
+              <span className="font-mono font-normal lowercase text-[10px] text-slate-400">
+                ↑↓ chọn • ↵ áp dụng
+              </span>
+            </div>
+            <div className="space-y-1">
+              {filteredSuggestions.map((item, idx) => {
+                const isSelected = idx === selectedIndex
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      handleSelectSuggestion(item)
+                    }}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    className={`w-full text-left p-2.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50 text-slate-900 border border-blue-200 shadow-2xs"
+                        : "hover:bg-slate-50 text-slate-700 border border-transparent"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${item.iconBg}`}>
+                      {item.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="font-bold text-xs text-slate-900 truncate">{item.title}</span>
+                        <span className={`px-1.5 py-0.5 rounded font-mono text-[10.5px] font-semibold border ${item.badgeClass}`}>
+                          {item.syntax}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* JolyUI Prompt Box Container (Light Theme) */}
       <div 
         className="rounded-3xl border border-slate-200/90 bg-white p-2.5 shadow-sm transition-all duration-300 ease-in-out focus-within:border-[#1057FB] focus-within:ring-2 focus-within:ring-[#1057FB]/15"
@@ -150,8 +354,10 @@ export function AiPromptBox({
           ref={textareaRef}
           rows={1}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleTextareaChange}
           onKeyDown={handleKeyDown}
+          onClick={handleKeyUpOrClick}
+          onKeyUp={handleKeyUpOrClick}
           placeholder={
             isSendPoActive 
               ? "Nhập nội dung bàn giao gửi PO xem xét..." 

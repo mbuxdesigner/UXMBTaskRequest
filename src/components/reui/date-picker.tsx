@@ -4,7 +4,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown } from
 interface DatePickerProps {
   value: string // YYYY-MM-DD
   onChange: (dateStr: string) => void
-  label?: string
+  label?: React.ReactNode
   icon?: React.ReactNode
   placeholder?: string
   className?: string
@@ -105,9 +105,16 @@ export function DatePicker({
           <div className="flex items-center gap-3 min-w-0">
             {icon && <span className="text-slate-400 flex-shrink-0">{icon}</span>}
             <div className="min-w-0">
-              <p className="text-xs text-slate-500 font-medium leading-none mb-1 truncate">
-                {label}
-              </p>
+              <div className="text-xs text-slate-500 font-medium leading-none mb-1 truncate">
+                {typeof label === "string" && label.includes("*") ? (
+                  <>
+                    <span>{label.replace("*", "").trim()} </span>
+                    <span className="text-rose-500 font-bold">*</span>
+                  </>
+                ) : (
+                  label
+                )}
+              </div>
               <p className="text-sm sm:text-base font-semibold text-slate-900 leading-tight truncate">
                 {formatDisplay(value)}
               </p>

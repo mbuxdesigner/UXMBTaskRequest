@@ -12,10 +12,14 @@ export interface UserSession {
   squads?: string[] // Danh sách các Squads được phân công (1 Designer -> nhiều Squad, 1 PO -> nhiều Squad)
   products?: string[] // Danh sách các Sản phẩm phụ trách (1 PO -> nhiều Sản phẩm)
   expiresAt: number // Timestamp in ms
+  isImpersonating?: boolean
+  originalRole?: UserRole
+  originalDisplayName?: string
 }
 
 // Lưu trong sessionStorage: Tắt tab là tự động xóa phiên!
 const SESSION_STORAGE_KEY = "ux_portal_session_auth"
+export const ORIGINAL_SESSION_BACKUP_KEY = "ux_portal_admin_original_session"
 export const SESSION_DURATION_HOURS = 8
 export const SESSION_DURATION_SECONDS = SESSION_DURATION_HOURS * 3600 // 8 tiếng = 28,800s
 
@@ -158,11 +162,100 @@ export function clearSession() {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     localStorage.removeItem(SESSION_STORAGE_KEY)
     localStorage.removeItem("ux_portal_session")
+    sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+    localStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
     window.dispatchEvent(new Event("auth_session_changed"))
     window.dispatchEvent(new Event("storage"))
   } catch (err) {
     console.warn("Could not clear session:", err)
   }
+}
+
+/**
+ * Bắt đầu xem giao diện dưới dạng một vai trò khác (Dành cho Admin/Design Owner kiểm thử hiển thị)
+ */
+export function startRolePreview(targetRole: UserRole): UserSession | null {
+  const current = getStoredSession()
+  if (!current) return null
+
+  // Lưu backup phiên admin gốc nếu chưa lưu
+  if (!current.isImpersonating) {
+    try {
+      sessionStorage.setItem(ORIGINAL_SESSION_BACKUP_KEY, JSON.stringify(current))
+      localStorage.setItem(ORIGINAL_SESSION_BACKUP_KEY, JSON.stringify(current))
+    } catch (e) {
+      console.warn("Could not backup original session:", e)
+    }
+  }
+
+  const originalRole = current.originalRole || (current.isImpersonating ? "Admin" : current.role)
+  const originalDisplayName = current.originalDisplayName || current.displayName
+
+  // Nếu chọn lại chính vai trò Admin/Original role -> dừng preview
+  if (targetRole === "Admin" || targetRole === originalRole) {
+    return stopRolePreview()
+  }
+
+  const updatedSession: UserSession = {
+    ...current,
+    role: targetRole,
+    isImpersonating: true,
+    originalRole,
+    originalDisplayName,
+  }
+
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession))
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession))
+    localStorage.setItem("ux_portal_session", JSON.stringify(updatedSession))
+    window.dispatchEvent(new Event("auth_session_changed"))
+    window.dispatchEvent(new Event("storage"))
+  } catch (err) {
+    console.warn("Could not save impersonation session:", err)
+  }
+
+  return updatedSession
+}
+
+/**
+ * Dừng chế độ xem thử vai trò, phục hồi lại quyền Admin ban đầu
+ */
+export function stopRolePreview(): UserSession | null {
+  try {
+    const backupRaw = sessionStorage.getItem(ORIGINAL_SESSION_BACKUP_KEY) || localStorage.getItem(ORIGINAL_SESSION_BACKUP_KEY)
+    let restoredSession: UserSession | null = null
+
+    if (backupRaw) {
+      restoredSession = JSON.parse(backupRaw)
+    } else {
+      const current = getStoredSession()
+      if (current) {
+        restoredSession = {
+          ...current,
+          role: current.originalRole || "Admin",
+          displayName: current.originalDisplayName || current.displayName,
+        }
+      }
+    }
+
+    if (restoredSession) {
+      delete restoredSession.isImpersonating
+      delete restoredSession.originalRole
+      delete restoredSession.originalDisplayName
+
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(restoredSession))
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(restoredSession))
+      localStorage.setItem("ux_portal_session", JSON.stringify(restoredSession))
+      sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+      localStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+      window.dispatchEvent(new Event("auth_session_changed"))
+      window.dispatchEvent(new Event("storage"))
+      return restoredSession
+    }
+  } catch (err) {
+    console.warn("Could not stop role preview:", err)
+  }
+  return null
 }
 
 /**

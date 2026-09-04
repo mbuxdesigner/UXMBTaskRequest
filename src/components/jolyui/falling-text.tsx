@@ -386,7 +386,7 @@ export const FallingText: React.FC<FallingTextProps> = ({
       {/* Sắp xếp linh hoạt dạng flex-wrap ở giai đoạn đo đạc kích thước ban đầu để TẤT CẢ các từ đều nằm trong viewport */}
       <div
         ref={textRef}
-        className="pointer-events-none flex flex-wrap justify-center items-center w-full px-6 max-w-5xl mx-auto"
+        className="pointer-events-none flex flex-wrap justify-center items-center w-full px-8 max-w-7xl mx-auto pt-4"
         style={{
           fontSize,
           lineHeight: 1.6,

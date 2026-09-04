@@ -983,6 +983,26 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
 
   if (!scriptUrl || !scriptUrl.trim()) return null
 
+  // 1. Thử qua POST text/plain (Tránh CORS preflight issues trên Google Apps Script)
+  try {
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "get_team_members" }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      const list = data.members || data.users || []
+      if (data.status === "success" && Array.isArray(list) && list.length > 0) {
+        return list
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch team members via POST, trying GET...", e)
+  }
+
+  // 2. Thử qua GET URL Query Params
   try {
     const url = new URL(scriptUrl.trim())
     url.searchParams.set("action", "get_team_members")
@@ -995,12 +1015,13 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
 
     if (res.ok) {
       const data = await res.json()
-      if (data.status === "success" && Array.isArray(data.members) && data.members.length > 0) {
-        return data.members
+      const list = data.members || data.users || []
+      if (data.status === "success" && Array.isArray(list) && list.length > 0) {
+        return list
       }
     }
   } catch (e) {
-    console.warn("Could not fetch team members from Google Sheet:", e)
+    console.warn("Could not fetch team members from Google Sheet via GET:", e)
   }
   return null
 }

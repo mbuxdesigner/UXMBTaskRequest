@@ -34,23 +34,25 @@ export default function SuccessCelebrationCard({
   }
 
   return (
-    <div className="relative w-full min-h-[580px] sm:min-h-[640px] flex items-center justify-center p-4 overflow-hidden rounded-3xl">
+    <div className="relative w-full min-h-[calc(100vh-4.5rem)] md:min-h-[calc(100vh-3.5rem)] flex items-center justify-center p-4 sm:p-6 overflow-hidden rounded-3xl">
       {/* 1. JOLY UI FALLING TEXT IN THE BACKGROUND (Sau background - Đầy ắp từ khóa UX/Banking đa sắc) */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-auto select-none opacity-90">
         <FallingText
           text="MBBank UXTeam UXUI UserFlow Prototype Request-Sent! All-Set! You’re-Done! Nice-One! Good-to-Go! It’s-In! Successfully-Shipped! Design-Incoming! Let’s-Design! Make-It-Better Pixel-Perfect Craft-the-Flow Think-Design-Ship Better-by-Design Flow-Matters Money-Moves Banking Better Smart-Money Make-Money-Flow Design-Meets-Finance"
           trigger="auto"
-          gravity={0.4}
-          fontSize="1.8rem"
+          gravity={0.45}
+          fontSize="1.75rem"
           mouseConstraintStiffness={0.3}
-          wordSpacing={8}
+          wordSpacing={10}
+          initialVelocity={{ x: 8, y: 3, angular: 0.08 }}
+          physicsOptions={{ restitution: 0.85, frictionAir: 0.012, friction: 0.2 }}
           minHeight="100%"
           className="h-full w-full"
         />
       </div>
 
       {/* 2. Main Foreground Warm & Friendly Card (Nằm nổi phía trên background) */}
-      <div className="relative z-10 w-full max-w-xl bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-3xl shadow-2xl shadow-slate-300/40 p-6 sm:p-10 text-center space-y-6 animate-in zoom-in-95 duration-300">
+      <div className="relative z-10 w-full max-w-lg sm:max-w-xl bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-3xl shadow-2xl shadow-slate-300/40 p-6 sm:p-10 text-center space-y-6 animate-in zoom-in-95 duration-300 my-auto">
         
         {/* Top Decorative Background Glow */}
         <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-blue-50/70 via-emerald-50/20 to-transparent pointer-events-none rounded-t-3xl" />
