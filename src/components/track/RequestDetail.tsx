@@ -1390,18 +1390,56 @@ export default function RequestDetail({
 
   const handlePoApprove = async () => {
     if (!request) return
-    const toastId = toast.loading("PO đang duyệt thiết kế...")
+    const toastId = toast.loading("PO đang duyệt và chuyển tiếp khâu...")
     try {
+      const curPhases = getAdminPhases()
+      const curPhase = (request.current_phase || "").trim().toLowerCase()
+      let curIdx = curPhases.findIndex(
+        (p) =>
+          p.key.toLowerCase() === curPhase ||
+          curPhase.includes(p.key.toLowerCase()) ||
+          p.key.toLowerCase().includes(curPhase)
+      )
+      if (curIdx < 0) {
+        curIdx = 0
+      }
+
+      const isLastStep = curIdx >= curPhases.length - 1
+      const nextIdx = isLastStep ? curIdx : curIdx + 1
+      const nextPhaseObj = curPhases[nextIdx]
+      const nextPhaseName = nextPhaseObj?.key || "Bàn giao"
+      const currentPhaseName = curPhases[curIdx]?.key || request.current_phase || "khâu hiện tại"
+
+      const isMovingToLast = nextIdx === curPhases.length - 1
+      const nextStatus = isMovingToLast ? "Hoàn thành" : "Đang thực hiện"
+      const nextProgress = isMovingToLast
+        ? 100
+        : (nextPhaseObj?.progress || Math.min(95, Math.round(((nextIdx + 1) / curPhases.length) * 100)))
+
+      const note = isMovingToLast
+        ? `PO (${session?.displayName || "PO"}) đã duyệt khâu cuối [${currentPhaseName}]. Bài toán đã hoàn thành.`
+        : `PO (${session?.displayName || "PO"}) đã xác nhận duyệt khâu [${currentPhaseName}]. Bài toán chuyển tiếp sang khâu: [${nextPhaseName}].`
+
+      // Cập nhật optimistic cho request ngay trên modal
+      request.sent_to_po_at = undefined
+      request.current_phase = nextPhaseName
+      request.status = nextStatus
+      request.progress = nextProgress
+
       const res = await updateTaskProgress(request.request_id, {
-        new_phase: "Bàn giao",
-        new_status: "Hoàn thành",
-        new_progress: 100,
-        note: `PO (${session?.displayName || "PO"}) đã duyệt phương án thiết kế và chấp thuận bàn giao.`,
+        new_phase: nextPhaseName,
+        new_status: nextStatus,
+        new_progress: nextProgress,
+        note,
         assigned_designer: request.assigned_designer,
+        sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO
         is_comment: false,
       })
       if (res.success) {
-        toast.success("PO đã duyệt thành công!", "Bài toán đã chuyển sang trạng thái Hoàn thành / Bàn giao.", { id: toastId })
+        const successDetail = isMovingToLast
+          ? `Bài toán hoàn thành ở khâu [${nextPhaseName}].`
+          : `Bài toán đã chuyển tiếp sang khâu: [${nextPhaseName}].`
+        toast.success("PO đã xác nhận thành công!", successDetail, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể duyệt", res.message, { id: toastId })
@@ -1415,12 +1453,16 @@ export default function RequestDetail({
     if (!request) return
     const toastId = toast.loading("Đang gửi yêu cầu chỉnh sửa...")
     try {
+      request.sent_to_po_at = undefined
+      request.status = "Đang thực hiện"
+
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: "Đang thực hiện",
-        new_progress: Math.max(50, request.progress - 10),
+        new_progress: Math.max(10, (request.progress || 50) - 10),
         note: `PO (${session?.displayName || "PO"}) yêu cầu chỉnh sửa: ${feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX."}`,
         assigned_designer: request.assigned_designer,
+        sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO
         is_comment: false,
       })
       if (res.success) {
