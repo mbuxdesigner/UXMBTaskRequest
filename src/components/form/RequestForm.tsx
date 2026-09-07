@@ -328,25 +328,45 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       })
     : []
 
-  const squadOptions: DropdownOption[] =
-    relevantSquads.length > 0
-      ? relevantSquads.map((s: any) => {
-          const name = s.name || s.squad_name || ""
-          return {
-            value: name,
-            label: name,
-            description: s.domain || undefined,
-          }
-        })
-      : form.product
-      ? [{ value: "", label: "Squad mặc định theo sản phẩm" }]
-      : [{ value: "", label: "Chọn sản phẩm trước..." }]
+  const squadOptions: DropdownOption[] = (() => {
+    if (!form.product) {
+      return [{ value: "", label: "Chọn sản phẩm trước..." }]
+    }
+    if (relevantSquads.length > 0) {
+      return relevantSquads.map((s: any) => {
+        const name = s.name || s.squad_name || ""
+        return {
+          value: name,
+          label: name,
+          description: s.domain || undefined,
+        }
+      })
+    }
+    // Nếu sản phẩm chưa có squad cấu hình riêng trong Admin (như BaaS, Khác...)
+    const defaultProdSquad: DropdownOption = {
+      value: form.product,
+      label: `Squad ${form.product}`,
+      description: `Squad chuyên trách theo sản phẩm ${form.product}`,
+    }
+    const otherOptions: DropdownOption[] = allSquads
+      .map((s: any) => {
+        const name = s.name || s.squad_name || ""
+        return {
+          value: name,
+          label: name,
+          description: s.domain || undefined,
+        }
+      })
+      .filter((opt) => opt.value && opt.value !== form.product)
+
+    return [defaultProdSquad, ...otherOptions]
+  })()
 
   const handleProductChange = (val: string) => {
     setForm((f) => ({
       ...f,
       product: val,
-      preferred_squad: "", // reset để chọn squad mới theo sản phẩm
+      preferred_squad: val, // Gán mặc định squad cùng tên sản phẩm để tránh bị rỗng
     }))
     if (errors.product) {
       setErrors((prev) => {

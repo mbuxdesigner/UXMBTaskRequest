@@ -175,7 +175,6 @@ function getSquadBadgeDetails(req: UXRequest): { label: string; dotClass: string
   const prod = (req.product || "").trim().toLowerCase()
   const hasSquad = Boolean(
     rawSquad &&
-    rawSquad.toLowerCase() !== prod &&
     rawSquad !== "Chưa phân công" &&
     rawSquad !== "Chưa có squad" &&
     rawSquad !== "Chưa phân squad" &&

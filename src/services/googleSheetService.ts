@@ -122,16 +122,10 @@ export function normalizeSheetRequest(data: any): UXRequest {
   }
 
   const rawProduct = String(data.product || "Khác").trim()
-  let rawPreferredSquad = String(data.preferred_squad || "").trim()
-  let rawSquadName = String(data.squad_name || "").trim()
+  const rawPreferredSquad = String(data.preferred_squad || "").trim()
+  const rawSquadName = String(data.squad_name || "").trim()
 
-  // Tự động làm sạch nếu squad bị gán nhầm thành tên sản phẩm
-  if (rawPreferredSquad.toLowerCase() === rawProduct.toLowerCase()) {
-    rawPreferredSquad = ""
-  }
-  if (rawSquadName.toLowerCase() === rawProduct.toLowerCase()) {
-    rawSquadName = ""
-  }
+  // Giữ nguyên squad người dùng đã gắn (kể cả sản phẩm BaaS có squad là BaaS)
   const cleanSquad = rawSquadName || rawPreferredSquad || ""
 
   const rawSentToPo = data.sent_to_po_at ? String(data.sent_to_po_at).trim() : undefined

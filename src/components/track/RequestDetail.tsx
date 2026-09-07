@@ -479,7 +479,7 @@ export default function RequestDetail({
         assignedSquadDesignerNames: [],
       }
     }
-    const rawSquad = (request.squad_name || request.preferred_squad || request.squad || "").trim()
+    const rawSquad = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || request.squad || "")).trim()
     const taskProd = (request.product || "").trim().toLowerCase()
     const squadLower = rawSquad.toLowerCase()
 
@@ -562,7 +562,6 @@ export default function RequestDetail({
 
     const hasCleanSquad = Boolean(
       rawSquad &&
-      rawSquad.toLowerCase() !== taskProd &&
       rawSquad !== "Chưa phân công" &&
       rawSquad !== "Chưa có squad" &&
       rawSquad !== "Chưa phân squad" &&
@@ -576,7 +575,7 @@ export default function RequestDetail({
       taskSquadName: cleanSquadDisplay,
       assignedSquadDesignerNames: cleanAssignedNames,
     }
-  }, [availableDesigners, request?.squad_name, request?.preferred_squad, request?.squad, request?.product, matchesPerson])
+  }, [availableDesigners, localSquad, request?.squad_name, request?.preferred_squad, request?.squad, request?.product, matchesPerson])
 
 
   const [isFullScreen, setIsFullScreen] = useState(false)
@@ -641,9 +640,7 @@ export default function RequestDetail({
   const [poFormTitle, setPoFormTitle] = useState(request?.title || "")
   const [poFormProduct, setPoFormProduct] = useState(request?.product || "")
   const [poFormSquad, setPoFormSquad] = useState(() => {
-    const rawSq = (request?.squad_name || request?.preferred_squad || "").trim()
-    const p = (request?.product || "").trim().toLowerCase()
-    return rawSq.toLowerCase() === p ? "" : rawSq
+    return (request?.squad_name || request?.preferred_squad || "").trim()
   })
   const [poFormReqType, setPoFormReqType] = useState(request?.request_type || "")
   const [poFormDesc, setPoFormDesc] = useState(request?.description || "")
@@ -674,6 +671,7 @@ export default function RequestDetail({
     return prods
   }, [poFormProduct])
 
+  // Danh sách Squad đầy đủ (không bao giờ rỗng), ưu tiên đưa squad khớp Product lên trước
   const editSquadOptions = useMemo(() => {
     let squadsList: any[] = mockSquads
     try {
@@ -684,21 +682,91 @@ export default function RequestDetail({
       }
     } catch {}
 
-    const matching = poFormProduct
-      ? squadsList.filter((s: any) => {
-          const prod = (s.productName || s.product_name || "").toLowerCase().trim()
-          const target = poFormProduct.toLowerCase().trim()
-          return prod === target || prod.includes(target) || target.includes(prod)
-        })
-      : squadsList
+    const allSquadNames = Array.from(new Set([
+      ...squadsList.map((s: any) => (s.name || s.squad_name || "").trim()).filter(Boolean),
+      ...mockSquads.map((s: any) => (s.squad_name || s.name || "").trim()).filter(Boolean),
+      "BaaS Gateway",
+      "Cards & Thanh toán số",
+      "Lending & Vay vốn",
+      "Core Banking & Tài khoản",
+      "Digital Wealth & Đầu tư",
+      "Chuyển tiền & Tiện ích số",
+      "eSaving",
+      "Biz Lending",
+      "Biz eSaving",
+      "Payroll & Quản lý lương",
+      "Design System MB"
+    ]))
 
-    const names = matching.map((s: any) => s.name || s.squad_name || "").filter(Boolean)
-    const unique = Array.from(new Set(names))
-    if (poFormSquad && !unique.includes(poFormSquad)) {
-      return [poFormSquad, ...unique]
+    const prodTarget = (poFormProduct || "").toLowerCase().trim()
+    const matchingSquads: string[] = []
+    const otherSquads: string[] = []
+
+    allSquadNames.forEach((squadName) => {
+      const sqObj = squadsList.find((s: any) => (s.name || s.squad_name || "").trim().toLowerCase() === squadName.toLowerCase())
+      const prodOfSq = ((sqObj?.productName || sqObj?.product_name || "") as string).toLowerCase().trim()
+
+      if (prodTarget && prodOfSq && (prodOfSq === prodTarget || prodOfSq.includes(prodTarget) || prodTarget.includes(prodOfSq))) {
+        matchingSquads.push(squadName)
+      } else {
+        otherSquads.push(squadName)
+      }
+    })
+
+    const combined = [...matchingSquads, ...otherSquads]
+    if (poFormSquad && !combined.includes(poFormSquad)) {
+      return [poFormSquad, ...combined]
     }
-    return unique
+    return combined
   }, [poFormProduct, poFormSquad])
+
+  // Danh sách phân loại Squad cho Popover chọn nhanh ngoài Task Detail Grid
+  const allAvailableSquads = useMemo(() => {
+    let squadsList: any[] = mockSquads
+    try {
+      const raw = localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) squadsList = parsed
+      }
+    } catch {}
+
+    const allSquadNames = Array.from(new Set([
+      ...squadsList.map((s: any) => (s.name || s.squad_name || "").trim()).filter(Boolean),
+      ...mockSquads.map((s: any) => (s.squad_name || s.name || "").trim()).filter(Boolean),
+      "BaaS Gateway",
+      "Cards & Thanh toán số",
+      "Lending & Vay vốn",
+      "Core Banking & Tài khoản",
+      "Digital Wealth & Đầu tư",
+      "Chuyển tiền & Tiện ích số",
+      "eSaving",
+      "Biz Lending",
+      "Biz eSaving",
+      "Payroll & Quản lý lương",
+      "Design System MB"
+    ]))
+
+    const currentProd = (localProduct || request?.product || "").toLowerCase().trim()
+    const matching: string[] = []
+    const others: string[] = []
+
+    allSquadNames.forEach((sqName) => {
+      const sqObj = squadsList.find((s: any) => (s.name || s.squad_name || "").trim().toLowerCase() === sqName.toLowerCase())
+      const prod = ((sqObj?.productName || sqObj?.product_name || "") as string).toLowerCase().trim()
+      if (currentProd && prod && (prod === currentProd || prod.includes(currentProd) || currentProd.includes(prod))) {
+        matching.push(sqName)
+      } else {
+        others.push(sqName)
+      }
+    })
+
+    return {
+      matching,
+      others,
+      all: [...matching, ...others],
+    }
+  }, [localProduct, request?.product])
 
   const editRequestTypeOptions = useMemo(() => {
     const base = REQUEST_TYPES
@@ -840,6 +908,66 @@ export default function RequestDetail({
     return false
   }, [request, session])
 
+  const canEditBrief = useMemo(() => {
+    if (isAuthor) return true
+    if (session?.role === "Admin" || session?.role === "Design Owner") return true
+    return false
+  }, [isAuthor, session])
+
+  const handleUpdateSquad = async (newSquad: string) => {
+    if (!request) return
+    const cleanSquad = newSquad.trim()
+    setLocalSquad(cleanSquad)
+    setPoFormSquad(cleanSquad)
+    setOpenDropdown(null)
+
+    // Cập nhật optimistic cho request object
+    request.squad_name = cleanSquad
+    request.preferred_squad = cleanSquad
+
+    // Cập nhật localStorage ux_portal_real_requests
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        const updated = list.map((r) =>
+          r.request_id === request.request_id
+            ? { ...r, squad_name: cleanSquad, preferred_squad: cleanSquad }
+            : r
+        )
+        localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+      }
+    } catch {}
+
+    const toastId = toast.loading(`Đang cập nhật Squad bài toán...`)
+    try {
+      const noteText = cleanSquad
+        ? `Chuyển bài toán sang Squad: [${cleanSquad}]`
+        : `Gỡ phân bổ Squad (đưa về Chưa phân squad)`
+
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: request.status,
+        new_progress: request.progress,
+        note: noteText,
+        assigned_designer: request.assigned_designer,
+        squad_name: cleanSquad,
+        preferred_squad: cleanSquad,
+        is_comment: false,
+      })
+
+      if (res && !res.success) {
+        toast.warning(res.message || noteText, undefined, { id: toastId })
+      } else {
+        toast.success(noteText, undefined, { id: toastId })
+      }
+      if (onUpdated) onUpdated()
+    } catch {
+      toast.success(`Đã cập nhật Squad: ${cleanSquad || "Chưa phân squad"}`, undefined, { id: toastId })
+      if (onUpdated) onUpdated()
+    }
+  }
+
   useEffect(() => {
     if (request) {
       setTitleValue(request.title || "")
@@ -849,8 +977,7 @@ export default function RequestDetail({
       setPoFormTitle(request.title || "")
       setPoFormProduct(request.product || "")
       const curSq = (request.squad_name || request.preferred_squad || "").trim()
-      const curProd = (request.product || "").trim().toLowerCase()
-      setPoFormSquad(curSq.toLowerCase() === curProd ? "" : curSq)
+      setPoFormSquad(curSq)
       setPoFormReqType(request.request_type || "")
       setPoFormDesc(request.description || "")
       setPoFormBizNeed(request.business_need || "")
@@ -926,7 +1053,7 @@ export default function RequestDetail({
 
   const handleSavePoRequirements = async () => {
     if (!request) return
-    const cleanSquad = (poFormSquad.trim().toLowerCase() === poFormProduct.trim().toLowerCase()) ? "" : poFormSquad.trim()
+    const cleanSquad = poFormSquad.trim()
     request.title = poFormTitle
     request.product = poFormProduct
     request.squad_name = cleanSquad
@@ -2858,17 +2985,46 @@ export default function RequestDetail({
                             Đầu bài từ Product Owner
                           </h2>
                           {(() => {
-                            const rawSq = (localSquad !== undefined ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
-                            const prod = (localProduct || request.product || "").trim().toLowerCase()
-                            const hasSq = Boolean(rawSq && rawSq.toLowerCase() !== prod && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad" && rawSq !== "Chưa phân squad")
+                            const rawSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                            const hasSq = Boolean(rawSq && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad" && rawSq !== "Chưa phân squad")
                             const squadLabel = hasSq ? rawSq : "Chưa phân squad"
                             return (
                               <span className="text-xs sm:text-[13px] font-medium text-slate-600 flex items-center gap-1.5 flex-wrap">
                                 <span>• {localProduct || request.product || "App MBBank"}</span>
                                 <span>•</span>
-                                <span className={hasSq ? "text-indigo-600 font-semibold" : "text-slate-400 italic font-normal"}>
-                                  {squadLabel}
-                                </span>
+                                {canEditBrief ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                                      setPoFormSquad(curSq)
+                                      setPoFormProduct(localProduct || request.product || "")
+                                      setPoFormTitle(request.title || "")
+                                      setPoFormReqType(request.request_type || "")
+                                      setPoFormDesc(request.description || "")
+                                      setPoFormBizNeed(request.business_need || "")
+                                      setPoFormUserProb(request.user_problem || "")
+                                      setPoFormTargetUser(request.target_user || "")
+                                      setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                                      setPoFormDeadlineReason(request.deadline_reason || "")
+                                      setPoFormDocLinks(request.doc_links || [])
+                                      setShowPoEditModal(true)
+                                    }}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                      hasSq
+                                        ? "text-indigo-600 font-semibold hover:bg-indigo-50 hover:underline decoration-dotted underline-offset-2"
+                                        : "text-slate-400 italic font-normal hover:text-indigo-600 hover:bg-slate-100"
+                                    }`}
+                                    title="Bấm để chỉnh sửa đầu bài & phân Squad"
+                                  >
+                                    <span>{squadLabel}</span>
+                                    <Edit3 className="w-3 h-3 opacity-60 hover:opacity-100" />
+                                  </button>
+                                ) : (
+                                  <span className={hasSq ? "text-indigo-600 font-semibold" : "text-slate-400 italic font-normal"}>
+                                    {squadLabel}
+                                  </span>
+                                )}
                                 <span>• {request.request_type || "Yêu cầu UX"}</span>
                               </span>
                             )
@@ -2895,15 +3051,14 @@ export default function RequestDetail({
                         </p>
                       </div>
 
-                      {isAuthor ? (
+                      {canEditBrief ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            const curSq = (localSquad !== undefined ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
-                            const curProd = (localProduct || request.product || "").trim().toLowerCase()
-                            setPoFormSquad(curSq.toLowerCase() === curProd ? "" : curSq)
+                            const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                            setPoFormSquad(curSq)
                             setPoFormProduct(localProduct || request.product || "")
                             setPoFormTitle(request.title || "")
                             setPoFormReqType(request.request_type || "")
@@ -2924,7 +3079,7 @@ export default function RequestDetail({
                       ) : (
                         <span 
                           className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 shrink-0" 
-                          title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) mới có quyền sửa nội dung đầu bài.`}
+                          title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) hoặc Admin mới có quyền sửa nội dung đầu bài.`}
                         >
                           <Lock className="w-3.5 h-3.5 text-slate-400" />
                           <span>Chỉ tác giả được sửa</span>
