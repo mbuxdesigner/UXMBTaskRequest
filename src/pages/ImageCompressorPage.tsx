@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import JSZip from "jszip"
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FrameActions } from "@/components/reui/frame"
-import { IconTile, IconStack } from "@/components/reui/icon-tile"
+import { IconTile } from "@/components/reui/icon-tile"
+import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, type DropdownOption } from "@/components/reui/dropdown-menu"
@@ -544,18 +545,9 @@ totalOriginalSize > 0 && convertedImages.length > 0
             isDraggingOver && "border-[#1B3A6B] bg-slate-50 ring-4 ring-[#1B3A6B]/10"
           )}
         >
-          {/* Overlapping Photo Cards Illustration (Chuẩn ReUI) */}
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center pointer-events-none">
-            {/* Back card tilted */}
-            <div className="absolute w-12 h-14 sm:w-14 sm:h-16 bg-blue-100/70 rounded-2xl rotate-[-10deg] border border-blue-200/60 shadow-xs" />
-            {/* Front card */}
-            <div className="relative w-12 h-14 sm:w-14 sm:h-16 bg-gradient-to-tr from-[#1B3A6B] to-[#1057FB] rounded-2xl shadow-md flex items-center justify-center overflow-hidden border border-[#1B3A6B]/30">
-              {/* Sun */}
-              <div className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-white/90" />
-              {/* Mountains */}
-              <div className="absolute -bottom-1 -left-2 w-9 h-9 bg-white/35 rounded-md rotate-45 transform origin-center" />
-              <div className="absolute -bottom-2 right-[-2px] w-10 h-8 bg-white/50 rounded-md rotate-12" />
-            </div>
+          {/* ReUI c-icon-stack-2 Large Illustration */}
+          <div className="mb-4 pointer-events-none flex items-center justify-center">
+            <IconStackLarge />
           </div>
 
           <div className="space-y-1.5 max-w-lg mx-auto pointer-events-none">
