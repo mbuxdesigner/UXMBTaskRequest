@@ -213,12 +213,20 @@ export function startRolePreview(targetRole: UserRole): UserSession | null {
     return stopRolePreview()
   }
 
+  const matchedDemo = DEMO_ACCOUNTS.find((a) => a.role === targetRole)
+
   const updatedSession: UserSession = {
     ...current,
     role: targetRole,
     isImpersonating: true,
     originalRole,
     originalDisplayName,
+    displayName: matchedDemo?.displayName || current.displayName,
+    teamsEmail: matchedDemo?.teamsEmail || current.teamsEmail,
+    personalEmail: matchedDemo?.personalEmail || current.personalEmail,
+    squad: matchedDemo?.squad || current.squad,
+    squads: matchedDemo?.squads || current.squads,
+    products: matchedDemo?.products || current.products,
   }
 
   try {

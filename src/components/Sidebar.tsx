@@ -20,6 +20,7 @@ import { fetchRequests } from "../api/api"
 import { preloadPage } from "../App"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
+import { filterRequestsByRole } from "@/lib/accessControl"
 import {
   getRoleNavConfig,
   getNavOrderConfig,
@@ -74,19 +75,7 @@ export default function Sidebar({
   useEffect(() => {
     fetchRequests()
       .then((reqs) => {
-        let list = reqs
-        if (session) {
-          const userEmail = (session.teamsEmail || "").toLowerCase().trim()
-          const userName = (session.displayName || "").toLowerCase().trim()
-          if (session.role === "PO") {
-            list = list.filter((r) => (r.requester_email || "").toLowerCase().includes(userEmail.split("@")[0]))
-          } else if (session.role === "Designer") {
-            list = list.filter((r) => {
-              const a = (r.assigned_designer || r.ux_owner || "").toLowerCase()
-              return a.includes(userEmail.split("@")[0]) || a.includes(userName)
-            })
-          }
-        }
+        const list = filterRequestsByRole(reqs, session)
         const inProgress = list.filter((r) => r.status === "Đang thực hiện").length
         setActiveTaskCount(inProgress)
       })

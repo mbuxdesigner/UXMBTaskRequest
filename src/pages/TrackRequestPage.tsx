@@ -16,6 +16,7 @@ import {
   getUserInitials,
   UserSession,
 } from "../services/otpAuthService"
+import { canUserAccessRequest, filterRequestsByRole } from "@/lib/accessControl"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -420,30 +421,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
   // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
   const filteredRequests = useMemo(() => {
-    let list = allRequests
-
-    // 1. Lọc theo Role người dùng
-    if (session) {
-      const userEmail = (session.teamsEmail || "").toLowerCase().trim()
-      const userName = (session.displayName || "").toLowerCase().trim()
-      const userRole = session.role
-
-      if (userRole === "PO") {
-        list = list.filter((r) => {
-          const reqEmail = (r.requester_email || "").toLowerCase().trim()
-          return reqEmail === userEmail || reqEmail.includes(userEmail.split("@")[0])
-        })
-      } else if (userRole === "Designer") {
-        list = list.filter((r) => {
-          const assigned = (r.assigned_designer || r.ux_owner || "").toLowerCase().trim()
-          return (
-            assigned.includes(userEmail) ||
-            assigned.includes(userName) ||
-            assigned.includes(userEmail.split("@")[0])
-          )
-        })
-      }
-    }
+    // 1. Lọc theo Phân quyền Vai trò người dùng (Admin: tất cả; PO & Business: do mình tạo; Designer: được gán; Design Owner: theo sản phẩm & squad)
+    let list = filterRequestsByRole(allRequests, session)
 
     // 2. Lọc theo Workstream / Phase
     if (selectedPhases.length > 0) {
@@ -479,14 +458,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   const getCount = (status: string) => {
-    let baseList = allRequests
-    if (session?.role === "PO") {
-      const userEmail = (session.teamsEmail || "").toLowerCase().trim()
-      baseList = baseList.filter((r) => (r.requester_email || "").toLowerCase().includes(userEmail.split("@")[0]))
-    } else if (session?.role === "Designer") {
-      const userEmail = (session.teamsEmail || "").toLowerCase().trim()
-      baseList = baseList.filter((r) => (r.assigned_designer || "").toLowerCase().includes(userEmail.split("@")[0]))
-    }
+    const baseList = filterRequestsByRole(allRequests, session)
     if (status === "Tất cả") return baseList.length
     if (status === "Đang phân loại") {
       return baseList.filter((r) => r.status === "Đang phân loại" || r.status === "Chờ tiếp nhận" || r.status === "Đã gửi").length
@@ -875,7 +847,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                         : undefined
                     }
                     primaryAction={
-                      session?.role === "PO"
+                      session?.role === "PO" || session?.role === "Business"
                         ? {
                             label: "Tạo yêu cầu mới",
                             onClick: () => {

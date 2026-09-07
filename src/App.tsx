@@ -168,9 +168,9 @@ export default function App() {
     }
   }, [])
 
-  // Tự động chuyển PO về màn hình "Yêu cầu của tôi" khi đăng nhập
+  // Tự động chuyển PO & Business về màn hình "Yêu cầu của tôi" khi đăng nhập
   useEffect(() => {
-    if (session?.role === "PO" && (page === "overview" || page === "manage")) {
+    if ((session?.role === "PO" || session?.role === "Business") && (page === "overview" || page === "manage")) {
       setPage("track")
       window.location.hash = "#track"
     }
@@ -206,9 +206,10 @@ export default function App() {
       <LoginGate
         onAuthSuccess={(newSession) => {
           setSession(newSession)
-          // Mặc định đăng nhập: PO về Track Task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
+          // Mặc định đăng nhập: PO/Business về Track Task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
           // Tuyệt đối không giữ URL cũ #manage từ phiên trước
-          const defaultPage: Page = newSession.role === "PO" ? "track" : "overview"
+          const defaultPage: Page =
+            newSession.role === "PO" || newSession.role === "Business" ? "track" : "overview"
           setPage(defaultPage)
           window.location.hash = `#${defaultPage}`
         }}

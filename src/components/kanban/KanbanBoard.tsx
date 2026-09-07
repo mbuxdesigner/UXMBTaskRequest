@@ -568,7 +568,7 @@ export default function KanbanBoard({
                           </div>
 
                           {/* Title */}
-                          <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:anywhere] break-all max-w-full">
+                          <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:break-word] max-w-full">
                             {req.title}
                           </h4>
 

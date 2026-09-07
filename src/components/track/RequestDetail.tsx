@@ -18,6 +18,7 @@ import { getStatusConfig, getRequestPendingClassification } from "@/config/statu
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { updateTaskProgress } from "../../api/api"
+import { canUserAccessRequest } from "@/lib/accessControl"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
 import { 
@@ -1015,11 +1016,14 @@ export default function RequestDetail({
   // RBAC Permission Check
   const canEdit = (() => {
     if (!session) return true
-    if (session.role === "Admin" || session.role === "Design Owner") return true
+    if (session.role === "Admin") return true
+    if (session.role === "Design Owner") {
+      return canUserAccessRequest(request, session)
+    }
     if (session.role === "Designer") {
       const email = session.teamsEmail.toLowerCase()
       const assigned = (request?.assigned_designer || request?.ux_owner || "").toLowerCase()
-      return !assigned || assigned.includes(email) || email.includes("designer") || email.includes("nam")
+      return !assigned || assigned.includes(email) || email.includes("designer") || email.includes("nam") || canUserAccessRequest(request, session)
     }
     return false
   })()
@@ -2151,7 +2155,7 @@ export default function RequestDetail({
                         </Button>
 
                         {/* Nút dành cho PO / Tác giả */}
-                        {(session?.role === "PO" || isAuthor) && (
+                        {(session?.role === "PO" || session?.role === "Business" || isAuthor) && (
                           <>
                             <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1">
                               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -2229,7 +2233,7 @@ export default function RequestDetail({
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
                         {/* Nút dành cho PO / Tác giả */}
-                        {(session?.role === "PO" || isAuthor) && (
+                        {(session?.role === "PO" || session?.role === "Business" || isAuthor) && (
                           <>
                             <Button 
                               size="sm" 
@@ -2267,7 +2271,7 @@ export default function RequestDetail({
                             if (e.key === "Escape") setIsEditingTitle(false)
                           }}
                           autoFocus
-                          className="w-full text-xl sm:text-2xl font-extrabold text-slate-900 border-b-2 border-[#1057FB] outline-none pb-1 bg-transparent"
+                          className="w-full text-lg sm:text-xl font-bold text-slate-900 border-b-2 border-[#1057FB] outline-none pb-1 bg-transparent"
                         />
                         <Button size="sm" onClick={handleSaveTitle} className="h-8 text-xs bg-slate-900 text-white rounded-lg cursor-pointer">
                           Lưu
@@ -2279,7 +2283,7 @@ export default function RequestDetail({
                           onClick={() => {
                             if (isAuthor) setIsEditingTitle(true)
                           }}
-                          className={`text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight transition-colors break-words [overflow-wrap:anywhere] break-all max-w-full ${
+                          className={`text-lg sm:text-xl lg:text-[21px] font-bold text-slate-900 tracking-tight leading-snug transition-colors break-words [overflow-wrap:break-word] max-w-full ${
                             isAuthor ? "hover:text-[#1057FB] cursor-pointer" : "cursor-default"
                           }`}
                           title={isAuthor ? "Tác giả đề bài: Bấm để sửa tiêu đề" : "Tiêu đề bài toán"}
