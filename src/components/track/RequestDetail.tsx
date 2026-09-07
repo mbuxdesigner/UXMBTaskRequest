@@ -1053,7 +1053,22 @@ export default function RequestDetail({
 
   const handleSavePoRequirements = async () => {
     if (!request) return
-    const cleanSquad = poFormSquad.trim()
+    const prevProd = (request.product || "").trim()
+    const newProd = poFormProduct.trim()
+    const prevSquad = (request.squad_name || request.preferred_squad || "").trim()
+    const newSquad = cleanSquad
+
+    const changes: string[] = []
+    if (prevProd && newProd && prevProd !== newProd) {
+      changes.push(`Đổi sản phẩm: ${prevProd} → ${newProd}`)
+    }
+    if (prevSquad && newSquad && prevSquad !== newSquad) {
+      changes.push(`Đổi squad: ${prevSquad} → ${newSquad}`)
+    }
+    const updateNote = changes.length > 0
+      ? `PO cập nhật đầu bài (${changes.join(", ")})`
+      : `PO cập nhật đầu bài: ${poFormTitle}`
+
     request.title = poFormTitle
     request.product = poFormProduct
     request.squad_name = cleanSquad
@@ -1080,7 +1095,7 @@ export default function RequestDetail({
         new_phase: request.current_phase,
         new_status: request.status,
         new_progress: request.progress,
-        note: `PO cập nhật đầu bài: ${poFormTitle}`,
+        note: updateNote,
         assigned_designer: request.assigned_designer,
         release_date: poFormExpectedDeadline,
         product: poFormProduct,
@@ -1658,7 +1673,7 @@ export default function RequestDetail({
       author: request.requester_email || "PO (Product Owner)",
       authorRole: "PO",
       title: "Đã khởi tạo yêu cầu UX",
-      content: `Yêu cầu [${request.title}] được tạo cho Squad ${request.product || request.squad_name}.`,
+      content: `Yêu cầu [${request.title}] được tạo cho Sản phẩm ${request.product || "App MBBank"}${request.squad_name ? ` (Squad: ${request.squad_name})` : ""}.`,
     })
 
     // 2. Assignment Event
@@ -2093,7 +2108,7 @@ export default function RequestDetail({
                 {/* Left: Breadcrumbs [Squad / Task ID] */}
                 <div className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
                   <span className="text-slate-600 font-bold truncate max-w-[120px] sm:max-w-none">
-                    {request.product || "MBBank App"}
+                    {localProduct || request.product || "App MBBank"}
                   </span>
 
                   <span className="text-slate-300 font-light">/</span>
@@ -3622,7 +3637,7 @@ export default function RequestDetail({
                                       <span className="font-bold text-slate-800">{event.author || "PO"}</span>
                                       <span>đã khởi tạo yêu cầu cho</span>
                                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200/90">
-                                        {request.product || "Lending"}
+                                        {localProduct || request.product || "App MBBank"}
                                       </span>
                                     </>
                                   )}
