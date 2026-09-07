@@ -5,6 +5,7 @@ import { getStatusConfig, getRequestPendingClassification } from "@/config/statu
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { ArrowUpRight, Clock, PauseCircle } from "lucide-react"
+import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
 
 interface RequestCardProps {
   request: UXRequest
@@ -93,9 +94,16 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
               <span className="font-mono text-[10.5px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/80">
                 {request.request_id}
               </span>
-              <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                {request.product || "App MBBank"}
-              </span>
+              {(() => {
+                const prodName = request.product || "App MBBank"
+                const prodColor = getProductColorDef(prodName)
+                return (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${prodColor.badgeClass} flex items-center gap-1`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${prodColor.dotClass} shrink-0`} />
+                    <span>{prodName}</span>
+                  </span>
+                )
+              })()}
               {request.priority && (
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
@@ -209,9 +217,18 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
             {(() => {
               const rawSquad = request.squad_name || request.preferred_squad
               const hasSquad = rawSquad && rawSquad !== request.product && rawSquad !== "Chưa phân công" && rawSquad !== "Triage Squad"
+              if (!hasSquad) {
+                return (
+                  <p className="text-slate-400 italic font-normal truncate text-[11.5px]">
+                    Chưa phân squad
+                  </p>
+                )
+              }
+              const squadColor = getSquadColorDef(rawSquad, request.product)
               return (
-                <p className={`font-semibold truncate text-[11.5px] ${hasSquad ? "text-slate-800" : "text-slate-400 italic font-normal"}`}>
-                  {hasSquad ? rawSquad : "Chưa phân squad"}
+                <p className="font-semibold truncate text-[11.5px] text-slate-800 flex items-center gap-1.5" title={rawSquad}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${squadColor.dotClass} shrink-0`} />
+                  <span className="truncate">{rawSquad}</span>
                 </p>
               )
             })()}

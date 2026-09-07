@@ -3,6 +3,7 @@ import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { getRequestPendingClassification } from "@/config/statusConfig"
+import { getSquadColorDef } from "@/lib/colorUtils"
 import { 
   Calendar, 
   ChevronLeft,
@@ -183,7 +184,8 @@ function getSquadBadgeDetails(req: UXRequest): { label: string; dotClass: string
   if (!hasSquad) {
     return { label: "Chưa phân squad", dotClass: "bg-slate-300", hasSquad: false }
   }
-  return { label: rawSquad, dotClass: "bg-[#1057FB]", hasSquad: true }
+  const colorDef = getSquadColorDef(rawSquad, req.product)
+  return { label: rawSquad, dotClass: colorDef.dotClass, hasSquad: true }
 }
 
 // Kiểm tra trạng thái Pending của thẻ Kanban - Phân loại chuẩn xác 2 loại:

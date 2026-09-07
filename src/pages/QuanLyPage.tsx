@@ -198,104 +198,21 @@ export interface ProductSetting {
   status: "Active" | "Inactive"
 }
 
-export interface ProductColorDef {
-  key: string
-  label: string
-  dotClass: string
-  badgeClass: string
-  borderClass: string
-  bgSoft: string
-  hex: string
-}
+import {
+  PRODUCT_COLORS,
+  ProductColorDef,
+  getProductColorDef,
+  getSquadColorDef,
+  resolveColorKey,
+} from "@/lib/colorUtils"
 
-export const PRODUCT_COLORS: Record<string, ProductColorDef> = {
-  blue: {
-    key: "blue",
-    label: "Xanh MB",
-    dotClass: "bg-blue-600",
-    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
-    borderClass: "border-blue-300",
-    bgSoft: "bg-blue-50/60",
-    hex: "#2563EB",
-  },
-  purple: {
-    key: "purple",
-    label: "Tím Đậm",
-    dotClass: "bg-purple-600",
-    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
-    borderClass: "border-purple-300",
-    bgSoft: "bg-purple-50/60",
-    hex: "#9333EA",
-  },
-  emerald: {
-    key: "emerald",
-    label: "Xanh Lá",
-    dotClass: "bg-emerald-600",
-    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    borderClass: "border-emerald-300",
-    bgSoft: "bg-emerald-50/60",
-    hex: "#059669",
-  },
-  amber: {
-    key: "amber",
-    label: "Vàng Cam",
-    dotClass: "bg-amber-500",
-    badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
-    borderClass: "border-amber-300",
-    bgSoft: "bg-amber-50/60",
-    hex: "#D97706",
-  },
-  rose: {
-    key: "rose",
-    label: "Đỏ Hồng",
-    dotClass: "bg-rose-500",
-    badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
-    borderClass: "border-rose-300",
-    bgSoft: "bg-rose-50/60",
-    hex: "#E11D48",
-  },
-  cyan: {
-    key: "cyan",
-    label: "Xanh Biển",
-    dotClass: "bg-cyan-500",
-    badgeClass: "bg-cyan-50 text-cyan-700 border-cyan-200",
-    borderClass: "border-cyan-300",
-    bgSoft: "bg-cyan-50/60",
-    hex: "#06B6D4",
-  },
-  indigo: {
-    key: "indigo",
-    label: "Chàm",
-    dotClass: "bg-indigo-600",
-    badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    borderClass: "border-indigo-300",
-    bgSoft: "bg-indigo-50/60",
-    hex: "#4F46E5",
-  },
-  slate: {
-    key: "slate",
-    label: "Xám Chì",
-    dotClass: "bg-slate-600",
-    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
-    borderClass: "border-slate-300",
-    bgSoft: "bg-slate-50/60",
-    hex: "#475569",
-  },
+export {
+  PRODUCT_COLORS,
+  getProductColorDef,
+  getSquadColorDef,
+  resolveColorKey,
 }
-
-export function getProductColorDef(productName: string, customColorKey?: string): ProductColorDef {
-  if (customColorKey && PRODUCT_COLORS[customColorKey]) {
-    return PRODUCT_COLORS[customColorKey]
-  }
-  const name = (productName || "").toLowerCase()
-  if (name.includes("app")) return PRODUCT_COLORS.blue
-  if (name.includes("biz")) return PRODUCT_COLORS.purple
-  if (name.includes("baas") || name.includes("api")) return PRODUCT_COLORS.emerald
-  if (name.includes("design") || name.includes("nền tảng")) return PRODUCT_COLORS.amber
-  if (name.includes("wealth") || name.includes("đầu tư")) return PRODUCT_COLORS.cyan
-  if (name.includes("lending") || name.includes("vay")) return PRODUCT_COLORS.indigo
-  return PRODUCT_COLORS.blue
-}
+export type { ProductColorDef }
 
 export interface AuditLogItem {
   id: string
@@ -1588,6 +1505,7 @@ export default function QuanLyPage() {
   const [newSquadDesigners, setNewSquadDesigners] = useState<string[]>([])
   const [newSquadPos, setNewSquadPos] = useState<string[]>([])
   const [newSquadBusinesses, setNewSquadBusinesses] = useState<string[]>([])
+  const [newSquadColor, setNewSquadColor] = useState("")
 
   // Add Product Form State
   const [newProdName, setNewProdName] = useState("")
@@ -2256,13 +2174,16 @@ export default function QuanLyPage() {
       leadDesigner: newSquadDesigners[0] || "",
       designers: newSquadDesigners,
       taskCount: 0,
-      color: "bg-blue-50 text-blue-700 border-blue-200",
+      color: newSquadColor || targetProd?.color || "blue",
       capacityThreshold: newSquadCapacity,
     }
 
     const updated = [...squads, newSq]
     setSquads(updated)
     localStorage.setItem("mbbank_admin_squads", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
 
     // Tự động đồng bộ phân bổ nhân sự sang Bảng Nhân sự ngay lập tức
     const syncedMembers = syncMembersWithSquads(teamMembers, updated)
@@ -2275,6 +2196,7 @@ export default function QuanLyPage() {
     setNewSquadName("")
     setNewSquadCode("")
     setNewSquadDomain("")
+    setNewSquadColor("")
     setNewSquadDesigners([])
     setNewSquadPos([])
     setNewSquadBusinesses([])
@@ -2309,6 +2231,9 @@ export default function QuanLyPage() {
     const updated = squads.map((s) => (s.id === editingSquad.id ? updatedSquadObj : s))
     setSquads(updated)
     localStorage.setItem("mbbank_admin_squads", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
 
     // Tự động đồng bộ phân bổ nhân sự sang Bảng Nhân sự ngay lập tức
     const syncedMembers = syncMembersWithSquads(teamMembers, updated)
@@ -2333,6 +2258,9 @@ export default function QuanLyPage() {
     const updated = squads.filter((s) => s.id !== squadId)
     setSquads(updated)
     localStorage.setItem("mbbank_admin_squads", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
 
     // Tự động đồng bộ phân bổ nhân sự sang Bảng Nhân sự ngay lập tức
     const syncedMembers = syncMembersWithSquads(teamMembers, updated)
@@ -2445,6 +2373,9 @@ export default function QuanLyPage() {
     const updated = [...products, newPr]
     setProducts(updated)
     localStorage.setItem("mbbank_admin_products", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
     setShowAddProductModal(false)
     setNewProdName("")
     setNewProdDesc("")
@@ -2465,6 +2396,9 @@ export default function QuanLyPage() {
     const updated = products.map((p) => (p.id === editingProduct.id ? editingProduct : p))
     setProducts(updated)
     localStorage.setItem("mbbank_admin_products", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
     logAdminAction(
       "Cập nhật Sản phẩm",
       editingProduct.name,
@@ -2484,7 +2418,11 @@ export default function QuanLyPage() {
     setProducts(updatedProds)
     setSquads(updatedSquads)
     localStorage.setItem("mbbank_admin_products", JSON.stringify(updatedProds))
+    localStorage.setItem("ux_portal_products_v2", JSON.stringify(updatedProds))
     localStorage.setItem("mbbank_admin_squads", JSON.stringify(updatedSquads))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updatedSquads))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
     logAdminAction(
       "Xóa Sản phẩm",
       productName,
@@ -4190,6 +4128,7 @@ export default function QuanLyPage() {
                               const desList = getSquadDesigners(sq)
                               const poList = getSquadPos(sq)
                               const bizList = getSquadBusinesses(sq)
+                              const sqColorDef = getSquadColorDef(sq.name, sq.productName)
 
                               return (
                                 <div
@@ -4201,6 +4140,7 @@ export default function QuanLyPage() {
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className={`w-2 h-2 rounded-full shrink-0 ${sqColorDef.dotClass}`} />
                                           <h4 className="font-bold text-[13px] text-slate-900 group-hover:text-blue-600 transition-colors truncate">
                                             {sq.name}
                                           </h4>
@@ -5427,6 +5367,46 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
+                {/* Màu nhận diện Squad */}
+                <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <span>Màu nhận diện Squad:</span>
+                      <span className="text-[11px] font-normal text-slate-500">
+                        (Mặc định đồng bộ theo {newSquadProduct || "Sản phẩm"})
+                      </span>
+                    </label>
+                    {newSquadColor && (
+                      <button
+                        type="button"
+                        onClick={() => setNewSquadColor("")}
+                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Đặt lại theo sản phẩm
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {Object.values(PRODUCT_COLORS).map((c) => {
+                      const effectiveColor = newSquadColor || getProductColorDef(newSquadProduct).key
+                      const isSelected = effectiveColor === c.key
+                      return (
+                        <button
+                          key={`new-sq-color-${c.key}`}
+                          type="button"
+                          onClick={() => setNewSquadColor(c.key)}
+                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
+                            isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-xs" : "opacity-75 hover:opacity-100"
+                          }`}
+                          title={c.label}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* 3 Role phân bổ phụ trách dàn ngang 3 cột */}
                 <div>
                   <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
@@ -5573,6 +5553,46 @@ export default function QuanLyPage() {
                       placeholder="VD: Tiết kiệm, chứng chỉ tiền gửi..."
                       className="text-xs rounded-lg border-slate-200 bg-white"
                     />
+                  </div>
+                </div>
+
+                {/* Màu nhận diện Squad */}
+                <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <span>Màu nhận diện Squad:</span>
+                      <span className="text-[11px] font-normal text-slate-500">
+                        (Mặc định đồng bộ theo {editingSquad.productName || "Sản phẩm"})
+                      </span>
+                    </label>
+                    {editingSquad.color && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSquad({ ...editingSquad, color: undefined })}
+                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Đặt lại theo sản phẩm
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {Object.values(PRODUCT_COLORS).map((c) => {
+                      const curColor = editingSquad.color || getSquadColorDef(editingSquad.name, editingSquad.productName).key
+                      const isSelected = curColor === c.key
+                      return (
+                        <button
+                          key={`edit-sq-color-${c.key}`}
+                          type="button"
+                          onClick={() => setEditingSquad({ ...editingSquad, color: c.key })}
+                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
+                            isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-xs" : "opacity-75 hover:opacity-100"
+                          }`}
+                          title={c.label}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 

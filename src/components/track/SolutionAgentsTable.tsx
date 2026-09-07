@@ -3,6 +3,7 @@ import { UXRequest } from "@/data/mockData"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { getRequestPendingClassification } from "@/config/statusConfig"
+import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
 
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
@@ -611,12 +612,20 @@ export default function SolutionAgentsTable({
 
                               {/* 3. Sản phẩm (Product) */}
                               <td className={`${rowHeightClass} px-3 min-w-0 overflow-hidden`}>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-50 text-slate-700 border border-slate-200/90 shadow-2xs h-[24px]">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                                  <span className="truncate max-w-[110px]" title={req.product || "App MBBank"}>
-                                    {req.product || "App MBBank"}
-                                  </span>
-                                </span>
+                                {(() => {
+                                  const prodName = req.product || "App MBBank"
+                                  const prodColor = getProductColorDef(prodName)
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${prodColor.badgeClass} shadow-2xs h-[24px]`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${prodColor.dotClass} shrink-0`} />
+                                      <span className="truncate max-w-[110px]" title={prodName}>
+                                        {prodName}
+                                      </span>
+                                    </span>
+                                  )
+                                })()}
                               </td>
 
                               {/* 4. Squad nghiệp vụ */}
@@ -626,14 +635,21 @@ export default function SolutionAgentsTable({
                                   const hasSquad = rawSquad && rawSquad !== req.product && rawSquad !== "Chưa phân công" && rawSquad !== "Triage Squad"
                                   const squadDisplay = hasSquad ? rawSquad : "Chưa phân squad"
 
-                                  return hasSquad ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-50/70 text-indigo-700 border border-indigo-200/70 shadow-2xs h-[24px]">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                  if (!hasSquad) {
+                                    return (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-normal text-slate-400 bg-slate-50 border border-slate-200/60 h-[24px]">
+                                        Chưa phân squad
+                                      </span>
+                                    )
+                                  }
+
+                                  const squadColor = getSquadColorDef(rawSquad, req.product)
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${squadColor.badgeClass} shadow-2xs h-[24px]`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${squadColor.dotClass} shrink-0`} />
                                       <span className="truncate max-w-[110px]" title={squadDisplay}>{squadDisplay}</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-normal text-slate-400 bg-slate-50 border border-slate-200/60 h-[24px]">
-                                      Chưa phân squad
                                     </span>
                                   )
                                 })()}
