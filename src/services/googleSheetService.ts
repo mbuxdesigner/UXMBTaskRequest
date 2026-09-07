@@ -13,6 +13,7 @@ import {
 } from "../data/mockData"
 import { getGoogleSheetConfig, saveGoogleSheetConfig } from "../config/googleSheetConfig"
 import { getStoredSession } from "./otpAuthService"
+import { broadcastTaskEvent } from "./realtimeSyncService"
 
 export interface SelectionsData {
   products: string[]
@@ -312,6 +313,7 @@ async function backgroundSyncRequests() {
         const normalized = data.requests.map(normalizeSheetRequest)
         cachedRequestsMemory = normalized
         localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+        broadcastTaskEvent("GLOBAL_REFRESH")
       }
     }
   } catch {
@@ -622,6 +624,13 @@ export async function updateTaskProgressInSheet(
       existingList[targetIdx] = updatedReq
       cachedRequestsMemory = existingList
       localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(existingList))
+      // Phát tín hiệu đồng bộ thời gian thực cho toàn bộ các tab và component
+      broadcastTaskEvent(
+        params.is_comment ? "COMMENT_ADDED" : "TASK_UPDATED",
+        requestId,
+        updatedReq,
+        params.note
+      )
     }
   } catch (e) {
     console.warn("Could not update request in localStorage:", e)
@@ -685,6 +694,50 @@ export async function updateTaskProgressInSheet(
     success: true,
     message: "Đã cập nhật tiến độ và ghi nhận nhật ký thành công!",
   }
+}
+
+/**
+ * Tải và đối chiếu cập nhật của riêng một bài toán (dùng cho Smart Poller khi mở Task Drawer)
+ */
+export async function fetchSingleTaskUpdate(requestId: string): Promise<UXRequest | null> {
+  const config = getGoogleSheetConfig()
+  if (!config.scriptUrl || !config.scriptUrl.trim()) {
+    try {
+      const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        return list.find((r) => r.request_id === requestId) || null
+      }
+    } catch {}
+    return null
+  }
+
+  try {
+    const url = new URL(config.scriptUrl.trim())
+    url.searchParams.set("action", "get_requests")
+    url.searchParams.set("_t", Date.now().toString())
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      if (data.status === "success" && Array.isArray(data.requests)) {
+        const normalized = data.requests.map(normalizeSheetRequest)
+        cachedRequestsMemory = normalized
+        localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+        const found = normalized.find((r: UXRequest) => r.request_id === requestId)
+        if (found) {
+          broadcastTaskEvent("TASK_UPDATED", requestId, found)
+          return found
+        }
+      }
+    }
+  } catch {}
+
+  return null
 }
 
 /**

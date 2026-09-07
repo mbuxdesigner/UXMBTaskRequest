@@ -417,6 +417,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   ]
 
   const [selectedPhases, setSelectedPhases] = useState<string[]>([])
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
 
   // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
@@ -429,12 +430,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       list = list.filter((r) => selectedPhases.includes(getRequestKanbanPhase(r)))
     }
 
-    // 3. Lọc theo Squad
-    if (selectedSquads.length > 0) {
-      list = list.filter((r) => selectedSquads.includes(r.squad_name || r.product || "Khác"))
+    // 3. Lọc theo Sản phẩm
+    if (selectedProducts.length > 0) {
+      list = list.filter((r) => selectedProducts.includes((r.product && r.product.trim()) || "Khác"))
     }
 
-    // 4. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
+    // 4. Lọc theo Squad
+    if (selectedSquads.length > 0) {
+      list = list.filter((r) => selectedSquads.includes(r.squad_name || r.preferred_squad || "Khác"))
+    }
+
+    // 5. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
     if (query.trim()) {
       const q = query.toLowerCase().trim()
       list = list.filter(
@@ -449,11 +455,12 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     }
 
     return list
-  }, [allRequests, session, selectedPhases, selectedSquads, query])
+  }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, query])
 
   const handleClearAllFilters = () => {
     setQuery("")
     setSelectedPhases([])
+    setSelectedProducts([])
     setSelectedSquads([])
   }
 
@@ -769,8 +776,10 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <TaskFilterPopover
                 requests={allRequests}
                 selectedPhases={selectedPhases}
+                selectedProducts={selectedProducts}
                 selectedSquads={selectedSquads}
                 onPhasesChange={setSelectedPhases}
+                onProductsChange={setSelectedProducts}
                 onSquadsChange={setSelectedSquads}
                 onClearAll={handleClearAllFilters}
               />

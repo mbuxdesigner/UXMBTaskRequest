@@ -3,17 +3,21 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Filter, Check, X } from "lucide-react"
 import { KANBAN_PROCESS_COLUMNS, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
 import { UXRequest } from "@/data/mockData"
+import { getProductColorDef } from "@/lib/colorUtils"
 
 export interface FilterState {
   phases: string[]
+  products: string[]
   squads: string[]
 }
 
 export interface TaskFilterPopoverProps {
   requests: UXRequest[]
   selectedPhases: string[]
+  selectedProducts?: string[]
   selectedSquads: string[]
   onPhasesChange: (phases: string[]) => void
+  onProductsChange?: (products: string[]) => void
   onSquadsChange: (squads: string[]) => void
   onClearAll: () => void
 }
@@ -21,8 +25,10 @@ export interface TaskFilterPopoverProps {
 export default function TaskFilterPopover({
   requests,
   selectedPhases,
+  selectedProducts = [],
   selectedSquads,
   onPhasesChange,
+  onProductsChange,
   onSquadsChange,
   onClearAll,
 }: TaskFilterPopoverProps) {
@@ -53,12 +59,26 @@ export default function TaskFilterPopover({
     return counts
   }, [requests])
 
-  // Unique Squads / Products & count
+  // Unique Products & count
+  const productCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+    requests.forEach((r) => {
+      const prod = (r.product && r.product.trim()) || "Khác"
+      counts[prod] = (counts[prod] || 0) + 1
+    })
+    return counts
+  }, [requests])
+
+  const availableProducts = Object.keys(productCounts)
+
+  // Unique Squads & count
   const squadCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
-      const squad = (r.squad_name && r.squad_name.trim()) || (r.product && r.product.trim()) || "Khác"
-      counts[squad] = (counts[squad] || 0) + 1
+      const squad = (r.squad_name && r.squad_name.trim()) || (r.preferred_squad && r.preferred_squad.trim()) || ""
+      if (squad && squad !== "Chưa phân công" && squad !== "Triage Squad") {
+        counts[squad] = (counts[squad] || 0) + 1
+      }
     })
     return counts
   }, [requests])
@@ -73,6 +93,15 @@ export default function TaskFilterPopover({
     }
   }
 
+  const toggleProduct = (prod: string) => {
+    if (!onProductsChange) return
+    if (selectedProducts.includes(prod)) {
+      onProductsChange(selectedProducts.filter((p) => p !== prod))
+    } else {
+      onProductsChange([...selectedProducts, prod])
+    }
+  }
+
   const toggleSquad = (squad: string) => {
     if (selectedSquads.includes(squad)) {
       onSquadsChange(selectedSquads.filter((s) => s !== squad))
@@ -81,7 +110,7 @@ export default function TaskFilterPopover({
     }
   }
 
-  const activeFilterCount = selectedPhases.length + selectedSquads.length
+  const activeFilterCount = selectedPhases.length + selectedProducts.length + selectedSquads.length
 
   return (
     <div className="relative" ref={popoverRef}>
@@ -174,6 +203,57 @@ export default function TaskFilterPopover({
                 })}
               </div>
             </div>
+
+            {/* Section: Sản phẩm */}
+            {availableProducts.length > 0 && onProductsChange && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-500 mb-2">Sản phẩm</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                  {availableProducts.map((prod, pIdx) => {
+                    const isChecked = selectedProducts.includes(prod)
+                    const count = productCounts[prod] || 0
+                    const colorDef = getProductColorDef(prod)
+
+                    return (
+                      <label
+                        key={`prod-opt-${prod}-${pIdx}`}
+                        onClick={() => toggleProduct(prod)}
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer select-none transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {/* Custom Checkbox */}
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                              isChecked
+                                ? "bg-slate-900 border-slate-900 text-white"
+                                : "border-slate-300 bg-white"
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+
+                          {/* Dot indicator */}
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: colorDef.dotColor }}
+                          />
+
+                          {/* Label */}
+                          <span className="text-xs font-medium text-slate-800 truncate">
+                            {prod}
+                          </span>
+                        </div>
+
+                        {/* Count */}
+                        <span className="text-xs font-mono text-slate-400 font-medium pl-2">
+                          {count}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Section 2: Squad / Phân hệ */}
             <div className="pt-2 border-t border-slate-100">

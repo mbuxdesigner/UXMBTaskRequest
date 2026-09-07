@@ -10,7 +10,12 @@ import {
 } from "../../data/mockData"
 import UpdateProgressModal from "./UpdateProgressModal"
 import { getStoredSession, getUserInitials } from "../../services/otpAuthService"
-import { uploadFileToDrive } from "../../services/googleSheetService"
+import { uploadFileToDrive, fetchSingleTaskUpdate } from "../../services/googleSheetService"
+import {
+  subscribeToTask,
+  startTaskActivePolling,
+  stopTaskActivePolling,
+} from "../../services/realtimeSyncService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -369,11 +374,67 @@ export default function RequestDetail({
   const [, setRequirementUpdateTick] = useState(0)
 
   useEffect(() => {
-    const raw = request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
-    setLocalAssignee(raw)
+    setLocalAssignee(request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || "")
     setLocalSquad(request?.squad_name || request?.preferred_squad || "")
     setLocalProduct(request?.product || "")
   }, [request?.request_id, request?.assigned_designer, request?.ux_owner, request?.squad_name, request?.preferred_squad, request?.product])
+
+  // Trạng thái đồng bộ thời gian thực (Live Real-time Sync)
+  const [liveSyncTime, setLiveSyncTime] = useState<string>("Vừa xong")
+  const [isLiveSyncing, setIsLiveSyncing] = useState<boolean>(false)
+
+  // Real-time Event Subscriber & Adaptive Polling cho Task đang mở
+  useEffect(() => {
+    if (!isVisible || !request?.request_id) return
+
+    // 1. Lắng nghe cập nhật real-time từ BroadcastChannel (đa tab / các client khác)
+    const unsubscribe = subscribeToTask(request.request_id, (payload) => {
+      setIsLiveSyncing(true)
+      setTimeout(() => setIsLiveSyncing(false), 800)
+      setLiveSyncTime("Vừa xong")
+
+      if (payload.task) {
+        if (payload.task.status) request.status = payload.task.status
+        if (payload.task.current_phase) request.current_phase = payload.task.current_phase
+        if (typeof payload.task.progress === "number") request.progress = payload.task.progress
+        if (payload.task.assigned_designer) {
+          request.assigned_designer = payload.task.assigned_designer
+          setLocalAssignee(payload.task.assigned_designer)
+        }
+        if (payload.task.product) {
+          request.product = payload.task.product
+          setLocalProduct(payload.task.product)
+        }
+        if (payload.task.squad_name) {
+          request.squad_name = payload.task.squad_name
+          setLocalSquad(payload.task.squad_name)
+        }
+        if (Array.isArray(payload.task.task_updates)) {
+          request.task_updates = payload.task.task_updates
+        }
+        setRequirementUpdateTick((c) => c + 1)
+      }
+    })
+
+    // 2. Kích hoạt Smart Adaptive Poller khi đang mở Drawer
+    startTaskActivePolling(request.request_id, async (id) => {
+      setIsLiveSyncing(true)
+      try {
+        const fresh = await fetchSingleTaskUpdate(id)
+        if (fresh) {
+          setLiveSyncTime("Vừa xong")
+          setRequirementUpdateTick((c) => c + 1)
+        }
+      } finally {
+        setTimeout(() => setIsLiveSyncing(false), 600)
+      }
+    })
+
+    return () => {
+      unsubscribe()
+      stopTaskActivePolling()
+    }
+  }, [isVisible, request?.request_id])
 
   const localAssignees = useMemo(() => {
     if (!localAssignee || localAssignee === "Chưa phân công" || localAssignee === "Đang phân công" || !localAssignee.trim()) {
@@ -2095,7 +2156,7 @@ export default function RequestDetail({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 260 }}
-              className={`bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transition-all duration-300 ${
+              className={`bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transition-all duration-300 transform-gpu will-change-transform ${
                 isFullScreen
                   ? "w-full max-w-none"
                   : "w-full sm:w-[680px] md:w-[780px] lg:w-[1020px] xl:w-[1200px]"
@@ -2131,7 +2192,12 @@ export default function RequestDetail({
 
                 {/* Right: Action & Window Controls */}
                 <div className="flex items-center gap-2">
-
+                  {/* Live Sync Real-time Beacon */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-semibold select-none shadow-2xs">
+                    <span className={`w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 ${isLiveSyncing ? "animate-ping" : "animate-pulse"}`} />
+                    <span className="hidden sm:inline">Live Sync</span>
+                    <span className="text-emerald-600/80 text-[10px] font-normal">• {liveSyncTime}</span>
+                  </div>
 
                   <button
                     type="button"

@@ -4,6 +4,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { getRequestPendingClassification, getStatusConfig } from "@/config/statusConfig"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
+import { fetchSingleTaskUpdate } from "@/services/googleSheetService"
 
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
@@ -410,11 +411,44 @@ export default function SolutionAgentsTable({
             {/* Table Body */}
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={`load-skel-${i}`} className="animate-pulse">
-                    <td colSpan={8} className="py-4 px-4 bg-slate-50/30">
-                      <div className="h-4 bg-slate-100 rounded w-1/3 mb-1" />
-                      <div className="h-3 bg-slate-100 rounded w-1/5" />
+                [...Array(6)].map((_, i) => (
+                  <tr key={`load-skel-${i}`} className="animate-pulse bg-white">
+                    {/* Col 1: Bài toán & Nhu cầu UX (26%) */}
+                    <td className="py-3 px-3 sm:px-4 w-[26%]">
+                      <div className="h-4 bg-slate-200/80 rounded w-3/4 mb-1.5" />
+                      <div className="h-3 bg-slate-100 rounded w-1/2" />
+                    </td>
+                    {/* Col 2: Sản phẩm (11%) */}
+                    <td className="py-3 px-3 w-[11%]">
+                      <div className="h-5 bg-slate-100 rounded-full w-20" />
+                    </td>
+                    {/* Col 3: Squad (11%) */}
+                    <td className="py-3 px-3 w-[11%]">
+                      <div className="h-5 bg-slate-100 rounded-md w-16" />
+                    </td>
+                    {/* Col 4: Người thực hiện (14%) */}
+                    <td className="py-3 px-3 w-[14%]">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-slate-200/80 shrink-0" />
+                        <div className="h-3.5 bg-slate-100 rounded w-20" />
+                      </div>
+                    </td>
+                    {/* Col 5: Trạng thái (12%) */}
+                    <td className="py-3 px-3 w-[12%]">
+                      <div className="h-5 bg-slate-100 rounded-full w-24" />
+                    </td>
+                    {/* Col 6: Độ ưu tiên (8%) */}
+                    <td className="py-3 px-3 w-[8%] text-right">
+                      <div className="h-4 bg-slate-100 rounded-md w-12 ml-auto" />
+                    </td>
+                    {/* Col 7: Thời hạn & Release (15%) */}
+                    <td className="py-3 px-3 w-[15%] text-right">
+                      <div className="h-3.5 bg-slate-100 rounded w-24 ml-auto mb-1" />
+                      <div className="h-3 bg-slate-100/60 rounded w-16 ml-auto" />
+                    </td>
+                    {/* Col 8: Menu (3%) */}
+                    <td className="py-3 px-2 w-[3%] text-right">
+                      <div className="w-5 h-5 bg-slate-100 rounded-full ml-auto" />
                     </td>
                   </tr>
                 ))
@@ -538,6 +572,11 @@ export default function SolutionAgentsTable({
                             <tr
                               key={req.request_id || `req-${rowIdx}`}
                               onClick={() => onSelectRequest(req)}
+                              onMouseEnter={() => {
+                                if (req.request_id) {
+                                  fetchSingleTaskUpdate(req.request_id)
+                                }
+                              }}
                               className={`group hover:bg-blue-50/40 transition-colors cursor-pointer ${
                                 rowIdx % 2 === 0 ? "bg-white" : "bg-slate-50/35"
                               }`}
