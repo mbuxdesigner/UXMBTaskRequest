@@ -193,6 +193,7 @@ export async function updateTaskProgress(
     product?: string
     squad_name?: string
     preferred_squad?: string
+    is_comment?: boolean
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

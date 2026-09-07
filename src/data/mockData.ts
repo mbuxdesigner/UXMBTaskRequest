@@ -87,6 +87,7 @@ export interface UXRequest {
   attachments?: Array<{ name: string; url: string; size?: number }>
   assigned_designer?: string
   design_owner?: string
+  squad?: string
   squad_name: string
   ux_owner: string
   current_phase: string

@@ -975,6 +975,10 @@ function handleUpdateTaskProgress(data) {
         }
         if (newStatus !== "Đã gửi PO" && newStatus !== "PO pending" && newStatus !== "Pending") {
           item.sent_to_po_at = "";
+          item.pending_reason = "";
+        }
+        if (data.pending_reason) {
+          item.pending_reason = String(data.pending_reason).trim();
         }
         if (data.priority) {
           item.priority = String(data.priority).trim();

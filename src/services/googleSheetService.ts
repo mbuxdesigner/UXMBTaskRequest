@@ -589,7 +589,10 @@ export async function updateTaskProgressInSheet(
         last_updated: formattedDate,
         assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : oldReq.assigned_designer,
         ux_owner: params.assigned_designer !== undefined ? (params.assigned_designer || "Chưa phân công") : (oldReq.ux_owner || "Chưa phân công"),
-        sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : oldReq.sent_to_po_at,
+        sent_to_po_at: (params.sent_to_po_at !== undefined)
+          ? (params.sent_to_po_at === "" ? undefined : params.sent_to_po_at)
+          : (params.new_status === "Đã gửi PO" || params.new_status === "PO pending" ? oldReq.sent_to_po_at : undefined),
+        pending_reason: (params.new_status === "Pending" || params.new_status === "PO pending") ? oldReq.pending_reason : undefined,
         phases: buildPhases(params.new_phase),
         latest_update: {
           date: formattedDate,

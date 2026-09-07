@@ -386,13 +386,13 @@ export default function SolutionAgentsTable({
             {/* Table Header: 8 Cột sắp xếp khoa học, chuẩn xác */}
             <thead className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="py-2.5 px-4 sm:px-5 w-[30%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
+                <th className="py-2.5 px-4 sm:px-5 w-[28%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
                 <th className="py-2.5 px-3 w-[12%]">Sản phẩm</th>
                 <th className="py-2.5 px-3 w-[12%]">Squad</th>
                 <th className="py-2.5 px-3 w-[14%]">Người thực hiện</th>
-                <th className="py-2.5 px-3 w-[8%] text-right">Tiến độ</th>
+                <th className="py-2.5 px-3 w-[7%] text-right">Tiến độ</th>
                 <th className="py-2.5 px-3 w-[9%] text-right">Độ ưu tiên</th>
-                <th className="py-2.5 px-3 w-[12%] text-right">Thời hạn & Release</th>
+                <th className="py-2.5 px-3 w-[15%] min-w-[155px] text-right whitespace-nowrap">Thời hạn & Release</th>
                 <th className="py-2.5 px-2 w-[3%] text-right" />
               </tr>
             </thead>
@@ -535,12 +535,12 @@ export default function SolutionAgentsTable({
                               {/* 1. Task Title & UX Business Need & Journey */}
                               <td className={`${rowHeightClass} px-4 sm:px-5 min-w-0 max-w-0 overflow-hidden`}>
                                 <div className="space-y-1 min-w-0 pr-2">
-                                  {/* Line 1: Tiêu đề bài toán + Badge PO Pending / Pending nếu có */}
+                                  {/* Line 1: Tiêu đề bài toán + Badge PO Pending / Pending nếu có (Ẩn khi đang trong group Pending) */}
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <span className="text-sm sm:text-[14.5px] font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug truncate" title={req.title}>
                                       {req.title}
                                     </span>
-                                    {pendingInfo.isPending && (
+                                    {pendingInfo.isPending && group.id !== "pending" && (
                                       <span
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] shrink-0 border shadow-2xs ${
                                           pendingInfo.type === "po_pending"
@@ -685,24 +685,24 @@ export default function SolutionAgentsTable({
                                 )}
                               </td>
 
-                              {/* 7. Thời hạn & Release: Design done (trên) & Release (dưới) */}
-                              <td className={`${rowHeightClass} px-3 text-right`}>
-                                <div className="flex flex-col items-end gap-0.5">
+                              {/* 7. Thời hạn & Release: Design done (trên) & Release (dưới) - Không xuống dòng */}
+                              <td className={`${rowHeightClass} px-3 text-right whitespace-nowrap shrink-0 min-w-[155px]`}>
+                                <div className="flex flex-col items-end gap-0.5 whitespace-nowrap shrink-0">
                                   {/* Design done (Hạn hoàn thành UX) - Nằm trên */}
-                                  <div className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-800 font-mono" title={`Hạn hoàn thành thiết kế (Design done): ${formatDisplayDate(designDoneDate)}`}>
-                                    <span className="text-xs text-slate-400 font-sans font-normal">Design done:</span>
-                                    <span>{formatDisplayDate(designDoneDate)}</span>
+                                  <div className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-800 font-mono whitespace-nowrap shrink-0" title={`Hạn hoàn thành thiết kế (Design done): ${formatDisplayDate(designDoneDate)}`}>
+                                    <span className="text-xs text-slate-400 font-sans font-normal whitespace-nowrap shrink-0">Design done:</span>
+                                    <span className="whitespace-nowrap shrink-0">{formatDisplayDate(designDoneDate)}</span>
                                     {isOverdue && group.id !== "overload" && (
-                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 ml-0.5">
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 ml-0.5 whitespace-nowrap shrink-0">
                                         Trễ
                                       </span>
                                     )}
                                   </div>
                                   {/* Release dự kiến - Nằm dưới */}
                                   {releaseDate && (
-                                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-mono" title={`Ngày Release dự kiến: ${formatDisplayDate(releaseDate)}`}>
-                                      <span className="text-[11px] text-slate-400 font-sans font-normal">Release:</span>
-                                      <span className="font-semibold text-rose-600">{formatDisplayDate(releaseDate)}</span>
+                                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-mono whitespace-nowrap shrink-0" title={`Ngày Release dự kiến: ${formatDisplayDate(releaseDate)}`}>
+                                      <span className="text-[11px] text-slate-400 font-sans font-normal whitespace-nowrap shrink-0">Release:</span>
+                                      <span className="font-semibold text-rose-600 whitespace-nowrap shrink-0">{formatDisplayDate(releaseDate)}</span>
                                     </div>
                                   )}
                                 </div>

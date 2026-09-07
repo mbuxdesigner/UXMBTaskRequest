@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react"
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   UXRequest, 
@@ -15,6 +15,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
+import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { updateTaskProgress } from "../../api/api"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
@@ -1156,15 +1157,61 @@ export default function RequestDetail({
     if (!request) return
     const toastId = toast.loading("Đang gỡ trạng thái Pending...")
     try {
+      const now = new Date()
+      const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`
+
+      const resumeNote = `Designer (${session?.displayName || "Designer"}) đã bấm tiếp tục update - Gỡ bỏ trạng thái Pending.`
+
+      const resumeRecord: TaskUpdateRecord = {
+        id: `OPT-${Date.now()}`,
+        request_id: request.request_id,
+        timestamp: formattedDate,
+        updated_by: session ? (session.displayName || session.teamsEmail) : displayName,
+        author_role: (session ? session.role : "Designer") as any,
+        new_phase: request.current_phase,
+        new_progress: request.progress,
+        note: resumeNote,
+        deliverable_link: request.deliverables?.figma_url || "",
+        is_comment: false,
+      }
+
+      // Gỡ cờ pending ngay lập tức trên UI (0ms latency)
       request.sent_to_po_at = undefined
       request.pending_reason = undefined
       request.status = "Đang thực hiện"
+      setOptimisticUpdates((prev) => [...prev, resumeRecord])
+
+      // Cập nhật ngay localStorage để tất cả các view (Kanban, Grid, Detail) đồng bộ ngay
+      try {
+        const cached = localStorage.getItem("ux_portal_real_requests")
+        if (cached) {
+          const list: UXRequest[] = JSON.parse(cached)
+          const updated = list.map((r) =>
+            r.request_id === request.request_id
+              ? {
+                  ...r,
+                  status: "Đang thực hiện",
+                  pending_reason: undefined,
+                  sent_to_po_at: undefined,
+                  task_updates: [resumeRecord, ...(r.task_updates || [])],
+                }
+              : r
+          )
+          localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+        }
+      } catch (e) {
+        console.warn("Could not optimistically update cache:", e)
+      }
 
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: "Đang thực hiện",
         new_progress: request.progress,
-        note: `Designer (${session?.displayName || "Designer"}) đã bấm tiếp tục update - Gỡ bỏ trạng thái Pending.`,
+        note: resumeNote,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: "", // Gỡ bỏ mốc gửi PO
         is_comment: false,
@@ -1174,7 +1221,7 @@ export default function RequestDetail({
         request.pending_reason = undefined
         request.status = "Đang thực hiện"
         toast.success("Đã gỡ trạng thái Pending thành công!", "Bài toán đã quay lại trạng thái Đang thực hiện.", { id: toastId })
-        if (onUpdated) onUpdated()
+        if (onUpdated) await onUpdated()
       } else {
         toast.error("Không thể gỡ trạng thái", res.message, { id: toastId })
       }
@@ -1838,29 +1885,6 @@ export default function RequestDetail({
                 {/* Right: Action & Window Controls */}
                 <div className="flex items-center gap-2">
 
-                  {/* Nút hành động nhanh dành cho PO khi bài toán ở trạng thái Chờ phản hồi hoặc PO Pending */}
-                  {(request.status === "Đã gửi PO" || pendingClassification.type === "po_pending") && (session?.role === "PO" || isAuthor) && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handlePoApprove}
-                        className="h-8 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer gap-1 shadow-2xs shrink-0"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>PO Duyệt</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePoRequestChanges()}
-                        className="h-8 text-xs font-semibold rounded-xl bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 cursor-pointer gap-1 shrink-0"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Cần sửa</span>
-                      </Button>
-                    </div>
-                  )}
 
                   <button
                     type="button"
@@ -2028,11 +2052,13 @@ export default function RequestDetail({
                         {/* Nút dành cho PO / Tác giả */}
                         {(session?.role === "PO" || isAuthor) && (
                           <>
-                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
-                              PO Duyệt ngay
+                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{APP_CONTENT.track.detailModal.banners.poPending.buttons.confirm}</span>
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 rounded-xl font-semibold cursor-pointer">
-                              Yêu cầu sửa
+                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 rounded-xl font-semibold cursor-pointer flex items-center gap-1">
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>{APP_CONTENT.track.detailModal.banners.poPending.buttons.needUpdate}</span>
                             </Button>
                           </>
                         )}
@@ -2087,37 +2113,39 @@ export default function RequestDetail({
                         <Send className="w-4 h-4 text-purple-600 shrink-0 mt-0.5 animate-pulse" />
                         <div>
                           <p className="font-bold text-purple-950 text-[13px] flex items-center gap-1.5 flex-wrap">
-                            <span>Đang chờ PO phản hồi (SLA 24h)</span>
+                            <span>{APP_CONTENT.track.detailModal.banners.poWaiting.title}</span>
                             <span className="px-2 py-0.5 rounded-full bg-purple-200/80 text-[10px] font-extrabold text-purple-900 uppercase tracking-wide border border-purple-300/80">
-                              Còn {poWaitInfo.hoursRemaining}h
+                              {APP_CONTENT.track.detailModal.banners.poWaiting.timeRemaining.replace("{hours}", String(poWaitInfo.hoursRemaining))}
                             </span>
                           </p>
                           <p className="text-purple-800 text-xs mt-1 leading-relaxed">
-                            Designer đã gửi bài toán cho PO xem xét {poWaitInfo.sentTimeStr ? `vào lúc ${poWaitInfo.sentTimeStr}` : ""}. Đang trong thời hạn 24h chờ PO phản hồi. Nếu sau 24h chưa duyệt, hệ thống sẽ tự động chuyển sang PO Pending.
+                            {APP_CONTENT.track.detailModal.banners.poWaiting.description.replace(
+                              "{sentTime}",
+                              poWaitInfo.sentTimeStr ? `vào lúc ${poWaitInfo.sentTimeStr}` : ""
+                            )}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
-                        {/* Nút dành cho Designer: Gỡ trạng thái cho PO bằng cách bấm Tiếp tục update */}
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={handleDesignerResumeUpdate}
-                          className="h-7.5 px-3 text-xs bg-white hover:bg-purple-100 text-purple-900 border-purple-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
-                          title="Gỡ trạng thái chờ PO để tiếp tục cập nhật bài toán"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Tiếp tục update</span>
-                        </Button>
-
                         {/* Nút dành cho PO / Tác giả */}
                         {(session?.role === "PO" || isAuthor) && (
                           <>
-                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
-                              PO Duyệt
+                            <Button 
+                              size="sm" 
+                              onClick={handlePoApprove} 
+                              className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{APP_CONTENT.track.detailModal.banners.poWaiting.buttons.confirm}</span>
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-purple-800 border-purple-200 rounded-xl font-semibold cursor-pointer">
-                              Yêu cầu sửa
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handlePoRequestChanges()} 
+                              className="h-7.5 px-3 text-xs bg-white text-purple-800 border-purple-200 hover:bg-purple-100 rounded-xl font-semibold cursor-pointer flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>{APP_CONTENT.track.detailModal.banners.poWaiting.buttons.needUpdate}</span>
                             </Button>
                           </>
                         )}

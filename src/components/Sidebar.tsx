@@ -292,7 +292,7 @@ export default function Sidebar({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${currentPage === "compressor" ? "bg-blue-600 ring-2 ring-blue-200" : "bg-emerald-500"}`} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${currentPage === "compressor" ? "ring-2 ring-emerald-200" : ""}`} />
                       <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
                     </div>
                     <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-semibold text-slate-600">

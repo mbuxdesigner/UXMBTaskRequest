@@ -341,8 +341,14 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
 
   const rawStatus = (req.status || "").toLowerCase().trim()
 
-  // Đã hoàn thành thì không phải pending (trừ khi trạng thái hiện tại được đặt là pending / po pending)
-  if ((rawStatus === "hoàn thành" || rawStatus === "done") && rawStatus !== "pending" && rawStatus !== "po pending") {
+  // Đã hoàn thành hoặc đã bàn giao thì tuyệt đối không phải pending
+  if (
+    rawStatus === "hoàn thành" ||
+    rawStatus === "done" ||
+    rawStatus === "bàn giao" ||
+    req.current_phase === "Bàn giao" ||
+    (typeof req.progress === "number" && req.progress >= 100)
+  ) {
     return {
       isPending: false,
       type: null,
@@ -354,9 +360,14 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
       badgeClasses: { bg: "", text: "", border: "", dot: "" },
     }
   }
+
+  // ==========================================
+  // LOẠI 1: PO PENDING (Hổ phách / Cảnh báo 24h)
+  // Xảy ra khi: 
+  // - Status là "PO pending" / "Pending PO"
+  // - Hoặc Status là "Đã gửi PO", đã quá 24h chưa được phản hồi và chưa chuyển khâu khác
+  // ==========================================
   const hasSentToPo = Boolean(req.sent_to_po_at && String(req.sent_to_po_at).trim() !== "")
-  
-  // Tính toán thời gian gửi PO
   let sentMs = 0
   let elapsedHours = 0
   let sentTimeStr = ""
@@ -369,50 +380,8 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
     }
   }
 
-  // 1. Trích xuất lý do pending từ chat (@pending: ...) nếu có
-  let chatPendingReason = (req.pending_reason || "").trim()
-  let hasDesignerPendingCommand = false
-
-  const extractReason = (text: string) => {
-    const trimmed = (text || "").trim()
-    const m = trimmed.match(/@pending(?::|\s+)\s*([^.\n]*)/i) || trimmed.match(/\[Pending\]\s*([^.\n]*)/i)
-    if (m && m[1] && m[1].trim()) {
-      return m[1].trim().replace(/^:\s*/, "")
-    }
-    return ""
-  }
-
-  if (!chatPendingReason && Array.isArray(req.task_updates) && req.task_updates.length > 0) {
-    for (const u of req.task_updates) {
-      const note = (u.note || "").trim()
-      if (/@pending\b/i.test(note) || /\[Pending\]/i.test(note)) {
-        hasDesignerPendingCommand = true
-        const r = extractReason(note)
-        if (r) {
-          chatPendingReason = r
-          break
-        }
-      }
-    }
-  }
-
-  if (!chatPendingReason && req.latest_update?.message) {
-    const msg = (req.latest_update.message || "").trim()
-    if (/@pending\b/i.test(msg) || /\[Pending\]/i.test(msg)) {
-      hasDesignerPendingCommand = true
-      const r = extractReason(msg)
-      if (r) {
-        chatPendingReason = r
-      }
-    }
-  }
-
-  // ==========================================
-  // LOẠI 1: PO PENDING (Hổ phách / Cảnh báo 24h)
-  // Xảy ra khi: sau 24h kể từ khi Designer gửi lại figma cho PO nhưng chưa phản hồi
-  // ==========================================
-  const isExplicitPoPending = rawStatus === "po pending" || rawStatus.includes("po pending")
-  const isOverduePo = (rawStatus === "đã gửi po" || hasSentToPo) && elapsedHours >= 24 && !hasDesignerPendingCommand
+  const isExplicitPoPending = rawStatus === "po pending" || rawStatus === "pending po" || rawStatus.includes("po pending")
+  const isOverduePo = (rawStatus === "đã gửi po" || hasSentToPo) && elapsedHours >= 24 && rawStatus !== "đang thực hiện"
 
   if (isExplicitPoPending || isOverduePo) {
     return {
@@ -433,12 +402,46 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
   }
 
   // ==========================================
-  // LOẠI 2: PENDING (Xám Slate / Tạm dừng theo đoạn chat Designer)
-  // Xảy ra khi: status là "Pending", hoặc Designer gõ @pending:
-  // Lí do: theo đoạn chat của designer khi viết @pending
+  // LOẠI 2: DESIGNER PENDING (Xám Slate / Tạm dừng theo yêu cầu)
+  // Chỉ kích hoạt KHI VÀ CHỈ KHI trạng thái hiện tại của task là "Pending" hoặc "Tạm dừng"
+  // TUYỆT ĐỐI KHÔNG duyệt lịch sử cũ để gắn cờ khi task đã được bấm "Tiếp tục làm" / "Đang thực hiện"
   // ==========================================
-  const isExplicitPending = rawStatus === "pending" || hasDesignerPendingCommand
-  if (isExplicitPending) {
+  const isPendingStatus = rawStatus === "pending" || rawStatus === "tạm dừng" || rawStatus === "chờ phản hồi"
+  if (isPendingStatus) {
+    let chatPendingReason = (req.pending_reason || "").trim()
+
+    const extractReason = (text: string) => {
+      const trimmed = (text || "").trim()
+      const m = trimmed.match(/@pending(?::|\s+)\s*([^.\n]*)/i) || trimmed.match(/\[Pending\]\s*([^.\n]*)/i)
+      if (m && m[1] && m[1].trim()) {
+        return m[1].trim().replace(/^:\s*/, "")
+      }
+      return ""
+    }
+
+    if (!chatPendingReason && Array.isArray(req.task_updates) && req.task_updates.length > 0) {
+      for (const u of req.task_updates) {
+        const note = (u.note || "").trim()
+        if (/@pending\b/i.test(note) || /\[Pending\]/i.test(note)) {
+          const r = extractReason(note)
+          if (r) {
+            chatPendingReason = r
+            break
+          }
+        }
+      }
+    }
+
+    if (!chatPendingReason && req.latest_update?.message) {
+      const msg = (req.latest_update.message || "").trim()
+      if (/@pending\b/i.test(msg) || /\[Pending\]/i.test(msg)) {
+        const r = extractReason(msg)
+        if (r) {
+          chatPendingReason = r
+        }
+      }
+    }
+
     return {
       isPending: true,
       type: "designer_pending",

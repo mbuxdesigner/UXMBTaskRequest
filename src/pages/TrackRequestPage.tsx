@@ -335,8 +335,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       timestamp: formattedDate,
       updated_by: currentSession ? (currentSession.displayName || currentSession.teamsEmail) : "Lê Hoàng Nam",
       author_role: currentSession ? currentSession.role : "Designer",
-      new_phase: targetReq?.current_phase,
-      new_progress: targetReq?.progress,
+      new_phase: targetReq?.current_phase || "Chờ tiếp nhận",
+      new_progress: targetReq?.progress ?? 0,
       note: `Chuyển trạng thái sang [${newStatus}] qua Kanban Board.`,
     }
 
@@ -367,8 +367,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     try {
       const res = await updateTaskProgress(requestId, {
         new_status: newStatus,
-        new_phase: targetReq?.current_phase,
-        new_progress: targetReq?.progress,
+        new_phase: targetReq?.current_phase || "Chờ tiếp nhận",
+        new_progress: targetReq?.progress ?? 0,
         note: `Chuyển trạng thái sang [${newStatus}] qua Kanban Board.`,
         assigned_designer: targetReq?.assigned_designer,
       })

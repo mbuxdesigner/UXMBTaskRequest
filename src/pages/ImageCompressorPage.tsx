@@ -9,6 +9,8 @@ import { EmptyState } from "@/components/reui/empty-state"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/toast"
+import PageHeader from "@/components/common/PageHeader"
+import { cn } from "@/lib/utils"
 import {
   FileImage,
   UploadCloud,
@@ -32,6 +34,7 @@ import {
   TrendingDown,
   HardDrive,
   FileCheck2,
+  Plus,
   RefreshCw,
 } from "lucide-react"
 
@@ -480,7 +483,7 @@ export default function ImageCompressorPage() {
   const totalConvertedSize = convertedImages.reduce((sum, i) => sum + i.convertedSize, 0)
   const totalSavedBytes = Math.max(0, totalOriginalSize - totalConvertedSize)
   const totalReductionPercent =
-    totalOriginalSize > 0 && convertedImages.length > 0
+totalOriginalSize > 0 && convertedImages.length > 0
       ? Math.round(((totalOriginalSize - totalConvertedSize) / totalOriginalSize) * 100)
       : 0
 
@@ -496,714 +499,772 @@ export default function ImageCompressorPage() {
 
   return (
     <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-20">
-      {/* 1. Header Frame */}
-      <Frame variant="glass" padding="lg" className="border-slate-200/90 shadow-xs relative overflow-hidden bg-gradient-to-r from-white via-white to-blue-50/40">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
-            <IconTile variant="gradient" size="xl" className="shadow-lg shadow-blue-600/20 ring-4 ring-blue-50">
-              <Sparkles className="w-8 h-8 text-white" />
-            </IconTile>
+      {/* 1. Page Header Chuẩn ReUI */}
+      <PageHeader
+        breadcrumb={{
+          parent: "MBBank UX Platform",
+          current: "Nén & Tối ưu ảnh",
+        }}
+        title="Nén & Tối ưu ảnh"
+        subtitle="Công cụ tối ưu dung lượng WebP / JPG / PNG siêu tốc ngay trên trình duyệt, không gửi dữ liệu ra ngoài."
+        actions={
+          originalImages.length > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearAll}
+              className="gap-1.5 font-medium text-rose-600 border-slate-200 hover:bg-rose-50/50 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa tất cả ({originalImages.length})</span>
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/jpg,image/webp"
+        className="hidden"
+        onChange={(e) => handleAddFiles(e.target.files)}
+      />
+
+      {/* 2. Khung Tải Lên (ReUI c-file-upload-10 khi chưa có ảnh & c-file-upload-3 khi đã có ảnh) */}
+      {originalImages.length === 0 ? (
+        /* PATTERN c-file-upload-10: Khung lớn chuẩn tỷ lệ màn hình (Aspect 21:9) */
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            "w-full transition-all duration-200 relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-6 sm:p-12 lg:p-16 text-center cursor-pointer min-h-[380px] sm:min-h-[460px] lg:min-h-[500px] aspect-[21/9] bg-white hover:bg-slate-50/50 border-slate-200/90 hover:border-slate-300 shadow-2xs group select-none",
+            isDraggingOver && "border-[#1B3A6B] bg-slate-50 ring-4 ring-[#1B3A6B]/10"
+          )}
+        >
+          {/* Overlapping Photo Cards Illustration (Chuẩn ReUI) */}
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center pointer-events-none">
+            {/* Back card tilted */}
+            <div className="absolute w-12 h-14 sm:w-14 sm:h-16 bg-blue-100/70 rounded-2xl rotate-[-10deg] border border-blue-200/60 shadow-xs" />
+            {/* Front card */}
+            <div className="relative w-12 h-14 sm:w-14 sm:h-16 bg-gradient-to-tr from-[#1B3A6B] to-[#1057FB] rounded-2xl shadow-md flex items-center justify-center overflow-hidden border border-[#1B3A6B]/30">
+              {/* Sun */}
+              <div className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-white/90" />
+              {/* Mountains */}
+              <div className="absolute -bottom-1 -left-2 w-9 h-9 bg-white/35 rounded-md rotate-45 transform origin-center" />
+              <div className="absolute -bottom-2 right-[-2px] w-10 h-8 bg-white/50 rounded-md rotate-12" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5 max-w-lg mx-auto pointer-events-none">
+            <p className="text-base sm:text-lg font-medium text-slate-900 tracking-tight">
+              Drag and drop an image, or{" "}
+              <span className="text-[#1057FB] underline underline-offset-4 font-semibold hover:text-[#1B3A6B] transition-colors">
+                Browse
+              </span>
+            </p>
+            <p className="text-xs text-slate-500 font-normal">
+              Hỗ trợ PNG, JPG, JPEG, WebP • Dán trực tiếp (Ctrl + V) từ Clipboard • Không giới hạn số lượng ảnh
+            </p>
+          </div>
+
+          {/* Guidelines Bullets 2 Cột (Chuẩn ReUI Cover Upload Guidelines) */}
+          <div className="mt-8 pt-6 border-t border-slate-100 w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-left text-xs text-slate-500 pointer-events-none">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  Chuyển đổi & Nén ảnh Đa năng
-                </h1>
-                <Badge variant="navy" size="default" className="font-bold text-xs uppercase tracking-wider">
-                  MB UX Tool v2.1
-                </Badge>
-                <Badge variant="emerald" size="default" className="gap-1.5 font-semibold text-xs">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Xử lý 100% Offline • Bảo mật MB</span>
-                </Badge>
-              </div>
-              <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
-                Tự động tối ưu dung lượng WebP / JPG / PNG siêu tốc ngay trên trình duyệt, không gửi file ra ngoài.
-                Hỗ trợ phân nhóm thông minh quy chuẩn <code className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded font-mono font-bold text-xs">.priority</code> cho Asset App MBBank.
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                <span>High resolution images (png, jpg, webp)</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                <span>Tự động nhận diện thẻ <code className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-[11px]">.priority</code></span>
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                <span>Nén ảnh hàng loạt & tải ZIP nhanh</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                <span>100% Offline, bảo mật an toàn MB</span>
               </p>
             </div>
           </div>
-
-          <FrameActions className="self-start lg:self-center gap-2.5">
-            {originalImages.length > 0 && (
-              <Button
-                variant="outline"
-                size="default"
-                onClick={handleClearAll}
-                className="gap-2 rounded-xl text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Xóa trắng ({originalImages.length})</span>
-              </Button>
-            )}
-
-            <Button
-              variant="default"
-              size="default"
-              onClick={() => fileInputRef.current?.click()}
-              className="gap-2 rounded-xl text-xs font-bold bg-[#1057FB] hover:bg-blue-700 text-white shadow-sm"
-            >
-              <UploadCloud className="w-4 h-4" />
-              <span>Chọn tệp ảnh</span>
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/jpg,image/webp"
-              className="hidden"
-              onChange={(e) => handleAddFiles(e.target.files)}
-            />
-          </FrameActions>
         </div>
-      </Frame>
-
-      {/* 2. Real-time KPI Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1 */}
-        <Frame variant="default" padding="default" className="space-y-2 hover:border-blue-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tổng số tệp ảnh</span>
-            <IconTile variant="blue" size="sm">
-              <FileImage className="w-4 h-4" />
-            </IconTile>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900">
-              {originalImages.length}
-            </span>
-            <span className="text-xs font-bold text-slate-400">tệp</span>
-          </div>
-          <div className="text-[11px] text-slate-500 font-medium">
-            {priorityAssetCount > 0 ? (
-              <span className="text-amber-700 font-bold">{priorityAssetCount} tệp .priority</span>
-            ) : (
-              "Chưa phát hiện tệp .priority"
+      ) : (
+        /* PATTERN c-file-upload-3: Khung nhỏ gọn khi đã có ảnh với dải thumbnails xem trước */
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            "border border-dashed rounded-2xl p-3 sm:p-3.5 flex flex-wrap sm:flex-nowrap items-center gap-3 bg-white transition-all shadow-2xs",
+            isDraggingOver
+              ? "border-[#1B3A6B] bg-slate-50 ring-4 ring-[#1B3A6B]/10"
+              : "border-slate-200/90 hover:border-slate-300"
+          )}
+        >
+          {/* Nút Thêm Ảnh */}
+          <Button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            size="sm"
+            className={cn(
+              "h-10 px-3.5 text-xs font-semibold gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white shrink-0 cursor-pointer shadow-2xs",
+              isDraggingOver && "animate-bounce"
             )}
-          </div>
-        </Frame>
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm ảnh</span>
+          </Button>
 
-        {/* Metric 2 */}
-        <Frame variant="default" padding="default" className="space-y-2 hover:border-blue-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Dung lượng gốc ban đầu</span>
-            <IconTile variant="amber" size="sm">
-              <HardDrive className="w-4 h-4" />
-            </IconTile>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900">
-              {formatBytes(totalOriginalSize)}
-            </span>
-          </div>
-          <div className="text-[11px] text-slate-500 font-medium">
-            {originalImages.length > 0 ? `Trung bình ${formatBytes(totalOriginalSize / originalImages.length)} / ảnh` : "Chưa có dữ liệu"}
-          </div>
-        </Frame>
-
-        {/* Metric 3 */}
-        <Frame variant="default" padding="default" className="space-y-2 hover:border-blue-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Dung lượng sau khi nén</span>
-            <IconTile variant="emerald" size="sm">
-              <FileCheck2 className="w-4 h-4" />
-            </IconTile>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-700">
-              {convertedImages.length > 0 ? formatBytes(totalConvertedSize) : "--"}
-            </span>
-          </div>
-          <div className="text-[11px] text-slate-500 font-medium">
-            {convertedImages.length > 0 ? `Đã nén ${convertedImages.length} / ${originalImages.length} ảnh` : "Đang chờ chuyển đổi"}
-          </div>
-        </Frame>
-
-        {/* Metric 4 */}
-        <Frame variant="default" padding="default" className="space-y-2 hover:border-emerald-300 transition-all bg-gradient-to-br from-white to-emerald-50/30">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Hiệu quả tiết kiệm</span>
-            <IconTile variant="emerald" size="sm">
-              <TrendingDown className="w-4 h-4" />
-            </IconTile>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-600">
-              {convertedImages.length > 0 ? `-${totalReductionPercent}%` : "0%"}
-            </span>
-            {convertedImages.length > 0 && (
-              <span className="text-xs font-bold text-emerald-700">
-                (Giảm {formatBytes(totalSavedBytes)})
-              </span>
-            )}
-          </div>
-          <div className="text-[11px] text-emerald-700 font-medium">
-            {convertedImages.length > 0 ? "Giúp App tải nhanh hơn gấp 3 lần" : "Chưa thực hiện nén"}
-          </div>
-        </Frame>
-      </div>
-
-      {/* 3. Settings & Controls Frame */}
-      <Frame variant="default" padding="lg" className="space-y-6">
-        <FrameHeader className="border-b border-slate-100 pb-3 mb-0">
-          <div>
-            <FrameTitle className="text-base text-slate-900">
-              <Sliders className="w-4 h-4 text-[#1057FB]" />
-              <span>Thiết lập chất lượng & Định dạng đầu ra</span>
-            </FrameTitle>
-            <FrameDescription>
-              Tùy chỉnh độ nén phù hợp với mục đích sử dụng trên Mobile App hoặc Web Portal.
-            </FrameDescription>
-          </div>
-        </FrameHeader>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Output Format Column (5 cols) */}
-          <div className="lg:col-span-5 space-y-3">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#1057FB]" />
-              <span>Định dạng hình ảnh đích:</span>
-            </label>
-
-            <DropdownMenu
-              options={OUTPUT_FORMAT_OPTIONS}
-              value={outputFormat}
-              onChange={setOutputFormat}
-              className="w-full"
-            />
-
-            {/* Quick selection pill buttons */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setOutputFormat("image/webp")}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
-                  outputFormat === "image/webp"
-                    ? "border-[#1057FB] bg-blue-50/80 text-[#1057FB] font-bold ring-2 ring-blue-100"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
-                }`}
-              >
-                <div className="text-xs font-bold">WebP</div>
-                <div className="text-[10px] text-slate-500 truncate">Nhẹ nhất cho App</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOutputFormat("image/png")}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
-                  outputFormat === "image/png"
-                    ? "border-[#1057FB] bg-blue-50/80 text-[#1057FB] font-bold ring-2 ring-blue-100"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
-                }`}
-              >
-                <div className="text-xs font-bold">PNG</div>
-                <div className="text-[10px] text-slate-500 truncate">Giữ trong suốt</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOutputFormat("image/jpeg")}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
-                  outputFormat === "image/jpeg"
-                    ? "border-[#1057FB] bg-blue-50/80 text-[#1057FB] font-bold ring-2 ring-blue-100"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
-                }`}
-              >
-                <div className="text-xs font-bold">JPEG</div>
-                <div className="text-[10px] text-slate-500 truncate">Nền trắng #FFF</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Quality Slider Column (7 cols) */}
-          <div className="lg:col-span-7 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-500" />
-                <span>Chất lượng nén ảnh:</span>
-              </label>
-              <Badge variant="navy" size="default" className="font-extrabold text-xs px-2.5 py-0.5">
-                {quality}%
-              </Badge>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={quality}
-                onChange={(e) => setQuality(Number(e.target.value))}
-                className="w-full accent-[#1057FB] cursor-pointer h-2 bg-slate-200 rounded-lg"
-              />
-
-              {/* Slider checkpoints */}
-              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+          {/* Dải ảnh Thumbnail xem trước */}
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-thin">
+            {originalImages.map((img) => (
+              <div key={img.id} className="group/item relative shrink-0">
+                <img
+                  src={img.previewUrl}
+                  alt={img.name}
+                  className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl border border-slate-200/90 object-cover shadow-2xs transition-transform group-hover/item:scale-105"
+                  title={`${img.name} (${formatBytes(img.size)})`}
+                />
+                {img.isPriority && (
+                  <span
+                    className="absolute -bottom-1 -left-1 px-1 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs"
+                    title="Thẻ .priority"
+                  >
+                    ★
+                  </span>
+                )}
+                {/* Nút Xóa nhanh từng ảnh */}
                 <button
                   type="button"
-                  onClick={() => setQuality(30)}
-                  className={`hover:text-blue-600 transition-colors ${quality === 30 ? "text-[#1057FB] font-bold" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveOriginal(img.id)
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-slate-900 text-white flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity shadow-md hover:bg-rose-600 cursor-pointer text-xs"
+                  title={`Xóa ${img.name}`}
                 >
-                  Siêu nhẹ (30%)
+                  <X className="w-3 h-3" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setQuality(75)}
-                  className={`hover:text-blue-600 transition-colors ${quality === 75 ? "text-[#1057FB] font-bold" : ""}`}
+              </div>
+            ))}
+          </div>
+
+          {/* Thông tin số lượng & hướng dẫn */}
+          <div className="text-xs text-slate-500 font-medium shrink-0 pl-3 border-l border-slate-100 hidden md:flex items-center gap-2">
+            <span className="font-semibold text-slate-900">{originalImages.length}</span>
+            <span>ảnh đã nạp</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[11px] text-slate-400">Kéo thả thêm hoặc dán Ctrl+V</span>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Khi đã có ảnh: Giao diện 2 cột chuẩn ReUI Receipt 5 (Ảnh đã nén 1 bên - Setting 1 bên) */}
+      {originalImages.length > 0 && (
+        <div className="space-y-4 animate-in fade-in-50 duration-200">
+          <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+            {/* CỘT TRÁI: THIẾT LẬP (SETTING) & SUMMARY PHONG CÁCH RECEIPT-5 */}
+            <div className="w-full lg:w-[380px] xl:w-[400px] shrink-0 p-6 bg-slate-50/50 flex flex-col justify-between">
+              <div className="space-y-5">
+                {/* Header card: Icon + Status badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-[#1B3A6B]">
+                      <Sliders className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-900">Thiết lập xuất file</h2>
+                      <p className="text-[11px] text-slate-500 font-normal">Cấu hình nén thời gian thực</p>
+                    </div>
+                  </div>
+                  <Badge
+                    variant={convertedImages.length > 0 ? "success" : "secondary"}
+                    size="sm"
+                    className="font-medium"
+                  >
+                    {convertedImages.length > 0 ? "Đã nén tối ưu" : "Chờ nén"}
+                  </Badge>
+                </div>
+
+                {/* Hero Savings / Size Metric Display */}
+                <div className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
+                  <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                    {convertedImages.length > 0 ? "Mức độ giảm tải" : "Tổng dung lượng gốc"}
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold tracking-tight text-slate-900">
+                      {convertedImages.length > 0 ? `-${totalReductionPercent}%` : formatBytes(totalOriginalSize)}
+                    </span>
+                    {convertedImages.length > 0 && (
+                      <span className="text-xs font-semibold text-emerald-600">
+                        (-{formatBytes(totalSavedBytes)})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 font-normal pt-0.5">
+                    {convertedImages.length > 0 ? (
+                      <span>
+                        Từ <strong className="text-slate-700 font-medium">{formatBytes(totalOriginalSize)}</strong> còn <strong className="text-emerald-700 font-medium">{formatBytes(totalConvertedSize)}</strong>
+                      </span>
+                    ) : (
+                      <span>Đã nạp {originalImages.length} tệp ảnh sẵn sàng xử lý</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Phân cách */}
+                <div className="border-t border-slate-200/80" />
+
+                {/* Cấu hình Định dạng ảnh */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Định dạng chuyển đổi</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { format: "image/webp", label: "WebP", desc: "Tối ưu nhất" },
+                      { format: "image/png", label: "PNG", desc: "Trong suốt" },
+                      { format: "image/jpeg", label: "JPG", desc: "Nền trắng" },
+                    ].map((item) => {
+                      const active = outputFormat === item.format
+                      return (
+                        <button
+                          key={item.format}
+                          type="button"
+                          onClick={() => setOutputFormat(item.format)}
+                          className={cn(
+                            "py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                            active
+                              ? "border-[#1B3A6B] bg-[#1B3A6B]/10 text-[#1B3A6B] ring-1 ring-[#1B3A6B]/30 shadow-2xs font-semibold"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 font-medium"
+                          )}
+                        >
+                          <div className="text-xs">{item.label}</div>
+                          <div className="text-[10px] text-slate-500 truncate mt-0.5 font-normal">{item.desc}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Cấu hình Chất lượng nén */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Chất lượng nén</span>
+                    </label>
+                    <Badge variant="secondary" size="xs" className="font-mono font-semibold text-slate-800">
+                      {quality}%
+                    </Badge>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={quality}
+                    onChange={(e) => setQuality(Number(e.target.value))}
+                    className="w-full accent-[#1B3A6B] cursor-pointer h-1.5 bg-slate-200 rounded-full"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                    {[
+                      { val: 30, label: "30%" },
+                      { val: 75, label: "75%" },
+                      { val: 90, label: "90% (Khuyên dùng)" },
+                      { val: 100, label: "100%" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setQuality(preset.val)}
+                        className={cn(
+                          "transition-colors cursor-pointer hover:text-slate-900 text-xs",
+                          quality === preset.val ? "text-[#1B3A6B] font-semibold" : "text-slate-500 font-normal"
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Phân cách */}
+                <div className="border-t border-slate-200/80" />
+
+                {/* Receipt Specs Breakdown */}
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="text-slate-500">Tệp .priority</span>
+                    <span className="font-medium text-slate-900">
+                      {priorityAssetCount > 0 ? (
+                        <span className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-mono text-[11px]">
+                          {priorityAssetCount} tệp → priority/
+                        </span>
+                      ) : (
+                        "Tự động gom nhóm"
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="text-slate-500">Thuật toán xử lý</span>
+                    <span className="font-medium text-slate-900">Canvas 100% Offline</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="text-slate-500">Bảo mật dữ liệu</span>
+                    <span className="font-medium text-emerald-700 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Nội bộ MB Bank
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nút Thực thi chính cột Settings */}
+              <div className="pt-6 mt-6 border-t border-slate-200/80">
+                <Button
+                  variant="default"
+                  size="default"
+                  onClick={handleConvertAll}
+                  disabled={isProcessing}
+                  className="w-full justify-center gap-2 font-medium shadow-2xs h-10 cursor-pointer"
                 >
-                  Chuẩn Web (75%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuality(90)}
-                  className={`hover:text-blue-600 transition-colors ${quality === 90 ? "text-[#1057FB] font-bold" : ""}`}
-                >
-                  Khuyên dùng (90%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuality(100)}
-                  className={`hover:text-blue-600 transition-colors ${quality === 100 ? "text-[#1057FB] font-bold" : ""}`}
-                >
-                  Tối đa (100%)
-                </button>
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang nén {originalImages.length} ảnh...</span>
+                    </>
+                  ) : convertedImages.length > 0 ? (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Nén lại ({originalImages.length} ảnh)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Bắt đầu nén ({originalImages.length} ảnh)</span>
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
 
-            {/* Quy chuẩn MB Bank Note */}
-            <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50/60 border border-blue-200/80 text-xs text-blue-900">
-              <span className="font-bold shrink-0">💡 Quy chuẩn MB:</span>
-              <span>
-                Các tệp chứa hậu tố <code className="font-bold text-[#1057FB]">.priority</code> (ví dụ: <code className="font-mono">banner_home.priority.png</code>) sẽ được tự động tách vào thư mục <code className="font-mono font-bold">priority/</code> khi xuất ZIP cho đội Dev Mobile.
-              </span>
+            {/* CỘT PHẢI: ẢNH ĐÃ NÉN (RECEIPT-5 ITEMS & BREAKDOWN) */}
+            <div className="flex-1 p-6 flex flex-col justify-between space-y-6 bg-white">
+              <div className="space-y-4">
+                {/* Header cột phải: Title, Filter Pills, View Toggle */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      {convertedImages.length > 0 ? "Danh sách ảnh đã nén" : "Danh sách ảnh chờ nén"}
+                    </h3>
+                    <Badge variant="secondary" size="xs" className="font-mono font-medium">
+                      {convertedImages.length > 0 ? displayedConvertedImages.length : originalImages.length}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {convertedImages.length > 0 && (
+                      <div className="flex items-center rounded-xl bg-slate-100 p-0.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilter("all")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer",
+                            activeFilter === "all" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          Tất cả ({convertedImages.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilter("priority")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer",
+                            activeFilter === "priority" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          Priority ({convertedImages.filter((c) => c.isPriority).length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFilter("base")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer",
+                            activeFilter === "base" ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          Base ({convertedImages.filter((c) => !c.isPriority).length})
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center rounded-xl bg-slate-100 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode("table")}
+                        className={cn(
+                          "p-1.5 rounded-lg transition-all cursor-pointer",
+                          viewMode === "table" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                        )}
+                        title="Xem dạng danh sách (Receipt Items)"
+                      >
+                        <List className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode("grid")}
+                        className={cn(
+                          "p-1.5 rounded-lg transition-all cursor-pointer",
+                          viewMode === "grid" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                        )}
+                        title="Xem dạng lưới (Cards)"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* DANH SÁCH ẢNH */}
+                {convertedImages.length === 0 ? (
+                  /* Trạng thái chờ nén */
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-700 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#1B3A6B]" />
+                        <span>Đã nạp {originalImages.length} ảnh. Bấm "Bắt đầu nén" ở cột thiết lập bên trái để tối ưu.</span>
+                      </div>
+                      <Button
+                        variant="default"
+                        size="xs"
+                        onClick={handleConvertAll}
+                        className="font-medium cursor-pointer"
+                      >
+                        Nén ngay
+                      </Button>
+                    </div>
+
+                    {viewMode === "table" ? (
+                      <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-h-[460px] overflow-y-auto">
+                        {originalImages.map((img) => (
+                          <div key={img.id} className="flex items-center justify-between p-3 hover:bg-slate-50/60 transition-colors">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-11 h-11 rounded-lg bg-slate-100 overflow-hidden border border-slate-200/80 p-0.5 flex items-center justify-center shrink-0">
+                                <img src={img.previewUrl} alt={img.name} className="max-h-full max-w-full object-contain rounded" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-slate-900 truncate" title={img.name}>{img.name}</span>
+                                  {img.isPriority && (
+                                    <Badge variant="warning" size="xs">.priority</Badge>
+                                  )}
+                                </div>
+                                <span className="text-[11px] font-mono text-slate-500">{formatBytes(img.size)}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOriginal(img.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                              title="Xóa ảnh này"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
+                        {originalImages.map((img) => (
+                          <div
+                            key={img.id}
+                            className="rounded-xl border border-slate-200/80 overflow-hidden bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col group"
+                          >
+                            <div className="aspect-square bg-slate-50 relative overflow-hidden flex items-center justify-center p-3 border-b border-slate-100">
+                              <img
+                                src={img.previewUrl}
+                                alt={img.name}
+                                className="max-h-full max-w-full object-contain rounded-md"
+                              />
+                              {img.isPriority && (
+                                <Badge variant="warning" size="xs" className="absolute top-2.5 left-2.5 shadow-2xs font-medium">
+                                  .priority
+                                </Badge>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOriginal(img.id)}
+                                className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-white/90 text-slate-500 hover:text-rose-600 hover:bg-white flex items-center justify-center shadow-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                title="Xóa ảnh này"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="p-3 space-y-1">
+                              <p className="text-xs font-semibold text-slate-900 truncate" title={img.name}>
+                                {img.name}
+                              </p>
+                              <p className="text-[11px] font-mono text-slate-500">
+                                {formatBytes(img.size)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : viewMode === "table" ? (
+                  /* Itemized Rows chuẩn Receipt 5 */
+                  <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto pr-1">
+                    {displayedConvertedImages.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between py-3 px-2 hover:bg-slate-50/70 rounded-xl transition-colors gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden border border-slate-200/80 p-0.5 flex items-center justify-center shrink-0">
+                            <img
+                              src={item.blobUrl || item.dataUrl}
+                              alt={item.name}
+                              className="max-h-full max-w-full object-contain rounded-lg"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-slate-900 truncate" title={item.name}>
+                                {item.name}
+                              </span>
+                              {item.isPriority ? (
+                                <Badge variant="warning" size="xs">priority/</Badge>
+                              ) : (
+                                <Badge variant="secondary" size="xs">base/</Badge>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 font-mono truncate">
+                              <span className="text-slate-400 truncate">Gốc: {item.originalName}</span>
+                              <span>•</span>
+                              <span className="text-slate-400 line-through">{formatBytes(item.originalSize)}</span>
+                              <span>→</span>
+                              <span className="text-emerald-700 font-semibold">{formatBytes(item.convertedSize)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Badges & Actions */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge
+                            variant={item.reductionPercent > 0 ? "success" : "secondary"}
+                            size="xs"
+                            className="font-semibold"
+                          >
+                            {item.reductionPercent > 0 ? `-${item.reductionPercent}%` : "0%"}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => openCompareModal(item)}
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 cursor-pointer"
+                            title="So sánh Before/After"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleDownloadSingle(item)}
+                            className="h-8 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer"
+                            title="Tải ảnh này"
+                          >
+                            <Download className="w-3 h-3 mr-1 text-slate-500" />
+                            <span>Tải</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => handleRemoveOriginal(item.originalId)}
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                            title="Xóa tệp này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Grid Card View */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-1">
+                    {displayedConvertedImages.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-200/80 overflow-hidden bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col group"
+                      >
+                        <div className="aspect-square bg-slate-50 relative overflow-hidden flex items-center justify-center p-3 border-b border-slate-100">
+                          <img
+                            src={item.blobUrl || item.dataUrl}
+                            alt={item.name}
+                            className="max-h-full max-w-full object-contain rounded-md"
+                          />
+
+                          {item.isPriority && (
+                            <Badge variant="warning" size="xs" className="absolute top-2.5 left-2.5 shadow-2xs font-medium">
+                              priority/
+                            </Badge>
+                          )}
+
+                          <Badge
+                            variant={item.reductionPercent > 0 ? "success" : "secondary"}
+                            size="xs"
+                            className="absolute top-2.5 right-2.5 shadow-2xs font-medium"
+                          >
+                            {item.reductionPercent > 0 ? `-${item.reductionPercent}%` : "0%"}
+                          </Badge>
+
+                          {/* Quick action buttons overlay */}
+                          <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-xs">
+                            <button
+                              type="button"
+                              onClick={() => openCompareModal(item)}
+                              className="w-8 h-8 rounded-lg bg-white text-slate-800 flex items-center justify-center hover:bg-slate-100 shadow-2xs transition-transform hover:scale-105 cursor-pointer"
+                              title="Xem so sánh Before/After"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSingle(item)}
+                              className="w-8 h-8 rounded-lg bg-[#1B3A6B] text-white flex items-center justify-center hover:bg-[#152e54] shadow-2xs transition-transform hover:scale-105 cursor-pointer"
+                              title="Tải ảnh này"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-900 truncate" title={item.name}>
+                              {item.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate" title={item.originalName}>
+                              Gốc: {item.originalName}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 font-mono">
+                            <span className="text-slate-400 line-through text-[11px]">
+                              {formatBytes(item.originalSize)}
+                            </span>
+                            <span className="text-emerald-700 font-semibold text-xs">
+                              {formatBytes(item.convertedSize)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              onClick={() => handleDownloadSingle(item)}
+                              className="flex-1 justify-center gap-1 font-medium text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <Download className="w-3 h-3 text-slate-500" />
+                              <span>Tải tệp</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => handleRemoveOriginal(item.originalId)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                              title="Xóa tệp này"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* RECEIPT-5 STATEMENT BREAKDOWN TABLE / SUMMARY */}
+              <div className="border-t border-slate-100 pt-4 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Tổng dung lượng ban đầu</span>
+                  <span className="font-mono text-slate-700 font-medium">{formatBytes(totalOriginalSize)}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Dung lượng sau khi nén</span>
+                  <span className="font-mono text-slate-700 font-medium">
+                    {convertedImages.length > 0 ? formatBytes(totalConvertedSize) : "--"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-emerald-700 font-medium">
+                  <span>Mức dung lượng tiết kiệm</span>
+                  <span className="font-mono font-semibold">
+                    {convertedImages.length > 0 ? `-${formatBytes(totalSavedBytes)} (-${totalReductionPercent}%)` : "--"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-sm font-semibold text-slate-900">
+                  <span>Tổng kích thước tải về (ZIP)</span>
+                  <span className="font-mono text-[#1B3A6B]">
+                    {convertedImages.length > 0 ? formatBytes(totalConvertedSize) : formatBytes(totalOriginalSize)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </Frame>
 
-      {/* 4. Dropzone & Action Bar */}
-      <Frame
-        variant="dashed"
-        padding="lg"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`cursor-pointer transition-all duration-200 text-center space-y-4 ${
-          isDraggingOver
-            ? "border-[#1057FB] bg-blue-50/70 scale-[1.005] ring-4 ring-blue-100"
-            : "hover:bg-slate-50/70 hover:border-slate-300"
-        }`}
-      >
-        <div className="flex justify-center">
-          <IconStack className="bg-blue-50 border-blue-200 text-[#1057FB]">
-            <UploadCloud className="w-8 h-8 animate-bounce" />
-          </IconStack>
-        </div>
+          {/* DƯỚI BOX: THANH HÀNH ĐỘNG PHỤ CHUẨN RECEIPT-5 */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearAll}
+              className="w-full sm:w-auto text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              <span>Xóa toàn bộ danh sách ({originalImages.length})</span>
+            </Button>
 
-        <div className="space-y-1">
-          <p className="text-base font-bold text-slate-900">
-            Nhấp vào đây để chọn tệp, hoặc kéo và thả hình ảnh vào khu vực này
-          </p>
-          <p className="text-xs text-slate-500">
-            Hỗ trợ PNG, JPG, JPEG, WebP • Hỗ trợ dán (Ctrl + V) từ Clipboard • Không giới hạn số lượng ảnh
-          </p>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 flex-wrap">
-          <Badge variant="navy" size="xs">
-            PNG
-          </Badge>
-          <Badge variant="navy" size="xs">
-            JPG
-          </Badge>
-          <Badge variant="navy" size="xs">
-            WebP
-          </Badge>
-          <Badge variant="amber" size="xs">
-            .priority Auto-Tag
-          </Badge>
-        </div>
-      </Frame>
-
-      {/* 5. Primary Action Toolbar */}
-      {originalImages.length > 0 && (
-        <Frame variant="glass" padding="default" className="sticky top-4 z-20 border-slate-200/90 shadow-md backdrop-blur-md bg-white/95">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
               <Button
-                variant="default"
-                size="default"
+                variant="outline"
+                size="sm"
                 onClick={handleConvertAll}
                 disabled={isProcessing}
-                className="gap-2 rounded-xl font-bold text-xs h-10 px-5 bg-[#1057FB] hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 cursor-pointer"
+                className="flex-1 sm:flex-initial text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer"
               >
-                {isProcessing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Đang nén {originalImages.length} ảnh...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Chuyển đổi & Nén {originalImages.length} ảnh</span>
-                  </>
-                )}
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isProcessing && "animate-spin")} />
+                <span>Nén lại</span>
               </Button>
-
               {convertedImages.length > 0 && (
                 <Button
-                  variant="teal"
-                  size="default"
+                  variant="default"
+                  size="sm"
                   onClick={handleDownloadZip}
                   disabled={isZipping}
-                  className="gap-2 rounded-xl font-bold text-xs h-10 px-5 shadow-md shadow-teal-600/20 cursor-pointer"
+                  className="flex-1 sm:flex-initial font-medium cursor-pointer"
                 >
-                  <FolderArchive className="w-4 h-4" />
+                  <FolderArchive className="w-3.5 h-3.5 mr-1.5" />
                   <span>
-                    {isZipping ? "Đang đóng gói ZIP..." : `Tải xuống tất cả (ZIP - ${convertedImages.length} ảnh)`}
+                    {isZipping ? "Đang nén ZIP..." : `Tải toàn bộ file ZIP (${convertedImages.length} ảnh)`}
                   </span>
                 </Button>
               )}
             </div>
-
-            {/* View Mode & Filter Controls */}
-            <div className="flex items-center gap-3 self-end sm:self-center">
-              {/* Category Filter */}
-              {convertedImages.length > 0 && (
-                <div className="flex items-center rounded-xl bg-slate-100 p-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setActiveFilter("all")}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                      activeFilter === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Tất cả ({convertedImages.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFilter("priority")}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                      activeFilter === "priority" ? "bg-white text-amber-800 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Priority ({convertedImages.filter((c) => c.isPriority).length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFilter("base")}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                      activeFilter === "base" ? "bg-white text-blue-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Base ({convertedImages.filter((c) => !c.isPriority).length})
-                  </button>
-                </div>
-              )}
-
-              {/* Grid / Table switch */}
-              <div className="flex items-center rounded-xl bg-slate-100 p-1">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    viewMode === "grid" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  title="Xem dạng lưới (Cards)"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("table")}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    viewMode === "table" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  title="Xem dạng bảng (Table)"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
           </div>
-        </Frame>
-      )}
-
-      {/* 6. Results Section */}
-      {originalImages.length === 0 ? (
-        <EmptyState
-          icon={FileImage}
-          title="Chưa có hình ảnh nào được tải lên"
-          description="Kéo thả hoặc nhấp nút 'Chọn tệp ảnh' phía trên để bắt đầu chuyển đổi và nén tối ưu."
-          action={
-            <Button
-              variant="outline"
-              size="default"
-              onClick={() => fileInputRef.current?.click()}
-              className="gap-2 rounded-xl text-xs font-bold"
-            >
-              <UploadCloud className="w-4 h-4" />
-              <span>Nạp ảnh ngay</span>
-            </Button>
-          }
-        />
-      ) : convertedImages.length === 0 ? (
-        // Hiển thị danh sách ảnh gốc đã nạp, chờ bấm nén
-        <Frame variant="default" padding="lg" className="space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Danh sách {originalImages.length} ảnh đã nạp (Chờ xử lý)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Bấm nút "Chuyển đổi & Nén ảnh" phía trên để tạo bản nén tối ưu.
-              </p>
-            </div>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleConvertAll}
-              className="gap-1.5 rounded-xl text-xs font-bold bg-[#1057FB] text-white"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Bắt đầu nén ngay</span>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {originalImages.map((img) => (
-              <div
-                key={img.id}
-                className="group relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-50/50 hover:border-blue-400 hover:shadow-md transition-all flex flex-col"
-              >
-                <div className="aspect-square bg-slate-100 relative overflow-hidden flex items-center justify-center p-2">
-                  <img
-                    src={img.previewUrl}
-                    alt={img.name}
-                    className="max-h-full max-w-full object-contain rounded-lg"
-                  />
-                  {img.isPriority && (
-                    <Badge variant="amber" size="xs" className="absolute top-2 left-2 shadow-xs">
-                      .priority
-                    </Badge>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveOriginal(img.id)}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-700 shadow-sm"
-                    title="Xóa ảnh này"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="p-2.5 space-y-1 flex-1 flex flex-col justify-between">
-                  <p className="text-xs font-bold text-slate-800 truncate" title={img.name}>
-                    {img.name}
-                  </p>
-                  <p className="text-[11px] font-mono text-slate-500 font-semibold">
-                    {formatBytes(img.size)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Frame>
-      ) : (
-        // Hiển thị kết quả sau khi nén
-        <Frame variant="default" padding="lg" className="space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <span>Kết quả nén ({displayedConvertedImages.length} tệp)</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Toàn bộ ảnh đã được nén tối ưu. Bạn có thể xem phóng to so sánh Before/After hoặc tải lẻ từng tệp.
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadZip}
-              className="gap-1.5 rounded-xl text-xs font-bold text-[#0D9B97] border-[#0D9B97]/30 hover:bg-teal-50"
-            >
-              <FolderArchive className="w-3.5 h-3.5" />
-              <span>Tải gói ZIP hoàn chỉnh</span>
-            </Button>
-          </div>
-
-          {viewMode === "grid" ? (
-            // GRID VIEW
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {displayedConvertedImages.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-slate-200 overflow-hidden bg-white hover:border-[#1057FB] hover:shadow-md transition-all flex flex-col group"
-                >
-                  <div className="aspect-square bg-slate-50 relative overflow-hidden flex items-center justify-center p-3 border-b border-slate-100">
-                    <img
-                      src={item.blobUrl || item.dataUrl}
-                      alt={item.name}
-                      className="max-h-full max-w-full object-contain rounded-lg"
-                    />
-
-                    {/* Priority badge */}
-                    {item.isPriority && (
-                      <Badge variant="amber" size="xs" className="absolute top-2.5 left-2.5 shadow-xs font-bold">
-                        priority/
-                      </Badge>
-                    )}
-
-                    {/* Reduction badge */}
-                    <Badge
-                      variant={item.reductionPercent > 0 ? "emerald" : "navy"}
-                      size="xs"
-                      className="absolute top-2.5 right-2.5 shadow-xs font-extrabold"
-                    >
-                      {item.reductionPercent > 0 ? `-${item.reductionPercent}%` : "0%"}
-                    </Badge>
-
-                    {/* Quick action buttons overlay */}
-                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-xs">
-                      <button
-                        type="button"
-                        onClick={() => openCompareModal(item)}
-                        className="w-9 h-9 rounded-xl bg-white text-slate-800 flex items-center justify-center hover:bg-slate-100 shadow-md transition-transform hover:scale-105"
-                        title="Xem so sánh phóng to"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadSingle(item)}
-                        className="w-9 h-9 rounded-xl bg-[#1057FB] text-white flex items-center justify-center hover:bg-blue-700 shadow-md transition-transform hover:scale-105"
-                        title="Tải ảnh này về"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 truncate" title={item.name}>
-                        {item.name}
-                      </p>
-                      <p className="text-[10px] text-slate-400 truncate" title={item.originalName}>
-                        Gốc: {item.originalName}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                      <div className="font-mono text-slate-400 line-through text-[11px]">
-                        {formatBytes(item.originalSize)}
-                      </div>
-                      <div className="font-mono text-emerald-700 font-bold text-xs">
-                        {formatBytes(item.convertedSize)}
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownloadSingle(item)}
-                      className="w-full gap-1.5 rounded-xl text-xs font-bold h-8 border-slate-200 hover:border-[#1057FB] hover:text-[#1057FB]"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>Tải ảnh</span>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // TABLE VIEW
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <Table>
-                <TableHeader className="bg-slate-50/80">
-                  <TableRow>
-                    <TableHead className="w-14">Xem</TableHead>
-                    <TableHead>Tên tệp xuất</TableHead>
-                    <TableHead>Tên tệp gốc</TableHead>
-                    <TableHead className="text-right">Dung lượng gốc</TableHead>
-                    <TableHead className="text-right">Sau nén</TableHead>
-                    <TableHead className="text-center">Giảm tải</TableHead>
-                    <TableHead className="text-center">Thư mục ZIP</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedConvertedImages.map((item) => (
-                    <TableRow key={item.id} className="hover:bg-slate-50/60">
-                      <TableCell>
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden border border-slate-200 p-0.5 flex items-center justify-center">
-                          <img
-                            src={item.blobUrl || item.dataUrl}
-                            alt={item.name}
-                            className="max-h-full max-w-full object-contain"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-bold text-xs text-slate-900 font-mono">
-                        {item.name}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-500 font-mono">
-                        {item.originalName}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs text-slate-400 line-through">
-                        {formatBytes(item.originalSize)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-bold text-emerald-700">
-                        {formatBytes(item.convertedSize)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={item.reductionPercent > 0 ? "emerald" : "navy"}
-                          size="xs"
-                          className="font-extrabold"
-                        >
-                          -{item.reductionPercent}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {item.isPriority ? (
-                          <Badge variant="amber" size="xs">
-                            priority/
-                          </Badge>
-                        ) : (
-                          <Badge variant="navy" size="xs">
-                            base/
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right space-x-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openCompareModal(item)}
-                          className="h-8 w-8 p-0 rounded-lg text-slate-600 hover:text-slate-900"
-                          title="So sánh Before/After"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadSingle(item)}
-                          className="h-8 px-2.5 rounded-lg text-xs font-bold text-[#1057FB] border-blue-200 hover:bg-blue-50"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Frame>
+        </div>
       )}
 
       {/* 7. Zoom & Comparison Modal */}
@@ -1212,73 +1273,73 @@ export default function ImageCompressorPage() {
           <DialogBody className="p-0 bg-white rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
-                <IconTile variant="teal" size="sm">
+                <div className="w-8 h-8 rounded-lg bg-slate-200/70 flex items-center justify-center text-slate-700">
                   <Eye className="w-4 h-4" />
-                </IconTile>
+                </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 truncate max-w-md">
-                    So sánh chi tiết: {previewItem.title}
+                  <h3 className="text-sm font-semibold text-slate-900 truncate max-w-md">
+                    So sánh: {previewItem.title}
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 font-normal">
                     Gốc: {formatBytes(previewItem.originalSize)} ➔ Sau nén: {formatBytes(previewItem.convertedSize)} (Tiết kiệm -{previewItem.reduction}%)
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
-                  className="w-8 h-8 p-0 rounded-lg"
+                  className="w-7 h-7 p-0"
                   title="Thu nhỏ"
                 >
-                  <ZoomOut className="w-4 h-4" />
+                  <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
-                <span className="text-xs font-mono font-bold text-slate-600 w-12 text-center">
+                <span className="text-xs font-mono font-medium text-slate-600 w-10 text-center">
                   {Math.round(zoomLevel * 100)}%
                 </span>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => setZoomLevel((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
-                  className="w-8 h-8 p-0 rounded-lg"
+                  className="w-7 h-7 p-0"
                   title="Phóng to"
                 >
-                  <ZoomIn className="w-4 h-4" />
+                  <ZoomIn className="w-3.5 h-3.5" />
                 </Button>
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => {
                     setZoomLevel(1)
                     setPanPosition({ x: 0, y: 0 })
                   }}
-                  className="text-xs font-semibold rounded-lg px-2 h-8"
+                  className="text-xs font-medium px-2 h-7"
                 >
                   Reset
                 </Button>
                 <button
                   type="button"
                   onClick={() => setPreviewItem(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 ml-2"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 ml-1 cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             <div className="p-4 sm:p-6 overflow-auto flex-1 bg-slate-100/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
                 {/* Original Image */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <div className="flex items-center justify-between text-xs font-medium text-slate-700">
                     <span>Ảnh gốc (Original)</span>
-                    <Badge variant="navy" size="xs">
+                    <Badge variant="secondary" size="xs">
                       {formatBytes(previewItem.originalSize)}
                     </Badge>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
                     <img
                       src={previewItem.originalUrl}
                       alt="Original"
@@ -1290,13 +1351,13 @@ export default function ImageCompressorPage() {
 
                 {/* Compressed Image */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                    <span className="text-emerald-700 font-bold">Ảnh sau nén (Compressed)</span>
-                    <Badge variant="emerald" size="xs">
+                  <div className="flex items-center justify-between text-xs font-medium text-slate-700">
+                    <span className="text-emerald-700 font-semibold">Ảnh sau nén (Compressed)</span>
+                    <Badge variant="success" size="xs">
                       {formatBytes(previewItem.convertedSize)} (-{previewItem.reduction}%)
                     </Badge>
                   </div>
-                  <div className="rounded-2xl border border-emerald-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
                     <img
                       src={previewItem.convertedUrl}
                       alt="Compressed"

@@ -181,7 +181,7 @@ export const APP_CONTENT = {
   // ----------------------------------------------------------------------------
   track: {
     pageTitle: "Track Task",
-    pageSubtitle: "Không gian làm việc trực quan theo dõi tiến độ khâu và bàn giao sản phẩm",
+    pageSubtitle: "Theo dõi tiến độ và bàn giao sản phẩm",
     viewModes: {
       kanban: "Kanban",
       gantt: "Gantt",
@@ -240,6 +240,27 @@ export const APP_CONTENT = {
         progressSliderLabel: "Tiến độ:",
         noteLabel: "Action log:",
         notePlaceholder: "",
+      },
+      banners: {
+        poWaiting: {
+          title: "Đang chờ PO phản hồi",
+          timeRemaining: "Còn {hours}h",
+          description: "Designer đã gửi PO {sentTime}. Đang trong thời hạn chờ PO phản hồi. Sau 24h PO chưa phản hồi, task tự động chuyển sang trạng thái Pending.",
+          buttons: {
+            confirm: "Xác nhận",
+            needUpdate: "Cần update",
+          },
+        },
+        poPending: {
+          title: "Trạng thái: PO Pending",
+          badge: "Quá hạn 24h chưa phản hồi",
+          descriptionWithTime: "Designer đã gửi PO {sentTime}. Đã quá 24h ({elapsedHours}h) chưa có phản hồi, task tự động chuyển trạng thái Pending.",
+          descriptionFallback: "Designer đã gửi PO quá 24h chưa có phản hồi, task chuyển sang trạng thái Pending.",
+          buttons: {
+            confirm: "Xác nhận",
+            needUpdate: "Cần update",
+          },
+        },
       },
     },
   },

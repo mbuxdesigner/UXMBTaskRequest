@@ -82,7 +82,7 @@ export default function App() {
       return hash as Page
     }
     if (hash === "manage" || hash === "admin") {
-      if (s && s.role !== "PO") return "manage"
+      if (s) return "manage"
     }
     return "overview"
   })
