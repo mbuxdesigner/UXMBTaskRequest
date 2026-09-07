@@ -18,6 +18,7 @@ import { getStatusConfig, getRequestPendingClassification } from "@/config/statu
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { updateTaskProgress } from "../../api/api"
+import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
 import { 
   X, 
@@ -719,6 +720,36 @@ export default function RequestDetail({
     }
     return base
   }, [poFormDeadlineReason])
+
+  // Chuẩn hóa danh sách DropdownOption theo chuẩn ReUI cho Form Sửa PO
+  const productDropdownOptions: DropdownOption[] = useMemo(() => {
+    return editProductOptions.map((p) => ({ value: p, label: p }))
+  }, [editProductOptions])
+
+  const squadDropdownOptions: DropdownOption[] = useMemo(() => {
+    return [
+      { value: "", label: "Chưa phân squad" },
+      ...editSquadOptions.map((sq) => ({ value: sq, label: sq })),
+    ]
+  }, [editSquadOptions])
+
+  const requestTypeDropdownOptions: DropdownOption[] = useMemo(() => {
+    return editRequestTypeOptions.map((rt) => ({ value: rt, label: rt }))
+  }, [editRequestTypeOptions])
+
+  const targetUserDropdownOptions: DropdownOption[] = useMemo(() => {
+    return [
+      { value: "", label: "Chọn đối tượng mục tiêu..." },
+      ...editTargetUserOptions.map((tu) => ({ value: tu, label: tu })),
+    ]
+  }, [editTargetUserOptions])
+
+  const deadlineReasonDropdownOptions: DropdownOption[] = useMemo(() => {
+    return [
+      { value: "", label: "Chọn lý do hạn chót..." },
+      ...editDeadlineReasonOptions.map((dr) => ({ value: dr, label: dr })),
+    ]
+  }, [editDeadlineReasonOptions])
 
   // Tab điều hướng riêng cho màn hình nhỏ (< lg)
   const [mobileActiveTab, setMobileActiveTab] = useState<"details" | "activity">("details")
@@ -3677,55 +3708,43 @@ export default function RequestDetail({
                   />
                 </div>
 
-                {/* 2. Nền tảng, Squad nghiệp vụ & Loại yêu cầu (Được chọn như lúc nhập) */}
+                {/* 2. Nền tảng, Squad nghiệp vụ & Loại yêu cầu (Chuẩn ReUI DropdownMenu) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Nền tảng / Sản phẩm *</label>
-                    <div className="relative">
-                      <select
-                        value={poFormProduct}
-                        onChange={(e) => setPoFormProduct(e.target.value)}
-                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
-                      >
-                        <option value="" disabled>Chọn sản phẩm...</option>
-                        {editProductOptions.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DropdownMenu
+                      options={productDropdownOptions}
+                      value={poFormProduct}
+                      onChange={(val) => setPoFormProduct(val)}
+                      placeholder="Chọn sản phẩm..."
+                      className="w-full"
+                      buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
+                      menuClassName="w-full min-w-56 max-h-60 overflow-y-auto"
+                    />
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Squad nghiệp vụ</label>
-                    <div className="relative">
-                      <select
-                        value={poFormSquad}
-                        onChange={(e) => setPoFormSquad(e.target.value)}
-                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
-                      >
-                        <option value="">Chưa phân squad</option>
-                        {editSquadOptions.map((sq) => (
-                          <option key={sq} value={sq}>{sq}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DropdownMenu
+                      options={squadDropdownOptions}
+                      value={poFormSquad}
+                      onChange={(val) => setPoFormSquad(val)}
+                      placeholder="Chưa phân squad"
+                      className="w-full"
+                      buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
+                      menuClassName="w-full min-w-56 max-h-60 overflow-y-auto"
+                    />
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Loại yêu cầu *</label>
-                    <div className="relative">
-                      <select
-                        value={poFormReqType}
-                        onChange={(e) => setPoFormReqType(e.target.value)}
-                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
-                      >
-                        <option value="" disabled>Chọn loại yêu cầu...</option>
-                        {editRequestTypeOptions.map((rt) => (
-                          <option key={rt} value={rt}>{rt}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DropdownMenu
+                      options={requestTypeDropdownOptions}
+                      value={poFormReqType}
+                      onChange={(val) => setPoFormReqType(val)}
+                      placeholder="Chọn loại yêu cầu..."
+                      className="w-full"
+                      buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
+                      menuClassName="w-full min-w-56 max-h-60 overflow-y-auto"
+                    />
                   </div>
                 </div>
 
@@ -3766,19 +3785,15 @@ export default function RequestDetail({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Đối tượng mục tiêu</label>
-                    <div className="relative">
-                      <select
-                        value={poFormTargetUser}
-                        onChange={(e) => setPoFormTargetUser(e.target.value)}
-                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
-                      >
-                        <option value="">Chọn đối tượng mục tiêu...</option>
-                        {editTargetUserOptions.map((tu) => (
-                          <option key={tu} value={tu}>{tu}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DropdownMenu
+                      options={targetUserDropdownOptions}
+                      value={poFormTargetUser}
+                      onChange={(val) => setPoFormTargetUser(val)}
+                      placeholder="Chọn đối tượng mục tiêu..."
+                      className="w-full"
+                      buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
+                      menuClassName="w-full min-w-56 max-h-60 overflow-y-auto"
+                    />
                     {poFormTargetUser === "Khác" && (
                       <input
                         type="text"
@@ -3803,19 +3818,15 @@ export default function RequestDetail({
                 {/* Lý do hạn chót / Mục tiêu Release */}
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">Lý do hạn chót / Sự kiện Release</label>
-                  <div className="relative">
-                    <select
-                      value={poFormDeadlineReason}
-                      onChange={(e) => setPoFormDeadlineReason(e.target.value)}
-                      className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
-                    >
-                      <option value="">Chọn lý do hạn chót...</option>
-                      {editDeadlineReasonOptions.map((dr) => (
-                        <option key={dr} value={dr}>{dr}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
+                  <DropdownMenu
+                    options={deadlineReasonDropdownOptions}
+                    value={poFormDeadlineReason}
+                    onChange={(val) => setPoFormDeadlineReason(val)}
+                    placeholder="Chọn lý do hạn chót..."
+                    className="w-full"
+                    buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
+                    menuClassName="w-full min-w-56 max-h-60 overflow-y-auto"
+                  />
                   {poFormDeadlineReason === "Khác" && (
                     <input
                       type="text"
