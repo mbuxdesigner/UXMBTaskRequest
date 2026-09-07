@@ -541,7 +541,16 @@ export async function updateTaskProgressInSheet(
     product?: string
     squad_name?: string
     preferred_squad?: string
+    title?: string
+    description?: string
+    business_need?: string
+    user_problem?: string
+    target_user?: string
+    request_type?: string
+    deadline_reason?: string
+    doc_links?: string[]
     is_comment?: boolean
+    is_po_edit?: boolean
   }
 ): Promise<{ success: boolean; message: string; updatedRequest?: UXRequest }> {
   const session = getStoredSession()
@@ -574,6 +583,7 @@ export async function updateTaskProgressInSheet(
 
     if (targetIdx !== -1) {
       const oldReq = existingList[targetIdx]
+      const rawDocLink = (params.doc_links && params.doc_links.length > 0) ? params.doc_links.join("\n") : oldReq.doc_link
       const updatedReq: UXRequest = {
         ...oldReq,
         current_phase: params.new_phase,
@@ -583,6 +593,15 @@ export async function updateTaskProgressInSheet(
         product: params.product !== undefined ? params.product : oldReq.product,
         squad_name: params.squad_name !== undefined ? params.squad_name : oldReq.squad_name,
         preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name !== undefined ? params.squad_name : oldReq.preferred_squad),
+        title: params.title !== undefined ? params.title : oldReq.title,
+        description: params.description !== undefined ? params.description : oldReq.description,
+        business_need: params.business_need !== undefined ? params.business_need : oldReq.business_need,
+        user_problem: params.user_problem !== undefined ? params.user_problem : oldReq.user_problem,
+        target_user: params.target_user !== undefined ? params.target_user : oldReq.target_user,
+        request_type: params.request_type !== undefined ? params.request_type : oldReq.request_type,
+        deadline_reason: params.deadline_reason !== undefined ? params.deadline_reason : oldReq.deadline_reason,
+        doc_links: params.doc_links !== undefined ? params.doc_links : oldReq.doc_links,
+        doc_link: rawDocLink,
         design_deadline: params.design_deadline !== undefined ? params.design_deadline : (oldReq.design_deadline || oldReq.expected_deadline),
         release_date: params.release_date !== undefined ? params.release_date : (oldReq.release_date || oldReq.expected_deadline),
         expected_deadline: params.release_date || oldReq.expected_deadline,
@@ -630,6 +649,15 @@ export async function updateTaskProgressInSheet(
         product: params.product || "",
         squad_name: params.squad_name !== undefined ? params.squad_name : "",
         preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name || ""),
+        title: params.title || "",
+        description: params.description || "",
+        business_need: params.business_need || "",
+        user_problem: params.user_problem || "",
+        target_user: params.target_user || "",
+        request_type: params.request_type || "",
+        deadline_reason: params.deadline_reason || "",
+        doc_links: params.doc_links || [],
+        is_po_edit: params.is_po_edit || false,
         design_deadline: params.design_deadline || "",
         release_date: params.release_date || "",
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,

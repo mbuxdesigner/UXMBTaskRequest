@@ -917,10 +917,18 @@ function handleUpdateTaskProgress(data) {
   const userRole = String(user.role || "Designer").trim();
 
   if (userRole === "PO") {
-    return createJsonResponse({
-      status: "forbidden",
-      message: "Tài khoản PO chỉ có quyền theo dõi, không có quyền sửa khâu thiết kế UX."
-    });
+    const isPoApproval = note && (note.includes("chấp thuận bàn giao") || note.includes("duyệt"));
+    const isPoEdit = (typeof data.is_po_edit !== "undefined" && data.is_po_edit) ||
+                     (note && (note.includes("PO cập nhật đầu bài") || note.includes("đầu bài"))) ||
+                     (typeof data.squad_name !== "undefined" || typeof data.title !== "undefined" || typeof data.description !== "undefined");
+    const isCommentOnly = data.is_comment === true;
+
+    if (!isPoApproval && !isPoEdit && !isCommentOnly) {
+      return createJsonResponse({
+        status: "forbidden",
+        message: "Tài khoản PO chỉ có quyền chỉnh sửa đầu bài hoặc duyệt bàn giao, không có quyền đổi khâu thiết kế UX."
+      });
+    }
   }
 
   let rawSheet = ss.getSheetByName(SHEET_RAW_TASKS);
@@ -989,6 +997,11 @@ function handleUpdateTaskProgress(data) {
         }
         if (data.release_date) {
           item.release_date = String(data.release_date).trim();
+          item.expected_deadline = item.release_date;
+        }
+        if (typeof data.title !== "undefined" && data.title) {
+          item.title = String(data.title).trim();
+          rawSheet.getRange(i + 2, 2).setValue(item.title);
         }
         if (typeof data.squad_name !== "undefined" || typeof data.preferred_squad !== "undefined") {
           const cleanSq = String(data.squad_name || data.preferred_squad || "").trim();
@@ -998,6 +1011,30 @@ function handleUpdateTaskProgress(data) {
         if (typeof data.product !== "undefined" && data.product) {
           item.product = String(data.product).trim();
           rawSheet.getRange(i + 2, 3).setValue(item.product);
+        }
+        if (typeof data.request_type !== "undefined") {
+          item.request_type = String(data.request_type).trim();
+        }
+        if (typeof data.description !== "undefined") {
+          item.description = String(data.description).trim();
+        }
+        if (typeof data.business_need !== "undefined") {
+          item.business_need = String(data.business_need).trim();
+        }
+        if (typeof data.user_problem !== "undefined") {
+          item.user_problem = String(data.user_problem).trim();
+        }
+        if (typeof data.target_user !== "undefined") {
+          item.target_user = String(data.target_user).trim();
+        }
+        if (typeof data.deadline_reason !== "undefined") {
+          item.deadline_reason = String(data.deadline_reason).trim();
+        }
+        if (typeof data.doc_links !== "undefined" && Array.isArray(data.doc_links)) {
+          item.doc_links = data.doc_links;
+          if (data.doc_links.length > 0) {
+            item.doc_link = data.doc_links.join("\n");
+          }
         }
         item.last_updated = formattedDate;
         if (typeof data.assigned_designer !== "undefined") {

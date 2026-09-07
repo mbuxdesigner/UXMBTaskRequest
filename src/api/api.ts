@@ -193,7 +193,16 @@ export async function updateTaskProgress(
     product?: string
     squad_name?: string
     preferred_squad?: string
+    title?: string
+    description?: string
+    business_need?: string
+    user_problem?: string
+    target_user?: string
+    request_type?: string
+    deadline_reason?: string
+    doc_links?: string[]
     is_comment?: boolean
+    is_po_edit?: boolean
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

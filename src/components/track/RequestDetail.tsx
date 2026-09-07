@@ -358,10 +358,21 @@ export default function RequestDetail({
     return request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
   })
 
+  // Local state for immediate optimistic update of Squad and Product from PO edit
+  const [localSquad, setLocalSquad] = useState<string>(() => {
+    return request?.squad_name || request?.preferred_squad || ""
+  })
+  const [localProduct, setLocalProduct] = useState<string>(() => {
+    return request?.product || ""
+  })
+  const [, setRequirementUpdateTick] = useState(0)
+
   useEffect(() => {
     const raw = request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
     setLocalAssignee(raw)
-  }, [request?.request_id, request?.assigned_designer, request?.ux_owner])
+    setLocalSquad(request?.squad_name || request?.preferred_squad || "")
+    setLocalProduct(request?.product || "")
+  }, [request?.request_id, request?.assigned_designer, request?.ux_owner, request?.squad_name, request?.preferred_squad, request?.product])
 
   const localAssignees = useMemo(() => {
     if (!localAssignee || localAssignee === "Chưa phân công" || localAssignee === "Đang phân công" || !localAssignee.trim()) {
@@ -931,10 +942,13 @@ export default function RequestDetail({
 
     setTitleValue(poFormTitle)
     setDescValue(poFormDesc)
+    setLocalSquad(cleanSquad)
+    setLocalProduct(poFormProduct)
+    setRequirementUpdateTick((c) => c + 1)
     setShowPoEditModal(false)
 
     try {
-      await updateTaskProgress(request.request_id, {
+      const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: request.status,
         new_progress: request.progress,
@@ -944,12 +958,26 @@ export default function RequestDetail({
         product: poFormProduct,
         squad_name: cleanSquad,
         preferred_squad: cleanSquad,
+        title: poFormTitle,
+        description: poFormDesc,
+        business_need: poFormBizNeed,
+        user_problem: poFormUserProb,
+        target_user: poFormTargetUser,
+        request_type: poFormReqType,
+        deadline_reason: poFormDeadlineReason,
+        doc_links: poFormDocLinks,
         is_comment: false,
+        is_po_edit: true,
       })
+      if (res && !res.success) {
+        toast.error("Lưu nội bộ", res.message)
+      } else {
+        toast.success("Đã lưu cập nhật tài liệu đầu bài từ PO thành công!")
+      }
       if (onUpdated) onUpdated()
-      toast.success("Đã lưu cập nhật tài liệu đầu bài từ PO thành công!")
     } catch {
       toast.success("Đã lưu cập nhật tài liệu đầu bài từ PO!")
+      if (onUpdated) onUpdated()
     }
   }
 
@@ -2789,13 +2817,13 @@ export default function RequestDetail({
                             Đầu bài từ Product Owner
                           </h2>
                           {(() => {
-                            const rawSq = (request.squad_name || request.preferred_squad || "").trim()
-                            const prod = (request.product || "").trim().toLowerCase()
-                            const hasSq = Boolean(rawSq && rawSq.toLowerCase() !== prod && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad")
+                            const rawSq = (localSquad !== undefined ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                            const prod = (localProduct || request.product || "").trim().toLowerCase()
+                            const hasSq = Boolean(rawSq && rawSq.toLowerCase() !== prod && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad" && rawSq !== "Chưa phân squad")
                             const squadLabel = hasSq ? rawSq : "Chưa phân squad"
                             return (
                               <span className="text-xs sm:text-[13px] font-medium text-slate-600 flex items-center gap-1.5 flex-wrap">
-                                <span>• {request.product || "App MBBank"}</span>
+                                <span>• {localProduct || request.product || "App MBBank"}</span>
                                 <span>•</span>
                                 <span className={hasSq ? "text-indigo-600 font-semibold" : "text-slate-400 italic font-normal"}>
                                   {squadLabel}
@@ -2831,7 +2859,22 @@ export default function RequestDetail({
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => setShowPoEditModal(true)}
+                          onClick={() => {
+                            const curSq = (localSquad !== undefined ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                            const curProd = (localProduct || request.product || "").trim().toLowerCase()
+                            setPoFormSquad(curSq.toLowerCase() === curProd ? "" : curSq)
+                            setPoFormProduct(localProduct || request.product || "")
+                            setPoFormTitle(request.title || "")
+                            setPoFormReqType(request.request_type || "")
+                            setPoFormDesc(request.description || "")
+                            setPoFormBizNeed(request.business_need || "")
+                            setPoFormUserProb(request.user_problem || "")
+                            setPoFormTargetUser(request.target_user || "")
+                            setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                            setPoFormDeadlineReason(request.deadline_reason || "")
+                            setPoFormDocLinks(request.doc_links || [])
+                            setShowPoEditModal(true)
+                          }}
                           className="h-9 px-3.5 text-xs sm:text-[13px] font-semibold rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
                         >
                           <Edit3 className="w-3.5 h-3.5 text-slate-500" />
