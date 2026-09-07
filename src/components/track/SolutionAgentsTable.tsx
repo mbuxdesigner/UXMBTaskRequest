@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react"
 import { UXRequest } from "@/data/mockData"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
-import { getRequestPendingClassification } from "@/config/statusConfig"
+import { getRequestPendingClassification, getStatusConfig } from "@/config/statusConfig"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
 
 function formatDesignerDisplayName(rawName?: string): string {
@@ -183,49 +183,58 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   },
 ]
 
-// ReUI Radial Steps Progress Ring
-function RadialStepsProgress({ progress }: { progress: number }) {
-  const safeProgress = Math.max(0, Math.min(100, progress))
-  const radius = 8
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (safeProgress / 100) * circumference
+// Helper phân giải Trạng thái / Khâu UX của bài toán theo Cấu hình Quy trình Khâu UX & SLA
+export function getTaskPhaseStatus(req: UXRequest): { name: string; progress: number } {
+  // 1. Kiểm tra trạng thái pending đặc biệt (PO Pending hoặc Designer Pending)
+  const pendingClass = getRequestPendingClassification(req)
+  if (pendingClass.isPending && pendingClass.label) {
+    return { name: pendingClass.label, progress: typeof req.progress === "number" ? req.progress : 0 }
+  }
 
-  const colorClass =
-    safeProgress >= 75
-      ? "text-emerald-500"
-      : safeProgress >= 35
-      ? "text-amber-500"
-      : "text-rose-500"
+  // 2. Nếu bài toán hoàn thành
+  const rawStatus = (req.status || "").trim().toLowerCase()
+  if (rawStatus === "hoàn thành" || rawStatus === "done" || (typeof req.progress === "number" && req.progress >= 100)) {
+    return { name: "Hoàn thành", progress: 100 }
+  }
 
-  return (
-    <div className="flex items-center justify-end gap-2" title={`${safeProgress}% tiến độ`}>
-      <svg viewBox="0 0 24 24" className={`w-4 h-4 shrink-0 ${colorClass}`} aria-hidden="true">
-        <circle
-          cx="12"
-          cy="12"
-          r={radius}
-          fill="none"
-          className="stroke-slate-200"
-          strokeWidth="2.5"
-        />
-        <circle
-          cx="12"
-          cy="12"
-          r={radius}
-          fill="none"
-          className="stroke-current"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 12 12)"
-        />
-      </svg>
-      <span className="font-mono text-xs font-bold text-slate-700 tabular-nums min-w-[28px] text-right">
-        {safeProgress}%
-      </span>
-    </div>
-  )
+  // 3. Nếu bị chặn
+  if (rawStatus === "bị chặn" || rawStatus === "blocked") {
+    return { name: "Bị chặn", progress: typeof req.progress === "number" ? req.progress : 0 }
+  }
+
+  // 4. Nếu có current_phase thì ưu tiên hiển thị tên khâu UX (chuẩn hóa bỏ tiền tố số "1. ", "2. ", v.v.)
+  const rawPhase = (req.current_phase || "").trim()
+  if (rawPhase) {
+    const clean = rawPhase.replace(/^\d+\.\s*/, "").trim()
+    if (clean) {
+      return { name: clean, progress: typeof req.progress === "number" ? req.progress : 0 }
+    }
+  }
+
+  // 5. Thử tra cứu từ Cấu hình Quy trình Khâu UX & Tiêu chuẩn SLA (localStorage: mbbank_admin_phases)
+  try {
+    const saved = localStorage.getItem("mbbank_admin_phases")
+    if (saved) {
+      const phases: any[] = JSON.parse(saved)
+      if (Array.isArray(phases) && phases.length > 0) {
+        const pVal = typeof req.progress === "number" ? req.progress : 0
+        // Khớp theo tiến độ % mặc định của khâu
+        const matched = phases.find((p) => p.defaultProgress === pVal)
+        if (matched && matched.name) {
+          return { name: matched.name, progress: pVal }
+        }
+        // Khớp theo tên khâu nằm trong status
+        const statusMatch = phases.find((p) => rawStatus.includes(p.name.toLowerCase()))
+        if (statusMatch && statusMatch.name) {
+          return { name: statusMatch.name, progress: statusMatch.defaultProgress || pVal }
+        }
+      }
+    }
+  } catch {}
+
+  // 6. Fallback về status hoặc "Chờ tiếp nhận"
+  const finalStatus = req.status || "Chờ tiếp nhận"
+  return { name: finalStatus, progress: typeof req.progress === "number" ? req.progress : 0 }
 }
 
 export default function SolutionAgentsTable({
@@ -387,12 +396,12 @@ export default function SolutionAgentsTable({
             {/* Table Header: 8 Cột sắp xếp khoa học, chuẩn xác */}
             <thead className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="py-2.5 px-4 sm:px-5 w-[28%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
-                <th className="py-2.5 px-3 w-[12%]">Sản phẩm</th>
-                <th className="py-2.5 px-3 w-[12%]">Squad</th>
+                <th className="py-2.5 px-4 sm:px-5 w-[26%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
+                <th className="py-2.5 px-3 w-[11%]">Sản phẩm</th>
+                <th className="py-2.5 px-3 w-[11%]">Squad</th>
                 <th className="py-2.5 px-3 w-[14%]">Người thực hiện</th>
-                <th className="py-2.5 px-3 w-[7%] text-right">Tiến độ</th>
-                <th className="py-2.5 px-3 w-[9%] text-right">Độ ưu tiên</th>
+                <th className="py-2.5 px-3 w-[12%] text-left">Trạng thái</th>
+                <th className="py-2.5 px-3 w-[8%] text-right">Độ ưu tiên</th>
                 <th className="py-2.5 px-3 w-[15%] min-w-[155px] text-right whitespace-nowrap">Thời hạn & Release</th>
                 <th className="py-2.5 px-2 w-[3%] text-right" />
               </tr>
@@ -675,9 +684,35 @@ export default function SolutionAgentsTable({
                                 )}
                               </td>
 
-                              {/* 5. Tiến độ (ReUI Steps Progress Ring) */}
-                              <td className={`${rowHeightClass} px-3 text-right`}>
-                                <RadialStepsProgress progress={progressVal} />
+                              {/* 5. Trạng thái (Khâu UX theo Cấu hình Quy trình & SLA) */}
+                              <td className={`${rowHeightClass} px-3 text-left`}>
+                                {(() => {
+                                  const phaseInfo = getTaskPhaseStatus(req)
+                                  const cfg = getStatusConfig(phaseInfo.name)
+                                  const pendingClass = getRequestPendingClassification(req)
+
+                                  if (pendingClass.isPending) {
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-[24px]"
+                                        title={`Pending: ${pendingClass.reason || pendingClass.label}`}
+                                      >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                        <span className="truncate max-w-[110px]">{pendingClass.label || phaseInfo.name}</span>
+                                      </span>
+                                    )
+                                  }
+
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap h-[24px] ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
+                                      title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                      <span className="truncate max-w-[115px]">{phaseInfo.name}</span>
+                                    </span>
+                                  )
+                                })()}
                               </td>
 
                               {/* 6. Độ ưu tiên (Priority Badge) - Đồng nhất chiều cao h-[24px] */}

@@ -492,6 +492,10 @@ export function getStatusConfig(status: string): StatusBadgeConfig {
   for (const [key, val] of Object.entries(STATUS_CONFIG)) {
     if (key.toLowerCase() === lower) return val
   }
+  // Thử khớp một phần (partial match) với tên khâu hoặc trạng thái
+  for (const [key, val] of Object.entries(STATUS_CONFIG)) {
+    if (lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) return val
+  }
   return DEFAULT_STATUS_CONFIG
 }
 
