@@ -156,9 +156,7 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
       phase: "Chờ tiếp nhận",
       message: "Yêu cầu đã được ghi nhận trên hệ thống và đang chờ tiếp nhận xử lý.",
     },
-    deliverables: {
-      figma_url: String(data.doc_link || ""),
-    },
+    deliverables: data.deliverables || (data.figma_url && !data.figma_url.includes("viewpage") ? { figma_url: data.figma_url } : {}),
   })
 
   // Prepend to localStorage cache so it shows up in "Tra cứu", "Quản lý", and "Tổng quan" immediately

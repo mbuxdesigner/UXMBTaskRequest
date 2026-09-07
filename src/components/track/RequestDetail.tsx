@@ -689,7 +689,31 @@ export default function RequestDetail({
   const [trackedSeconds, setTrackedSeconds] = useState<number>(0)
   const [activeTags, setActiveTags] = useState<string[]>(["Lending", "UX Research"])
   const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || request?.expected_deadline || "")
-  const [customDeliverables, setCustomDeliverables] = useState(request?.deliverables || {})
+
+  const getSanitizedDeliverables = useCallback((req?: UXRequest | null) => {
+    const d = { ...(req?.deliverables || {}) }
+    if (d.figma_url) {
+      const raw = d.figma_url.trim().toLowerCase()
+      // Nếu figma_url là link tài liệu PO đính kèm (confluence viewpage, drive, hoặc trùng doc_link) thì không phải figma bàn giao của designer
+      if (
+        (req?.doc_link && d.figma_url === req.doc_link) ||
+        (req?.doc_links && req.doc_links.includes(d.figma_url)) ||
+        raw.includes("viewpage.action") ||
+        raw.includes("google.com/drive") ||
+        (!raw.includes("figma.com") && !raw.includes("figma"))
+      ) {
+        d.figma_url = ""
+      }
+    }
+    return d
+  }, [])
+
+  const [customDeliverables, setCustomDeliverables] = useState(() => getSanitizedDeliverables(request))
+
+  useEffect(() => {
+    setCustomDeliverables(getSanitizedDeliverables(request))
+  }, [request?.request_id, request?.deliverables, getSanitizedDeliverables])
+
   const [showAddDeliverableModal, setShowAddDeliverableModal] = useState(false)
   const [newDeliverableType, setNewDeliverableType] = useState<"figma" | "prototype" | "spec">("figma")
   const [newDeliverableUrl, setNewDeliverableUrl] = useState("")
@@ -3331,10 +3355,10 @@ export default function RequestDetail({
                             href={customDeliverables.figma_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs sm:text-sm transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 transition-colors shrink-0"
+                            title="Mở Figma Canvas"
                           >
-                            <span>Mở Canvas</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <ExternalLink className="w-4 h-4" />
                           </a>
                         ) : (
                           <button

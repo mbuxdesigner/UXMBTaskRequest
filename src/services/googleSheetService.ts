@@ -185,9 +185,11 @@ export function normalizeSheetRequest(data: any): UXRequest {
       phase: currentPhase,
       message: "Yêu cầu đã được ghi nhận vào hệ thống Google Sheet.",
     },
-    deliverables: data.deliverables || {
-      figma_url: String(data.doc_link || ""),
-    },
+    deliverables: (data.deliverables?.figma_url && !data.deliverables.figma_url.includes("viewpage") && (data.deliverables.figma_url.includes("figma") || !data.doc_links?.includes(data.deliverables.figma_url)))
+      ? data.deliverables
+      : (data.figma_url && !data.figma_url.includes("viewpage") && data.figma_url.includes("figma"))
+      ? { figma_url: data.figma_url }
+      : {},
     submitted_at: formattedDate,
     priority: String(data.priority || "Normal"),
     task_updates: taskUpdates,
