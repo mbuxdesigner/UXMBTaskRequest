@@ -2444,27 +2444,22 @@ export default function RequestDetail({
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
-                                      Phân công Designer
+                                      Assignees
                                     </span>
                                     {localAssignees.length > 0 && (
-                                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 text-[#1057FB] border border-blue-200">
-                                        {localAssignees.length} đã chọn
+                                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-[#1057FB] border border-blue-200">
+                                        {String(localAssignees.length).padStart(2, "0")}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="text-[10.5px] text-slate-400 font-medium truncate max-w-[110px]" title={`Squad: ${taskSquadName}`}>
-                                      Squad: <strong className="text-slate-700">{taskSquadName}</strong>
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setOpenDropdown(null)}
-                                      className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                                      title="Đóng"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(null)}
+                                    className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    title="Đóng"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <div className="relative">
                                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
