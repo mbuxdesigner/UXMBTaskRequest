@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { OtpInput } from "@/components/reui/otp-input"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import BrandLogo from "@/components/common/BrandLogo"
 import {
   requestTeamsOtp,
   verifyTeamsOtp,
@@ -84,6 +85,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(5)
   const [otpCountdown, setOtpCountdown] = useState(180)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [logoFailed, setLogoFailed] = useState(false)
 
   // Timer cho hiệu lực OTP (180s)
   useEffect(() => {
@@ -310,12 +312,17 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                 <p className="text-xs text-neutral-500 font-medium">
                   Chào mừng đến với
                 </p>
-                <div className="mt-2">
-                  <img
-                    src="/img-logo-UXTeamWith.webp"
-                    alt="MB UX Team"
-                    className="h-8 w-auto object-contain"
-                  />
+                <div className="mt-2 min-h-8 flex items-center">
+                  {!logoFailed ? (
+                    <img
+                      src="/img-logo-UXTeamWith.webp"
+                      alt="MB UX Team"
+                      className="h-8 w-auto object-contain"
+                      onError={() => setLogoFailed(true)}
+                    />
+                  ) : (
+                    <BrandLogo size="sm" />
+                  )}
                 </div>
               </div>
 
