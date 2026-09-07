@@ -1115,6 +1115,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
     rbac?: any
     nav_items?: any
     selections?: any
+    team_members?: any[]
   }
 }> {
   const config = getGoogleSheetConfig()
@@ -1126,6 +1127,39 @@ export async function fetchMasterDataFromSheet(): Promise<{
     }
   }
 
+  // 1. Ưu tiên gửi qua POST (text/plain) để tránh caching và URL query length limits
+  try {
+    const postRes = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "get_master_data" }),
+    })
+
+    if (postRes.ok) {
+      const json = await postRes.json()
+      if (json.status === "success") {
+        return {
+          success: true,
+          message: "Tải Master Data từ Google Sheet thành công!",
+          data: {
+            squads: json.squads || json.master_data?.SQUADS_CONFIG,
+            products: json.products || json.master_data?.PRODUCTS_CONFIG,
+            phases: json.phases || json.master_data?.PHASES_CONFIG,
+            status_rules: json.status_rules || json.master_data?.STATUS_RULES_CONFIG,
+            audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
+            rbac: json.rbac || json.master_data?.RBAC_CONFIG,
+            nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
+            selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
+            team_members: json.team_members || json.master_data?.USERS_LIST,
+          },
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch master data via POST, trying GET...", err)
+  }
+
+  // 2. Dự phòng qua GET URL
   try {
     const url = new URL(scriptUrl.trim())
     url.searchParams.set("action", "get_master_data")
@@ -1153,6 +1187,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
           rbac: json.rbac || json.master_data?.RBAC_CONFIG,
           nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
           selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
+          team_members: json.team_members || json.master_data?.USERS_LIST,
         },
       }
     }
@@ -1201,14 +1236,59 @@ function parseCsvSimple(text: string): string[][] {
 }
 
 /**
- * Lấy danh sách nhân sự từ Google Sheet (Hỗ trợ cả GViz trực tiếp và Apps Script Web App API)
+ * Lấy danh sách nhân sự từ Google Sheet (Ưu tiên Apps Script Web App vì chứa 100% JSON squads & products trong RAW_SETTINGS)
  */
 export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
   const config = getGoogleSheetConfig()
   const scriptUrl = config?.scriptUrl
   const sheetId = config?.sheetId || "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw"
 
-  // 1. Thử tải trực tiếp từ Google Sheet qua GViz API (Tốc độ tức thì, không bị CORS, trực tiếp lấy từ tab USERS mới nhất)
+  // 1. ƯU TIÊN SỐ 1: Thử qua POST text/plain tới Apps Script Web App (action: get_team_members)
+  // Đây là nơi đọc từ RAW_SETTINGS (USERS_LIST) có đầy đủ mảng squads, products, vai trò, avatar
+  if (scriptUrl && scriptUrl.trim()) {
+    try {
+      const res = await fetch(scriptUrl.trim(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "get_team_members" }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const list = data.members || data.users || []
+        if (data.status === "success" && Array.isArray(list) && list.length > 0) {
+          return list
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch team members via POST, trying GET...", e)
+    }
+
+    // 2. Thử qua GET URL Query Params
+    try {
+      const url = new URL(scriptUrl.trim())
+      url.searchParams.set("action", "get_team_members")
+      url.searchParams.set("_t", Date.now().toString())
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const list = data.members || data.users || []
+        if (data.status === "success" && Array.isArray(list) && list.length > 0) {
+          return list
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch team members from Google Sheet via GET:", e)
+    }
+  }
+
+  // 3. Dự phòng qua GViz CSV sheet USERS (Khi Apps Script không phản hồi)
+  // GIỮ NGUYÊN squads & products đã có từ bộ nhớ thay vì gán đè bừa bãi "All Squads"
   if (sheetId && sheetId.trim()) {
     try {
       const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId.trim()}/gviz/tq?tqx=out:csv&sheet=USERS&_t=${Date.now()}`
@@ -1217,6 +1297,25 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
         const text = await res.text()
         const rows = parseCsvSimple(text)
         if (rows.length > 1) {
+          // Lấy cấu hình nhân sự hiện tại trong máy để giữ lại squads & products
+          const existingMap = new Map<string, any>()
+          try {
+            const savedLocal = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+            if (savedLocal) {
+              const parsed = JSON.parse(savedLocal)
+              if (Array.isArray(parsed)) {
+                for (const m of parsed) {
+                  const key1 = (m.email || "").trim().toLowerCase()
+                  const key2 = (m.teamsEmail || "").trim().toLowerCase()
+                  const key3 = (m.name || "").trim().toLowerCase()
+                  if (key1) existingMap.set(key1, m)
+                  if (key2) existingMap.set(key2, m)
+                  if (key3) existingMap.set(key3, m)
+                }
+              }
+            }
+          } catch {}
+
           const members: any[] = []
           for (let i = 1; i < rows.length; i++) {
             const r = rows[i]
@@ -1229,21 +1328,25 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
             else if (rawRole.toLowerCase().includes("business") || rawRole.toLowerCase().includes("biz")) role = "Business"
             else role = "Designer"
 
+            const email = (r[3] || r[2] || "").trim()
+            const name = (r[0] || "Thành viên UX").trim()
+            const existing = existingMap.get(email.toLowerCase()) || existingMap.get(name.toLowerCase())
+
             members.push({
-              id: `mem-${i}`,
-              name: r[0] || "Thành viên UX",
-              avatarUrl: r[1] || "",
-              personalEmail: r[2] || "",
-              teamsEmail: r[3] || "",
-              email: r[3] || r[2] || "",
-              status: r[4] || "Active",
+              id: existing?.id || `mem-${i}`,
+              name: name,
+              avatarUrl: r[1] || existing?.avatarUrl || "",
+              personalEmail: r[2] || existing?.personalEmail || "",
+              teamsEmail: r[3] || existing?.teamsEmail || "",
+              email: email,
+              status: r[4] || existing?.status || "Active",
               role: role,
-              squad: "All Squads",
-              squads: ["All Squads"],
-              products: ["Toàn hàng"],
-              capacityLimit: 8,
-              activeTasks: 0,
-              permissions: {
+              squad: existing?.squad || (existing?.squads && existing.squads[0]) || (role === "Admin" || role === "Design Owner" ? "All Squads" : "Chưa phân bổ"),
+              squads: existing?.squads && existing.squads.length > 0 ? existing.squads : (role === "Admin" || role === "Design Owner" ? ["All Squads"] : ["Chưa phân bổ"]),
+              products: existing?.products && existing.products.length > 0 ? existing.products : (role === "Admin" || role === "Design Owner" ? ["Toàn hàng"] : ["Chưa gán"]),
+              capacityLimit: existing?.capacityLimit || 8,
+              activeTasks: existing?.activeTasks || 0,
+              permissions: existing?.permissions || {
                 canAssign: role === "Admin" || role === "Design Owner",
                 canApprovePo: true,
                 canExport: true,
@@ -1257,51 +1360,9 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
         }
       }
     } catch (e) {
-      console.warn("Could not fetch team members directly via GViz, trying Apps Script Web App...", e)
+      console.warn("Could not fetch team members directly via GViz:", e)
     }
   }
 
-  if (!scriptUrl || !scriptUrl.trim()) return null
-
-  // 2. Thử qua POST text/plain (Tránh CORS preflight issues trên Google Apps Script)
-  try {
-    const res = await fetch(scriptUrl.trim(), {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "get_team_members" }),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const list = data.members || data.users || []
-      if (data.status === "success" && Array.isArray(list) && list.length > 0) {
-        return list
-      }
-    }
-  } catch (e) {
-    console.warn("Could not fetch team members via POST, trying GET...", e)
-  }
-
-  // 3. Thử qua GET URL Query Params
-  try {
-    const url = new URL(scriptUrl.trim())
-    url.searchParams.set("action", "get_team_members")
-    url.searchParams.set("_t", Date.now().toString())
-
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const list = data.members || data.users || []
-      if (data.status === "success" && Array.isArray(list) && list.length > 0) {
-        return list
-      }
-    }
-  } catch (e) {
-    console.warn("Could not fetch team members from Google Sheet via GET:", e)
-  }
   return null
 }

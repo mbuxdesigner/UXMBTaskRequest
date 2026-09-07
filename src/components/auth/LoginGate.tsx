@@ -8,6 +8,7 @@ import BrandLogo from "@/components/common/BrandLogo"
 import {
   requestTeamsOtp,
   verifyTeamsOtp,
+  refreshAllDataOnLogin,
   UserSession,
   DEMO_ACCOUNTS,
   saveSession,
@@ -205,6 +206,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
       account.products
     )
     onAuthSuccess(session)
+    refreshAllDataOnLogin().catch(() => {})
   }
 
   const handleOtpComplete = (code: string) => {

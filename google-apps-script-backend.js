@@ -276,6 +276,7 @@ function doGet(e) {
         rbac: masterData["RBAC_CONFIG"] || null,
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
+        team_members: masterData["USERS_LIST"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -366,6 +367,55 @@ function doPost(e) {
     // 12. ACTION: SYNC MASTER DATA (SQUADS, PRODUCTS, PHASES, SELECTIONS)
     if (action === "sync_master_data" || action === "save_settings") {
       return handleSyncMasterData(data);
+    }
+
+    // 12b. ACTION: GET MASTER DATA & TEAM MEMBERS VIA POST
+    if (action === "get_master_data") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      if (!rawSettings) {
+        initCoreSheets();
+        rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      }
+      const masterData = {};
+      if (rawSettings && rawSettings.getLastRow() > 1) {
+        const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 4).getValues();
+        for (let i = 0; i < rows.length; i++) {
+          const key = String(rows[i][0] || "").trim();
+          const jsonVal = String(rows[i][1] || "").trim();
+          if (key && jsonVal) {
+            try {
+              masterData[key] = JSON.parse(jsonVal);
+            } catch (err) {
+              masterData[key] = jsonVal;
+            }
+          }
+        }
+      }
+      return createJsonResponse({
+        status: "success",
+        master_data: masterData,
+        squads: masterData["SQUADS_CONFIG"] || null,
+        products: masterData["PRODUCTS_CONFIG"] || null,
+        phases: masterData["PHASES_CONFIG"] || null,
+        status_rules: masterData["STATUS_RULES_CONFIG"] || null,
+        audit_logs: masterData["AUDIT_LOGS_CONFIG"] || null,
+        rbac: masterData["RBAC_CONFIG"] || null,
+        nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
+        selections: masterData["SELECTIONS_CONFIG"] || null,
+        team_members: masterData["USERS_LIST"] || null,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "get_team_members" || action === "get_users") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const members = getOrInitTeamMembers(ss);
+      return createJsonResponse({
+        status: "success",
+        members: members,
+        timestamp: new Date().toISOString()
+      });
     }
 
     // 13. ACTION: TEST EXAMS & SUBMISSIONS
@@ -2273,47 +2323,7 @@ function testAvatarDrive() {
  * Lấy danh sách nhân sự từ RAW_SETTINGS (USERS_LIST) hoặc USERS sheet
  */
 function getOrInitTeamMembers(ss) {
-  // 1. Ưu tiên đọc trực tiếp từ sheet USERS (Nơi người dùng/Admin quản lý danh sách nhân sự thực tế)
-  const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
-  if (userSheet && userSheet.getLastRow() > 1) {
-    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
-    const list = [];
-    for (let i = 0; i < data.length; i++) {
-      if (data[i][0] || data[i][2] || data[i][3]) {
-        var rawRole = String(data[i][5] || "Designer").trim();
-        var role = "Designer";
-        if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
-        else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
-        else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
-        else role = "Designer";
-
-        list.push({
-          id: "mem-" + (i + 1),
-          name: String(data[i][0] || "Thành viên UX"),
-          avatarUrl: String(data[i][1] || ""),
-          email: String(data[i][3] || data[i][2] || ""),
-          personalEmail: String(data[i][2] || ""),
-          teamsEmail: String(data[i][3] || ""),
-          status: String(data[i][4] || "Active"),
-          role: role,
-          squad: "Lending & Vay vốn",
-          squads: ["Lending & Vay vốn"],
-          products: ["Lending & Vay vốn"],
-          capacityLimit: 8,
-          activeTasks: 0,
-          permissions: {
-            canAssign: role === "Admin" || role === "Design Owner",
-            canApprovePo: true,
-            canExport: true,
-            canManageSystem: role === "Admin"
-          }
-        });
-      }
-    }
-    if (list.length > 0) return list;
-  }
-
-  // 2. Dự phòng: Đọc từ RAW_SETTINGS (USERS_LIST) nếu sheet USERS chưa có
+  // 1. ƯU TIÊN SỐ 1: Đọc từ RAW_SETTINGS (Key: USERS_LIST) vì đây là nơi lưu đầy đủ 100% cấu hình JSON nhân sự (Squads, Products, Permissions, Avatar...)
   try {
     const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
     if (rawSettings && rawSettings.getLastRow() > 1) {
@@ -2329,6 +2339,48 @@ function getOrInitTeamMembers(ss) {
     }
   } catch (e) {}
 
+  // 2. DỰ PHÒNG: Đọc từ sheet USERS nếu RAW_SETTINGS chưa có cấu hình
+  const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+  if (userSheet && userSheet.getLastRow() > 1) {
+    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
+    const list = [];
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] || data[i][2] || data[i][3]) {
+        var rawRole = String(data[i][5] || "Designer").trim();
+        var role = "Designer";
+        if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
+        else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
+        else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
+        else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
+        else role = "Designer";
+
+        list.push({
+          id: "mem-" + (i + 1),
+          name: String(data[i][0] || "Thành viên UX"),
+          avatarUrl: String(data[i][1] || ""),
+          email: String(data[i][3] || data[i][2] || ""),
+          personalEmail: String(data[i][2] || ""),
+          teamsEmail: String(data[i][3] || ""),
+          status: String(data[i][4] || "Active"),
+          role: role,
+          squad: "All Squads",
+          squads: ["All Squads"],
+          products: ["Toàn hàng"],
+          capacityLimit: 8,
+          activeTasks: 0,
+          permissions: {
+            canAssign: role === "Admin" || role === "Design Owner",
+            canApprovePo: true,
+            canExport: true,
+            canManageSystem: role === "Admin"
+          }
+        });
+      }
+    }
+    if (list.length > 0) return list;
+  }
+
+  // 3. Fallback mặc định ban đầu nếu cả 2 bảng đều chưa có dữ liệu
   return DEFAULT_INITIAL_USERS.map(function(u, idx) {
     return {
       id: "mem-" + (idx + 1),
@@ -2339,9 +2391,9 @@ function getOrInitTeamMembers(ss) {
       role: u.role,
       status: u.status,
       avatarUrl: u.avatarUrl,
-      squad: "Lending & Vay vốn",
-      squads: ["Lending & Vay vốn"],
-      products: ["Lending & Vay vốn"],
+      squad: "All Squads",
+      squads: ["All Squads"],
+      products: ["Toàn hàng"],
       capacityLimit: 8,
       activeTasks: 0,
       permissions: {
@@ -2503,6 +2555,7 @@ function handleSyncMasterData(data) {
   if (data.audit_logs) configsToSave["AUDIT_LOGS_CONFIG"] = data.audit_logs;
   if (data.rbac) configsToSave["RBAC_CONFIG"] = data.rbac;
   if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
+  if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
 
   const existingKeys = {};
   const lastRow = rawSettings.getLastRow();

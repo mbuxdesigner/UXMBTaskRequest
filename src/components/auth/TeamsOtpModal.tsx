@@ -15,6 +15,7 @@ import { OtpInput } from "@/components/reui/otp-input"
 import {
   requestTeamsOtp,
   verifyTeamsOtp,
+  refreshAllDataOnLogin,
   UserSession,
   DEMO_ACCOUNTS,
   saveSession,
@@ -189,6 +190,7 @@ export default function TeamsOtpModal({
     )
     onSuccess(session)
     onClose()
+    refreshAllDataOnLogin().catch(() => {})
   }
 
   const handleOtpComplete = (code: string) => {

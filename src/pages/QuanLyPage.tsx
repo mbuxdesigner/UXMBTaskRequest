@@ -973,10 +973,11 @@ const RBAC_CAPABILITIES = [
 
 export function isNameMatching(nameA?: string, nameB?: string): boolean {
   if (!nameA || !nameB) return false
-  const a = nameA.trim().toLowerCase()
-  const b = nameB.trim().toLowerCase()
-  if (a === b) return true
-  if (a.endsWith(" " + b) || b.endsWith(" " + a)) return true
+  const cleanA = nameA.replace(/\(.*?\)/g, "").trim().toLowerCase()
+  const cleanB = nameB.replace(/\(.*?\)/g, "").trim().toLowerCase()
+  if (cleanA === cleanB) return true
+  if (cleanA.endsWith(" " + cleanB) || cleanB.endsWith(" " + cleanA)) return true
+  if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true
   return false
 }
 
@@ -987,7 +988,7 @@ export function syncMembersWithSquads(
   return members.map((mem) => {
     const memName = (mem.name || "").trim()
 
-    // Tìm tất cả squads mà member này tham gia
+    // Tìm tất cả squads mà member này tham gia trong bảng Squads
     const matchedSquads = currentSquads.filter((sq) => {
       const inDesigners =
         (sq.designers || []).some((d) => isNameMatching(d, memName)) ||
@@ -1008,16 +1009,25 @@ export function syncMembersWithSquads(
       return inDesigners || inPos || inBiz
     })
 
-    if (matchedSquads.length > 0) {
-      const sqNames = Array.from(new Set(matchedSquads.map((s) => s.name)))
-      const prodNames = Array.from(
-        new Set(matchedSquads.map((s) => s.productName).filter(Boolean))
-      )
+    // Giữ lại các squads đã được gán trực tiếp cho nhân sự này (từ drawer hoặc Sheet)
+    const existingSquads = (Array.isArray(mem.squads) ? mem.squads : (mem.squad ? [mem.squad] : []))
+      .filter((s) => s && s !== "Chưa phân bổ" && s !== "All Squads")
+
+    const matchedSquadNames = matchedSquads.map((s) => s.name)
+    const combinedSquadNames = Array.from(new Set([...matchedSquadNames, ...existingSquads]))
+
+    if (combinedSquadNames.length > 0) {
+      const derivedProds = currentSquads
+        .filter((sq) => combinedSquadNames.includes(sq.name) && sq.productName)
+        .map((sq) => sq.productName)
+      const existingProds = (mem.products || []).filter((p) => p && p !== "Chưa gán" && p !== "Toàn hàng")
+      const combinedProds = Array.from(new Set([...derivedProds, ...existingProds]))
+
       return {
         ...mem,
-        squads: sqNames,
-        squad: sqNames[0],
-        products: prodNames.length > 0 ? prodNames : ["App MBBank"],
+        squads: combinedSquadNames,
+        squad: combinedSquadNames[0],
+        products: combinedProds.length > 0 ? combinedProds : (mem.products && mem.products.length > 0 ? mem.products : ["App MBBank"]),
       }
     } else {
       // Nếu chưa được gán vào squad nào
@@ -1317,8 +1327,8 @@ export default function QuanLyPage() {
         const parsed = JSON.parse(saved)
         list = parsed.map((m: any) => ({
           ...m,
-          squads: m.squads || (m.squad ? [m.squad] : ["Lending & Vay vốn"]),
-          products: m.products || ["Lending & Vay vốn"],
+          squads: Array.isArray(m.squads) && m.squads.length > 0 ? m.squads : (m.squad ? [m.squad] : []),
+          products: Array.isArray(m.products) && m.products.length > 0 ? m.products : (m.product ? [m.product] : []),
         }))
       } catch {}
     }
@@ -1357,7 +1367,7 @@ export default function QuanLyPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.some((p: any) => p.code === "APP_MB" && p.description)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((p: any) => ({
             ...p,
             color: p.color || getProductColorDef(p.name).key,
@@ -1373,7 +1383,7 @@ export default function QuanLyPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.some((s: any) => s.productName && s.code === "ESAVING")) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((s: any) => ({
             ...s,
             designers: Array.isArray(s.designers) && s.designers.length > 0
@@ -1640,18 +1650,6 @@ export default function QuanLyPage() {
     })
   }, [squads])
 
-  // Tự động dọn dẹp các Squads không thuộc sản phẩm nào đang hoạt động
-  useEffect(() => {
-    if (products.length > 0 && squads.length > 0) {
-      const activeProdNames = new Set(products.map((p) => p.name).filter(Boolean))
-      const cleanSquads = squads.filter((s) => activeProdNames.has(s.productName))
-      if (cleanSquads.length !== squads.length) {
-        setSquads(cleanSquads)
-        localStorage.setItem("mbbank_admin_squads", JSON.stringify(cleanSquads))
-      }
-    }
-  }, [products, squads])
-
   useEffect(() => {
     localStorage.setItem("mbbank_admin_products", JSON.stringify(products))
   }, [products])
@@ -1831,15 +1829,9 @@ export default function QuanLyPage() {
           updatedCount++
         }
         if (Array.isArray(res.data.squads) && res.data.squads.length > 0) {
-          const effectiveProds = (Array.isArray(res.data.products) && res.data.products.length > 0)
-            ? res.data.products
-            : products
-          const activeProdNames = new Set(effectiveProds.map((p: any) => p.name).filter(Boolean))
-          const cleanPulledSquads = res.data.squads.filter((s: any) => activeProdNames.has(s.productName))
-          const squadsToSave = cleanPulledSquads.length > 0 ? cleanPulledSquads : res.data.squads
-          setSquads(squadsToSave)
-          localStorage.setItem("mbbank_admin_squads", JSON.stringify(squadsToSave))
-          localStorage.setItem("ux_portal_squads_v2", JSON.stringify(squadsToSave))
+          setSquads(res.data.squads)
+          localStorage.setItem("mbbank_admin_squads", JSON.stringify(res.data.squads))
+          localStorage.setItem("ux_portal_squads_v2", JSON.stringify(res.data.squads))
           updatedCount++
         }
         if (Array.isArray(res.data.phases) && res.data.phases.length > 0) {
@@ -1861,6 +1853,12 @@ export default function QuanLyPage() {
         if (res.data.nav_items && typeof res.data.nav_items === "object") {
           setNavConfig(res.data.nav_items)
           saveRoleNavConfig(res.data.nav_items)
+          updatedCount++
+        }
+        if (Array.isArray(res.data.team_members) && res.data.team_members.length > 0) {
+          setTeamMembers(res.data.team_members)
+          localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))
+          localStorage.setItem("mbbank_team_members", JSON.stringify(res.data.team_members))
           updatedCount++
         }
         if (Array.isArray(res.data.audit_logs) && res.data.audit_logs.length > 0) {
