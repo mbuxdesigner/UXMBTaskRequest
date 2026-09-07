@@ -51,13 +51,154 @@ export interface StatusBadgeConfig {
  */
 export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
   "Chờ tiếp nhận": {
-    variant: "secondary",
-    dotColor: "bg-slate-400",
+    variant: "warning",
+    dotColor: "bg-amber-500",
     inlineClasses: {
-      bg: "bg-slate-50",
-      text: "text-slate-600",
-      border: "border-slate-200",
-      dot: "bg-slate-400",
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
+      dot: "bg-amber-500",
+    },
+  },
+  // ─── 7 Khâu Quy trình UX & Tiêu chuẩn SLA (MB Bank) ───────────
+  "Chờ xác nhận": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
+      dot: "bg-amber-500",
+    },
+  },
+  "1. Chờ xác nhận": {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: {
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
+      dot: "bg-amber-500",
+    },
+  },
+  "Define đầu bài": {
+    variant: "purple",
+    dotColor: "bg-purple-600",
+    inlineClasses: {
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
+      dot: "bg-purple-600",
+    },
+  },
+  "2. Define đầu bài": {
+    variant: "purple",
+    dotColor: "bg-purple-600",
+    inlineClasses: {
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
+      dot: "bg-purple-600",
+    },
+  },
+  "Wireframe": {
+    variant: "navy",
+    dotColor: "bg-indigo-600",
+    inlineClasses: {
+      bg: "bg-indigo-50",
+      text: "text-indigo-700",
+      border: "border-indigo-200",
+      dot: "bg-indigo-600",
+    },
+  },
+  "3. Wireframe": {
+    variant: "navy",
+    dotColor: "bg-indigo-600",
+    inlineClasses: {
+      bg: "bg-indigo-50",
+      text: "text-indigo-700",
+      border: "border-indigo-200",
+      dot: "bg-indigo-600",
+    },
+  },
+  "UI Design": {
+    variant: "info",
+    dotColor: "bg-blue-600",
+    inlineClasses: {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
+      dot: "bg-blue-600",
+    },
+  },
+  "4. UI Design": {
+    variant: "info",
+    dotColor: "bg-blue-600",
+    inlineClasses: {
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
+      dot: "bg-blue-600",
+    },
+  },
+  "Ready to dev": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-700",
+      border: "border-cyan-200",
+      dot: "bg-cyan-600",
+    },
+  },
+  "Ready to Dev": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-700",
+      border: "border-cyan-200",
+      dot: "bg-cyan-600",
+    },
+  },
+  "5. Ready to dev": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-700",
+      border: "border-cyan-200",
+      dot: "bg-cyan-600",
+    },
+  },
+  "Nghiệm thu UI": {
+    variant: "purple",
+    dotColor: "bg-pink-600",
+    inlineClasses: {
+      bg: "bg-pink-50",
+      text: "text-pink-700",
+      border: "border-pink-200",
+      dot: "bg-pink-600",
+    },
+  },
+  "6. Nghiệm thu UI": {
+    variant: "purple",
+    dotColor: "bg-pink-600",
+    inlineClasses: {
+      bg: "bg-pink-50",
+      text: "text-pink-700",
+      border: "border-pink-200",
+      dot: "bg-pink-600",
+    },
+  },
+  "7. Hoàn thành": {
+    variant: "success",
+    dotColor: "bg-emerald-600",
+    inlineClasses: {
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      border: "border-emerald-200",
+      dot: "bg-emerald-600",
     },
   },
   "Đã gửi yêu cầu": {
@@ -138,16 +279,6 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       text: "text-indigo-700",
       border: "border-indigo-200",
       dot: "bg-indigo-500",
-    },
-  },
-  "UI Design": {
-    variant: "info",
-    dotColor: "bg-blue-600",
-    inlineClasses: {
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-      border: "border-blue-200",
-      dot: "bg-blue-600",
     },
   },
   "Prototype": {
@@ -471,6 +602,52 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
   }
 }
 
+/** Standard 7-stage UX Phase Palette (Ordered from start to completion) */
+export const UX_PHASE_COLOR_PALETTE: StatusBadgeConfig[] = [
+  // Khâu 1: Chờ xác nhận / Tiếp nhận
+  {
+    variant: "warning",
+    dotColor: "bg-amber-500",
+    inlineClasses: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
+  },
+  // Khâu 2: Define đầu bài / Phân loại / Discovery
+  {
+    variant: "purple",
+    dotColor: "bg-purple-600",
+    inlineClasses: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-600" },
+  },
+  // Khâu 3: Wireframe / User Flow
+  {
+    variant: "navy",
+    dotColor: "bg-indigo-600",
+    inlineClasses: { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-600" },
+  },
+  // Khâu 4: UI Design
+  {
+    variant: "info",
+    dotColor: "bg-blue-600",
+    inlineClasses: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-600" },
+  },
+  // Khâu 5: Ready to dev / Prototype
+  {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: { bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", dot: "bg-cyan-600" },
+  },
+  // Khâu 6: Nghiệm thu UI / Review
+  {
+    variant: "purple",
+    dotColor: "bg-pink-600",
+    inlineClasses: { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", dot: "bg-pink-600" },
+  },
+  // Khâu 7: Hoàn thành / Bàn giao
+  {
+    variant: "success",
+    dotColor: "bg-emerald-600",
+    inlineClasses: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-600" },
+  },
+]
+
 /** Default fallback config for unknown statuses */
 export const DEFAULT_STATUS_CONFIG: StatusBadgeConfig = {
   variant: "secondary",
@@ -483,19 +660,58 @@ export const DEFAULT_STATUS_CONFIG: StatusBadgeConfig = {
   },
 }
 
-/** Get status config with fallback */
+/** Get status config with fallback & smart phase resolution */
 export function getStatusConfig(status: string): StatusBadgeConfig {
   if (!status) return DEFAULT_STATUS_CONFIG
   const trimmed = status.trim()
+  
+  // 1. Direct match
   if (STATUS_CONFIG[trimmed]) return STATUS_CONFIG[trimmed]
+
+  // 2. Strip prefix numbers: "1. Chờ xác nhận", "Khâu 2. Define đầu bài", etc.
+  const cleaned = trimmed
+    .replace(/^(khâu|step|bước)?\s*\d+[\.\:\-\s]+/i, "")
+    .trim()
+  if (cleaned && STATUS_CONFIG[cleaned]) return STATUS_CONFIG[cleaned]
+
+  // 3. Exact case-insensitive match on trimmed or cleaned
   const lower = trimmed.toLowerCase()
+  const cleanedLower = cleaned.toLowerCase()
   for (const [key, val] of Object.entries(STATUS_CONFIG)) {
-    if (key.toLowerCase() === lower) return val
+    const kLower = key.toLowerCase()
+    if (kLower === lower || (cleanedLower && kLower === cleanedLower)) {
+      return val
+    }
   }
-  // Thử khớp một phần (partial match) với tên khâu hoặc trạng thái
+
+  // 4. Dynamic match against custom admin phases in localStorage
+  try {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("mbbank_admin_phases") : null
+    if (saved) {
+      const parsed: any[] = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const foundIdx = parsed.findIndex(
+          (p) =>
+            p.name?.toLowerCase() === lower ||
+            p.name?.toLowerCase() === cleanedLower ||
+            lower.includes((p.name || "").toLowerCase()) ||
+            (cleanedLower && cleanedLower.includes((p.name || "").toLowerCase()))
+        )
+        if (foundIdx !== -1) {
+          return UX_PHASE_COLOR_PALETTE[foundIdx % UX_PHASE_COLOR_PALETTE.length]
+        }
+      }
+    }
+  } catch {}
+
+  // 5. Partial match with STATUS_CONFIG
   for (const [key, val] of Object.entries(STATUS_CONFIG)) {
-    if (lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) return val
+    const kLower = key.toLowerCase()
+    if (lower.includes(kLower) || (cleanedLower && cleanedLower.includes(kLower))) {
+      return val
+    }
   }
+
   return DEFAULT_STATUS_CONFIG
 }
 

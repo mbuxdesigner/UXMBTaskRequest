@@ -247,12 +247,13 @@ export function getAdminPhases() {
     }
   } catch {}
   return [
-    { key: "Phân loại", label: "1. Phân loại", progress: 15 },
-    { key: "Discovery", label: "2. Discovery", progress: 35 },
-    { key: "User Flow", label: "3. User Flow", progress: 55 },
-    { key: "UI Design", label: "4. UI Design", progress: 75 },
-    { key: "Prototype", label: "5. Prototype", progress: 90 },
-    { key: "Bàn giao", label: "6. Bàn giao", progress: 100 },
+    { key: "Chờ xác nhận", label: "1. Chờ xác nhận", progress: 10 },
+    { key: "Define đầu bài", label: "2. Define đầu bài", progress: 30 },
+    { key: "Wireframe", label: "3. Wireframe", progress: 40 },
+    { key: "UI Design", label: "4. UI Design", progress: 70 },
+    { key: "Ready to dev", label: "5. Ready to dev", progress: 80 },
+    { key: "Nghiệm thu UI", label: "6. Nghiệm thu UI", progress: 90 },
+    { key: "Hoàn thành", label: "7. Hoàn thành", progress: 100 },
   ]
 }
 
@@ -2547,7 +2548,7 @@ export default function RequestDetail({
                       </div>
                       <div className="flex-1 relative">
                         {(() => {
-                          const displayPhase = request.current_phase || "Khâu 1. Phân loại"
+                          const displayPhase = request.current_phase || (adminPhases[0]?.key || "Chờ xác nhận")
                           const cfg = getStatusConfig(displayPhase)
                           return (
                             <>
@@ -2557,7 +2558,7 @@ export default function RequestDetail({
                                   onClick={() => setOpenDropdown(openDropdown === "phase" ? null : "phase")}
                                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
                                 >
-                                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                  <span className={`w-2 h-2 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
                                   <span>{displayPhase}</span>
                                 </button>
 
@@ -2593,12 +2594,12 @@ export default function RequestDetail({
                                           key={`drop-phase-${phase.key}`}
                                           type="button"
                                           onClick={() => handleUpdatePhase(phase.key, phase.progress)}
-                                          className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-50/60 cursor-pointer text-xs transition-colors group ${
-                                            isCurrent ? "bg-blue-50/80 font-bold text-[#1057FB]" : "text-slate-700 font-medium"
+                                          className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 cursor-pointer text-xs transition-colors group ${
+                                            isCurrent ? "bg-blue-50/70 font-bold text-[#1057FB]" : "text-slate-700 font-medium"
                                           }`}
                                         >
-                                          <div className="flex items-center gap-2">
-                                            <span className={`w-2 h-2 rounded-full ${phaseCfg.inlineClasses?.dot || "bg-blue-500"}`} />
+                                          <div className="flex items-center gap-2.5">
+                                            <span className={`w-2.5 h-2.5 rounded-full ${phaseCfg.inlineClasses?.dot || phaseCfg.dotColor || "bg-blue-500"} shrink-0 shadow-2xs`} />
                                             <span className={isCurrent ? "font-bold text-[#1057FB]" : "text-slate-800"}>
                                               {phase.label}
                                             </span>
