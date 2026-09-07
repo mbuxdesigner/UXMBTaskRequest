@@ -622,7 +622,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
           </Button>
 
           {/* Dải ảnh Thumbnail xem trước */}
-          <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-thin">
+          <div className="flex-1 flex items-center gap-2.5 overflow-x-auto py-2 px-1.5 scrollbar-thin min-w-0">
             {originalImages.map((img) => (
               <div key={img.id} className="group/item relative shrink-0">
                 <img
@@ -633,7 +633,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
                 />
                 {img.isPriority && (
                   <span
-                    className="absolute -bottom-1 -left-1 px-1 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs"
+                    className="absolute -bottom-1 -left-1 px-1 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs z-10"
                     title="Thẻ .priority"
                   >
                     ★
@@ -646,21 +646,34 @@ totalOriginalSize > 0 && convertedImages.length > 0
                     e.stopPropagation()
                     handleRemoveOriginal(img.id)
                   }}
-                  className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-slate-900 text-white flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity shadow-md hover:bg-rose-600 cursor-pointer text-xs"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900/90 text-white flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all shadow-md hover:bg-rose-600 cursor-pointer z-20 hover:scale-110"
                   title={`Xóa ${img.name}`}
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3 h-3 stroke-[2.5]" />
                 </button>
               </div>
             ))}
           </div>
 
-          {/* Thông tin số lượng & hướng dẫn */}
-          <div className="text-xs text-slate-500 font-medium shrink-0 pl-3 border-l border-slate-100 hidden md:flex items-center gap-2">
-            <span className="font-semibold text-slate-900">{originalImages.length}</span>
-            <span>ảnh đã nạp</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-[11px] text-slate-400">Kéo thả thêm hoặc dán Ctrl+V</span>
+          {/* Thông tin số lượng & Nút Xóa */}
+          <div className="text-xs text-slate-500 font-medium shrink-0 pl-3 border-l border-slate-100 flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-1.5">
+              <span className="font-semibold text-slate-900">{originalImages.length}</span>
+              <span>ảnh đã nạp</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-[11px] text-slate-400">Kéo thả thêm hoặc dán Ctrl+V</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={handleClearAll}
+              className="text-slate-500 hover:text-rose-600 hover:bg-rose-50 h-8 px-2.5 rounded-lg text-xs gap-1.5 cursor-pointer font-medium border border-transparent hover:border-rose-200 transition-all"
+              title="Xóa tất cả ảnh đã nạp"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa tất cả</span>
+            </Button>
           </div>
         </div>
       )}
