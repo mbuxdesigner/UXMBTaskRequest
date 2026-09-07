@@ -2,6 +2,8 @@ import { useState, useEffect } from "react"
 import {
   Squad,
   recommendSquad,
+  mockSquads,
+  PRODUCTS as DEFAULT_PRODUCTS,
 } from "../../data/mockData"
 import { submitRequest, fetchFormSelections } from "../../api/api"
 import {
@@ -126,6 +128,12 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
   }, [])
 
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem("ux_portal_selections_cache")
+      if (cached && (cached.includes("App/Core") || cached.includes("App/Card"))) {
+        localStorage.removeItem("ux_portal_selections_cache")
+      }
+    } catch {}
     setLoadingSelections(true)
     fetchFormSelections()
       .then(setSelections)
@@ -218,7 +226,8 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         doc_link: validLinks.join("\n"),
         requester_email: finalEmail,
         requester_name: session?.displayName || "PO",
-        preferred_squad: form.product,
+        preferred_squad: form.preferred_squad || "",
+        squad_name: form.preferred_squad || "",
         attachments: uploadedAttachments,
       })
       setRequestId(res.requestId)
@@ -257,16 +266,38 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
     }
   } catch {}
 
+  // Master products list: Luôn ưu tiên đọc từ Cài đặt Quản lý (Settings) trong LocalStorage
+  const masterProducts: string[] = (() => {
+    try {
+      const rawProds = localStorage.getItem("mbbank_admin_products")
+      if (rawProds) {
+        const parsed = JSON.parse(rawProds)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const active = parsed
+            .filter((p: any) => p.status !== "Inactive")
+            .map((p: any) => p.name)
+          if (active.length > 0) return active
+        }
+      }
+    } catch {}
+
+    const clean = selections.products?.filter(
+      (p) => !p.startsWith("App/") && p !== "Digi" && p !== "Internet Banking"
+    )
+    if (clean && clean.length > 0) return clean
+    return DEFAULT_PRODUCTS
+  })()
+
   const isRestrictedPo = userRole === "PO" && allocatedProducts.length > 0
   const availableProductList = isRestrictedPo
-    ? selections.products.filter((p) =>
+    ? masterProducts.filter((p) =>
         allocatedProducts.some(
           (ap) =>
             ap.toLowerCase().includes(p.toLowerCase()) ||
             p.toLowerCase().includes(ap.toLowerCase())
         )
       ).length > 0
-      ? selections.products.filter((p) =>
+      ? masterProducts.filter((p) =>
           allocatedProducts.some(
             (ap) =>
               ap.toLowerCase().includes(p.toLowerCase()) ||
@@ -274,7 +305,57 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
           )
         )
       : allocatedProducts
-    : selections.products
+    : masterProducts
+
+  // All active squads from localStorage or mock
+  const allSquads: any[] = (() => {
+    try {
+      const stored = localStorage.getItem("mbbank_admin_squads")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return squads && squads.length > 0 ? squads : mockSquads
+  })()
+
+  // Filter squads belonging to the selected product
+  const relevantSquads = form.product
+    ? allSquads.filter((s: any) => {
+        const prod = (s.productName || s.product_name || "").toLowerCase().trim()
+        const target = form.product.toLowerCase().trim()
+        return prod === target || prod.includes(target) || target.includes(prod)
+      })
+    : []
+
+  const squadOptions: DropdownOption[] =
+    relevantSquads.length > 0
+      ? relevantSquads.map((s: any) => {
+          const name = s.name || s.squad_name || ""
+          return {
+            value: name,
+            label: name,
+            description: s.domain || undefined,
+          }
+        })
+      : form.product
+      ? [{ value: "", label: "Squad mặc định theo sản phẩm" }]
+      : [{ value: "", label: "Chọn sản phẩm trước..." }]
+
+  const handleProductChange = (val: string) => {
+    setForm((f) => ({
+      ...f,
+      product: val,
+      preferred_squad: "", // reset để chọn squad mới theo sản phẩm
+    }))
+    if (errors.product) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next.product
+        return next
+      })
+    }
+  }
 
   // Options for custom ReUI dropdowns
   const productOptions: DropdownOption[] = availableProductList.map((p) => ({
@@ -397,24 +478,25 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
               {errors.title && <p className="text-sm text-rose-500 font-medium">{errors.title}</p>}
             </div>
 
-            {/* 2-Column: Nền tảng / Sản phẩm & Loại yêu cầu */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 3-Column: Sản phẩm số, Squad nghiệp vụ trực thuộc & Loại yêu cầu */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Cột 1: Sản phẩm số */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-sm font-medium text-slate-700">
-                    Nền tảng / Sản phẩm <span className="text-rose-500">*</span>
+                    Sản phẩm số <span className="text-rose-500">*</span>
                   </label>
                   {isRestrictedPo && (
-                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                      ⚡ Phân bổ theo PO ({allocatedProducts.length} SP)
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100">
+                      ⚡ Phân bổ PO ({allocatedProducts.length} SP)
                     </span>
                   )}
                 </div>
                 <DropdownMenu
                   options={productOptions}
                   value={form.product}
-                  onChange={(val) => set("product")(val)}
-                  placeholder="Chọn nền tảng..."
+                  onChange={handleProductChange}
+                  placeholder="Chọn sản phẩm..."
                   className="w-full"
                   buttonClassName={`w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800 ${
                     errors.product ? "border-rose-400 ring-1 ring-rose-200" : ""
@@ -423,7 +505,64 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 {errors.product && <p className="text-sm text-rose-500 font-medium">{errors.product}</p>}
               </div>
 
+              {/* Cột 2: Squad nghiệp vụ trực thuộc */}
               <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Squad nghiệp vụ
+                  </label>
+                  {form.product && relevantSquads.length > 0 && (
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      {relevantSquads.length} squads
+                    </span>
+                  )}
+                </div>
+                <DropdownMenu
+                  options={squadOptions}
+                  value={form.preferred_squad}
+                  onChange={(val) => set("preferred_squad")(val)}
+                  placeholder={form.product ? "Chọn squad..." : "Chọn sản phẩm trước..."}
+                  className="w-full"
+                  buttonClassName="w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800"
+                />
+                {form.preferred_squad && (() => {
+                  const selectedSq = relevantSquads.find(
+                    (s: any) => (s.name || s.squad_name) === form.preferred_squad
+                  )
+                  if (!selectedSq) return null
+                  const pos: string[] = selectedSq.pos || (selectedSq.leadPo ? [selectedSq.leadPo] : [])
+                  const businesses: string[] = selectedSq.businesses || (selectedSq.leadBusiness ? [selectedSq.leadBusiness] : [])
+                  const designers: string[] = selectedSq.designers || (selectedSq.leadDesigner ? [selectedSq.leadDesigner] : [])
+
+                  if (pos.length === 0 && businesses.length === 0 && designers.length === 0) return null
+
+                  return (
+                    <div className="text-[11.5px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200/80 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      {pos.length > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                          <strong className="text-purple-800 font-medium">PO:</strong> {pos.join(", ")}
+                        </span>
+                      )}
+                      {businesses.length > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <strong className="text-amber-800 font-medium">Biz:</strong> {businesses.join(", ")}
+                        </span>
+                      )}
+                      {designers.length > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          <strong className="text-blue-800 font-medium">UX:</strong> {designers.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Cột 3: Loại yêu cầu */}
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                 <label className="block text-sm font-medium text-slate-700">
                   Loại yêu cầu <span className="text-rose-500">*</span>
                 </label>

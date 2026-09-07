@@ -46,6 +46,14 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: true,
     manage: false,
   },
+  Business: {
+    overview: true,
+    track: true,
+    create: true,
+    test: false,
+    compressor: true,
+    manage: false,
+  },
 }
 
 export function getRoleNavConfig(): RoleNavConfig {
@@ -58,6 +66,7 @@ export function getRoleNavConfig(): RoleNavConfig {
       "Design Owner": { ...DEFAULT_ROLE_NAV_CONFIG["Design Owner"], ...parsed["Design Owner"] },
       Designer: { ...DEFAULT_ROLE_NAV_CONFIG.Designer, ...parsed.Designer },
       PO: { ...DEFAULT_ROLE_NAV_CONFIG.PO, ...parsed.PO },
+      Business: { ...DEFAULT_ROLE_NAV_CONFIG.Business, ...parsed.Business },
     }
   } catch {
     return DEFAULT_ROLE_NAV_CONFIG

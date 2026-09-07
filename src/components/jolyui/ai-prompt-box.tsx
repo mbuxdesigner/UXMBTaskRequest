@@ -68,13 +68,13 @@ const DEFAULT_COMMAND_SUGGESTIONS: CommandSuggestion[] = [
   {
     id: "send_to_po",
     title: "Sent to PO",
-    syntax: "@SendToPO:",
-    insertText: "@SendToPO: ",
-    description: "Chuyển sang Đã gửi PO & theo dõi phản hồi 24h",
+    syntax: "@SenToPO: [link_figma]",
+    insertText: "@SenToPO: ",
+    description: "Đổi trạng thái Đã gửi PO & tự động gán link Figma đính kèm",
     badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
     iconBg: "bg-purple-100/90 text-purple-600",
     icon: <Send className="w-4 h-4" />,
-    keywords: ["send to po", "sent to po", "send", "sent", "po", "gửi po", "gui po", "bàn giao"],
+    keywords: ["send to po", "sent to po", "setopo", "sentopo", "sendtopo", "se to po", "send", "sent", "po", "gửi po", "gui po", "figma", "bàn giao"],
   },
   {
     id: "pending",
@@ -130,7 +130,7 @@ export function AiPromptBox({
   const [selectedIndex, setSelectedIndex] = useState(0)
   
   // Track active modes
-  const isSendPoActive = value.toLowerCase().includes("@sentopo:") || value.toLowerCase().includes("@sendtopo:")
+  const isSendPoActive = /@se(?:n)?(?:d)?(?:_)?to(?:_)?po:/i.test(value)
   const isPendingActive = value.toLowerCase().includes("@pending:")
 
   // Auto-resize textarea height as content changes
@@ -163,9 +163,20 @@ export function AiPromptBox({
       if (/\s/.test(charBeforeAt)) {
         const query = textBeforeCursor.slice(lastAtIndex + 1)
         if (!/\s/.test(query)) {
-          setMentionQuery(query)
-          setShowSuggestions(true)
-          setSelectedIndex(0)
+          setMentionQuery((prevQuery) => {
+            // Chỉ reset vị trí chọn về 0 khi từ khóa tìm kiếm sau @ thực sự thay đổi
+            if (prevQuery !== query) {
+              setSelectedIndex(0)
+            }
+            return query
+          })
+          setShowSuggestions((prevShow) => {
+            // Nếu bảng gợi ý vừa mới mở lần đầu thì chọn item đầu tiên
+            if (!prevShow) {
+              setSelectedIndex(0)
+            }
+            return true
+          })
           return
         }
       }
@@ -221,7 +232,10 @@ export function AiPromptBox({
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault()
-        handleSelectSuggestion(filteredSuggestions[selectedIndex])
+        const target = filteredSuggestions[selectedIndex] || filteredSuggestions[0]
+        if (target) {
+          handleSelectSuggestion(target)
+        }
         return
       }
       if (e.key === "Escape") {
@@ -246,7 +260,16 @@ export function AiPromptBox({
     checkMentionTrigger(val, cursor)
   }
 
-  const handleKeyUpOrClick = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Không xử lý trigger khi đang điều hướng phím mũi tên hoặc thao tác menu
+    if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter", "Tab", "Escape"].includes(e.key)) {
+      return
+    }
+    const target = e.currentTarget
+    checkMentionTrigger(target.value, target.selectionEnd || target.value.length)
+  }
+
+  const handleClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget
     checkMentionTrigger(target.value, target.selectionEnd || target.value.length)
   }
@@ -282,7 +305,7 @@ export function AiPromptBox({
     }, 50)
   }, [value, onChange])
 
-  const hasContent = value.trim() !== "" || Boolean(linkValue && linkValue.trim())
+  const hasContent = value.trim() !== ""
 
   return (
     <div ref={containerRef} className={`relative space-y-2 ${className}`}>
@@ -317,25 +340,25 @@ export function AiPromptBox({
                       handleSelectSuggestion(item)
                     }}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`w-full text-left p-2.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer ${
-                      isSelected
-                        ? "bg-blue-50 text-slate-900 border border-blue-200 shadow-2xs"
-                        : "hover:bg-slate-50 text-slate-700 border border-transparent"
+                    className={`w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-3 transition-colors cursor-pointer ${
+                      isSelected 
+                        ? "bg-slate-100/90 text-slate-900 shadow-2xs" 
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${item.iconBg}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.iconBg}`}>
                       {item.icon}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <span className="font-bold text-xs text-slate-900 truncate">{item.title}</span>
-                        <span className={`px-1.5 py-0.5 rounded font-mono text-[10.5px] font-semibold border ${item.badgeClass}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-slate-900">{item.title}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border font-semibold ${item.badgeClass}`}>
                           {item.syntax}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
                         {item.description}
-                      </p>
+                      </div>
                     </div>
                   </button>
                 )
@@ -345,59 +368,28 @@ export function AiPromptBox({
         )}
       </AnimatePresence>
 
-      {/* JolyUI Prompt Box Container (Light Theme) */}
+      {/* Main JolyUI Interactive Container */}
       <div 
-        className="rounded-3xl border border-slate-200/90 bg-white p-2.5 shadow-sm transition-all duration-300 ease-in-out focus-within:border-[#1057FB] focus-within:ring-2 focus-within:ring-[#1057FB]/15"
+        onClick={() => textareaRef.current?.focus()}
+        className="relative rounded-2xl border border-slate-200/90 bg-white p-2.5 shadow-xs transition-all duration-200 focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-100/80 cursor-text"
       >
-        {/* Expandable Textarea */}
+        {/* Dynamic Auto-Expanding Textarea */}
         <textarea
           ref={textareaRef}
-          rows={1}
           value={value}
           onChange={handleTextareaChange}
           onKeyDown={handleKeyDown}
-          onClick={handleKeyUpOrClick}
-          onKeyUp={handleKeyUpOrClick}
+          onClick={handleClick}
+          onKeyUp={handleKeyUp}
           placeholder={
             isSendPoActive 
-              ? "Nhập nội dung bàn giao gửi PO xem xét..." 
+              ? "Dán link Figma kèm ghi chú bàn giao cho PO xem xét (ví dụ: @SenToPO: https://figma.com/...)..." 
               : isPendingActive 
-              ? "Nhập lý do chuyển trạng thái Pending..." 
+              ? "Nhập lý do chuyển trạng thái Pending (ví dụ: @Pending: Chờ cung cấp API)..." 
               : placeholder
           }
-          className="flex min-h-[42px] w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
+          className="flex min-h-[46px] w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
-
-        {/* Deliverable/Figma Link Input Bar */}
-        <AnimatePresence>
-          {showLinkInput && onLinkChange && (
-            <motion.div
-              layout
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-2.5 py-1.5 border-t border-slate-100 flex items-center gap-2 bg-slate-50/90 rounded-xl my-1"
-            >
-              <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <input
-                type="url"
-                value={linkValue}
-                onChange={(e) => onLinkChange(e.target.value)}
-                placeholder="https://www.figma.com/design/..."
-                className="w-full text-xs bg-white text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 outline-none font-mono text-[11px] placeholder:text-slate-400"
-              />
-              {onToggleLinkInput && (
-                <button
-                  type="button"
-                  onClick={onToggleLinkInput}
-                  className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* JolyUI Actions Toolbar */}
         <div className="flex items-center justify-between gap-2 p-0 pt-1.5 border-t border-slate-100/80">
@@ -405,24 +397,6 @@ export function AiPromptBox({
           {/* Left Action Buttons with JolyUI Rotation & Width Expand Animation */}
           <div className="flex items-center gap-0.5 select-none">
             
-            {/* 1. Attachment / Figma Link */}
-            {onToggleLinkInput && (
-              <>
-                <button
-                  type="button"
-                  onClick={onToggleLinkInput}
-                  className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
-                    showLinkInput 
-                      ? "bg-blue-50 text-[#1057FB]" 
-                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  }`}
-                  title="Đính kèm link Figma / tài liệu"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </button>
-                <CustomDivider />
-              </>
-            )}
 
             {/* 3. Send to PO Action Button (JolyUI Rotate & Expand Animation) */}
             <button

@@ -30,11 +30,10 @@ export const FALLBACK_SELECTIONS: SelectionsData = {
   deadline_reasons: DEFAULT_DEADLINE_REASONS,
   squads: mockSquads,
   product_squad_map: {
-    "App/Card": "Payments Squad",
-    "App/Lending": "Lending Squad",
-    "App/Saving": "Wealth Squad",
-    "App/Core": "Daily Banking Squad",
-    "Digi": "Daily Banking Squad",
+    "App MBBank": "eSaving",
+    "Biz MBBank": "Biz Lending",
+    "BaaS & Open API": "BaaS Gateway",
+    "Design System & Nền tảng": "Design System MB",
   },
 }
 
@@ -45,6 +44,31 @@ let inflightSelectionsPromise: Promise<SelectionsData> | null = null
 
 const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
+
+/**
+ * Helper chuẩn xác chuyển đổi chuỗi ngày giờ (DD/MM/YYYY HH:mm:ss hoặc ISO) sang milliseconds
+ */
+export function parseDateTimeToMs(ts?: string): number {
+  if (!ts) return 0
+  const trimmed = String(ts).trim()
+  if (!trimmed) return 0
+
+  // 1. Định dạng Việt Nam DD/MM/YYYY HH:mm:ss hoặc DD/MM/YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10)
+    const month = parseInt(dmyMatch[2], 10) - 1
+    const year = parseInt(dmyMatch[3], 10)
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0
+    const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0
+    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0
+    return new Date(year, month, day, hour, minute, second).getTime()
+  }
+
+  // 2. Định dạng chuẩn ISO 8601 hoặc new Date()
+  const parsed = new Date(trimmed).getTime()
+  return isNaN(parsed) ? 0 : parsed
+}
 
 /**
  * Normalizes raw object from Google Sheet into a complete UXRequest object
@@ -97,10 +121,26 @@ export function normalizeSheetRequest(data: any): UXRequest {
     })
   }
 
+  const rawProduct = String(data.product || "Khác").trim()
+  let rawPreferredSquad = String(data.preferred_squad || "").trim()
+  let rawSquadName = String(data.squad_name || "").trim()
+
+  // Tự động làm sạch nếu squad bị gán nhầm thành tên sản phẩm
+  if (rawPreferredSquad.toLowerCase() === rawProduct.toLowerCase()) {
+    rawPreferredSquad = ""
+  }
+  if (rawSquadName.toLowerCase() === rawProduct.toLowerCase()) {
+    rawSquadName = ""
+  }
+  const cleanSquad = rawSquadName || rawPreferredSquad || ""
+
+  const rawSentToPo = data.sent_to_po_at ? String(data.sent_to_po_at).trim() : undefined
+  const effectiveSentToPo = rawSentToPo || (data.status === "Đã gửi PO" ? new Date().toISOString() : undefined)
+
   return {
     request_id: String(data.request_id || "UXMB-PENDING"),
     title: String(data.title || "Yêu cầu thiết kế UX"),
-    product: String(data.product || "Khác"),
+    product: rawProduct,
     request_type: String(data.request_type || "Tính năng mới"),
     feature_journey: String(data.feature_journey || data.title || "Core Journey"),
     description: String(data.description || ""),
@@ -111,13 +151,15 @@ export function normalizeSheetRequest(data: any): UXRequest {
       ? data.expected_output
       : ["User Flow", "UI Design"],
     expected_deadline: String(data.release_date || data.expected_deadline || ""),
+    release_date: String(data.release_date || data.expected_deadline || ""),
+    design_deadline: String(data.design_deadline || data.ux_deadline || data.expected_deadline || ""),
     deadline_reason: String(data.deadline_reason || "Ra mắt sản phẩm"),
-    preferred_squad: String(data.preferred_squad || data.product || "Chưa phân công"),
+    preferred_squad: cleanSquad,
     requester_email: String(data.requester_email || ""),
     requester_name: String(data.requester_name || data.requester_email?.split("@")[0] || "PO"),
     assigned_designer: data.assigned_designer ? String(data.assigned_designer) : "",
     design_owner: String(data.design_owner || "lead.cuong@mbbank.com.vn"),
-    squad_name: String(data.preferred_squad || data.product || "Triage Squad"),
+    squad_name: cleanSquad,
     ux_owner: data.ux_owner ? String(data.ux_owner) : "Chưa phân công",
     doc_link: rawDocLink,
     doc_links: docLinks,
@@ -125,22 +167,16 @@ export function normalizeSheetRequest(data: any): UXRequest {
     current_phase: currentPhase,
     status: (() => {
       let currentSt = String(data.status || "Đang phân loại")
-      const sentToPo = data.sent_to_po_at ? String(data.sent_to_po_at) : undefined
-      if (currentSt === "Đã gửi PO" || sentToPo) {
-        const referenceTime = sentToPo || data.last_updated || data.latest_update?.date
-        if (referenceTime) {
-          let sentDate = new Date(referenceTime)
-          if (isNaN(sentDate.getTime()) && referenceTime.includes("/")) {
-            const parts = referenceTime.split(/[\/\s:]/)
-            if (parts.length >= 3) {
-              sentDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
-            }
-          }
-          if (!isNaN(sentDate.getTime())) {
-            const elapsedHours = (Date.now() - sentDate.getTime()) / (1000 * 60 * 60)
-            if (elapsedHours >= 24) {
-              currentSt = "Pending"
-            }
+      // CHỈ tự động chuyển sang PO pending nếu:
+      // 1. Task đang ở trạng thái "Đã gửi PO"
+      // 2. ĐÃ có mốc thời gian sent_to_po_at cụ thể
+      // 3. Thời gian đã trôi qua THỰC SỰ >= 24 giờ
+      if (currentSt === "Đã gửi PO" && rawSentToPo) {
+        const sentMs = parseDateTimeToMs(rawSentToPo)
+        if (sentMs > 0) {
+          const elapsedHours = (Date.now() - sentMs) / (1000 * 60 * 60)
+          if (elapsedHours >= 24) {
+            currentSt = "PO pending"
           }
         }
       }
@@ -158,8 +194,9 @@ export function normalizeSheetRequest(data: any): UXRequest {
       figma_url: String(data.doc_link || ""),
     },
     submitted_at: formattedDate,
+    priority: String(data.priority || "Normal"),
     task_updates: taskUpdates,
-    sent_to_po_at: data.sent_to_po_at ? String(data.sent_to_po_at) : undefined,
+    sent_to_po_at: effectiveSentToPo,
   }
 }
 
@@ -302,9 +339,12 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
       const local = localStorage.getItem(SELECTIONS_CACHE_KEY)
       if (local) {
         const parsed = JSON.parse(local)
-        if (parsed && parsed.products) {
+        // If cached selections contain obsolete dummy products like App/Core, purge
+        if (parsed && Array.isArray(parsed.products) && !parsed.products.some((p: string) => p.startsWith("App/"))) {
           cachedSelections = parsed
           return parsed
+        } else {
+          localStorage.removeItem(SELECTIONS_CACHE_KEY)
         }
       }
     } catch (e) {
@@ -342,10 +382,37 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
       if (res.ok) {
         const data = await res.json()
         if (data.status === "success" && data.selections) {
+          let fetchedProducts: string[] = data.selections.products?.length
+            ? data.selections.products
+            : FALLBACK_SELECTIONS.products
+
+          // If fetched products contain legacy dummy data, filter them out
+          fetchedProducts = fetchedProducts.filter(
+            (p: string) => !p.startsWith("App/") && p !== "Digi" && p !== "Internet Banking"
+          )
+
+          // Overlay active products from Admin Settings if available
+          try {
+            const adminRaw = localStorage.getItem("mbbank_admin_products")
+            if (adminRaw) {
+              const parsedAdmin = JSON.parse(adminRaw)
+              if (Array.isArray(parsedAdmin) && parsedAdmin.length > 0) {
+                const activeAdmin = parsedAdmin
+                  .filter((p: any) => p.status !== "Inactive")
+                  .map((p: any) => p.name)
+                if (activeAdmin.length > 0) {
+                  fetchedProducts = activeAdmin
+                }
+              }
+            }
+          } catch {}
+
+          if (fetchedProducts.length === 0) {
+            fetchedProducts = FALLBACK_SELECTIONS.products
+          }
+
           const merged: SelectionsData = {
-            products: data.selections.products?.length
-              ? data.selections.products
-              : FALLBACK_SELECTIONS.products,
+            products: fetchedProducts,
             request_types: data.selections.request_types?.length
               ? data.selections.request_types
               : FALLBACK_SELECTIONS.request_types,
@@ -468,6 +535,13 @@ export async function updateTaskProgressInSheet(
     figma_url?: string
     assigned_designer?: string
     sent_to_po_at?: string
+    priority?: string
+    design_deadline?: string
+    release_date?: string
+    product?: string
+    squad_name?: string
+    preferred_squad?: string
+    is_comment?: boolean
   }
 ): Promise<{ success: boolean; message: string; updatedRequest?: UXRequest }> {
   const session = getStoredSession()
@@ -489,6 +563,7 @@ export async function updateTaskProgressInSheet(
     new_progress: params.new_progress,
     note: params.note,
     deliverable_link: params.figma_url || "",
+    is_comment: params.is_comment === true,
   }
 
   // Cập nhật LocalStorage và Memory Cache ngay tức thì
@@ -504,8 +579,16 @@ export async function updateTaskProgressInSheet(
         current_phase: params.new_phase,
         status: params.new_status,
         progress: params.new_progress,
+        priority: params.priority !== undefined ? params.priority : (oldReq.priority || "Normal"),
+        product: params.product !== undefined ? params.product : oldReq.product,
+        squad_name: params.squad_name !== undefined ? params.squad_name : oldReq.squad_name,
+        preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name !== undefined ? params.squad_name : oldReq.preferred_squad),
+        design_deadline: params.design_deadline !== undefined ? params.design_deadline : (oldReq.design_deadline || oldReq.expected_deadline),
+        release_date: params.release_date !== undefined ? params.release_date : (oldReq.release_date || oldReq.expected_deadline),
+        expected_deadline: params.release_date || oldReq.expected_deadline,
         last_updated: formattedDate,
-        assigned_designer: params.assigned_designer || oldReq.assigned_designer,
+        assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : oldReq.assigned_designer,
+        ux_owner: params.assigned_designer !== undefined ? (params.assigned_designer || "Chưa phân công") : (oldReq.ux_owner || "Chưa phân công"),
         sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : oldReq.sent_to_po_at,
         phases: buildPhases(params.new_phase),
         latest_update: {
@@ -534,13 +617,21 @@ export async function updateTaskProgressInSheet(
       const payload = {
         action: "update_task_progress",
         session_token: session?.sessionToken || "DEMO_TOKEN",
+        user_email: session?.teamsEmail || session?.personalEmail || "",
+        user_role: session?.role || "",
         request_id: requestId,
         new_phase: params.new_phase,
         new_status: params.new_status,
         new_progress: params.new_progress,
+        priority: params.priority || "",
+        product: params.product || "",
+        squad_name: params.squad_name !== undefined ? params.squad_name : "",
+        preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name || ""),
+        design_deadline: params.design_deadline || "",
+        release_date: params.release_date || "",
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
         figma_url: params.figma_url || "",
-        assigned_designer: params.assigned_designer || "",
+        assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : "",
         sent_to_po_at: params.sent_to_po_at || "",
         timestamp: now.toISOString(),
       }
@@ -921,6 +1012,10 @@ export async function syncMasterDataToSheet(params: {
   products?: any[]
   phases?: any[]
   selections?: any
+  status_rules?: any[]
+  audit_logs?: any[]
+  rbac?: any
+  nav_items?: any
   actorEmail?: string
 }): Promise<{ success: boolean; message: string }> {
   const config = getGoogleSheetConfig()
@@ -975,15 +1070,169 @@ export async function syncMasterDataToSheet(params: {
 }
 
 /**
- * Lấy danh sách nhân sự từ Google Sheet (nếu có)
+ * Tải Master Data (Squads, Products, Phases, Status Rules, Audit Logs, RBAC) từ Google Sheet về máy
+ */
+export async function fetchMasterDataFromSheet(): Promise<{
+  success: boolean
+  message: string
+  data?: {
+    squads?: any[]
+    products?: any[]
+    phases?: any[]
+    status_rules?: any[]
+    audit_logs?: any[]
+    rbac?: any
+    nav_items?: any
+    selections?: any
+  }
+}> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      message: "Chưa cấu hình Google Apps Script URL.",
+    }
+  }
+
+  try {
+    const url = new URL(scriptUrl.trim())
+    url.searchParams.set("action", "get_master_data")
+    url.searchParams.set("t", String(Date.now()))
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+    })
+
+    if (!res.ok) {
+      throw new Error(`Máy chủ trả về HTTP ${res.status}`)
+    }
+
+    const json = await res.json()
+    if (json.status === "success") {
+      return {
+        success: true,
+        message: "Tải Master Data từ Google Sheet thành công!",
+        data: {
+          squads: json.squads || json.master_data?.SQUADS_CONFIG,
+          products: json.products || json.master_data?.PRODUCTS_CONFIG,
+          phases: json.phases || json.master_data?.PHASES_CONFIG,
+          status_rules: json.status_rules || json.master_data?.STATUS_RULES_CONFIG,
+          audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
+          rbac: json.rbac || json.master_data?.RBAC_CONFIG,
+          nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
+          selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
+        },
+      }
+    }
+
+    return {
+      success: false,
+      message: json.message || "Không thể tải Master Data từ Google Sheet.",
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      message: `Lỗi kết nối Google Sheet: ${errorMsg}`,
+    }
+  }
+}
+
+function parseCsvSimple(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = [""]
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    const next = text[i + 1]
+    if (c === '"') {
+      if (inQuotes && next === '"') {
+        row[row.length - 1] += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (c === "," && !inQuotes) {
+      row.push("")
+    } else if ((c === "\r" || c === "\n") && !inQuotes) {
+      if (c === "\r" && next === "\n") i++
+      rows.push(row)
+      row = [""]
+    } else {
+      row[row.length - 1] += c
+    }
+  }
+  if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) {
+    rows.push(row)
+  }
+  return rows
+}
+
+/**
+ * Lấy danh sách nhân sự từ Google Sheet (Hỗ trợ cả GViz trực tiếp và Apps Script Web App API)
  */
 export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
   const config = getGoogleSheetConfig()
   const scriptUrl = config?.scriptUrl
+  const sheetId = config?.sheetId || "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw"
+
+  // 1. Thử tải trực tiếp từ Google Sheet qua GViz API (Tốc độ tức thì, không bị CORS, trực tiếp lấy từ tab USERS mới nhất)
+  if (sheetId && sheetId.trim()) {
+    try {
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId.trim()}/gviz/tq?tqx=out:csv&sheet=USERS&_t=${Date.now()}`
+      const res = await fetch(gvizUrl)
+      if (res.ok) {
+        const text = await res.text()
+        const rows = parseCsvSimple(text)
+        if (rows.length > 1) {
+          const members: any[] = []
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i]
+            if (!r[0] && !r[2] && !r[3]) continue
+            const rawRole = (r[5] || "Designer").trim()
+            let role = "Designer"
+            if (rawRole.toLowerCase().includes("admin")) role = "Admin"
+            else if (rawRole.toLowerCase().includes("owner")) role = "Design Owner"
+            else if (rawRole.toLowerCase().includes("po")) role = "PO"
+            else if (rawRole.toLowerCase().includes("business") || rawRole.toLowerCase().includes("biz")) role = "Business"
+            else role = "Designer"
+
+            members.push({
+              id: `mem-${i}`,
+              name: r[0] || "Thành viên UX",
+              avatarUrl: r[1] || "",
+              personalEmail: r[2] || "",
+              teamsEmail: r[3] || "",
+              email: r[3] || r[2] || "",
+              status: r[4] || "Active",
+              role: role,
+              squad: "All Squads",
+              squads: ["All Squads"],
+              products: ["Toàn hàng"],
+              capacityLimit: 8,
+              activeTasks: 0,
+              permissions: {
+                canAssign: role === "Admin" || role === "Design Owner",
+                canApprovePo: true,
+                canExport: true,
+                canManageSystem: role === "Admin",
+              },
+            })
+          }
+          if (members.length > 0) {
+            return members
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch team members directly via GViz, trying Apps Script Web App...", e)
+    }
+  }
 
   if (!scriptUrl || !scriptUrl.trim()) return null
 
-  // 1. Thử qua POST text/plain (Tránh CORS preflight issues trên Google Apps Script)
+  // 2. Thử qua POST text/plain (Tránh CORS preflight issues trên Google Apps Script)
   try {
     const res = await fetch(scriptUrl.trim(), {
       method: "POST",
@@ -1002,7 +1251,7 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
     console.warn("Could not fetch team members via POST, trying GET...", e)
   }
 
-  // 2. Thử qua GET URL Query Params
+  // 3. Thử qua GET URL Query Params
   try {
     const url = new URL(scriptUrl.trim())
     url.searchParams.set("action", "get_team_members")

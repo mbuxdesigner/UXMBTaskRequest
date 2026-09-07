@@ -1,22 +1,23 @@
 # 📊 TÍNH NĂNG 02: THEO DÕI & QUẢN LÝ TIẾN ĐỘ YÊU CẦU (TASK TRACKING & KANBAN)
 
-> **Mục tiêu tính năng:** Cung cấp không gian làm việc chính cho toàn bộ đội ngũ UX và PO để theo dõi tiến độ các yêu cầu thiết kế theo thời gian thực qua 4 chế độ xem (**Kanban Board**, **Interactive Gantt Timeline**, **Table**, **Grid/List**), hỗ trợ bộ lọc đa chiều và modal quản trị chi tiết 6 nhóm trường thông tin.
+> **Mục tiêu tính năng:** Cung cấp không gian làm việc chính cho toàn bộ đội ngũ UX và PO để theo dõi tiến độ các yêu cầu thiết kế theo thời gian thực qua 4 chế độ xem (**Kanban Board**, **Interactive Gantt Timeline**, **Table Phân Tầng**, **Grid/List**), hỗ trợ bộ lọc đa chiều, cơ chế phân loại chuẩn 2 loại Pending, tự động hóa gửi PO qua cú pháp chat `@SenToPO:`, và modal quản trị chi tiết bài toán với cấu trúc lưới thuộc tính 2x2 tối ưu.
 
 ---
 
 ## 🎯 1. KHI NÀO CẦN ĐỌC TÀI LIỆU NÀY?
 
 - **Khi làm tính năng mới:**
-  - Thêm 1 chế độ xem mới (ví dụ: Calendar View, Export PDF/Excel danh sách task).
-  - Thêm trường dữ liệu mới vào thẻ Task hoặc Modal chi tiết (ví dụ: trường "Độ phức tạp Story Points", "Loại thiết bị Mobile/Web").
-  - Bổ sung tiêu chí lọc mới vào Bộ lọc (`FilterPopover.tsx`).
-  - Thêm hành động hàng loạt (Bulk actions: chuyển khâu hàng loạt, phân công hàng loạt).
-- **Khi sửa tính năng cũ:**
-  - Kéo thả Kanban bị giật, bị lệch cột hoặc không lưu được trạng thái mới.
-  - Thẻ Kanban bị che mất hoặc bị cắt mép trên màn hình nhỏ.
-  - Dropdown chuyển khâu trong Modal chi tiết không hiển thị đủ các khâu mới cấu hình bên Quản trị.
-  - PO bấm vào xem task bị lỗi hoặc Designer sửa task của người khác bị chặn không đúng cách.
-  - Thống kê tiến độ % hoặc trạng thái cảnh báo quá hạn SLA tính toán sai.
+  - Thêm một chế độ xem mới (ví dụ: Lịch biểu Calendar View, Xuất báo cáo PDF/Excel phân tầng).
+  - Thêm trường dữ liệu mới vào thẻ Task hoặc Modal chi tiết (ví dụ: "Story Points", "Nền tảng mục tiêu Web/Mobile/Tablet").
+  - Mở rộng logic tự động hóa chuyển khâu hoặc mở rộng bộ lọc `FilterPopover.tsx`.
+  - Tích hợp thêm các cú pháp trao đổi thông minh mới trong khung chat JolyUI (ví dụ: `@ReviewBy:`, `@HandoffDev:`).
+- **Khi sửa / bảo trì tính năng cũ:**
+  - Kéo thả Kanban bị giật hoặc sai lệch vị trí giữa các khâu UX.
+  - Trạng thái `Pending` hoặc `PO Pending` hiển thị sai màu sắc hoặc tính sai mốc 24h.
+  - Cú pháp `@SenToPO:` không tự động gán link Figma hoặc không kích hoạt nút "Mở Figma".
+  - Đường dẫn URL trong comment trao đổi không click mở tab mới được.
+  - Khối thuộc tính 2x2 trong `RequestDetail.tsx` bị lệch dòng hoặc không lưu lên Google Sheets.
+  - Biểu đồ Gantt Timeline hiển thị thiếu mốc số 7 `PO Pending`.
 
 ---
 
@@ -25,96 +26,104 @@
 ```
 src/pages/TrackRequestPage.tsx (Trang Cha)
 │
-├── 🔍 Bộ Lọc & Tìm Kiếm:
-│   ├── Search Input (Tìm nhanh theo Mã task, Tiêu đề, Tên PO, Tên Designer)
-│   ├── FilterPopover.tsx (Lọc đa chiều: Squad, Khâu, Ưu tiên, Người phụ trách)
-│   └── View Mode Toggle (Chuyển đổi: Kanban | Gantt | Table | Grid | List)
+├── 🔍 Thanh Điều Hướng & Bộ Lọc Đa Chiều:
+│   ├── Search Input (Tìm nhanh theo Mã task, Tiêu đề, PO, Designer)
+│   ├── FilterPopover.tsx (Lọc theo Squad, Khâu UX, Độ ưu tiên, Người phụ trách)
+│   └── View Mode Selector (Kanban | Gantt | Table | Grid / List)
 │
-├── 🖼️ 4 Chế Độ Hiển Thị:
-│   ├── 1. KanbanBoard.tsx (Kéo thả thẻ theo khâu UX, đếm số lượng task/khâu)
+├── 🖼️ 4 Chế Độ Hiển Thị Tiến Độ:
+│   ├── 1. KanbanBoard.tsx (Kéo thả thẻ theo khâu UX, đếm task theo cột)
 │   │   └── KanbanCard.tsx (Thẻ task: Mã task, Ngày hoàn thành, Priority, Progress bar, Avatar)
-│   ├── 2. GanttTimeline.tsx (Trục thời gian tương tác, xem tiến độ theo lịch)
-│   ├── 3. Table View (Bảng dữ liệu phân trang, sắp xếp cột)
-│   └── 4. Grid / List View (Dạng lưới thẻ Spotlight hoặc danh sách tóm tắt)
+│   ├── 2. gantt-chart.tsx (Trục thời gian tương tác, thanh tiến độ 7 mốc gồm PO Pending)
+│   ├── 3. SolutionAgentsTable.tsx (Bảng phân nhóm thông minh, badge đồng nhất h-[22px], tối ưu Overload)
+│   └── 4. Grid / List View (Dạng lưới thẻ Spotlight hoặc danh sách tóm lược)
 │
 └── 📄 Modal Chi Tiết Bài Toán (RequestDetail.tsx):
-    ├── Nhóm 1: Thông tin chung (Mã task, Tiêu đề, Squad, Sản phẩm, Độ ưu tiên)
-    ├── Nhóm 2: Tiến độ & Khâu UX (Dropdown khâu, Thanh slider %, Ghi chú nhật ký)
-    ├── Nhóm 3: Thông tin Nghiệp vụ & PO (PO Name, Email, Mục tiêu kinh doanh, Lý do deadline)
-    ├── Nhóm 4: Phân công UX (Designer phụ trách, Reviewer, Ngày bắt đầu, Deadline)
-    ├── Nhóm 5: Tài liệu bàn giao & Figma (Link Figma, Doc Links, File đính kèm Drive)
-    └── Nhóm 6: Lịch sử cập nhật khâu (Timeline log `task_updates`)
+    ├── Banner Trạng thái PO: Đếm ngược 24h hoặc Cảnh báo Quá hạn / Lý do Pending
+    ├── Lưới Thuộc Tính 2x2 Chuẩn Hóa:
+    │   ├── Hàng 1: [Status / Khâu UX] (Trái) & [Assignees / Phân công] (Phải)
+    │   └── Hàng 2: [Dates / Thời hạn] (Trái) & [Priority / Ưu tiên] (Phải)
+    ├── Khung Trao Đổi Thông Minh (ai-prompt-box.tsx):
+    │   ├── Nhận diện cú pháp @SenToPO: [figma_url] & @pending: [lý do]
+    │   └── Render link xanh MB-Blue bo pill kèm click mở tab mới
+    └── Lịch sử nhật ký tiến độ (task_updates timeline)
 ```
 
 ---
 
-## 📊 3. QUY TRÌNH 6 KHÂU UX CHUẨN & QUY TẮC PHÂN QUYỀN
+## ⚡ 3. CÁC QUY CHUẨN NGHIỆP VỤ & NÂNG CẤP ĐẶC TẢ
 
-### 3.1 Quy trình 6 Khâu Mặc định (Có thể tùy biến từ Admin Portal):
-1. `1. Tiếp nhận & Phân loại` (10% - SLA 1 ngày)
-2. `2. Discovery & Nghiên cứu` (25% - SLA 2-3 ngày)
-3. `3. User Flow & Wireframe` (45% - SLA 3 ngày)
-4. `4. Hi-Fi UI Design` (70% - SLA 4-5 ngày)
-5. `5. Review & Đóng gói Design System` (90% - SLA 2 ngày)
-6. `6. Bàn giao & Handoff Dev` (100% - Hoàn thành)
+### 3.1. Phân Loại Chuẩn 2 Loại Trạng Thái Pending (`statusConfig.ts`)
+Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến độ, hệ thống tách biệt rõ ràng 2 trường hợp Pending:
 
-### 3.2 Quy tắc Phân quyền thao tác trên Task:
-- **Admin & Design Owner:** Có quyền kéo thả/chuyển khâu, sửa % tiến độ, gán Designer cho **BẤT KỲ TASK NÀO**.
-- **Designer:** Chỉ được phép đổi khâu, kéo thẻ Kanban và ghi Note tiến độ đối với **TASK ĐƯỢC PHÂN CÔNG CHO CHÍNH MÌNH** (`assigned_designer === session.email`). Đối với các task khác: Chỉ có quyền xem.
-- **Product Owner (PO):** Chỉ xem task thuộc sản phẩm do mình quản lý. **Không có quyền đổi khâu hoặc sửa tiến độ.**
-
----
-
-## 📦 4. CẤU TRÚC DỮ LIỆU TASK (`UXRequest`)
-
-```typescript
-export interface UXRequest {
-  request_id: string                 // Mã định danh (VD: UXMB-2026-088)
-  title: string                      // Tiêu đề công việc
-  squad: string                      // Tên Squad thực hiện
-  product: string                    // Tên Sản phẩm / Phân hệ
-  request_type: string               // Loại yêu cầu (Mới, Cải tiến, Sửa lỗi...)
-  current_phase: string              // Tên khâu hiện tại
-  progress: number                   // Tiến độ thực tế (0 - 100)
-  priority: "High" | "Medium" | "Low" // Độ ưu tiên
-  submitted_at: string               // Thời điểm tạo (DD/MM/YYYY)
-  deadline: string                   // Hạn chót cam kết (DD/MM/YYYY)
-  deadline_reason?: string           // Lý do deadline
-  po_name: string                    // Tên PO tạo task
-  po_email: string                   // Email PO
-  assigned_designer?: string         // Email Designer thực hiện
-  reviewer?: string                  // Email Lead review
-  business_goal?: string             // Mục tiêu kinh doanh
-  expected_output?: string           // Kết quả đầu ra bàn giao
-  doc_links?: string[]               // Mảng link tài liệu (PRD/Spec)
-  figma_url?: string                 // Link Figma
-  attachments?: Array<{              // File đính kèm trên Google Drive
-    name: string
-    url: string
-    size?: number
-  }>
-  task_updates?: TaskUpdateRecord[]  // Toàn bộ lịch sử chuyển khâu & ghi chú
-}
-```
-
----
-
-## 🔍 5. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG (IMPACT ANALYSIS)
-
-| Khi bạn chỉnh sửa... | Các file bị ảnh hưởng | Rủi ro tiềm ẩn & Cách phòng tránh |
+| Tiêu chí | 1. PO Pending (Hổ Phách - Amber) | 2. Pending (Xám Slate) |
 | :--- | :--- | :--- |
-| **Bảng Kanban (`KanbanBoard.tsx`)** | `src/components/kanban/KanbanBoard.tsx`<br>`src/components/kanban/KanbanCard.tsx` | - **Bẫy CSS:** Không được dùng class `snap-x` trên container cuộn ngang Kanban vì sẽ làm thẻ ngoài cùng bên trái bị giật hoặc cắt mép.<br>- Kiểm tra quyền kéo thả: Người không có quyền (PO) phải bị disable kéo thả (`isDraggable = false`). |
-| **Modal Chi tiết Task (`RequestDetail.tsx`)** | `src/components/track/RequestDetail.tsx`<br>`src/services/googleSheetService.ts` | - Khi lưu thay đổi (khâu mới, % mới, ghi chú), phải append một bản ghi vào mảng `task_updates`.<br>- Đồng bộ ngay lên Google Sheet qua `updateRequest()` và cập nhật state ở component cha (`TrackRequestPage`). |
-| **Thêm/Sửa Khâu UX từ Admin** | `src/pages/QuanLyPage.tsx`<br>`src/components/track/RequestDetail.tsx`<br>`src/components/kanban/KanbanBoard.tsx` | - Danh sách cột Kanban và Dropdown chọn khâu phải lấy động từ `localStorage` key `mbbank_admin_phases` (kèm fallback 6 khâu mặc định trong `mockData.ts`). |
-| **Bộ Lọc Task (`FilterPopover.tsx`)** | `src/components/track/FilterPopover.tsx`<br>`src/pages/TrackRequestPage.tsx` | - Khi reset bộ lọc, phải đảm bảo các mảng filter quay về rỗng và ô tìm kiếm được clear.<br>- Không được làm mất bộ lọc phân quyền của PO (PO luôn chỉ thấy task của sản phẩm mình). |
+| **Bản chất nghiệp vụ** | Đang chờ Product Owner (PO) phản hồi hoặc nghiệm thu phương án thiết kế. | Designer chủ động tạm dừng thực hiện bài toán do thiếu thông tin / đợi bên thứ ba. |
+| **Cơ chế kích hoạt** | Tự động kích hoạt sau **24 giờ** kể từ khi Designer gửi phương án Figma cho PO nhưng chưa có phản hồi. | Kích hoạt khi trạng thái là `Pending` hoặc khi Designer chat cú pháp `@pending: [lý do]`. |
+| **Giao diện nhận diện** | Dot vàng `amber-500`, nền `bg-amber-50`, viền `border-amber-300`, chữ `text-amber-800`. | Dot xám `slate-500`, nền `bg-slate-100`, viền `border-slate-300`, chữ `text-slate-700`. |
+| **Hiển thị lý do** | *"Quá hạn 24h PO chưa phản hồi duyệt phương án"*. | Trích xuất trực tiếp nội dung sau cú pháp `@pending: ...` từ bình luận gần nhất. |
+| **Hành vi SLA** | Đồng hồ SLA 24h chạy đếm ngược, chuyển cảnh báo khi quá hạn. | Tạm dừng đồng hồ tính SLA nội bộ của Designer. |
+
+### 3.2. Tự Động Hóa Gửi PO Bằng Cú Pháp `@SenToPO:` Kèm Link Figma
+- **Loại bỏ quy trình thủ công:** Xóa bỏ thanh nhập URL kẹp giấy rườm rà.
+- **Quy trình 1 chạm qua khung chat:** Designer chỉ cần nhập vào ô trao đổi:
+  ```text
+  @SenToPO: https://www.figma.com/file/xyz... Đã hoàn thành bản Hi-Fi UI luồng mở thẻ.
+  ```
+- **Hệ quả tự động hóa:**
+  1. Regex trích xuất đường dẫn `figma.com` lưu vào `request.figma_url`.
+  2. Tự động chuyển trạng thái bài toán sang `Đã gửi PO`.
+  3. Kích hoạt mốc thời gian `sent_to_po_at`, bật đồng hồ đếm lùi 24h.
+  4. Hiển thị nút **"Mở Figma"** tại thanh footer điều hướng của Modal.
+  5. Đồng bộ tức thì lên Google Sheets backend qua API `update_task_progress`.
+
+### 3.3. Tự Động Render Rich Clickable Link (URL Bôi Xanh & Mở Tab Mới)
+- Toàn bộ đường dẫn URL (`http://`, `https://`) trong nội dung bình luận được nhận diện tự động qua hàm `renderRichCommentContent`.
+- Định dạng theo chuẩn visual MBBank:
+  - Màu chữ xanh dương nhận diện: `text-[#1057FB] font-medium`.
+  - Nền bo pill nổi bật: `bg-blue-50/90 hover:bg-blue-100 border border-blue-200/80 px-2 py-0.5 rounded-md`.
+  - Tự động gắn icon `ExternalLink` và thuộc tính `target="_blank" rel="noopener noreferrer"` cho phép click mở tab mới ngay lập tức mà không rời khỏi trang làm việc.
+
+### 3.4. Bổ Sung Mốc Trạng Thái "7. PO Pending" Trên Biểu Đồ Gantt
+- Biểu đồ Gantt Timeline (`gantt-chart.tsx`) bổ sung giai đoạn thứ 7:
+  ```typescript
+  { id: "7_po_pending", name: "7. PO Pending", color: "amber", slaDays: 2 }
+  ```
+- Thể hiện thanh block màu hổ phách kèm icon `Clock` khi bài toán đang dừng chờ PO, đồng thời hiển thị đầy đủ mốc số 7 tại Footer Legend dưới chân biểu đồ.
+
+### 3.5. Chuẩn Hóa Typography & Badge UI Bảng Task (`SolutionAgentsTable.tsx`)
+- **Đồng nhất chiều cao dòng:** Toàn bộ badge Trạng thái, Squad và Ưu tiên được cố định kích thước `h-[22px]`, bo góc `rounded-md`, khoảng đệm `px-2 py-0.5` và cỡ chữ `text-[11px] font-medium`.
+- **Khử trùng lặp cảnh báo Overload:** Đối với các bài toán đã nằm trong nhóm "Quá tải (Overload)", ẩn badge màu đỏ `[Trễ]` ở cột ngày hạn, nâng cỡ chữ ngày hoàn thành lên `11.5px font-semibold text-slate-700` để giao diện thoáng sạch, không gây ức chế thị giác.
+
+### 3.6. Lưới Thuộc Tính 2x2 Cân Đối Trong `RequestDetail.tsx`
+- Đổi nhãn `Khâu UX` thành **`Status`** với icon `<Target className="w-4 h-4 text-slate-400" />`.
+- Loại bỏ trường Status cũ bị trùng lặp với Banner PO.
+- Cấu trúc lưới 2x2 hoàn hảo:
+  - **Ô 1 (Trên - Trái):** `Status` (Chọn khâu quy trình từ Phân loại đến Bàn giao).
+  - **Ô 2 (Trên - Phải):** `Assignees` (Chọn UX/UI Designer phụ trách).
+  - **Ô 3 (Dưới - Trái):** `Dates` (Ngày tạo và Hạn hoàn thành với bộ chọn ReUI Date Picker).
+  - **Ô 4 (Dưới - Phải):** `Priority` (Độ ưu tiên: High / Medium / Low).
 
 ---
 
-## 🛑 6. CHECKLIST KIỂM THỬ ĐẠT 100 ĐIỂM (TEST CHECKLIST)
+## 🔍 4. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG (IMPACT MATRIX)
 
-- [ ] **Chuyển đổi 4 View**: Bấm chuyển đổi lần lượt giữa Kanban -> Gantt -> Table -> Grid. Dữ liệu task phải nhất quán, không bị mất hoặc lệch state.
-- [ ] **Kéo thả thẻ Kanban**: Kéo 1 thẻ từ khâu A sang khâu B -> Kiểm tra xem % tiến độ có tự động cập nhật theo SLA của khâu B không -> F5 lại trang kiểm tra xem trạng thái đã được lưu chưa.
-- [ ] **Kiểm tra quyền Designer**: Đăng nhập tài khoản Designer -> Thử kéo thẻ task của mình (thành công) -> Thử kéo thẻ task của Designer khác (hệ thống chặn hoặc cảnh báo không có quyền).
-- [ ] **Thẻ Task hiển thị ngày tháng**: Kiểm tra thẻ Kanban chỉ hiển thị ngày hoàn thành (VD: `30/08/2026`), không hiển thị giờ phút rườm rà.
-- [ ] **Modal Chi tiết Task**: Mở modal -> Kiểm tra đủ 6 nhóm thông tin -> Thử nhập ghi chú mới và bấm Lưu -> Kiểm tra nhóm 6 (Lịch sử `task_updates`) có xuất hiện dòng log mới vừa tạo không.
-- [ ] **Compile Test**: Chạy `npx tsc --noEmit` đạt 0 lỗi.
+| Thành phần sửa đổi | File mã nguồn | Tác động hệ thống & Rủi ro cần phòng tránh |
+| :--- | :--- | :--- |
+| **Logic Phân loại Pending** | `src/config/statusConfig.ts`<br>`src/components/track/RequestDetail.tsx`<br>`src/components/track/SolutionAgentsTable.tsx` | Đảm bảo hàm `getRequestPendingClassification()` luôn xử lý an toàn khi thiếu trường dữ liệu (`req.sent_to_po_at` null hoặc rỗng), không gây crash ứng dụng. |
+| **Tự động hóa `@SenToPO:`** | `src/components/jolyui/ai-prompt-box.tsx`<br>`src/components/track/RequestDetail.tsx` | Regex bắt link figma phải linh hoạt với cả link share desktop app, prototype mode và link canvas chung. |
+| **Stage 7 trên Gantt Chart** | `src/components/reui/gantt-chart.tsx` | Mốc 7 chỉ xuất hiện khi task ở trạng thái chờ PO; không làm lệch dải thời gian của các khâu 1-6 trước đó. |
+| **Lưới 2x2 Properties Grid** | `src/components/track/RequestDetail.tsx` | Mỗi thao tác đổi giá trị trong ô thuộc tính phải kích hoạt Optimistic UI ngay lập tức và gọi API `updateTaskProgressInSheet()` ở background. |
+
+---
+
+## 🛑 5. CHECKLIST KIỂM THỬ ĐẠT 100 ĐIỂM (TEST CHECKLIST)
+
+- [x] **Kiểm tra 2 loại Pending:**
+  - Tạo task mới, chuyển trạng thái sang `Đã gửi PO` -> Đợi/chỉnh thời gian gửi quá 24h -> Hệ thống hiển thị badge màu Amber `PO Pending`.
+  - Nhập comment `@pending: Đợi BA xác nhận luồng OTP Smart OTP` -> Hệ thống hiển thị badge màu Slate `Pending` kèm lý do trích xuất chính xác.
+- [x] **Kiểm tra cú pháp `@SenToPO:`:**
+  - Nhập `@SenToPO: https://figma.com/design/sample-url` vào ô trao đổi -> Bấm gửi -> Trạng thái đổi thành `Đã gửi PO`, xuất hiện nút "Mở Figma", link trong comment được bôi xanh và click mở tab mới.
+- [x] **Kiểm tra Gantt Timeline:** Mở chế độ Gantt Chart -> Task chờ PO hiển thị block màu hổ phách và dot vàng, Footer Legend có mốc `7. PO Pending`.
+- [x] **Kiểm tra Bảng Danh sách Task:** Chiều cao cả 3 badge Trạng thái, Squad, Ưu tiên bằng nhau chằn chặn `h-[22px]`; các task trong nhóm Overload không còn hiện badge đỏ `[Trễ]`.
+- [x] **Kiểm tra Build & Compile:** Chạy `npm run build` hoàn thành với 0 cảnh báo hoặc lỗi cú pháp.

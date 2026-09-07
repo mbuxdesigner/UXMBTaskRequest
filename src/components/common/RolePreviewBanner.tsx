@@ -12,6 +12,7 @@ const PREVIEWABLE_ROLES: Array<{ role: UserRole; label: string }> = [
   { role: "Design Owner", label: "Design Owner" },
   { role: "Designer", label: "Designer" },
   { role: "PO", label: "PO (Product Owner)" },
+  { role: "Business", label: "Business (Nghiệp vụ)" },
 ]
 
 export const RolePreviewBanner: React.FC<RolePreviewBannerProps> = ({ session }) => {

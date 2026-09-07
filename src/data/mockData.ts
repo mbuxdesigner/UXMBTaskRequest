@@ -1,8 +1,10 @@
-export type UserRole = "Admin" | "Design Owner" | "Designer" | "PO"
+export type UserRole = "Admin" | "Design Owner" | "Designer" | "PO" | "Business"
 
 export interface Squad {
   squad_id: string
   squad_name: string
+  product_id?: string
+  product_name?: string
   domain: string
   active_tasks: number
   queued_tasks: number
@@ -55,6 +57,7 @@ export interface TaskUpdateRecord {
   new_progress: number
   note: string
   deliverable_link?: string
+  is_comment?: boolean
 }
 
 export interface UXRequest {
@@ -70,6 +73,8 @@ export interface UXRequest {
   target_user: string
   expected_output: string[]
   expected_deadline: string
+  release_date?: string
+  design_deadline?: string
   deadline_reason: string
   preferred_squad: string
   requester_email: string
@@ -78,6 +83,7 @@ export interface UXRequest {
   priority?: string
   doc_link?: string
   doc_links?: string[]
+  figma_url?: string
   attachments?: Array<{ name: string; url: string; size?: number }>
   assigned_designer?: string
   design_owner?: string
@@ -93,26 +99,33 @@ export interface UXRequest {
   submitted_at: string
   task_updates?: TaskUpdateRecord[]
   sent_to_po_at?: string
+  pending_reason?: string
 }
 
 export function evaluatePoPendingStatus(request: UXRequest): UXRequest {
-  if (request.status === "Đã gửi PO" || request.sent_to_po_at) {
-    const sentTime = request.sent_to_po_at || request.last_updated || request.latest_update?.date
-    if (sentTime) {
-      let sentDate = new Date(sentTime)
-      if (isNaN(sentDate.getTime()) && sentTime.includes("/")) {
-        const parts = sentTime.split(/[\/\s:]/)
-        if (parts.length >= 3) {
-          sentDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
-        }
-      }
-      if (!isNaN(sentDate.getTime())) {
-        const elapsedHours = (Date.now() - sentDate.getTime()) / (1000 * 60 * 60)
-        if (elapsedHours >= 24) {
-          return {
-            ...request,
-            status: "Pending",
-          }
+  if (request.status === "Đã gửi PO" && request.sent_to_po_at) {
+    const trimmed = String(request.sent_to_po_at).trim()
+    let sentMs = 0
+    const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+    if (dmyMatch) {
+      const day = parseInt(dmyMatch[1], 10)
+      const month = parseInt(dmyMatch[2], 10) - 1
+      const year = parseInt(dmyMatch[3], 10)
+      const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0
+      const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0
+      const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0
+      sentMs = new Date(year, month, day, hour, minute, second).getTime()
+    } else {
+      const parsed = new Date(trimmed).getTime()
+      sentMs = isNaN(parsed) ? 0 : parsed
+    }
+
+    if (sentMs > 0) {
+      const elapsedHours = (Date.now() - sentMs) / (1000 * 60 * 60)
+      if (elapsedHours >= 24) {
+        return {
+          ...request,
+          status: "PO pending",
         }
       }
     }
@@ -148,54 +161,93 @@ export function buildPhases(currentPhase: string): Phase[] {
 }
 
 export const mockSquads: Squad[] = [
+  // --- SẢN PHẨM: App MBBank ---
   {
-    squad_id: "SQ_CARD",
-    squad_name: "App/Card",
-    domain: "Thẻ & Thanh toán",
+    squad_id: "SQ_ESAVING",
+    squad_name: "eSaving",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
+    domain: "Tiết kiệm & Tích lũy số",
     active_tasks: 0,
     queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "Nguyễn Văn Cường (Design Owner)",
+    ux_owner: "Lê Hoàng Nam (Designer)",
     active_task_titles: [],
     queued_task_titles: [],
   },
   {
-    squad_id: "SQ_CORE",
-    squad_name: "App/Core",
-    domain: "Tài khoản & Giao dịch chính",
+    squad_id: "SQ_CARD",
+    squad_name: "Cards & Thanh toán số",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
+    domain: "Thẻ & Cổng thanh toán",
     active_tasks: 0,
     queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "Nguyễn Văn Cường (Design Owner)",
+    ux_owner: "Trần Mai Lan (Design Owner)",
     active_task_titles: [],
     queued_task_titles: [],
   },
   {
     squad_id: "SQ_LENDING",
-    squad_name: "App/Lending",
+    squad_name: "Lending & Vay vốn",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
     domain: "Vay vốn & Thấu chi tín dụng",
     active_tasks: 0,
     queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "Trần Mai Hoa (Design Owner)",
+    ux_owner: "Nguyễn Văn Cường (Admin)",
     active_task_titles: [],
     queued_task_titles: [],
   },
   {
-    squad_id: "SQ_SAVING",
-    squad_name: "App/Saving",
-    domain: "Tiết kiệm & Tích lũy số",
+    squad_id: "SQ_CORE",
+    squad_name: "Core Banking & Tài khoản",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
+    domain: "Tài khoản & Giao dịch chính",
     active_tasks: 0,
     queued_tasks: 0,
     capacity_threshold: 8,
-    ux_owner: "Lê Hoàng Nam (Design Owner)",
+    ux_owner: "Nguyễn Văn Cường (Admin)",
     active_task_titles: [],
     queued_task_titles: [],
   },
   {
-    squad_id: "SQ_DIGI",
-    squad_name: "Digi",
-    domain: "Kênh số & Tiện ích mở rộng",
+    squad_id: "SQ_WEALTH",
+    squad_name: "Digital Wealth & Đầu tư",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
+    domain: "Đầu tư tài chính & Chứng khoán",
+    active_tasks: 0,
+    queued_tasks: 0,
+    capacity_threshold: 6,
+    ux_owner: "Phạm Hải Đăng (Designer)",
+    active_task_titles: [],
+    queued_task_titles: [],
+  },
+  {
+    squad_id: "SQ_TRANSFER",
+    squad_name: "Chuyển tiền & Tiện ích số",
+    product_name: "App MBBank",
+    product_id: "prod-app-mb",
+    domain: "Chuyển tiền & Tiện ích đời sống",
+    active_tasks: 0,
+    queued_tasks: 0,
+    capacity_threshold: 8,
+    ux_owner: "UX Designer phụ trách",
+    active_task_titles: [],
+    queued_task_titles: [],
+  },
+
+  // --- SẢN PHẨM: Biz MBBank ---
+  {
+    squad_id: "SQ_BIZ_LENDING",
+    squad_name: "Biz Lending",
+    product_name: "Biz MBBank",
+    product_id: "prod-biz-mb",
+    domain: "Vay doanh nghiệp & SME",
     active_tasks: 0,
     queued_tasks: 0,
     capacity_threshold: 8,
@@ -204,8 +256,38 @@ export const mockSquads: Squad[] = [
     queued_task_titles: [],
   },
   {
-    squad_id: "SQ_BAAS",
-    squad_name: "BaaS",
+    squad_id: "SQ_BIZ_SAVING",
+    squad_name: "Biz eSaving",
+    product_name: "Biz MBBank",
+    product_id: "prod-biz-mb",
+    domain: "Tiền gửi doanh nghiệp",
+    active_tasks: 0,
+    queued_tasks: 0,
+    capacity_threshold: 8,
+    ux_owner: "UX Designer phụ trách",
+    active_task_titles: [],
+    queued_task_titles: [],
+  },
+  {
+    squad_id: "SQ_PAYROLL",
+    squad_name: "Payroll & Quản lý lương",
+    product_name: "Biz MBBank",
+    product_id: "prod-biz-mb",
+    domain: "Chi lương & Nhân sự số",
+    active_tasks: 0,
+    queued_tasks: 0,
+    capacity_threshold: 6,
+    ux_owner: "UX Designer phụ trách",
+    active_task_titles: [],
+    queued_task_titles: [],
+  },
+
+  // --- SẢN PHẨM: BaaS & Open API ---
+  {
+    squad_id: "SQ_BAAS_GW",
+    squad_name: "BaaS Gateway",
+    product_name: "BaaS & Open API",
+    product_id: "prod-baas",
     domain: "Banking as a Service & Đối tác API",
     active_tasks: 0,
     queued_tasks: 0,
@@ -214,14 +296,18 @@ export const mockSquads: Squad[] = [
     active_task_titles: [],
     queued_task_titles: [],
   },
+
+  // --- SẢN PHẨM: Design System & Nền tảng ---
   {
-    squad_id: "SQ_IB",
-    squad_name: "Internet Banking",
-    domain: "Kênh Web Internet Banking",
+    squad_id: "SQ_DS_MB",
+    squad_name: "Design System MB",
+    product_name: "Design System & Nền tảng",
+    product_id: "prod-ds",
+    domain: "Liquid Glass System & UI Token",
     active_tasks: 0,
     queued_tasks: 0,
-    capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
+    capacity_threshold: 10,
+    ux_owner: "Nguyễn Văn Cường (Admin)",
     active_task_titles: [],
     queued_task_titles: [],
   },
@@ -472,13 +558,10 @@ export const mockRequests: UXRequest[] = [
 ]
 
 export const PRODUCTS = [
-  "App/Core",
-  "App/Card",
-  "App/Lending",
-  "App/Saving",
-  "Digi",
-  "BaaS",
-  "Internet Banking",
+  "App MBBank",
+  "Biz MBBank",
+  "BaaS & Open API",
+  "Design System & Nền tảng",
   "Khác",
 ]
 
@@ -511,18 +594,25 @@ export const DEADLINE_REASONS = [
   "Khác",
 ]
 
-export function recommendSquad(product: string): Squad | null {
+export function recommendSquad(product: string, squadName?: string): Squad | null {
   if (!product) return null
-  return mockSquads.find((s) => s.squad_name === product) ?? {
-    squad_id: `SQ_${product.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase()}`,
-    squad_name: product,
-    domain: `Phân hệ ${product}`,
-    active_tasks: 1,
-    queued_tasks: 1,
-    capacity_threshold: 8,
-    ux_owner: "UX Designer phụ trách",
-    active_task_titles: ["Tiếp nhận yêu cầu mới"],
-    queued_task_titles: [],
+  if (squadName) {
+    const found = mockSquads.find((s) => s.squad_name.toLowerCase() === squadName.toLowerCase())
+    if (found) return found
   }
+  return (
+    mockSquads.find((s) => s.product_name === product) ?? {
+      squad_id: `SQ_${product.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase()}`,
+      squad_name: product,
+      product_name: product,
+      domain: `Phân hệ ${product}`,
+      active_tasks: 1,
+      queued_tasks: 1,
+      capacity_threshold: 8,
+      ux_owner: "UX Designer phụ trách",
+      active_task_titles: ["Tiếp nhận yêu cầu mới"],
+      queued_task_titles: [],
+    }
+  )
 }
 

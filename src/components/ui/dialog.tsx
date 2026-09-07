@@ -65,7 +65,7 @@ export function Dialog({
             exit={{ opacity: 0, scale: 0.96, y: 6 }}
             transition={{ type: "spring", stiffness: 450, damping: 30 }}
             className={cn(
-              "relative z-50 bg-white rounded-xl shadow-xl border border-zinc-200 w-full overflow-hidden flex flex-col max-h-[90vh]",
+              "relative z-50 bg-white rounded-xl shadow-xl border border-slate-200 w-full overflow-hidden flex flex-col max-h-[90vh]",
               sizeClasses,
               className
             )}

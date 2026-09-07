@@ -78,6 +78,17 @@ export const DEMO_ACCOUNTS: Array<{
     squads: ["Lending & Vay vốn", "Cards & Thanh toán số"],
     products: ["Lending & Vay vốn", "Cards & Digital Payment"],
   },
+  {
+    name: "Phạm Hoàng Bách",
+    displayName: "Phạm Hoàng Bách (Business)",
+    personalEmail: "bach.biz@gmail.com",
+    teamsEmail: "bachph@mbbank.com.vn",
+    avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80",
+    role: "Business",
+    squad: "Lending & Vay vốn",
+    squads: ["Lending & Vay vốn", "Cards & Thanh toán số"],
+    products: ["Lending & Vay vốn", "Cards & Digital Payment"],
+  },
 ]
 
 /**
@@ -377,6 +388,9 @@ export async function verifyTeamsOtp(
     } else if (cleanEmail.includes("po") || cleanEmail.includes("lan")) {
       role = "PO"
       displayName = "Trần Mai Lan (PO)"
+    } else if (cleanEmail.includes("biz") || cleanEmail.includes("business") || cleanEmail.includes("bach")) {
+      role = "Business"
+      displayName = "Phạm Hoàng Bách (Business)"
     } else {
       displayName = cleanEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     }
@@ -426,7 +440,7 @@ export async function verifyTeamsOtp(
       const role: UserRole = data.role || "Designer"
       const displayName = data.display_name || data.full_name || cleanEmail.split("@")[0]
       const avatarUrl = data.avatar_url || ""
-      const session = saveSession(
+      let session = saveSession(
         data.session_token,
         data.personal_email || cleanEmail,
         data.teams_email || cleanEmail,
@@ -436,6 +450,13 @@ export async function verifyTeamsOtp(
         avatarUrl,
         data.expires_in || SESSION_DURATION_SECONDS
       )
+
+      // Luôn kiểm tra đối chiếu trực tiếp với tab USERS trên Sheet để đảm bảo Role đúng 100%
+      try {
+        const synced = await syncSessionRoleFromSheet()
+        if (synced) session = synced
+      } catch {}
+
       return {
         success: true,
         message: data.message || "Xác thực thành công!",
@@ -559,4 +580,78 @@ export async function logoutTeamsSession(): Promise<void> {
     } catch {}
   }
   clearSession()
+}
+
+/**
+ * Tự động đồng bộ vai trò (Role) của phiên làm việc với Google Sheet USERS mới nhất
+ */
+export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
+  const currentSession = getStoredSession()
+  if (!currentSession) return null
+
+  // Không ghi đè nếu đang ở chế độ xem trước vai trò (impersonating)
+  if (currentSession.isImpersonating) return currentSession
+
+  const config = getGoogleSheetConfig()
+  const sheetId = config?.sheetId || "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw"
+  if (!sheetId) return currentSession
+
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId.trim()}/gviz/tq?tqx=out:csv&sheet=USERS&_t=${Date.now()}`
+    const res = await fetch(gvizUrl)
+    if (!res.ok) return currentSession
+    const text = await res.text()
+
+    const lines = text.split(/\r?\n/)
+    const myEmail = (currentSession.teamsEmail || currentSession.personalEmail || "").trim().toLowerCase()
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (!line) continue
+      const cols = line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim())
+      const pEmail = (cols[2] || "").toLowerCase()
+      const tEmail = (cols[3] || "").toLowerCase()
+
+      if (
+        pEmail === myEmail ||
+        tEmail === myEmail ||
+        (myEmail && (pEmail.includes(myEmail.split("@")[0]) || tEmail.includes(myEmail.split("@")[0])))
+      ) {
+        const rawRole = (cols[5] || "").toLowerCase()
+        let newRole: UserRole = "Designer"
+        if (rawRole.includes("admin")) newRole = "Admin"
+        else if (rawRole.includes("owner")) newRole = "Design Owner"
+        else if (rawRole.includes("po")) newRole = "PO"
+        else if (rawRole.includes("biz") || rawRole.includes("business")) newRole = "Business"
+        else newRole = "Designer"
+
+        const newDisplayName = cols[0] || currentSession.displayName
+        const newAvatar = cols[1] || currentSession.avatarUrl
+
+        if (
+          newRole !== currentSession.role ||
+          (newAvatar && newAvatar !== currentSession.avatarUrl) ||
+          (newDisplayName && newDisplayName !== currentSession.displayName)
+        ) {
+          const updated = saveSession(
+            currentSession.sessionToken,
+            currentSession.personalEmail,
+            currentSession.teamsEmail,
+            newRole,
+            currentSession.squad,
+            newDisplayName,
+            newAvatar,
+            Math.max(300, Math.floor((currentSession.expiresAt - Date.now()) / 1000)),
+            currentSession.squads,
+            currentSession.products
+          )
+          return updated
+        }
+        break
+      }
+    }
+  } catch (e) {
+    console.warn("Could not sync role from sheet:", e)
+  }
+  return currentSession
 }

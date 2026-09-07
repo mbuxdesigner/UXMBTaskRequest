@@ -55,17 +55,25 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
 │   │   ├── Tích hợp TestManagementView & TestRunnerView
 │   │   └── Quản lý câu hỏi trắc nghiệm/tự luận, nhập xuất Excel XLSX
 │   │
-│   └── 🔄 Tab 5: workflow - Quy trình & Khâu UX (Phases Config)
-│       ├── Danh sách 6 khâu UX chuẩn sắp xếp dọc
+│   └── 🔄 Tab 5: workflow - Quy trình & Khâu UX (Phases Config & Status Rules Tool)
+│       ├── Danh sách 6 khâu UX chuẩn sắp xếp dọc (Discovery -> Handoff)
 │       ├── Kéo thả hoặc bấm nút ⬆️/⬇️ để đổi thứ tự bước quy trình
 │       ├── Thêm / Sửa / Xóa khâu UX (SLA ngày, % tiến độ, deliverable bắt buộc)
 │       ├── Nút Khôi phục mặc định 6 khâu UX MBBank
-│       └── Bảng tiêu chuẩn 6 trạng thái xử lý yêu cầu (Tiếp nhận -> Bàn giao)
+│       ├── ⚡ TOOL CẤU HÌNH QUY TẮC TRẠNG THÁI TỰ ĐỘNG (Status Automation Rules Tool):
+│       │   ├── Bảng tương tác quản trị 6 trạng thái (Đang phân loại, Đang thực hiện, Đã gửi PO, Pending, Hoàn thành, Bị chặn)
+│       │   ├── Toggle Switch Bật/Tắt tự động hóa từng trạng thái tức thì
+│       │   ├── Modal cấu hình chuyên sâu: Tùy biến Trigger event, SLA Action, Mô tả nghiệp vụ
+│       │   ├── Liên kết động với danh sách Khâu UX phía trên (Checklist đa khâu)
+│       │   └── Nút Khôi phục mặc định 6 quy tắc tự động hóa chuẩn MBBank
 │
 └── 📂 NHÓM 3: HỆ THỐNG & KẾT NỐI
-    ├── 📦 Tab 6: masterdata - Squads & Sản phẩm
-    │   ├── Quản lý danh mục UX Squads (Tên, Mã Code, Hạn mức tasks, Sản phẩm phụ trách)
-    │   └── Quản lý danh mục Phân hệ Sản phẩm MB (App MBBank, Lending, Cards, BaaS...)
+    ├── 📦 Tab 6: masterdata - Squads & Sản phẩm (Xem chi tiết doc/features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md)
+    │   ├── Giao diện ReUI Card Grid tối ưu kèm bộ lọc & tìm kiếm nhanh
+    │   ├── Quản lý danh mục UX Squads: Tên, Mã Code, Hạn mức tasks, Sản phẩm phụ trách
+    │   ├── Phân bổ nhân sự Squad theo Vai trò chuẩn (Role-Based Pickers): PO, Business, UX/UI Designers
+    │   ├── Quản lý danh mục Phân hệ Sản phẩm MB (App MBBank, Lending, Cards, BaaS...)
+    │   └── Tự động đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`)
     │
     ├── 🔌 Tab 7: integrations - Cổng kết nối APIs & Webhooks
     │   ├── Cấu hình Google Apps Script Web App URL & Tần suất đồng bộ
@@ -130,6 +138,7 @@ Quản trị viên cần kiểm tra xem người dùng thuộc các vai trò kh�
 | `mbbank_admin_squads` | `SquadSetting[]` | Danh mục UX Squads và hạn mức nhận việc tối đa |
 | `mbbank_admin_products` | `ProductSetting[]` | Danh mục Sản phẩm / Phân hệ ngân hàng số |
 | `mbbank_admin_rbac` | `Record<string, string[]>` | Quyền hạn tác nghiệp hệ thống theo từng capability ID |
+| `mbbank_admin_status_rules` | `StatusAutomationRule[]` | 6 quy tắc tự động hóa chuyển trạng thái, điều kiện trigger, ánh xạ khâu UX và hành vi SLA |
 | `ux_portal_preview_role` | `UserRole` | Lưu vai trò đang được Admin giả lập xem thử |
 
 ---
@@ -140,8 +149,10 @@ Quản trị viên cần kiểm tra xem người dùng thuộc các vai trò kh�
 | :--- | :--- | :--- |
 | **Thêm / Sửa Nhân sự** | `QuanLyPage.tsx`<br>`googleSheetService.ts`<br>`mockData.ts` | Luôn đảm bảo mảng `squads` và `products` là mảng chuỗi (`string[]`), hỗ trợ 1 người thuộc nhiều Squad. Tự động đồng bộ lên Google Sheet ngay sau khi lưu. |
 | **Sắp xếp Khâu UX** | `QuanLyPage.tsx`<br>`KanbanBoard.tsx`<br>`RequestDetail.tsx` | Khâu UX phải đánh lại số thứ tự `step: 1, 2, 3...` liên tục. Không cho phép xóa nếu danh sách chỉ còn dưới 2 khâu. |
+| **Status Automation Rules** | `QuanLyPage.tsx`<br>`RequestDetail.tsx`<br>`gantt-chart.tsx` | Đồng bộ 2 chiều: Khi PO gửi bài toán mới (`po_created`), gán Designer (`designer_assigned`), bàn giao (`send_to_po`), hoặc nghiệm thu (`po_approved`), hệ thống chuyển trạng thái và kích hoạt/tạm dừng bộ đếm SLA tương ứng. |
 | **Ma trận Menu RBAC** | `QuanLyPage.tsx`<br>`navVisibilityConfig.ts`<br>`Sidebar.tsx` | Sau khi cập nhật thứ tự hoặc công tắc ẩn/hiện, bắt buộc bắn event `window.dispatchEvent(new Event("nav_visibility_changed"))`. |
 | **Role Preview Switcher** | `AppHeader.tsx`<br>`otpAuthService.ts`<br>`Sidebar.tsx` | Chỉ hiển thị dropdown cho Admin/Design Owner thật. Luôn có nút khôi phục về Admin gốc để tránh Admin bị kẹt trong vai trò bị giới hạn quyền. |
+| **Điều hướng Deep Link Hash** | `QuanLyPage.tsx`<br>`Sidebar.tsx` | Hỗ trợ mở trực tiếp `#manage?tab=[tab_id]` (ví dụ `#manage?tab=workflow`) mà không bị gián đoạn hay reset về tab đầu. |
 
 ---
 

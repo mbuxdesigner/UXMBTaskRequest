@@ -46,13 +46,10 @@ const OTP_RESEND_COOLDOWN = 60;      // 60 giây chờ gửi lại
 // Default selections data
 const DEFAULT_SELECTIONS = {
   products: [
-    "App/Core",
-    "App/Card",
-    "App/Lending",
-    "App/Saving",
-    "Digi",
-    "BaaS",
-    "Internet Banking",
+    "App MBBank",
+    "Biz MBBank",
+    "BaaS & Open API",
+    "Design System & Nền tảng",
     "Khác"
   ],
   request_types: [
@@ -242,6 +239,43 @@ function doGet(e) {
       return createJsonResponse({
         status: "success",
         members: members,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "get_master_data") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      if (!rawSettings) {
+        initCoreSheets();
+        rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      }
+      const masterData = {};
+      if (rawSettings && rawSettings.getLastRow() > 1) {
+        const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 4).getValues();
+        for (let i = 0; i < rows.length; i++) {
+          const key = String(rows[i][0] || "").trim();
+          const jsonVal = String(rows[i][1] || "").trim();
+          if (key && jsonVal) {
+            try {
+              masterData[key] = JSON.parse(jsonVal);
+            } catch (err) {
+              masterData[key] = jsonVal;
+            }
+          }
+        }
+      }
+      return createJsonResponse({
+        status: "success",
+        master_data: masterData,
+        squads: masterData["SQUADS_CONFIG"] || null,
+        products: masterData["PRODUCTS_CONFIG"] || null,
+        phases: masterData["PHASES_CONFIG"] || null,
+        status_rules: masterData["STATUS_RULES_CONFIG"] || null,
+        audit_logs: masterData["AUDIT_LOGS_CONFIG"] || null,
+        rbac: masterData["RBAC_CONFIG"] || null,
+        nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
+        selections: masterData["SELECTIONS_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -825,6 +859,21 @@ function handleUpdateTaskProgress(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let user = findUserBySessionToken(ss, sessionToken);
 
+  // Dự phòng: tra cứu theo user_email gửi từ client nếu sessionToken chưa được lưu
+  const clientEmail = String(data.user_email || "").trim().toLowerCase();
+  if (!user && clientEmail) {
+    const userSheet = getOrInitUsersSheet(ss);
+    const userRow = findUserRowByPersonalEmail(userSheet, clientEmail);
+    if (userRow) {
+      user = {
+        personalEmail: userRow.personalEmail,
+        teamsEmail: userRow.teamsEmail,
+        displayName: userRow.displayName,
+        role: userRow.role
+      };
+    }
+  }
+
   if (!user && (sessionToken.startsWith("MOCK_") || sessionToken === "DEMO_TOKEN")) {
     user = {
       personalEmail: "demo@gmail.com",
@@ -841,8 +890,31 @@ function handleUpdateTaskProgress(data) {
     });
   }
 
+  // Luôn làm tươi vai trò mới nhất trực tiếp từ sheet USERS theo email
+  const userEmail = String(user.teamsEmail || user.personalEmail || clientEmail).trim().toLowerCase();
+  if (userEmail) {
+    const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+    if (userSheet && userSheet.getLastRow() > 1) {
+      const uRows = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
+      for (let u = 0; u < uRows.length; u++) {
+        const rowTEmail = String(uRows[u][3] || "").trim().toLowerCase();
+        const rowPEmail = String(uRows[u][2] || "").trim().toLowerCase();
+        if (rowTEmail === userEmail || rowPEmail === userEmail || (userEmail && (rowTEmail.includes(userEmail.split("@")[0]) || userEmail.includes(rowTEmail.split("@")[0])))) {
+          var rawRole = String(uRows[u][5] || "").trim();
+          if (rawRole) {
+            if (rawRole.toLowerCase().indexOf("admin") !== -1) user.role = "Admin";
+            else if (rawRole.toLowerCase().indexOf("owner") !== -1) user.role = "Design Owner";
+            else if (rawRole.toLowerCase().indexOf("po") !== -1) user.role = "PO";
+            else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) user.role = "Business";
+            else user.role = rawRole;
+          }
+          break;
+        }
+      }
+    }
+  }
+
   const userRole = String(user.role || "Designer").trim();
-  const userEmail = String(user.teamsEmail || "").trim().toLowerCase();
 
   if (userRole === "PO") {
     return createJsonResponse({
@@ -890,15 +962,43 @@ function handleUpdateTaskProgress(data) {
           new_phase: newPhase || item.current_phase || "Ghi nhận",
           new_progress: newProgress || item.progress || 0,
           note: note,
-          deliverable_link: figmaUrl || (item.deliverables && item.deliverables.figma_url) || ""
+          deliverable_link: figmaUrl || ""
         };
 
         if (newPhase) item.current_phase = newPhase;
         if (newStatus) item.status = newStatus;
         if (typeof newProgress === "number") item.progress = newProgress;
+        if (typeof data.sent_to_po_at !== "undefined") {
+          item.sent_to_po_at = String(data.sent_to_po_at || "").trim();
+        } else if (newStatus === "Đã gửi PO" && !item.sent_to_po_at) {
+          item.sent_to_po_at = new Date().toISOString();
+        }
+        if (newStatus !== "Đã gửi PO" && newStatus !== "PO pending" && newStatus !== "Pending") {
+          item.sent_to_po_at = "";
+        }
+        if (data.priority) {
+          item.priority = String(data.priority).trim();
+          rawSheet.getRange(i + 2, 6).setValue(item.priority);
+        }
+        if (data.design_deadline) {
+          item.design_deadline = String(data.design_deadline).trim();
+        }
+        if (data.release_date) {
+          item.release_date = String(data.release_date).trim();
+        }
+        if (typeof data.squad_name !== "undefined" || typeof data.preferred_squad !== "undefined") {
+          const cleanSq = String(data.squad_name || data.preferred_squad || "").trim();
+          item.squad_name = cleanSq;
+          item.preferred_squad = cleanSq;
+        }
+        if (typeof data.product !== "undefined" && data.product) {
+          item.product = String(data.product).trim();
+          rawSheet.getRange(i + 2, 3).setValue(item.product);
+        }
         item.last_updated = formattedDate;
-        if (assignedDesigner && (userRole === "Admin" || userRole === "Design Owner")) {
+        if (typeof data.assigned_designer !== "undefined") {
           item.assigned_designer = assignedDesigner;
+          item.ux_owner = assignedDesigner || "Chưa phân công";
         }
         if (figmaUrl) {
           if (!item.deliverables) item.deliverables = {};
@@ -994,6 +1094,7 @@ function getAllRequestsFromSheet() {
     if (item) {
       if (!item.request_id && isRawTasks) item.request_id = rawRows[i][0];
       if (!item.submitted_at && isRawTasks) item.submitted_at = String(rawRows[i][8] || "");
+      if (!item.priority && isRawTasks && rawRows[i][5]) item.priority = String(rawRows[i][5]);
       requests.push(item);
     }
   }
@@ -1156,20 +1257,20 @@ function handleVerifyOtpFast(data) {
     const sessionExpiresDate = new Date(nowMs + SESSION_EXPIRY_MINUTES * 60 * 1000);
     const sessionExpiresStr = Utilities.formatDate(sessionExpiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
 
-    cache.put("session_" + sessionToken, JSON.stringify({
-      personalEmail: otpObj.personalEmail || emailInput,
-      teamsEmail: otpObj.teamsEmail,
-      displayName: otpObj.displayName || otpObj.teamsEmail.split("@")[0],
-      avatarUrl: otpObj.avatarUrl || "",
-      role: otpObj.role || "Designer",
-      expiresAt: sessionExpiresDate.getTime()
-    }), SESSION_EXPIRY_MINUTES * 60);
-
+    let finalRole = otpObj.role || "Designer";
     if (otpObj.rowIndex) {
       try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
-        if (userSheet) {
+        if (userSheet && userSheet.getLastRow() >= otpObj.rowIndex) {
+          const rawRoleVal = String(userSheet.getRange(otpObj.rowIndex, 6).getValue() || "").trim();
+          if (rawRoleVal) {
+            if (rawRoleVal.toLowerCase().indexOf("admin") !== -1) finalRole = "Admin";
+            else if (rawRoleVal.toLowerCase().indexOf("owner") !== -1) finalRole = "Design Owner";
+            else if (rawRoleVal.toLowerCase().indexOf("po") !== -1) finalRole = "PO";
+            else if (rawRoleVal.toLowerCase().indexOf("biz") !== -1 || rawRoleVal.toLowerCase().indexOf("business") !== -1) finalRole = "Business";
+            else finalRole = rawRoleVal;
+          }
           userSheet.getRange(otpObj.rowIndex, 7, 1, 6).setValues([[
             "VERIFIED (" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss") + ")",
             "",
@@ -1182,6 +1283,15 @@ function handleVerifyOtpFast(data) {
       } catch (e) {}
     }
 
+    cache.put("session_" + sessionToken, JSON.stringify({
+      personalEmail: otpObj.personalEmail || emailInput,
+      teamsEmail: otpObj.teamsEmail,
+      displayName: otpObj.displayName || otpObj.teamsEmail.split("@")[0],
+      avatarUrl: otpObj.avatarUrl || "",
+      role: finalRole,
+      expiresAt: sessionExpiresDate.getTime()
+    }), SESSION_EXPIRY_MINUTES * 60);
+
     return createJsonResponse({
       status: "success",
       message: "Xác thực thành công!",
@@ -1190,7 +1300,7 @@ function handleVerifyOtpFast(data) {
       teams_email: otpObj.teamsEmail,
       display_name: otpObj.displayName || otpObj.teamsEmail.split("@")[0],
       avatar_url: otpObj.avatarUrl || "",
-      role: otpObj.role || "Designer",
+      role: finalRole,
       expires_in: SESSION_EXPIRY_MINUTES * 60
     });
   }
@@ -1492,7 +1602,41 @@ function findUserRowByPersonalEmail(userSheet, email) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // 1. Tìm trong RAW_SETTINGS (Key USERS_LIST)
+  // 1. Ưu tiên đọc trực tiếp từ sheet USERS (Nơi Admin trực tiếp quản lý phân quyền và nhân sự)
+  if (userSheet && userSheet.getLastRow() > 1) {
+    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 12).getValues();
+    for (let i = 0; i < data.length; i++) {
+      const pEmail = String(data[i][2] || "").trim().toLowerCase();
+      const tEmail = String(data[i][3] || "").trim().toLowerCase();
+      if (pEmail === targetEmail || tEmail === targetEmail || (tEmail && targetEmail.includes(tEmail.split("@")[0]))) {
+        var rawRole = String(data[i][5] || "Designer").trim();
+        var role = "Designer";
+        if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
+        else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
+        else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
+        else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
+        else role = "Designer";
+
+        return {
+          rowIndex: i + 2,
+          displayName: String(data[i][0] || ""),
+          avatarUrl: String(data[i][1] || ""),
+          personalEmail: data[i][2] || tEmail,
+          teamsEmail: data[i][3],
+          status: String(data[i][4] || "Active"),
+          role: role,
+          currentOtp: data[i][6],
+          otpExpiresAt: data[i][7],
+          otpAttempts: data[i][8],
+          sessionToken: data[i][9],
+          sessionExpiresAt: data[i][10],
+          notes: data[i][11]
+        };
+      }
+    }
+  }
+
+  // 2. Dự phòng: Tìm trong RAW_SETTINGS (Key USERS_LIST) nếu sheet USERS chưa có
   try {
     const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
     if (rawSettings && rawSettings.getLastRow() > 1) {
@@ -1525,32 +1669,6 @@ function findUserRowByPersonalEmail(userSheet, email) {
       }
     }
   } catch (e) {}
-
-  // 2. Tìm trong sheet USERS
-  if (userSheet && userSheet.getLastRow() > 1) {
-    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 12).getValues();
-    for (let i = 0; i < data.length; i++) {
-      const pEmail = String(data[i][2] || "").trim().toLowerCase();
-      const tEmail = String(data[i][3] || "").trim().toLowerCase();
-      if (pEmail === targetEmail || tEmail === targetEmail || (tEmail && targetEmail.includes(tEmail.split("@")[0]))) {
-        return {
-          rowIndex: i + 2,
-          displayName: String(data[i][0] || ""),
-          avatarUrl: String(data[i][1] || ""),
-          personalEmail: data[i][2] || tEmail,
-          teamsEmail: data[i][3],
-          status: String(data[i][4] || "Active"),
-          role: String(data[i][5] || "Designer"),
-          currentOtp: data[i][6],
-          otpExpiresAt: data[i][7],
-          otpAttempts: data[i][8],
-          sessionToken: data[i][9],
-          sessionExpiresAt: data[i][10],
-          notes: data[i][11]
-        };
-      }
-    }
-  }
 
   // 3. Dự phòng từ danh sách mặc định DEFAULT_INITIAL_USERS
   for (let d = 0; d < DEFAULT_INITIAL_USERS.length; d++) {
@@ -1585,6 +1703,43 @@ function findUserRowByPersonalEmail(userSheet, email) {
 function findUserBySessionToken(ss, sessionToken) {
   if (!sessionToken) return null;
 
+  // 1. Ưu tiên tra cứu trực tiếp từ sheet USERS để luôn nhận vai trò mới nhất nếu Admin đã đổi
+  try {
+    const userSheet = getOrInitUsersSheet(ss);
+    const lastRow = userSheet.getLastRow();
+    if (lastRow > 1) {
+      const data = userSheet.getRange(2, 1, lastRow - 1, 12).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const tokenInSheet = String(data[i][9] || "").trim();
+        if (tokenInSheet === sessionToken) {
+          var rawRole = String(data[i][5] || "Designer").trim();
+          var role = "Designer";
+          if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
+          else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
+          else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
+          else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
+          else role = rawRole;
+
+          const freshUser = {
+            displayName: String(data[i][0] || ""),
+            avatarUrl: String(data[i][1] || ""),
+            personalEmail: String(data[i][2] || ""),
+            teamsEmail: String(data[i][3] || ""),
+            role: role
+          };
+          try {
+            CacheService.getScriptCache().put("session_" + sessionToken, JSON.stringify({
+              ...freshUser,
+              expiresAt: Date.now() + 30 * 60 * 1000
+            }), 30 * 60);
+          } catch (ce) {}
+          return freshUser;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Dự phòng tra cứu Script Cache
   const cache = CacheService.getScriptCache();
   const cached = cache.get("session_" + sessionToken);
   if (cached) {
@@ -1596,24 +1751,6 @@ function findUserBySessionToken(ss, sessionToken) {
     } catch (e) {}
   }
 
-  const userSheet = getOrInitUsersSheet(ss);
-  const lastRow = userSheet.getLastRow();
-  if (lastRow <= 1) return null;
-
-  const data = userSheet.getRange(2, 1, lastRow - 1, 12).getValues();
-
-  for (let i = 0; i < data.length; i++) {
-    const tokenInSheet = String(data[i][9] || "").trim();
-    if (tokenInSheet === sessionToken) {
-      return {
-        displayName: String(data[i][0] || ""),
-        avatarUrl: String(data[i][1] || ""),
-        personalEmail: String(data[i][2] || ""),
-        teamsEmail: String(data[i][3] || ""),
-        role: String(data[i][5] || "Designer")
-      };
-    }
-  }
   return null;
 }
 
@@ -2095,6 +2232,47 @@ function testAvatarDrive() {
  * Lấy danh sách nhân sự từ RAW_SETTINGS (USERS_LIST) hoặc USERS sheet
  */
 function getOrInitTeamMembers(ss) {
+  // 1. Ưu tiên đọc trực tiếp từ sheet USERS (Nơi người dùng/Admin quản lý danh sách nhân sự thực tế)
+  const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+  if (userSheet && userSheet.getLastRow() > 1) {
+    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
+    const list = [];
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] || data[i][2] || data[i][3]) {
+        var rawRole = String(data[i][5] || "Designer").trim();
+        var role = "Designer";
+        if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
+        else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
+        else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
+        else role = "Designer";
+
+        list.push({
+          id: "mem-" + (i + 1),
+          name: String(data[i][0] || "Thành viên UX"),
+          avatarUrl: String(data[i][1] || ""),
+          email: String(data[i][3] || data[i][2] || ""),
+          personalEmail: String(data[i][2] || ""),
+          teamsEmail: String(data[i][3] || ""),
+          status: String(data[i][4] || "Active"),
+          role: role,
+          squad: "Lending & Vay vốn",
+          squads: ["Lending & Vay vốn"],
+          products: ["Lending & Vay vốn"],
+          capacityLimit: 8,
+          activeTasks: 0,
+          permissions: {
+            canAssign: role === "Admin" || role === "Design Owner",
+            canApprovePo: true,
+            canExport: true,
+            canManageSystem: role === "Admin"
+          }
+        });
+      }
+    }
+    if (list.length > 0) return list;
+  }
+
+  // 2. Dự phòng: Đọc từ RAW_SETTINGS (USERS_LIST) nếu sheet USERS chưa có
   try {
     const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
     if (rawSettings && rawSettings.getLastRow() > 1) {
@@ -2109,38 +2287,6 @@ function getOrInitTeamMembers(ss) {
       }
     }
   } catch (e) {}
-
-  const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
-  if (userSheet && userSheet.getLastRow() > 1) {
-    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
-    const list = [];
-    for (let i = 0; i < data.length; i++) {
-      if (data[i][0] || data[i][2] || data[i][3]) {
-        list.push({
-          id: "mem-" + (i + 1),
-          name: String(data[i][0] || "Thành viên UX"),
-          avatarUrl: String(data[i][1] || ""),
-          email: String(data[i][3] || data[i][2] || ""),
-          personalEmail: String(data[i][2] || ""),
-          teamsEmail: String(data[i][3] || ""),
-          status: String(data[i][4] || "Active"),
-          role: String(data[i][5] || "Designer"),
-          squad: "Lending & Vay vốn",
-          squads: ["Lending & Vay vốn"],
-          products: ["Lending & Vay vốn"],
-          capacityLimit: 8,
-          activeTasks: 0,
-          permissions: {
-            canAssign: data[i][5] === "Admin" || data[i][5] === "Design Owner",
-            canApprovePo: true,
-            canExport: true,
-            canManageSystem: data[i][5] === "Admin"
-          }
-        });
-      }
-    }
-    if (list.length > 0) return list;
-  }
 
   return DEFAULT_INITIAL_USERS.map(function(u, idx) {
     return {
@@ -2312,6 +2458,10 @@ function handleSyncMasterData(data) {
   if (data.products) configsToSave["PRODUCTS_CONFIG"] = data.products;
   if (data.phases) configsToSave["PHASES_CONFIG"] = data.phases;
   if (data.selections) configsToSave["SELECTIONS_CONFIG"] = data.selections;
+  if (data.status_rules) configsToSave["STATUS_RULES_CONFIG"] = data.status_rules;
+  if (data.audit_logs) configsToSave["AUDIT_LOGS_CONFIG"] = data.audit_logs;
+  if (data.rbac) configsToSave["RBAC_CONFIG"] = data.rbac;
+  if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
 
   const existingKeys = {};
   const lastRow = rawSettings.getLastRow();

@@ -26,6 +26,7 @@ interface RequestReviewSheetProps {
   form: {
     title: string
     product: string
+    preferred_squad?: string
     request_type: string
     description: string
     business_need: string
@@ -112,12 +113,24 @@ export default function RequestReviewSheet({
                     {/* 1. Nền tảng / Sản phẩm */}
                     <div className="flex items-start">
                       <span className="w-36 sm:w-44 text-slate-400 font-medium shrink-0 text-xs sm:text-sm">
-                        Nền tảng / Sản phẩm
+                        Sản phẩm số
                       </span>
                       <span className="font-semibold text-slate-900 flex-1 break-words [overflow-wrap:anywhere]">
                         {form.product || "Chưa chọn"}
                       </span>
                     </div>
+
+                    {/* Squad nghiệp vụ */}
+                    {form.preferred_squad && (
+                      <div className="flex items-start">
+                        <span className="w-36 sm:w-44 text-slate-400 font-medium shrink-0 text-xs sm:text-sm">
+                          Squad tiếp nhận
+                        </span>
+                        <span className="font-semibold text-blue-600 flex-1 break-words [overflow-wrap:anywhere]">
+                          {form.preferred_squad}
+                        </span>
+                      </div>
+                    )}
 
                     {/* 2. Loại yêu cầu */}
                     <div className="flex items-start">

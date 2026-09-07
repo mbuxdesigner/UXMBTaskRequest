@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { EmptyState } from "@/components/reui/empty-state"
+import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +34,7 @@ import { toast } from "@/components/ui/toast"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import PageHeader from "@/components/common/PageHeader"
 import { TestExam, TestSubmission } from "@/types/testAssessment"
+import { UserRole } from "@/data/mockData"
 import {
   getStoredTests,
   getStoredSubmissions,
@@ -44,7 +46,7 @@ import TestUploadModal from "./TestUploadModal"
 import GradeEssayModal from "./GradeEssayModal"
 
 interface TestManagementViewProps {
-  userRole: "Admin" | "Design Owner" | "Designer" | "PO"
+  userRole: UserRole
   currentUserName: string
   currentUserEmail: string
   currentUserSquad?: string
@@ -551,18 +553,22 @@ export default function TestManagementView({
           <div className="p-4 px-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span>Số dòng mỗi trang:</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => {
-                  setRowsPerPage(Number(e.target.value))
+              <DropdownMenu
+                value={String(rowsPerPage)}
+                position="top"
+                onChange={(val) => {
+                  setRowsPerPage(Number(val))
                   setCurrentPage(1)
                 }}
-                className="h-8 px-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none cursor-pointer focus:border-[#1057FB] shadow-2xs transition-colors"
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+                options={[
+                  { value: "10", label: "10" },
+                  { value: "20", label: "20" },
+                  { value: "50", label: "50" },
+                ]}
+                className="w-20"
+                buttonClassName="h-8 px-2.5 bg-slate-50 border-slate-200"
+                menuClassName="min-w-24"
+              />
             </div>
 
             <div className="flex items-center gap-3 shrink-0">

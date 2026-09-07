@@ -1,20 +1,21 @@
 # 💾 TÍNH NĂNG 05: TẦNG BACKEND GOOGLE APPS SCRIPT & CƠ SỞ DỮ LIỆU GOOGLE SHEETS / DRIVE
 
-> **Mục tiêu tính năng:** Cung cấp hạ tầng lưu trữ không máy chủ (Serverless Backend) dựa trên hệ sinh thái Google Workspace, sử dụng Google Apps Script làm API Gateway xử lý đọc/ghi tốc độ cao qua mô hình 2 Bảng JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), đồng thời lưu trữ tệp tin/avatar an toàn trên Google Drive.
+> **Mục tiêu tính năng:** Cung cấp hạ tầng lưu trữ không máy chủ (Serverless Backend) dựa trên hệ sinh thái Google Workspace, sử dụng Google Apps Script làm API Gateway xử lý đọc/ghi tốc độ cao qua mô hình 2 Bảng JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), hỗ trợ đồng bộ 2 chiều (Two-Way Sync), nạp siêu tốc danh sách nhân sự từ tab `USERS` qua GViz API, và lưu trữ tệp tin/avatar an toàn trên Google Drive.
 
 ---
 
 ## 🎯 1. KHI NÀO CẦN ĐỌC TÀI LIỆU NÀY?
 
 - **Khi làm tính năng mới:**
-  - Thêm một API endpoint mới trong `google-apps-script-backend.js` (ví dụ: endpoint xuất báo cáo, endpoint xóa task vĩnh viễn).
-  - Thêm một cấu hình mới cần lưu vĩnh viễn trên Google Sheet thay vì chỉ lưu tạm `localStorage`.
-  - Tích hợp thêm thư mục lưu trữ mới trên Google Drive.
+  - Thêm một API action mới trong `google-apps-script-backend.js` (ví dụ: action xóa task vĩnh viễn, action lưu vết audit log chuyên sâu).
+  - Thêm một cấu hình hệ thống mới cần lưu trữ lâu dài trên Google Sheet trong bảng `RAW_SETTINGS`.
+  - Tích hợp thêm thư mục lưu trữ mới trên Google Drive hoặc thay đổi định dạng nén tài liệu.
 - **Khi sửa tính năng cũ:**
   - Ứng dụng gọi API sang Apps Script bị lỗi CORS (`Failed to fetch`, `NetworkError`).
   - Gặp lỗi ghi dữ liệu chậm (>3 giây) hoặc bị timeout 30 giây của Google Apps Script.
-  - Sửa code trong file `google-apps-script-backend.js` nhưng ứng dụng thực tế vẫn chạy theo logic cũ.
+  - Sửa code trong file `google-apps-script-backend.js` nhưng ứng dụng thực tế vẫn chạy theo logic cũ (chưa Deploy New Version).
   - Tải file lên Google Drive bị hỏng file (file corrupt, không mở được do lỗi encode Base64).
+  - Lỗi đồng bộ Master Data hoặc lệch vai trò người dùng sau khi chỉnh sửa trên Google Sheet.
 
 ---
 
@@ -43,9 +44,9 @@
     │                                              │  │  📁 UX_Portal_Attachments        │
     │  📄 BẢNG 2: RAW_SETTINGS (Core Config JSON)  │  │     (Tài liệu đính kèm PRD/Spec) │
     │     Lưu cấu hình Phân quyền, Khâu UX,        │  └──────────────────────────────────┘
-    │     Danh mục Squads & Products.              │
+    │     Danh mục Squads & Products, Status Rules │
     │                                              │
-    │  📊 Requests_View / Users_View (Projection)  │
+    │  📊 Requests_View / Users_View / USERS       │
     │     Bảng xem phụ trợ dạng cột cho con người  │
     └──────────────────────────────────────────────┘
 ```
@@ -63,7 +64,7 @@ Mỗi bài toán là 1 hàng duy nhất. Cột `Payload` chứa toàn bộ objec
 | **B** | `Title` | String | Tiêu đề bài toán (giúp nhận diện bằng mắt thường trên Sheet) |
 | **C** | `Product` | String | Sản phẩm / Phân hệ nghiệp vụ |
 | **D** | `Current_Phase` | String | Khâu hiện tại trong quy trình UX |
-| **E** | `Status` | String | Trạng thái (`Đang thực hiện`, `Hoàn thành`, `Pending`...) |
+| **E** | `Status` | String | Trạng thái (`Đang thực hiện`, `Hoàn thành`, `Pending`, `PO Pending`...) |
 | **F** | `Priority` | String | Độ ưu tiên (`High`, `Medium`, `Low`) |
 | **G** | `Assignee` | String | Email Designer phụ trách |
 | **H** | **`Payload`** | **JSON String** | **Toàn bộ dữ liệu chi tiết của Task + Mảng lịch sử `task_updates`** |
@@ -72,49 +73,68 @@ Mỗi bài toán là 1 hàng duy nhất. Cột `Payload` chứa toàn bộ objec
 
 ---
 
-### 📦 BẢNG 2: `RAW_SETTINGS` (Lưu Trữ Cấu Hình Hệ Thống)
+### 📦 BẢNG 2: `RAW_SETTINGS` (Lưu Trữ Cấu Hình Hệ Thống & Master Data)
+*(Xem chi tiết cơ chế đồng bộ 2 chiều tại `features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md`)*
 
 | Cột | Tên Cột Header | Kiểu Dữ Liệu | Ví dụ Key | Nội dung Payload |
 | :---: | :--- | :--- | :--- | :--- |
-| **A** | `Config_Key` | String (PK) | `NAV_CONFIG` | Ma trận bật/tắt và thứ tự menu cho 4 roles |
-| **A** | `Config_Key` | String (PK) | `UX_PHASES` | Danh sách các khâu trong quy trình và SLA chuẩn |
-| **A** | `Config_Key` | String (PK) | `MASTER_DATA`| Danh mục Squads, Products và Danh sách Nhân sự |
-| **B** | **`Config_JSON`** | **JSON String** | `{ ... }` | Nội dung cấu hình chi tiết dạng JSON nén |
-| **C** | `Updated_At` | ISO String | `2026-08-22T...` | Thời điểm Admin cập nhật cấu hình |
+| **A** | `Config_Key` | String (PK) | `USERS_LIST` | Danh sách toàn bộ nhân sự, vai trò RBAC, avatar Drive, hạn mức task |
+| **A** | `Config_Key` | String (PK) | `SQUADS_CONFIG` | Danh mục UX Squads: Mã, Tên, PO, Business, Designers phụ trách |
+| **A** | `Config_Key` | String (PK) | `PRODUCTS_CONFIG` | Danh mục Sản phẩm số MB: App MBBank, Biz MBBank, Lending, BaaS... |
+| **A** | `Config_Key` | String (PK) | `PHASES_CONFIG` | 6 Khâu quy trình chuẩn UX, SLA số ngày, % tiến độ, Deliverables |
+| **A** | `Config_Key` | String (PK) | `STATUS_RULES_CONFIG` | 6 Quy tắc tự động hóa trạng thái, trigger event, hành vi SLA |
+| **A** | `Config_Key` | String (PK) | `AUDIT_LOGS_CONFIG` | Nhật ký lưu vết thay đổi của Quản trị viên |
+| **A** | `Config_Key` | String (PK) | `SELECTIONS_CONFIG` | Danh mục Dropdown phục vụ Form tạo task (Loại yêu cầu, Output...) |
+| **B** | **`Payload_JSON`** | **JSON String** | `{ ... }` hoặc `[ ... ]` | Dữ liệu cấu hình chi tiết dạng JSON nguyên bản |
+| **C** | `Updated_At` | ISO String | `2026-09-05T...` | Thời điểm cập nhật cuối cùng |
+| **D** | `Updated_By` | String | Email Admin | Người thực hiện cập nhật cấu hình |
 
 ---
 
 ## ⚙️ 4. DANH MỤC API ENDPOINTS TRONG `google-apps-script-backend.js`
 
-### Phương thức `GET` (`doGet`):
+### 4.1. Phương thức `GET` (`doGet`):
 - `?action=sync`: Lấy toàn bộ danh sách bài toán từ `RAW_REQUESTS` và cấu hình từ `RAW_SETTINGS`.
 - `?action=query&request_id=...`: Tra cứu chi tiết một bài toán theo ID.
+- `?action=get_master_data`: Kéo toàn bộ Dữ liệu chủ (Squads, Products, Phases, Status Rules, Audit Logs, RBAC, Selections) từ `RAW_SETTINGS`.
+- `?action=get_team_members`: Trả về danh sách nhân sự từ tab `USERS`.
+- `?action=get_selections`: Lấy danh mục chọn phục vụ Request Form.
 
-### Phương thức `POST` (`doPost`):
-- `action: "create"`: Tạo một task mới và ghi vào `RAW_REQUESTS` (kèm đẩy dữ liệu cơ bản ra `Requests_View`).
-- `action: "update"`: Cập nhật tiến độ, đổi khâu và append bản ghi mới vào mảng `task_updates` trong `Payload`.
+### 4.2. Phương thức `POST` (`doPost`):
+- `action: "create"`: Tạo một task mới và ghi vào `RAW_REQUESTS` (kèm cập nhật `Requests_View`).
+- `action: "update_task_progress"`: Cập nhật khâu UX, tiến độ %, trạng thái, mức độ ưu tiên, sản phẩm, squad, ngày hạn chót, ngày phát hành, ghi chú tiến độ, URL Figma và gán Designer.
+- `action: "sync_master_data"`: Đồng bộ toàn bộ Master Data từ Web App lên bảng `RAW_SETTINGS` trên Google Sheet.
+- `action: "sync_team_members"`: Đẩy danh sách nhân sự cập nhật lên bảng `USERS`.
 - `action: "upload_file"`: Nhận chuỗi Base64 của file tài liệu, lưu vào folder `UX_Portal_Attachments` trên Drive và trả về link tải.
-- `action: "upload_avatar"`: Nhận chuỗi Base64 ảnh chân dung, lưu vào folder `UX_Portal_Avatars` trên Drive và trả về link ảnh công khai.
-- `action: "request_otp"`: Sinh mã 6 số, lưu vào `CacheService` RAM và gửi tin nhắn Adaptive Card qua Teams Webhook.
-- `action: "verify_otp"`: Kiểm tra mã 6 số từ `CacheService`, nếu hợp lệ trả về session token.
+- `action: "upload_avatar"`: Lưu ảnh đại diện người dùng vào thư mục `UX_Portal_Avatars` trên Drive.
 
 ---
 
-## 🔍 5. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG & BẪY KỸ THUẬT (GOTCHAS)
+## ⚡ 5. CƠ CHẾ NẠP SIÊU TỐC TỪ TAB `USERS` QUA GVIZ API
 
-| Vùng Thay Đổi | Điểm Cần Đặc Biệt Lưu Ý | Rủi Ro Sống Còn |
-| :--- | :--- | :--- |
-| **Chỉnh sửa file `google-apps-script-backend.js`** | **Cloud-Hosted:** File nằm trong source code máy bạn chỉ là bản sao lưu! Code thực thi nằm trên Google Cloud. | ⚠️ **QUY TẮC BẮT BUỘC:** Sau khi sửa file trong thư mục dự án, bạn phải vào trang biên tập Google Apps Script ➔ Dán code mới ➔ Bấm **Deploy (Triển khai)** ➔ Chọn **New version (Phiên bản mới)**. Nếu quên bước này, hệ thống sẽ tiếp tục chạy code cũ! |
-| **Upload file / Avatar (Base64)** | Chuỗi Base64 từ Frontend gửi lên thường có tiền tố `data:image/png;base64,` hoặc `data:application/pdf;base64,`. | ⚠️ Apps Script hàm `Utilities.base64Decode()` sẽ lỗi ngay lập tức nếu không loại bỏ tiền tố `data:...;base64,` trước khi giải mã! |
-| **Thêm trường vào Schema Task** | Không bao giờ được đổi vị trí hoặc xóa cột `Payload` trong sheet `RAW_REQUESTS`. | ⚠️ Nếu đổi cấu trúc cột, các hàm bóc tách JSON tự động sẽ bị lệch cột dẫn đến hỏng toàn bộ cơ sở dữ liệu. |
-| **Xử lý CORS trên Google Apps Script** | Tất cả các phản hồi từ `doGet` và `doPost` phải được bọc qua: `ContentService.createTextOutput(JSON.stringify(...)).setMimeType(ContentService.MimeType.JSON)`. | ⚠️ Tránh chuyển hướng (Redirect 302) không có header CORS, sẽ làm trình duyệt chặn request. |
+Để tránh độ trễ khởi động lạnh (Cold start) của Google Apps Script khi người dùng đăng nhập hoặc mở bảng phân công:
+1. **Ưu tiên 1 (GViz API CSV):** Ứng dụng kết nối trực tiếp URL Google Visualization:
+   ```text
+   https://docs.google.com/spreadsheets/d/[SHEET_ID]/gviz/tq?tqx=out:csv&sheet=USERS
+   ```
+   - Thời gian phản hồi: **< 150ms** (gần như tức thì).
+   - Không bị chặn CORS preflight.
+   - Trực tiếp phân tích cú pháp CSV UTF-8, chuyển đổi vai trò (Admin, Design Owner, Designer, PO, Business).
+2. **Ưu tiên 2 (Apps Script Web App API):** Tự động fallback sang gọi POST/GET `action=get_team_members` nếu kết nối GViz gặp sự cố quyền riêng tư.
+3. **Đồng bộ vai trò phiên (`syncSessionRoleFromSheet`):** Mỗi khi người dùng có phiên đăng nhập, hệ thống tự động đối chiếu email với tab `USERS` trên Sheet. Nếu Admin vừa đổi vai trò trên Sheet, phiên làm việc lập tức nhận vai trò mới mà không cần đăng nhập lại.
 
 ---
 
-## 🛑 6. CHECKLIST KIỂM THỬ ĐẠT 100 ĐIỂM (TEST CHECKLIST)
+## 🛑 6. QUY TRÌNH DEPLOY GOOGLE APPS SCRIPT KHI CÓ THAY ĐỔI
 
-- [ ] **Ping Test Kết Nối**: Mở Admin Portal -> Tab 4 Tích hợp -> Bấm "Kiểm tra kết nối" -> Kết quả trả về màu xanh (Ping thành công trong < 1.5s).
-- [ ] **Kiểm tra Dữ liệu Đọc/Ghi**: Tạo 1 task thử nghiệm -> Mở Google Sheet trực tiếp bằng trình duyệt -> Kiểm tra xem dòng mới có xuất hiện trong sheet `RAW_REQUESTS` với đầy đủ JSON trong cột `Payload` không.
-- [ ] **Kiểm tra Tải file lên Drive**: Upload 1 file ảnh đại diện mới cho tài khoản trong Tab 1 Quản trị -> Kiểm tra link Drive trả về có xem được không và folder `UX_Portal_Avatars` có file mới không.
-- [ ] **Dung lượng Payload JSON**: Đảm bảo chuỗi JSON nén của mỗi task không vượt quá giới hạn 50,000 ký tự cho phép của một ô tính Google Sheet.
-- [ ] **Compile Test**: Chạy `npx tsc --noEmit` đạt 0 lỗi.
+> [!CAUTION]
+> Bất kỳ chỉnh sửa nào trong file `google-apps-script-backend.js` trong thư mục dự án **CHỈ LÀ SOURCE CODE LOCAL**. Nó **CHƯA CÓ HIỆU LỰC TRÊN CLOUD** cho đến khi bạn triển khai phiên bản mới.
+
+### Các Bước Triển Khai Chuẩn:
+1. Mở file `google-apps-script-backend.js`, copy toàn bộ mã nguồn.
+2. Truy cập dự án Apps Script liên kết với Google Sheet: `https://script.google.com`.
+3. Dán đè toàn bộ mã vào file `Code.gs`.
+4. Bấm **Deploy** -> Chọn **Manage deployments**.
+5. Bấm vào biểu tượng cây bút (Chỉnh sửa) -> Tại mục **Version**, chọn **New version** (Bắt buộc).
+6. Bấm **Deploy** -> Giữ nguyên Web App URL hiện tại.
+7. Vào Web App -> Tab Integrations (hoặc `googleSheetConfig.ts`) xác nhận URL khớp và bấm "Kiểm tra kết nối".

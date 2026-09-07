@@ -187,6 +187,12 @@ export async function updateTaskProgress(
     figma_url?: string
     assigned_designer?: string
     sent_to_po_at?: string
+    priority?: string
+    design_deadline?: string
+    release_date?: string
+    product?: string
+    squad_name?: string
+    preferred_squad?: string
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

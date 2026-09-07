@@ -18,7 +18,6 @@ import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, st
 import { uploadAvatarToDrive } from "../services/googleSheetService"
 import { fetchRequests } from "../api/api"
 import { preloadPage } from "../App"
-import ImageCompressorModal from "./tools/ImageCompressorModal"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import {
@@ -31,7 +30,7 @@ import {
 } from "@/config/navVisibilityConfig"
 import { APP_CONTENT } from "@/config/content"
 
-export type Page = "overview" | "create" | "track" | "manage" | "test"
+export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor"
 
 interface SidebarProps {
   currentPage: Page
@@ -47,7 +46,6 @@ export default function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [activeTaskCount, setActiveTaskCount] = useState<number>(0)
-  const [compressorOpen, setCompressorOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(getNavOrderConfig())
@@ -161,6 +159,7 @@ export default function Sidebar({
     await logoutTeamsSession()
     setSession(null)
     setUserMenuOpen(false)
+    window.location.hash = "#overview"
     window.location.reload()
   }
 
@@ -284,11 +283,16 @@ export default function Sidebar({
                   <button
                     key="nav-compressor"
                     type="button"
-                    onClick={() => setCompressorOpen(true)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors text-left cursor-pointer group text-sm font-medium"
+                    onClick={() => onNavigate("compressor")}
+                    onMouseEnter={() => preloadPage("compressor")}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                      currentPage === "compressor"
+                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                    }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${currentPage === "compressor" ? "bg-blue-600 ring-2 ring-blue-200" : "bg-emerald-500"}`} />
                       <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
                     </div>
                     <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-semibold text-slate-600">
@@ -406,8 +410,8 @@ export default function Sidebar({
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-1">
-                  {(["Admin", "Design Owner", "Designer", "PO"] as const).map((r) => {
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                  {(["Admin", "Design Owner", "Designer", "PO", "Business"] as const).map((r) => {
                     const isCurrent = userRole === r
                     return (
                       <button
@@ -469,12 +473,6 @@ export default function Sidebar({
           </div>
         )}
       </div>
-
-      {/* Built-in Tool Modal: Nén ảnh */}
-      <ImageCompressorModal
-        open={compressorOpen}
-        onClose={() => setCompressorOpen(false)}
-      />
     </div>
   )
 

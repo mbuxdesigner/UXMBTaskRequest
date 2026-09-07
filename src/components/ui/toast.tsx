@@ -15,6 +15,20 @@ type ToastListener = (toasts: ToastItem[]) => void
 let toasts: ToastItem[] = []
 const listeners = new Set<ToastListener>()
 
+let lastToastSignature = ""
+let lastToastTime = 0
+
+function isRecentDuplicate(title: string, type: string): boolean {
+  const now = Date.now()
+  const sig = `${type}::${title}`
+  if (sig === lastToastSignature && now - lastToastTime < 500) {
+    return true
+  }
+  lastToastSignature = sig
+  lastToastTime = now
+  return false
+}
+
 function notify() {
   listeners.forEach((listener) => listener([...toasts]))
 }
@@ -35,6 +49,11 @@ export const toast = {
   },
 
   success: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+    // Deduplication check
+    if (isRecentDuplicate(title, "success")) {
+      return lastToastSignature
+    }
+
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 3500
     const existingIndex = toasts.findIndex((t) => t.id === id)
@@ -56,6 +75,10 @@ export const toast = {
   },
 
   error: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+    if (isRecentDuplicate(title, "error")) {
+      return lastToastSignature
+    }
+
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 4500
     const existingIndex = toasts.findIndex((t) => t.id === id)

@@ -15,23 +15,25 @@ Deploy App/doc/
 ├── 📖 00_OVERVIEW_AND_ONBOARDING.md   <-- BẠN ĐANG ĐỌC TÀI LIỆU NÀY (Tổng quan, Bản đồ tra cứu)
 │
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
-│   └── 📋 2026-09-04_DAILY_UPDATE_REPORT.md  <-- Báo cáo chi tiết nâng cấp ReUI 8 Tabs, Role Preview, Xuất CSV
+│   ├── 📋 2026-09-04_DAILY_UPDATE_REPORT.md  <-- Báo cáo chi tiết nâng cấp ReUI 8 Tabs, Role Preview, Xuất CSV
+│   ├── 📋 2026-09-05_DAILY_UPDATE_REPORT.md  <-- Báo cáo Tool Quy tắc Trạng thái tự động, Gantt PO Pending, Đồng nhất UI Badge & Typography
+│   └── 📋 2026-09-07_DAILY_UPDATE_REPORT.md  <-- Báo cáo Nâng cấp Toàn diện: Image Compressor Standalone & JSZip, Chuẩn 2 loại Pending, @SenToPO Trigger, Đồng bộ 2 Chiều Google Sheets
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
-│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất.
+│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Tự động đồng bộ vai trò từ Sheet USERS, Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất.
 │   │
 │   ├── 📊 02_TASK_MANAGEMENT_AND_TRACKING.md
-│   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Danh sách Track (Table/Grid/List), Bộ lọc, Modal chi tiết Task (6 nhóm trường), Chuyển khâu, Tính % SLA, Cập nhật tiến độ.
+│   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.
 │   │
 │   ├── 📝 03_REQUEST_CREATION_FLOW.md
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình tạo yêu cầu (RequestForm), Ràng buộc sản phẩm của PO, Đính kèm tài liệu Google Drive, Hiệu ứng Confetti (Matter.js).
 │   │
 │   ├── ⚙️ 04_ADMIN_PORTAL_AND_RBAC.md
-│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (8 tabs), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Quản lý Khâu UX & SLA, Master Data, Audit Logs.
+│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (8 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL.
 │   │
 │   ├── 💾 05_GOOGLE_SHEET_AND_GAS_BACKEND.md
-│   │   └── Đọc khi: Đụng tới backend Google Apps Script (`google-apps-script-backend.js`), Cấu trúc lưu trữ JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), API Sync dữ liệu nhân sự/squads, Upload Avatar/Drive.
+│   │   └── Đọc khi: Đụng tới backend Google Apps Script (`google-apps-script-backend.js`), Cấu trúc lưu trữ JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), Nạp GViz CSV bảng USERS, API get_master_data & sync_master_data, Upload Avatar/Drive.
 │   │
 │   ├── 🎨 06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md
 │   │   └── Đọc khi: Thiết kế giao diện mới, Tạo UI Component mới, Chuẩn hóa màu sắc (Zinc Monochrome, Color Tokens), Spacing, Border-radius (`rounded-xl`), Chuẩn ReUI Application Settings, Sidebar Desktop Offset (`md:ml-60`).
@@ -39,8 +41,11 @@ Deploy App/doc/
 │   ├── 🎓 07_TEST_ASSESSMENT_MODULE.md
 │   │   └── Đọc khi: Sửa/Làm mới Phân hệ Khảo sát & Đánh giá Năng lực UX (Bộ câu hỏi, Làm bài trắc nghiệm, Import/Export Excel bằng XLSX, Chấm điểm).
 │   │
-│   └── 🛠️ 08_BUILTIN_TOOLS_AND_UTILITIES.md
-│       └── Đọc khi: Sửa/Dùng công cụ nén ảnh Client-side (`ImageCompressorModal.tsx`), Các tiện ích dùng chung.
+│   ├── 🛠️ 08_BUILTIN_TOOLS_AND_UTILITIES.md
+│   │   └── Đọc khi: Sửa/Dùng công cụ nén ảnh Client-side độc lập (`ImageCompressorPage.tsx` & `ImageCompressorModal.tsx`), Đóng gói file ZIP hàng loạt (`jszip`), Chuyển đổi định dạng WebP/PNG/JPEG.
+│   │
+│   └── 🔄 09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md
+│       └── Đọc khi: Sửa/Làm mới Master Data (UX Squads, Phân bổ PO/Business/Designers theo vai trò, Sản phẩm số MBBank), Đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`), Khử trùng lặp Activity Comments (Deduplication Engine).
 ```
 
 ---
@@ -52,12 +57,12 @@ Deploy App/doc/
 1. **Phân quyền (RBAC):** Tính năng này cho ai dùng (`Admin`, `Design Owner`, `Designer`, hay `PO`)? Menu của nó nằm ở đâu trong Sidebar (`Platform` hay `Resources`)?  
    👉 *Đọc ngay:* `features/04_ADMIN_PORTAL_AND_RBAC.md` và `features/01_AUTH_AND_SESSION_MANAGEMENT.md`.
 2. **Nơi lưu trữ dữ liệu (Storage):** Dữ liệu mới lưu ở đâu? LocalStorage, Google Sheet JSON (`RAW_REQUESTS` / `RAW_SETTINGS`), hay Google Drive?  
-   👉 *Đọc ngay:* `features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md`.
+   👉 *Đọc ngay:* `features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` và `features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md`.
 3. **Giao diện & Trải nghiệm (UI/UX):** Component mới tuân thủ Design System không? Có bị Sidebar che khuất trên Desktop không (`md:ml-60`)?  
    👉 *Đọc ngay:* `features/06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md`.
 4. **Đồng bộ trạng thái (Events):** Component khác có cần biết sự thay đổi này không? (Ví dụ: Đổi avatar, đổi menu, đổi session thì cần bắn event gì)?  
    👉 *Đọc ngay:* Bảng Event Bus trong tài liệu này và `features/04_ADMIN_PORTAL_AND_RBAC.md`.
-5. **Kiểm tra biên dịch:** Chạy lệnh `npx tsc --noEmit` có đạt 0 lỗi TypeScript không?
+5. **Kiểm tra biên dịch:** Chạy lệnh `npm run build` có đạt 0 lỗi TypeScript không?
 
 ---
 
@@ -76,7 +81,7 @@ Deploy App/doc/
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           FRONTEND CLIENT APPLICATION                           │
 │     React 19 + TypeScript 5.7 + Vite 8 + Tailwind CSS v4 + Framer Motion        │
-│          Radix UI Slot + ReUI / JolyUI Design System + Matter.js + XLSX         │
+│    Radix UI Slot + ReUI / JolyUI Design System + Matter.js + XLSX + JSZip       │
 └────────────────────────────────────────┬────────────────────────────────────────┘
                                          │ RESTful HTTPS / JSON Payloads
                                          ▼
@@ -92,7 +97,7 @@ Deploy App/doc/
 │  - RAW_REQUESTS (Core JSON Payload)    │ │  - UX_Portal_Avatars (Ảnh đại diện)  │
 │  - RAW_SETTINGS (Cấu hình hệ thống)    │ │  - UX_Portal_Attachments (Tài liệu)  │
 │  - Requests_View (Bảng xem nghiệp vụ)  │ └──────────────────────────────────────┘
-│  - Users_View (Danh sách nhân sự)      │
+│  - USERS / Users_View (Danh sách USERS)│
 └────────────────────────────────────────┘
                      │
                      ▼ Webhook / Adaptive Cards
@@ -120,14 +125,15 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
 
 | Vùng Thay Đổi | Các File Liên Quan | Phạm Vi Ảnh Hưởng Cần Rà Soát | Tài Liệu Chi Tiết |
 | :--- | :--- | :--- | :--- |
-| **Đăng nhập / Session / OTP** | `otpAuthService.ts`<br>`OtpLoginForm.tsx`<br>`TeamsOtpModal.tsx`<br>`Sidebar.tsx`<br>`App.tsx` | - Hàm `clearSession()` xóa sạch cả sessionStorage & localStorage.<br>- Timeout phiên 8h/15m.<br>- Bắn event `auth_session_changed`. | `features/01_AUTH_AND_SESSION_MANAGEMENT.md` |
-| **Kanban / Danh sách Task / Chi tiết Task** | `TrackRequestPage.tsx`<br>`KanbanBoard.tsx`<br>`RequestDetail.tsx`<br>`mockData.ts` | - Dropdown chuyển khâu có đủ các khâu không.<br>- Cột Kanban có đồng bộ thứ tự SLA không.<br>- Kiểm tra quyền sửa theo 4 Roles (PO chỉ xem). | `features/02_TASK_MANAGEMENT_AND_TRACKING.md` |
+| **Đăng nhập / Session / OTP** | `otpAuthService.ts`<br>`OtpLoginForm.tsx`<br>`TeamsOtpModal.tsx`<br>`Sidebar.tsx`<br>`App.tsx` | - Hàm `clearSession()` xóa sạch cả sessionStorage & localStorage.<br>- Timeout phiên 8h/15m.<br>- Tự động đối chiếu vai trò mới nhất từ Google Sheet tab `USERS`.<br>- Bắn event `auth_session_changed`. | `features/01_AUTH_AND_SESSION_MANAGEMENT.md` |
+| **Kanban / Danh sách Task / Chi tiết Task** | `TrackRequestPage.tsx`<br>`KanbanBoard.tsx`<br>`gantt-chart.tsx`<br>`SolutionAgentsTable.tsx`<br>`RequestDetail.tsx`<br>`statusConfig.ts` | - Phân loại chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với `@pending:`).<br>- Tự động hóa `@SenToPO:` kèm nút "Mở Figma" và link bôi xanh mở tab mới.<br>- Lưới thuộc tính 2x2 tối ưu.<br>- Mốc 7 trên Gantt Timeline.<br>- Đồng nhất badge `h-[22px]`. | `features/02_TASK_MANAGEMENT_AND_TRACKING.md` |
 | **Tạo Yêu Cầu (Request Form)** | `CreateRequestPage.tsx`<br>`RequestForm.tsx`<br>`googleSheetService.ts` | - PO chỉ được chọn Sản phẩm thuộc quyền quản lý.<br>- Upload file lên Drive có lấy được link không.<br>- Ghi JSON đồng bộ lên Google Sheet. | `features/03_REQUEST_CREATION_FLOW.md` |
-| **Admin Settings & RBAC** | `QuanLyPage.tsx`<br>`navVisibilityConfig.ts`<br>`Sidebar.tsx` | - Đổi thứ tự menu / bật tắt menu phản ánh ngay trên Sidebar.<br>- Thêm/xóa/sửa khâu UX cập nhật ngay vào Kanban & Track.<br>- Master Data Squads & Products không được lỗi format. | `features/04_ADMIN_PORTAL_AND_RBAC.md` |
-| **Google Sheet Backend & Drive** | `google-apps-script-backend.js`<br>`googleSheetService.ts` | - Bắt buộc Deploy New Version trên GAS.<br>- Giữ nguyên cấu trúc 2 bảng Core JSON (`RAW_REQUESTS`, `RAW_SETTINGS`).<br>- Không tự ý đổi tên cột bảng Core. | `features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` |
+| **Admin Settings & RBAC** | `QuanLyPage.tsx`<br>`navVisibilityConfig.ts`<br>`Sidebar.tsx` | - Đổi thứ tự menu / bật tắt menu phản ánh ngay trên Sidebar.<br>- Status Automation Rules Tool (6 trạng thái tự động).<br>- Đồng bộ 2 chiều với Google Sheets.<br>- Deep Link URL Hash `#manage?tab=...`.<br>- Chặn PO truy cập trang quản trị. | `features/04_ADMIN_PORTAL_AND_RBAC.md` |
+| **Google Sheet Backend & Drive** | `google-apps-script-backend.js`<br>`googleSheetService.ts` | - Bắt buộc Deploy New Version trên GAS.<br>- Giữ nguyên cấu trúc 2 bảng Core JSON (`RAW_REQUESTS`, `RAW_SETTINGS`).<br>- Nạp siêu tốc danh sách nhân sự từ tab `USERS` qua GViz API. | `features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` |
 | **UI, Token & Layout** | `App.tsx`<br>`Sidebar.tsx`<br>`index.css`<br>`src/components/ui/` | - Luôn giữ `md:ml-60` trên Desktop để không bị Sidebar che.<br>- Dùng color token và border-radius chuẩn.<br>- Đảm bảo responsive mobile (`w-full`). | `features/06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md` |
 | **Khảo sát Năng lực (Assessment)** | `TestAssessmentPage.tsx`<br>`test-assessment/` | - Định dạng file Excel Import/Export bằng thư viện XLSX.<br>- Trạng thái làm bài, bộ đếm giờ và kết quả bài thi. | `features/07_TEST_ASSESSMENT_MODULE.md` |
-| **Công cụ nén ảnh** | `ImageCompressorModal.tsx` | - Chạy hoàn toàn trên Canvas browser, không gửi dữ liệu ra ngoài. | `features/08_BUILTIN_TOOLS_AND_UTILITIES.md` |
+| **Công cụ nén ảnh (Compressor)** | `ImageCompressorPage.tsx`<br>`ImageCompressorModal.tsx`<br>`package.json` | - Chạy 100% Client-side Canvas HTML5.<br>- Hỗ trợ định dạng WebP, PNG, JPEG.<br>- Đóng gói file ZIP hàng loạt qua thư viện `jszip`. | `features/08_BUILTIN_TOOLS_AND_UTILITIES.md` |
+| **Master Data & Đồng bộ 2 chiều** | `QuanLyPage.tsx`<br>`googleSheetService.ts`<br>`google-apps-script-backend.js` | - Phân bổ nhân sự Squad theo vai trò chuẩn (PO, Business, Designer).<br>- Đồng bộ 2 chiều (Push/Pull) với bảng `RAW_SETTINGS`.<br>- Khử trùng lặp Activity Comments. | `features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md` |
 
 ---
 
@@ -141,10 +147,10 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
 3. **Backend Google Apps Script là Cloud-hosted:**
    - Sửa code trong file `google-apps-script-backend.js` ở máy local **không** tự động đổi code trên Google Cloud! Phải copy code vào Trình chỉnh sửa Apps Script và chọn **Deploy -> New version**.
 4. **Fallback cho Schema Dữ liệu cũ:**
-   - Khi thêm trường mới vào `UXRequest` (ví dụ `doc_links`, `attachments`), luôn luôn viết code phòng thủ: `request.attachments ?? []` để tránh crash app với các task cũ trên Google Sheet.
+   - Khi thêm trường mới vào `UXRequest` (ví dụ `doc_links`, `attachments`, `sent_to_po_at`), luôn luôn viết code phòng thủ: `request.attachments ?? []` để tránh crash app với các task cũ trên Google Sheet.
 5. **Kiểm tra Biên dịch TypeScript:**
    - Trước khi hoàn tất task, luôn chạy:
      ```bash
-     npx tsc --noEmit
+     npm run build
      ```
      Đảm bảo đạt 0 lỗi biên dịch!

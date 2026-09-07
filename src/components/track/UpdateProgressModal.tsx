@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { IconTile } from "@/components/reui/icon-tile"
+import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { UXRequest, ALL_PHASES, UserRole } from "../../data/mockData"
 import { updateTaskProgress } from "../../api/api"
 import { UserSession } from "../../services/otpAuthService"
@@ -163,32 +164,30 @@ export default function UpdateProgressModal({
               <label className="text-xs font-bold text-slate-700">
                 Giai đoạn UX hiện tại
               </label>
-              <select
+              <DropdownMenu
+                className="w-full"
                 value={phase}
-                onChange={(e) => setPhase(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 outline-none focus:border-[#1B3A6B] focus:ring-2 focus:ring-[#1B3A6B]/15"
-              >
-                {ALL_PHASES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setPhase(val)}
+                options={ALL_PHASES.map((p) => ({ value: p, label: p }))}
+                placeholder="Chọn giai đoạn..."
+              />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">
                 Trạng thái tổng thể
               </label>
-              <select
+              <DropdownMenu
+                className="w-full"
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 outline-none focus:border-[#1B3A6B] focus:ring-2 focus:ring-[#1B3A6B]/15"
-              >
-                <option value="Đang phân loại">Đang phân loại</option>
-                <option value="Đang thực hiện">Đang thực hiện</option>
-                <option value="Hoàn thành">Hoàn thành</option>
-              </select>
+                onChange={(val) => setStatus(val)}
+                options={[
+                  { value: "Đang phân loại", label: "Đang phân loại" },
+                  { value: "Đang thực hiện", label: "Đang thực hiện" },
+                  { value: "Hoàn thành", label: "Hoàn thành" },
+                ]}
+                placeholder="Chọn trạng thái..."
+              />
             </div>
           </div>
 

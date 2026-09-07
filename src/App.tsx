@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, ArrowLeft, LogOut } from "lucide-react"
 import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
-import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession } from "./services/otpAuthService"
+import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession, syncSessionRoleFromSheet } from "./services/otpAuthService"
 import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 
 // Code-splitting via React.lazy
@@ -17,6 +17,7 @@ const CreateRequestPage = lazy(() => import("./pages/CreateRequestPage"))
 const TrackRequestPage = lazy(() => import("./pages/TrackRequestPage"))
 const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
 const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
+const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
 
 // Route Preloaders
 export const preloadPage = (page: Page) => {
@@ -35,6 +36,9 @@ export const preloadPage = (page: Page) => {
       break
     case "test":
       import("./pages/TestAssessmentPage")
+      break
+    case "compressor":
+      import("./pages/ImageCompressorPage")
       break
   }
 }
@@ -71,7 +75,15 @@ export default function App() {
   })
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
+    const hash = window.location.hash.replace(/^#/, "").split("?")[0]
     if (s?.role === "PO") return "track"
+    // Nếu có hash cụ thể hợp lệ (khác manage khi chưa có quyền)
+    if (hash === "track" || hash === "overview" || hash === "create" || hash === "test" || hash === "compressor") {
+      return hash as Page
+    }
+    if (hash === "manage" || hash === "admin") {
+      if (s && s.role !== "PO") return "manage"
+    }
     return "overview"
   })
 
@@ -90,6 +102,7 @@ export default function App() {
       setSession(current)
       if (current?.role === "PO") {
         setPage("track")
+        window.location.hash = "#track"
       }
     }
     window.addEventListener("auth_session_changed", handleAuthChange)
@@ -105,13 +118,37 @@ export default function App() {
     }
   }, [session])
 
+  // Tự động kiểm tra và đồng bộ vai trò mới nhất từ Google Sheet USERS khi có phiên đăng nhập
+  useEffect(() => {
+    if (session && !session.isImpersonating) {
+      syncSessionRoleFromSheet().then((synced) => {
+        if (synced && synced.role !== session.role) {
+          setSession(synced)
+        }
+      })
+    }
+  }, [session?.personalEmail, session?.teamsEmail])
+
   // Lắng nghe và đồng bộ URL Hash (#track, #overview, #create, #admin) và Custom Navigation Event
   useEffect(() => {
     const syncFromHash = () => {
       const hash = window.location.hash.replace(/^#/, "").split("?")[0]
-      if (hash === "track" || hash === "overview" || hash === "create" || hash === "manage" || hash === "admin" || hash === "test") {
-        const targetPage = hash === "admin" ? "manage" : (hash as Page)
-        setPage(targetPage)
+      const current = getStoredSession()
+
+      if (hash === "manage" || hash === "admin") {
+        // Chưa đăng nhập hoặc PO không được tự động vào trang quản trị
+        if (!current || current.role === "PO") {
+          const fallback: Page = current?.role === "PO" ? "track" : "overview"
+          setPage(fallback)
+          window.location.hash = `#${fallback}`
+          return
+        }
+        setPage("manage")
+        return
+      }
+
+      if (hash === "track" || hash === "overview" || hash === "create" || hash === "test" || hash === "compressor") {
+        setPage(hash as Page)
       }
     }
     syncFromHash()
@@ -133,10 +170,11 @@ export default function App() {
 
   // Tự động chuyển PO về màn hình "Yêu cầu của tôi" khi đăng nhập
   useEffect(() => {
-    if (session?.role === "PO" && page === "overview") {
+    if (session?.role === "PO" && (page === "overview" || page === "manage")) {
       setPage("track")
+      window.location.hash = "#track"
     }
-  }, [session?.role])
+  }, [session?.role, page])
 
   // Background prefetch remaining pages during browser idle time
   useEffect(() => {
@@ -158,6 +196,8 @@ export default function App() {
   const handleLogout = async () => {
     await logoutTeamsSession()
     setSession(null)
+    setPage("overview")
+    window.location.hash = "#overview"
   }
 
   // NẾU CHƯA ĐĂNG NHẬP HOẶC HẾT HẠN PHIÊN -> HIỂN THỊ MÀN HÌNH LOGIN GATE
@@ -166,9 +206,11 @@ export default function App() {
       <LoginGate
         onAuthSuccess={(newSession) => {
           setSession(newSession)
-          if (newSession.role === "PO") {
-            setPage("track")
-          }
+          // Mặc định đăng nhập: PO về Track Task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
+          // Tuyệt đối không giữ URL cũ #manage từ phiên trước
+          const defaultPage: Page = newSession.role === "PO" ? "track" : "overview"
+          setPage(defaultPage)
+          window.location.hash = `#${defaultPage}`
         }}
       />
     )
@@ -196,6 +238,7 @@ export default function App() {
           {page === "track" && <TrackRequestPage onNavigateToCreate={() => setPage("create")} />}
           {page === "manage" && <QuanLyPage />}
           {page === "test" && <TestAssessmentPage />}
+          {page === "compressor" && <ImageCompressorPage />}
         </Suspense>
       </div>
 

@@ -13,6 +13,8 @@ const buttonVariants = cva(
           "bg-[#1B3A6B] text-white shadow-xs hover:bg-[#152e54] hover:shadow-md",
         primary:
           "bg-[#1B3A6B] text-white shadow-xs hover:bg-[#152e54] hover:shadow-md",
+        blue:
+          "bg-[#1057FB] text-white shadow-xs hover:bg-blue-700 active:bg-blue-800",
         teal:
           "bg-[#0D9B97] text-white shadow-xs hover:bg-[#0b8380] hover:shadow-md",
         destructive:

@@ -10,7 +10,7 @@ const STORAGE_KEY = "ux_portal_google_sheet_config"
 
 export const DEFAULT_CONFIG: GoogleSheetConfig = {
   scriptUrl: "https://script.google.com/macros/s/AKfycbyz4_GK_guUx9L6uaRd4vK5jqJwG60eLr8Xju3j2hcEUianS8873cp4fJe8BBBrilKQ/exec",
-  sheetId: "",
+  sheetId: "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw",
   autoSync: true,
 }
 
@@ -24,6 +24,7 @@ export function getGoogleSheetConfig(): GoogleSheetConfig {
         ...parsed,
         // If saved scriptUrl was empty, fallback to the preconfigured URL
         scriptUrl: parsed.scriptUrl || DEFAULT_CONFIG.scriptUrl,
+        sheetId: (parsed.sheetId && parsed.sheetId.trim()) ? parsed.sheetId : DEFAULT_CONFIG.sheetId,
       }
     }
   } catch (err) {

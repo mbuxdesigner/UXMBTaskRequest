@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { getStatusConfig } from "@/config/statusConfig"
+import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
 import TaskFilterPopover from "@/components/reui/task-filter-popover"
-import SolutionAgentsTable from "@/components/track/SolutionAgentsTable"
+import SolutionAgentsTable, { getTaskGroup } from "@/components/track/SolutionAgentsTable"
 import { AnimatedTableRow, tableContainerVariants } from "@/components/jolyui/animated-table"
 import {
   getStoredSession,
@@ -246,6 +246,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       now.getMinutes()
     ).padStart(2, "0")}`
 
+    const targetReq = allRequests.find((r) => r.request_id === requestId)
     const newLogRecord: TaskUpdateRecord = {
       id: `LOG-${Date.now()}`,
       request_id: requestId,
@@ -254,6 +255,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       author_role: currentSession ? currentSession.role : "Designer",
       new_phase: newPhase,
       new_progress: newProgress,
+      previous_phase: targetReq?.current_phase,
       note: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
     }
 
@@ -308,6 +310,84 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       }
     } catch (err) {
       console.error("Error updating phase:", err)
+      toast.error(
+        "Lỗi cập nhật",
+        "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!",
+        { id: toastId }
+      )
+    }
+  }
+
+  const handleUpdateStatus = async (requestId: string, newStatus: string) => {
+    const toastId = toast.loading("Đang cập nhật trạng thái...", `Yêu cầu: ${requestId}`)
+    const currentSession = getStoredSession()
+    const now = new Date()
+    const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`
+
+    const targetReq = allRequests.find((r) => r.request_id === requestId)
+    const newLogRecord: TaskUpdateRecord = {
+      id: `LOG-${Date.now()}`,
+      request_id: requestId,
+      timestamp: formattedDate,
+      updated_by: currentSession ? (currentSession.displayName || currentSession.teamsEmail) : "Lê Hoàng Nam",
+      author_role: currentSession ? currentSession.role : "Designer",
+      new_phase: targetReq?.current_phase,
+      new_progress: targetReq?.progress,
+      note: `Chuyển trạng thái sang [${newStatus}] qua Kanban Board.`,
+    }
+
+    // Optimistic UI update
+    setAllRequests((prev) =>
+      prev.map((r) => {
+        if (r.request_id === requestId) {
+          const updated = {
+            ...r,
+            status: newStatus as any,
+            last_updated: formattedDate,
+            latest_update: {
+              date: formattedDate,
+              phase: r.current_phase,
+              message: `Chuyển trạng thái sang [${newStatus}] qua Kanban Board.`,
+            },
+            task_updates: [newLogRecord, ...(r.task_updates || [])],
+          }
+          if (selectedRequest?.request_id === requestId) {
+            setSelectedRequest(updated)
+          }
+          return updated
+        }
+        return r
+      })
+    )
+
+    try {
+      const res = await updateTaskProgress(requestId, {
+        new_status: newStatus,
+        new_phase: targetReq?.current_phase,
+        new_progress: targetReq?.progress,
+        note: `Chuyển trạng thái sang [${newStatus}] qua Kanban Board.`,
+        assigned_designer: targetReq?.assigned_designer,
+      })
+
+      if (res.success) {
+        toast.success(
+          "Cập nhật trạng thái thành công!",
+          `Yêu cầu ${requestId} đã chuyển sang [${newStatus}].`,
+          { id: toastId }
+        )
+      } else {
+        toast.error(
+          "Cập nhật không thành công",
+          res.message || "Vui lòng thử lại sau.",
+          { id: toastId }
+        )
+      }
+    } catch (err) {
+      console.error("Error updating status:", err)
       toast.error(
         "Lỗi cập nhật",
         "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!",
@@ -477,44 +557,151 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   const activeCount = filteredRequests.filter((r) => r.status === "Đang thực hiện" || r.status === "Đã gửi PO").length
-  const pendingCount = filteredRequests.filter((r) => r.status === "Pending" || r.status === "PO pending").length
-  const completedCount = filteredRequests.filter((r) => r.status === "Hoàn thành").length
+  const runsCount = filteredRequests.length
+
+  const groupCounts = useMemo(() => {
+    const counts = { overload: 0, unassigned: 0, running: 0, pending: 0, completed: 0 }
+    filteredRequests.forEach((r) => {
+      const g = getTaskGroup(r)
+      counts[g] = (counts[g] || 0) + 1
+    })
+    return counts
+  }, [filteredRequests])
+
+  const { poPendingCount, designerPendingCount } = useMemo(() => {
+    let po = 0
+    let des = 0
+    filteredRequests.forEach((r) => {
+      const p = getRequestPendingClassification(r)
+      if (p.isPending) {
+        if (p.type === "po_pending") po++
+        else if (p.type === "designer_pending") des++
+      }
+    })
+    return { poPendingCount: po, designerPendingCount: des }
+  }, [filteredRequests])
+
+  const overloadCount = groupCounts.overload
+  const unassignedCount = groupCounts.unassigned
+  const runningCount = groupCounts.running
+  const pendingCount = groupCounts.pending
+  const completedCount = groupCounts.completed
 
   return (
     <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
-      {/* Top Header matching Create Task clean style */}
+      {/* 1. Page Header Đồng Bộ theo Design System */}
       <PageHeader
         breadcrumb={{
           parent: "MBBank UX Platform",
-          current: "Track Task",
+          current: "Task của tôi",
         }}
-        title={session?.role === "PO" ? "Task của tôi" : "Task của tôi"}
+        title="Task của tôi"
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live Sync
+          </span>
+        }
         subtitle={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span>
-              <NumberTicker value={totalItems} className="font-bold text-slate-800" /> bài toán hiển thị
-            </span>
-            <span className="mx-0.5 text-slate-300">•</span>
-            <span className="text-blue-600 font-semibold">
-              <NumberTicker value={activeCount} className="font-bold text-blue-600" /> đang thực hiện
-            </span>
-            {pendingCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2.5 pt-0.5 select-none text-xs">
+            {/* Runs */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium text-xs">Runs</span>
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200/60 min-w-[20px]">
+                {runsCount}
+              </span>
+            </div>
+
+            {/* Overload (Chỉ hiển thị nếu > 0) */}
+            {overloadCount > 0 && (
               <>
-                <span className="mx-0.5 text-slate-300">•</span>
-                <span className="text-amber-600 font-bold">
-                  <NumberTicker value={pendingCount} className="font-bold text-amber-600" /> Pending ({">"}24h)
-                </span>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium text-xs">Overload</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 min-w-[20px]">
+                    {overloadCount}
+                  </span>
+                </div>
               </>
             )}
-            <span className="mx-0.5 text-slate-300">•</span>
-            <span className="text-emerald-600 font-semibold">
-              <NumberTicker value={completedCount} className="font-bold text-emerald-600" /> hoàn thành
-            </span>
+
+            {/* Chờ phân bổ (Chỉ hiển thị nếu > 0) */}
+            {unassignedCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium text-xs">Chờ phân bổ</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 min-w-[20px]">
+                    {unassignedCount}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Đang thực hiện */}
+            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium text-xs">Đang thực hiện</span>
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-[#1057FB] border border-blue-200 min-w-[20px]">
+                {runningCount}
+              </span>
+            </div>
+
+            {/* PO Pending (Quá hạn 24h) */}
+            {poPendingCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
+                  <span className="text-slate-500 font-medium text-xs">PO Pending</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 min-w-[20px]">
+                    {poPendingCount}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Pending (Tạm dừng theo chat @pending của Designer) */}
+            {designerPendingCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5" title="Pending: Tạm dừng theo đoạn chat của Designer khi viết @pending">
+                  <span className="text-slate-500 font-medium text-xs">Pending</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 min-w-[20px]">
+                    {designerPendingCount}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Fallback nếu không thuộc 2 loại trên nhưng pendingCount > 0 */}
+            {poPendingCount === 0 && designerPendingCount === 0 && pendingCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium text-xs">Pending</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 min-w-[20px]">
+                    {pendingCount}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Hoàn thành (Chỉ hiển thị nếu > 0) */}
+            {completedCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium text-xs">Hoàn thành</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 min-w-[20px]">
+                    {completedCount}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         }
         actions={
-          <>
-            {/* New Request Button */}
+          <div className="flex items-center gap-2">
             <Button
               variant="primary"
               size="sm"
@@ -531,17 +718,16 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <span>Tạo task mới</span>
             </Button>
 
-            {/* Refresh Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => loadData(true)}
-              className="h-10 text-xs gap-1.5 bg-white border-slate-200 rounded-xl text-slate-600 font-semibold cursor-pointer shrink-0 shadow-2xs hover:bg-slate-50"
+              className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
               <span>Làm mới</span>
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -636,6 +822,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 loading={loading}
                 onSelectRequest={setSelectedRequest}
                 onUpdatePhase={handleUpdatePhase}
+                onUpdateStatus={handleUpdateStatus}
               />
             </motion.div>
           ) : viewMode === "grid" ? (
@@ -717,6 +904,9 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 loading={loading}
                 onSelectRequest={setSelectedRequest}
                 onNavigateToCreate={onNavigateToCreate}
+                onResetFilters={handleClearAllFilters}
+                hasActiveFilters={Boolean(query || selectedPhases.length > 0 || selectedSquads.length > 0)}
+                hideHeader={true}
               />
             </motion.div>
           )}
@@ -724,17 +914,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       </div>
 
       {/* SLIDE-OVER DRAWER XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
-      <RequestDetail
-        open={Boolean(selectedRequest)}
-        request={selectedRequest}
-        onClose={() => setSelectedRequest(null)}
-        onUpdated={async () => {
-          const reqs = await fetchRequests(true)
-          setAllRequests(reqs)
-          const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
-          if (found) setSelectedRequest(found)
-        }}
-      />
+      {selectedRequest && (
+        <RequestDetail
+          open={Boolean(selectedRequest)}
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onUpdated={async () => {
+            const reqs = await fetchRequests(true)
+            setAllRequests(reqs)
+            const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
+            if (found) setSelectedRequest(found)
+          }}
+        />
+      )}
     </main>
   )
 }

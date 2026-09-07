@@ -1,13 +1,20 @@
 import React, { useState, useMemo, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { UXRequest, TaskUpdateRecord } from "../../data/mockData"
+import { 
+  UXRequest, 
+  TaskUpdateRecord, 
+  PRODUCTS as DEFAULT_PRODUCTS, 
+  REQUEST_TYPES, 
+  DEADLINE_REASONS, 
+  mockSquads 
+} from "../../data/mockData"
 import UpdateProgressModal from "./UpdateProgressModal"
 import { getStoredSession, getUserInitials } from "../../services/otpAuthService"
 import { uploadFileToDrive } from "../../services/googleSheetService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { getStatusConfig } from "@/config/statusConfig"
+import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { toast } from "@/components/ui/toast"
 import { updateTaskProgress } from "../../api/api"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
@@ -15,6 +22,7 @@ import {
   X, 
   ArrowLeft, 
   Send, 
+  PauseCircle, 
   ExternalLink, 
   Target, 
   FileText, 
@@ -67,7 +75,8 @@ import {
   Download,
   Image as ImageIcon,
   FileSpreadsheet,
-  FileBox
+  FileBox,
+  HelpCircle
 } from "lucide-react"
 
 interface RequestDetailProps {
@@ -96,19 +105,116 @@ export interface ActivityEvent {
   isPinned?: boolean
 }
 
+// Kiểm tra ghi chú có phải là nhật ký thao tác tự động của hệ thống (dạng text ngắn gọn) thay vì tin nhắn người dùng tự chat
+export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean): boolean => {
+  if (isCommentExplicit === true) return false
+  if (isCommentExplicit === false) return true
+
+  const raw = (text || "").trim()
+  if (!raw) return true
+  const lower = raw.toLowerCase()
+
+  // Cú pháp lệnh do người dùng tự gõ trong ô chat: @SenToPO:, @Pending:
+  if (/^@se(?:n)?(?:d)?(?:_)?to(?:_)?po:|^@(po_)?pending:/i.test(lower)) {
+    return false
+  }
+
+  // Khớp tất cả các câu thông báo hành động hệ thống được tạo tự động khi thao tác trên giao diện:
+  if (
+    // 1. Cập nhật ngày hạn deadline / design end date
+    lower.includes("design end date") ||
+    lower.includes("hạn thiết kế") ||
+    lower.startsWith("cập nhật hạn") ||
+
+    // 2. PO cập nhật tài liệu đầu bài
+    lower.includes("cập nhật đầu bài") ||
+    lower.startsWith("po cập nhật") ||
+    lower.startsWith("po yêu cầu chỉnh sửa") ||
+    lower.startsWith("po đã duyệt") ||
+    lower.includes("chấp thuận bàn giao") ||
+
+    // 3. Tiến độ, khâu, trạng thái
+    lower.startsWith("chuyển tiến độ") ||
+    lower.startsWith("cập nhật tiến độ") ||
+    lower.startsWith("chuyển khâu") ||
+    lower.startsWith("chuyển sang khâu") ||
+    lower.startsWith("cập nhật trạng thái") ||
+    lower.startsWith("chuyển trạng thái") ||
+    lower.startsWith("đổi trạng thái") ||
+    lower.includes("kanban") ||
+    lower.includes("tự động gỡ trạng thái") ||
+    lower.includes("gỡ bỏ trạng thái") ||
+    lower.includes("tiếp tục update") ||
+
+    // 4. Phân công nhân sự / designer
+    lower.startsWith("phân công") ||
+    lower.startsWith("gỡ bỏ phân công") ||
+    lower.includes("phân công công việc cho") ||
+    lower.includes("phân công designer") ||
+    lower.includes("phân công nhân sự") ||
+
+    // 5. Độ ưu tiên
+    lower.includes("độ ưu tiên") ||
+    lower.startsWith("đã cập nhật độ ưu tiên") ||
+
+    // 6. Khởi tạo / tiếp nhận
+    lower.startsWith("khởi tạo yêu cầu") ||
+    lower.startsWith("ghi nhận yêu cầu") ||
+    lower.startsWith("đã tạo yêu cầu") ||
+    lower.startsWith("yêu cầu đã được tiếp nhận") ||
+    lower.includes("bài toán được đánh dấu pending") ||
+
+    // 7. Thông báo gửi PO mặc định của hệ thống
+    lower.includes("đã gửi phương án thiết kế cho po xem xét")
+  ) {
+    return true
+  }
+
+  return false
+}
+
 const DESIGNER_OPTIONS = [
-  { name: "Lê Hoàng Nam", role: "Designer", email: "nam.designer@mbbank.com.vn", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80" },
-  { name: "Nguyễn Văn Cường", role: "Design Owner", email: "cuong.owner@mbbank.com.vn", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80" },
-  { name: "Trần Mai Lan", role: "UX Lead", email: "lan.po@mbbank.com.vn", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80" },
-  { name: "UX Designer phụ trách", role: "Designer", email: "ux.designer@mbbank.com.vn", avatar: "" },
+  { 
+    name: "Lê Hoàng Nam", 
+    role: "Designer", 
+    email: "nam.designer@mbbank.com.vn", 
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
+    squad: "Lending & Vay vốn",
+    squads: ["Lending & Vay vốn", "Cards & Thanh toán số", "BaaS & Open API", "App/Lending", "App/Card"]
+  },
+  { 
+    name: "Nguyễn Văn Cường", 
+    role: "Design Owner", 
+    email: "cuong.owner@mbbank.com.vn", 
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+    squad: "Design System & Core",
+    squads: ["Design System & Core", "Core Banking & Tài khoản", "Lending & Vay vốn", "All Squads"]
+  },
+  { 
+    name: "Phạm Hải Đăng", 
+    role: "UX Designer", 
+    email: "dang.designer@mbbank.com.vn", 
+    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
+    squad: "Digital Wealth & Đầu tư",
+    squads: ["Digital Wealth & Đầu tư", "Core Banking & Tài khoản", "App/Core", "App/Saving"]
+  },
+  { 
+    name: "Vũ Phương Linh", 
+    role: "UI/UX Designer", 
+    email: "linh.designer@mbbank.com.vn", 
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    squad: "eSaving",
+    squads: ["eSaving", "Biz eSaving", "Chuyển tiền & Tiện ích số"]
+  },
 ]
 
 const STATUS_OPTIONS = [
-  { value: "Chờ tiếp nhận", label: "QUEUED", color: "bg-slate-200 text-slate-800 hover:bg-slate-300" },
-  { value: "Đang phân loại", label: "TRIAGE", color: "bg-amber-100 text-amber-800 hover:bg-amber-200" },
-  { value: "Đang thực hiện", label: "IN PROGRESS", color: "bg-[#1057FB] text-white hover:bg-blue-700" },
-  { value: "Hoàn thành", label: "RELEASE", color: "bg-emerald-600 text-white hover:bg-emerald-700" },
-  { value: "Bị chặn", label: "BLOCKED", color: "bg-rose-500 text-white hover:bg-rose-600" },
+  { value: "Chờ tiếp nhận", label: "Chờ tiếp nhận", color: "bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200" },
+  { value: "Đang phân loại", label: "Đang phân loại", color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" },
+  { value: "Đang thực hiện", label: "Đang thực hiện", color: "bg-blue-50 text-[#1057FB] border-blue-200 hover:bg-blue-100" },
+  { value: "Pending", label: "Pending PO", color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
+  { value: "Hoàn thành", label: "Hoàn thành", color: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" },
+  { value: "Bị chặn", label: "Bị chặn", color: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100" },
 ]
 
 const PRIORITY_OPTIONS = [
@@ -208,6 +314,32 @@ function getDesignerAvatar(name?: string) {
   return ""
 }
 
+// Helper to parse dates into epoch milliseconds
+function parseDateToMs(ts?: string): number {
+  if (!ts) return 0
+  const dmyMatch = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10)
+    const month = parseInt(dmyMatch[2], 10) - 1
+    const year = parseInt(dmyMatch[3], 10)
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0
+    const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0
+    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0
+    return new Date(year, month, day, hour, minute, second).getTime()
+  }
+  const timeMatch = ts.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
+  if (timeMatch) {
+    const hour = parseInt(timeMatch[1], 10)
+    const minute = parseInt(timeMatch[2], 10)
+    const second = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0
+    const d = new Date()
+    d.setHours(hour, minute, second, 0)
+    return d.getTime()
+  }
+  const isoParsed = new Date(ts).getTime()
+  return isNaN(isoParsed) ? 0 : isoParsed
+}
+
 export default function RequestDetail({
   request,
   open = true,
@@ -219,10 +351,219 @@ export default function RequestDetail({
   const isVisible = Boolean(open && request)
   const session = getStoredSession()
 
-  const rawDesigner = request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
-  const isAssigned = Boolean(rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công")
-  const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
-  const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
+  // Local state for immediate optimistic update of Assignee (Hỗ trợ chọn nhiều người)
+  const [localAssignee, setLocalAssignee] = useState<string>(() => {
+    return request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
+  })
+
+  useEffect(() => {
+    const raw = request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || ""
+    setLocalAssignee(raw)
+  }, [request?.request_id, request?.assigned_designer, request?.ux_owner])
+
+  const localAssignees = useMemo(() => {
+    if (!localAssignee || localAssignee === "Chưa phân công" || localAssignee === "Đang phân công" || !localAssignee.trim()) {
+      return []
+    }
+    return localAssignee
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s && s !== "Chưa phân công" && s !== "Đang phân công")
+  }, [localAssignee])
+
+  const isAssigned = localAssignees.length > 0
+  const displayName = isAssigned ? localAssignees.join(", ") : "Chưa phân công"
+  const designerAvatar = isAssigned ? getDesignerAvatar(localAssignees[0]) : ""
+
+  // Helper đối soát tên nhân sự linh hoạt (VD: "Cường" khớp "Nguyễn Văn Cường", "cuongdm5")
+  const isNameMatching = useCallback((nameA?: string, nameB?: string): boolean => {
+    if (!nameA || !nameB) return false
+    const a = nameA.trim().toLowerCase()
+    const b = nameB.trim().toLowerCase()
+    if (a === b) return true
+    if (a.endsWith(" " + b) || b.endsWith(" " + a)) return true
+    if (a.startsWith(b + " ") || b.startsWith(a + " ")) return true
+    return false
+  }, [])
+
+  const matchesPerson = useCallback((assignedTarget?: string, designer?: { name: string; email?: string }): boolean => {
+    if (!assignedTarget || !designer) return false
+    const target = assignedTarget.trim().toLowerCase()
+    const dName = designer.name.trim().toLowerCase()
+    if (isNameMatching(target, dName)) return true
+    if (designer.email) {
+      const emailPrefix = designer.email.toLowerCase().split("@")[0].replace(/[^a-z0-9]/g, "")
+      const targetClean = target.replace(/[^a-z0-9]/g, "")
+      if (emailPrefix && targetClean && (emailPrefix === targetClean || emailPrefix.includes(targetClean) || targetClean.includes(emailPrefix))) {
+        return true
+      }
+    }
+    return false
+  }, [isNameMatching])
+
+  // Lấy danh sách Designer từ cả mbbank_admin_team và mbbank_team_members kết hợp với DESIGNER_OPTIONS
+  const availableDesigners = useMemo(() => {
+    try {
+      const cached = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+      if (cached) {
+        const members: any[] = JSON.parse(cached)
+        if (Array.isArray(members) && members.length > 0) {
+          const list = members
+            .map((m) => ({
+              name: String(m.name || m.displayName || "").trim(),
+              role: String(m.role || "Designer").trim(),
+              email: String(m.email || m.teamsEmail || "").trim(),
+              avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(m.name || m.displayName || "")),
+              squad: String(m.squad || "").trim(),
+              squads: Array.isArray(m.squads) ? m.squads : (m.squad ? [m.squad] : []),
+            }))
+            .filter((m) => {
+              if (!m.name) return false
+              const roleLower = m.role.toLowerCase()
+              // Chỉ chọn designer/design owner, loại bỏ PO, Business, BA, Tester, Guest...
+              if (
+                roleLower === "po" ||
+                roleLower.includes("product owner") ||
+                roleLower === "business" ||
+                roleLower === "biz" ||
+                roleLower === "ba" ||
+                roleLower === "tester" ||
+                roleLower === "guest"
+              ) {
+                return false
+              }
+              return (
+                roleLower.includes("design") ||
+                roleLower.includes("ux") ||
+                roleLower.includes("ui") ||
+                roleLower.includes("lead") ||
+                roleLower.includes("owner") ||
+                roleLower.includes("admin")
+              )
+            })
+
+          if (list.length > 0) {
+            const names = new Set(list.map((l) => l.name.toLowerCase()))
+            DESIGNER_OPTIONS.forEach((d) => {
+              if (!names.has(d.name.toLowerCase())) list.push(d)
+            })
+            return list
+          }
+        }
+      }
+    } catch {}
+    return DESIGNER_OPTIONS
+  }, [])
+
+  // Tách thành 2 nhóm: Designer phụ trách Squad CHUẨN XÁC theo cấu hình Admin và Designer hỗ trợ (ngoài Squad)
+  const { squadDesigners, supportingDesigners, taskSquadName, assignedSquadDesignerNames } = useMemo(() => {
+    if (!request) {
+      return {
+        squadDesigners: [],
+        supportingDesigners: [],
+        taskSquadName: "Chưa phân squad",
+        assignedSquadDesignerNames: [],
+      }
+    }
+    const rawSquad = (request.squad_name || request.preferred_squad || request.squad || "").trim()
+    const taskProd = (request.product || "").trim().toLowerCase()
+    const squadLower = rawSquad.toLowerCase()
+
+    // 1. Đọc danh sách cấu hình Squads từ Admin Settings (mbbank_admin_squads) hoặc mockSquads
+    let allSquads: any[] = []
+    try {
+      const rawSquads = localStorage.getItem("mbbank_admin_squads")
+      if (rawSquads) {
+        const parsed = JSON.parse(rawSquads)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          allSquads = parsed
+        }
+      }
+    } catch {}
+    if (allSquads.length === 0) {
+      allSquads = mockSquads
+    }
+
+    // 2. Tìm chính xác Squad của Task này (khớp tên squad và khớp sản phẩm nếu có)
+    const matchedSquad = allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      const sqProd = (sq.productName || sq.product_name || "").trim().toLowerCase()
+      const isNameMatch = sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+      if (taskProd && sqProd) {
+        return isNameMatch && (sqProd === taskProd || sqProd.includes(taskProd) || taskProd.includes(sqProd))
+      }
+      return isNameMatch
+    }) || allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      return sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+    })
+
+    // 3. Lấy danh sách Designer được phân công phụ trách Squad này trong Admin Settings
+    const squadAssignedNames: string[] = []
+    if (matchedSquad) {
+      if (Array.isArray(matchedSquad.designers) && matchedSquad.designers.length > 0) {
+        squadAssignedNames.push(...matchedSquad.designers)
+      }
+      if (matchedSquad.leadDesigner && matchedSquad.leadDesigner.trim()) {
+        squadAssignedNames.push(matchedSquad.leadDesigner.trim())
+      }
+      if (matchedSquad.ux_owner && matchedSquad.ux_owner.trim()) {
+        const cleanUx = matchedSquad.ux_owner.replace(/\(.*?\)/g, "").trim()
+        if (cleanUx && cleanUx !== "Chưa phân công" && cleanUx !== "Đang phân công") {
+          squadAssignedNames.push(cleanUx)
+        }
+      }
+    }
+    const cleanAssignedNames = Array.from(new Set(squadAssignedNames.map((s) => s.trim()).filter(Boolean)))
+
+    const squadList: typeof availableDesigners = []
+    const supportList: typeof availableDesigners = []
+
+    // 4. Phân loại chuẩn: CHỈ những ai được cấu hình rõ ràng trong squad mới vào squadDesigners
+    availableDesigners.forEach((d) => {
+      const dSquadLower = (d.squad || "").toLowerCase()
+      const dSquadsLower = (d.squads || []).map((s: string) => s.toLowerCase())
+
+      let isSquadInCharge = false
+
+      if (cleanAssignedNames.length > 0) {
+        // Có cấu hình trong Admin: Chỉ khớp với nhân sự được gán trong squad này
+        isSquadInCharge = cleanAssignedNames.some((name) => matchesPerson(name, d))
+      } else if (rawSquad) {
+        // Squad chưa gán trong Admin: Khớp với designer có squad này cụ thể (không tính "all" hay "toàn hàng")
+        isSquadInCharge = Boolean(
+          !dSquadLower.includes("all") && (
+            dSquadLower === squadLower ||
+            dSquadsLower.some((s: string) => !s.includes("all") && (s === squadLower || s.includes(squadLower) || squadLower.includes(s)))
+          )
+        )
+      }
+
+      if (isSquadInCharge) {
+        squadList.push(d)
+      } else {
+        supportList.push(d)
+      }
+    })
+
+    const hasCleanSquad = Boolean(
+      rawSquad &&
+      rawSquad.toLowerCase() !== taskProd &&
+      rawSquad !== "Chưa phân công" &&
+      rawSquad !== "Chưa có squad" &&
+      rawSquad !== "Chưa phân squad" &&
+      rawSquad !== "Triage Squad"
+    )
+    const cleanSquadDisplay = hasCleanSquad ? rawSquad : "Chưa phân squad"
+
+    return {
+      squadDesigners: squadList,
+      supportingDesigners: supportList,
+      taskSquadName: cleanSquadDisplay,
+      assignedSquadDesignerNames: cleanAssignedNames,
+    }
+  }, [availableDesigners, request?.squad_name, request?.preferred_squad, request?.squad, request?.product, matchesPerson])
+
 
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -231,6 +572,21 @@ export default function RequestDetail({
   const [commentLink, setCommentLink] = useState("")
   const [showLinkInput, setShowLinkInput] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [optimisticUpdates, setOptimisticUpdates] = useState<TaskUpdateRecord[]>([])
+  const activityContainerRef = useRef<HTMLDivElement>(null)
+
+  // Reset optimistic updates when switching to another task
+  useEffect(() => {
+    setOptimisticUpdates([])
+  }, [request?.request_id])
+
+  // Dọn sạch các optimisticUpdates đã được ghi nhận trong task_updates từ server
+  useEffect(() => {
+    if (!request?.task_updates || optimisticUpdates.length === 0) return
+    const serverNotes = new Set(request.task_updates.map((u) => u.note?.trim()).filter(Boolean))
+    setOptimisticUpdates((prev) => prev.filter((opt) => !serverNotes.has(opt.note?.trim())))
+  }, [request?.task_updates])
+
   const [activitySearchQuery, setActivitySearchQuery] = useState("")
   const [showSearchBox, setShowSearchBox] = useState(false)
   const [selectedActivityFilters, setSelectedActivityFilters] = useState<string[]>(ALL_CLICKUP_FILTERS)
@@ -246,12 +602,19 @@ export default function RequestDetail({
 
   // Interactive Property Edit States
   const [openDropdown, setOpenDropdown] = useState<"status" | "assignee" | "date" | "priority" | "estimate" | "phase" | "tags" | null>(null)
-  const [currentPriority, setCurrentPriority] = useState<string>("High")
+  const [currentPriority, setCurrentPriority] = useState<string>(() => {
+    return request?.priority || "Normal"
+  })
+
+  useEffect(() => {
+    setCurrentPriority(request?.priority || "Normal")
+  }, [request?.request_id, request?.priority])
+
   const [timeEstimate, setTimeEstimate] = useState<string>("40 hrs")
   const [isTrackingTime, setIsTrackingTime] = useState<boolean>(false)
   const [trackedSeconds, setTrackedSeconds] = useState<number>(0)
   const [activeTags, setActiveTags] = useState<string[]>(["Lending", "UX Research"])
-  const [customDeadline, setCustomDeadline] = useState<string>(request?.expected_deadline || "")
+  const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || request?.expected_deadline || "")
   const [customDeliverables, setCustomDeliverables] = useState(request?.deliverables || {})
   const [showAddDeliverableModal, setShowAddDeliverableModal] = useState(false)
   const [newDeliverableType, setNewDeliverableType] = useState<"figma" | "prototype" | "spec">("figma")
@@ -260,17 +623,101 @@ export default function RequestDetail({
   const [showOlderActivities, setShowOlderActivities] = useState<boolean>(false)
   const [activeEmojiPickerEventId, setActiveEmojiPickerEventId] = useState<string | null>(null)
 
-  // PO Requirements Editing (Only PO can edit, Designer can only view)
   const [showPoEditModal, setShowPoEditModal] = useState(false)
   const [poFormTitle, setPoFormTitle] = useState(request?.title || "")
   const [poFormProduct, setPoFormProduct] = useState(request?.product || "")
+  const [poFormSquad, setPoFormSquad] = useState(() => {
+    const rawSq = (request?.squad_name || request?.preferred_squad || "").trim()
+    const p = (request?.product || "").trim().toLowerCase()
+    return rawSq.toLowerCase() === p ? "" : rawSq
+  })
   const [poFormReqType, setPoFormReqType] = useState(request?.request_type || "")
   const [poFormDesc, setPoFormDesc] = useState(request?.description || "")
   const [poFormBizNeed, setPoFormBizNeed] = useState(request?.business_need || "")
   const [poFormUserProb, setPoFormUserProb] = useState(request?.user_problem || "")
   const [poFormTargetUser, setPoFormTargetUser] = useState(request?.target_user || "")
+  const [poFormExpectedDeadline, setPoFormExpectedDeadline] = useState(request?.release_date || request?.expected_deadline || "")
+  const [poFormDeadlineReason, setPoFormDeadlineReason] = useState(request?.deadline_reason || "")
   const [poFormDocLinks, setPoFormDocLinks] = useState<string[]>(request?.doc_links || [])
   const [poFormNewLink, setPoFormNewLink] = useState("")
+
+  // Options for Edit Form Selects (Được chọn như lúc tạo/nhập)
+  const editProductOptions = useMemo(() => {
+    let prods: string[] = DEFAULT_PRODUCTS
+    try {
+      const raw = localStorage.getItem("mbbank_admin_products")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const active = parsed.filter((p: any) => p.status !== "Inactive").map((p: any) => p.name)
+          if (active.length > 0) prods = active
+        }
+      }
+    } catch {}
+    if (poFormProduct && !prods.includes(poFormProduct)) {
+      return [poFormProduct, ...prods]
+    }
+    return prods
+  }, [poFormProduct])
+
+  const editSquadOptions = useMemo(() => {
+    let squadsList: any[] = mockSquads
+    try {
+      const raw = localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) squadsList = parsed
+      }
+    } catch {}
+
+    const matching = poFormProduct
+      ? squadsList.filter((s: any) => {
+          const prod = (s.productName || s.product_name || "").toLowerCase().trim()
+          const target = poFormProduct.toLowerCase().trim()
+          return prod === target || prod.includes(target) || target.includes(prod)
+        })
+      : squadsList
+
+    const names = matching.map((s: any) => s.name || s.squad_name || "").filter(Boolean)
+    const unique = Array.from(new Set(names))
+    if (poFormSquad && !unique.includes(poFormSquad)) {
+      return [poFormSquad, ...unique]
+    }
+    return unique
+  }, [poFormProduct, poFormSquad])
+
+  const editRequestTypeOptions = useMemo(() => {
+    const base = REQUEST_TYPES
+    if (poFormReqType && !base.includes(poFormReqType)) {
+      return [poFormReqType, ...base]
+    }
+    return base
+  }, [poFormReqType])
+
+  const editTargetUserOptions = useMemo(() => {
+    const base = [
+      "Người dùng chung",
+      "Khách hàng cá nhân",
+      "Khách hàng Priority / Private",
+      "Hộ kinh doanh cá thể & SME",
+      "Khách hàng Doanh nghiệp (SME & Corporate)",
+      "Gen Z & Millennials",
+      "Nội bộ MBBank (Cán bộ nhân viên)",
+      "Khác",
+    ]
+    if (poFormTargetUser && !base.includes(poFormTargetUser)) {
+      return [poFormTargetUser, ...base]
+    }
+    return base
+  }, [poFormTargetUser])
+
+  const editDeadlineReasonOptions = useMemo(() => {
+    const base = DEADLINE_REASONS
+    if (poFormDeadlineReason && !base.includes(poFormDeadlineReason)) {
+      return [poFormDeadlineReason, ...base]
+    }
+    return base
+  }, [poFormDeadlineReason])
 
   // Tab điều hướng riêng cho màn hình nhỏ (< lg)
   const [mobileActiveTab, setMobileActiveTab] = useState<"details" | "activity">("details")
@@ -353,15 +800,20 @@ export default function RequestDetail({
     if (request) {
       setTitleValue(request.title || "")
       setDescValue(request.description || "")
-      setCustomDeadline(request.expected_deadline || "")
+      setCustomDeadline(request.design_deadline || request.expected_deadline || "")
       setCustomDeliverables(request.deliverables || {})
       setPoFormTitle(request.title || "")
       setPoFormProduct(request.product || "")
+      const curSq = (request.squad_name || request.preferred_squad || "").trim()
+      const curProd = (request.product || "").trim().toLowerCase()
+      setPoFormSquad(curSq.toLowerCase() === curProd ? "" : curSq)
       setPoFormReqType(request.request_type || "")
       setPoFormDesc(request.description || "")
       setPoFormBizNeed(request.business_need || "")
       setPoFormUserProb(request.user_problem || "")
       setPoFormTargetUser(request.target_user || "")
+      setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+      setPoFormDeadlineReason(request.deadline_reason || "")
       setPoFormDocLinks(request.doc_links || [])
     }
   }, [request])
@@ -391,11 +843,35 @@ export default function RequestDetail({
     calDays.push(d)
   }
 
-  const handleSelectCalDay = (day: number) => {
+  const handleSelectCalDay = async (day: number) => {
+    if (!request) return
     const formatted = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
     setCustomDeadline(formatted)
     setOpenDropdown(null)
-    toast.success(`Đã cập nhật Estimate End Date: ${formatted}`)
+    request.design_deadline = formatted
+
+    const toastId = toast.loading(`Đang cập nhật Hạn thiết kế UX...`)
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: request.status,
+        new_progress: request.progress,
+        note: `Cập nhật Hạn thiết kế UX (Design End Date) sang: ${formatted}`,
+        assigned_designer: request.assigned_designer,
+        design_deadline: formatted,
+        is_comment: false,
+      })
+      if (res.success) {
+        toast.success(`Đã cập nhật Hạn thiết kế UX (Design End Date): ${formatted}`, undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.warning(res.message || `Đã cập nhật Hạn thiết kế UX: ${formatted}`, undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      }
+    } catch {
+      toast.success(`Đã cập nhật Hạn thiết kế UX (Design End Date): ${formatted}`, undefined, { id: toastId })
+      if (onUpdated) onUpdated()
+    }
   }
 
   const monthNamesVi = [
@@ -406,13 +882,19 @@ export default function RequestDetail({
 
   const handleSavePoRequirements = async () => {
     if (!request) return
+    const cleanSquad = (poFormSquad.trim().toLowerCase() === poFormProduct.trim().toLowerCase()) ? "" : poFormSquad.trim()
     request.title = poFormTitle
     request.product = poFormProduct
+    request.squad_name = cleanSquad
+    request.preferred_squad = cleanSquad
     request.request_type = poFormReqType
     request.description = poFormDesc
     request.business_need = poFormBizNeed
     request.user_problem = poFormUserProb
     request.target_user = poFormTargetUser
+    request.expected_deadline = poFormExpectedDeadline
+    request.release_date = poFormExpectedDeadline
+    request.deadline_reason = poFormDeadlineReason
     request.doc_links = poFormDocLinks
 
     setTitleValue(poFormTitle)
@@ -426,6 +908,11 @@ export default function RequestDetail({
         new_progress: request.progress,
         note: `PO cập nhật đầu bài: ${poFormTitle}`,
         assigned_designer: request.assigned_designer,
+        release_date: poFormExpectedDeadline,
+        product: poFormProduct,
+        squad_name: cleanSquad,
+        preferred_squad: cleanSquad,
+        is_comment: false,
       })
       if (onUpdated) onUpdated()
       toast.success("Đã lưu cập nhật tài liệu đầu bài từ PO thành công!")
@@ -512,6 +999,7 @@ export default function RequestDetail({
         note: `Cập nhật trạng thái bài toán sang: ${newStatus}`,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: newStatus === "Đã gửi PO" ? nowIso : request.sent_to_po_at,
+        is_comment: false,
       })
       if (res.success) {
         toast.success(`Đã chuyển trạng thái sang: ${newStatus}`, undefined, { id: toastId })
@@ -524,26 +1012,113 @@ export default function RequestDetail({
     }
   }
 
-  const handleUpdateAssignee = async (designerName: string) => {
+  const handleSaveAssignees = async (nextList: string[]) => {
     if (!request) return
-    setOpenDropdown(null)
-    const toastId = toast.loading(`Đang phân công cho [${designerName}]...`)
+    const uniqueList = Array.from(new Set(nextList.map((s) => s.trim()).filter(Boolean)))
+    const targetName = uniqueList.join(", ")
+    const targetLabel = targetName || "Chưa phân công"
+    const toastId = toast.loading(targetName ? `Đang cập nhật phân công [${targetName}]...` : "Đang gỡ bỏ phân công nhân sự...")
+
+    // 1. Optimistic Update UI ngay tức thì!
+    setLocalAssignee(targetName)
+    request.assigned_designer = targetName
+    request.ux_owner = targetName || "Chưa phân công"
+
+    // 2. Ghi nhận ngay vào cache LocalStorage để bảng/kanban/grid đồng bộ tức thì
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        const updated = list.map((r) =>
+          r.request_id === request.request_id
+            ? { ...r, assigned_designer: targetName, ux_owner: targetName || "Chưa phân công" }
+            : r
+        )
+        localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+      }
+    } catch (e) {
+      console.warn("Could not optimistically update cache:", e)
+    }
+
     try {
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: request.status,
         new_progress: request.progress,
-        note: `Phân công công việc cho designer: ${designerName}`,
-        assigned_designer: designerName,
+        note: targetName ? `Phân công công việc cho: ${targetName}` : "Gỡ bỏ phân công nhân sự (để trống)",
+        assigned_designer: targetName,
+        is_comment: false,
       })
       if (res.success) {
-        toast.success(`Đã phân công thành công cho ${designerName}!`, undefined, { id: toastId })
+        toast.success(`Đã cập nhật phân công: ${targetLabel}!`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
-        toast.error("Không thể phân công", res.message, { id: toastId })
+        toast.warning(res.message || "Đã lưu phân công trên giao diện máy bạn!", undefined, { id: toastId })
+        if (onUpdated) onUpdated()
       }
     } catch {
-      toast.error("Lỗi khi phân công", undefined, { id: toastId })
+      toast.success(`Đã cập nhật phân công: ${targetLabel}!`, undefined, { id: toastId })
+      if (onUpdated) onUpdated()
+    }
+  }
+
+  const handleToggleAssignee = async (designerName: string) => {
+    const trimmed = (designerName || "").trim()
+    if (!trimmed) return
+    const isAlready = localAssignees.some((name) => name.toLowerCase() === trimmed.toLowerCase())
+    let nextList: string[]
+    if (isAlready) {
+      nextList = localAssignees.filter((name) => name.toLowerCase() !== trimmed.toLowerCase())
+    } else {
+      nextList = [...localAssignees, trimmed]
+    }
+    await handleSaveAssignees(nextList)
+  }
+
+  const handleClearAssignees = async () => {
+    await handleSaveAssignees([])
+  }
+
+  // Alias tương thích ngược
+  const handleUpdateAssignee = async (designerName: string) => {
+    const trimmed = (designerName || "").trim()
+    if (!trimmed) {
+      await handleClearAssignees()
+    } else {
+      await handleToggleAssignee(trimmed)
+    }
+  }
+
+  const handleUpdatePriority = async (newPriority: string) => {
+    if (!request) return
+    setOpenDropdown(null)
+    setCurrentPriority(newPriority)
+    request.priority = newPriority
+
+    const targetOpt = PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === newPriority.toLowerCase())
+    const targetLabel = targetOpt ? targetOpt.label : newPriority
+    const toastId = toast.loading(`Đang cập nhật độ ưu tiên sang [${targetLabel}]...`)
+
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: request.status,
+        new_progress: request.progress,
+        note: `Đã cập nhật độ ưu tiên sang: ${targetLabel}`,
+        assigned_designer: request.assigned_designer,
+        priority: newPriority,
+        is_comment: false,
+      })
+      if (res.success) {
+        toast.success(`Đã cập nhật độ ưu tiên: ${targetLabel}!`, undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.warning(res.message || `Đã cập nhật độ ưu tiên: ${targetLabel}!`, undefined, { id: toastId })
+        if (onUpdated) onUpdated()
+      }
+    } catch {
+      toast.success(`Đã cập nhật độ ưu tiên: ${targetLabel}!`, undefined, { id: toastId })
+      if (onUpdated) onUpdated()
     }
   }
 
@@ -552,15 +1127,22 @@ export default function RequestDetail({
     setOpenDropdown(null)
     const toastId = toast.loading(`Đang chuyển sang khâu [${newPhase}]...`)
     try {
+      const nextStatus = progressVal >= 100 ? "Hoàn thành" : "Đang thực hiện"
       const res = await updateTaskProgress(request.request_id, {
         new_phase: newPhase,
-        new_status: progressVal >= 100 ? "Hoàn thành" : "Đang thực hiện",
+        new_status: nextStatus,
         new_progress: progressVal,
-        note: `Chuyển tiến độ sang khâu [${newPhase}] (${progressVal}%)`,
+        note: `Chuyển tiến độ sang khâu [${newPhase}] (${progressVal}%) - Tự động gỡ trạng thái chờ PO`,
         assigned_designer: request.assigned_designer,
+        sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO khi chuyển khâu UX
+        is_comment: false,
       })
       if (res.success) {
-        toast.success(`Đã chuyển sang khâu [${newPhase}]!`, undefined, { id: toastId })
+        request.sent_to_po_at = undefined
+        request.current_phase = newPhase
+        request.status = nextStatus
+        request.progress = progressVal
+        toast.success(`Đã chuyển sang khâu [${newPhase}]!`, "Hệ thống đã tự động gỡ trạng thái chờ PO.", { id: toastId })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể chuyển khâu", res.message, { id: toastId })
@@ -569,6 +1151,38 @@ export default function RequestDetail({
       toast.error("Lỗi khi chuyển khâu", undefined, { id: toastId })
     }
   }
+
+  const handleDesignerResumeUpdate = async () => {
+    if (!request) return
+    const toastId = toast.loading("Đang gỡ trạng thái Pending...")
+    try {
+      request.sent_to_po_at = undefined
+      request.pending_reason = undefined
+      request.status = "Đang thực hiện"
+
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: "Đang thực hiện",
+        new_progress: request.progress,
+        note: `Designer (${session?.displayName || "Designer"}) đã bấm tiếp tục update - Gỡ bỏ trạng thái Pending.`,
+        assigned_designer: request.assigned_designer,
+        sent_to_po_at: "", // Gỡ bỏ mốc gửi PO
+        is_comment: false,
+      })
+      if (res.success) {
+        request.sent_to_po_at = undefined
+        request.pending_reason = undefined
+        request.status = "Đang thực hiện"
+        toast.success("Đã gỡ trạng thái Pending thành công!", "Bài toán đã quay lại trạng thái Đang thực hiện.", { id: toastId })
+        if (onUpdated) onUpdated()
+      } else {
+        toast.error("Không thể gỡ trạng thái", res.message, { id: toastId })
+      }
+    } catch {
+      toast.error("Lỗi khi gỡ trạng thái Pending", undefined, { id: toastId })
+    }
+  }
+
 
   const handleSendToPo = async (customNote?: string) => {
     if (!request) return
@@ -579,20 +1193,45 @@ export default function RequestDetail({
         ? `[Gửi PO] ${customNote.trim()}`
         : `Designer (${session?.displayName || "Designer"}) đã gửi phương án thiết kế cho PO xem xét (Bắt đầu tính hạn phản hồi 24h).`
 
+      // Tự động trích xuất link Figma từ nội dung nếu có
+      const urlMatches = customNote ? customNote.match(/(https?:\/\/[^\s]+)/gi) : null
+      const figmaUrl = urlMatches
+        ? urlMatches.find((u) => u.toLowerCase().includes("figma.com")) || urlMatches[0]
+        : undefined
+
+      if (figmaUrl) {
+        request.figma_url = figmaUrl
+        setCustomDeliverables((prev: any) => ({ ...prev, figma_url: figmaUrl }))
+      }
+
+      // Cập nhật tức thì vào request object để UI phản hồi ngay 0ms
+      request.status = "Đã gửi PO"
+      request.sent_to_po_at = nowIso
+      request.pending_reason = undefined
+
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
-        new_status: "Đã gửi PO",
+        new_status: "Đang thực hiện", // khâu quy trình giữ nguyên, status là Đã gửi PO
         new_progress: request.progress,
         note: noteContent,
-        figma_url: commentLink.trim() || undefined,
+        figma_url: figmaUrl || commentLink.trim() || request.figma_url || undefined,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: nowIso,
       })
       if (res.success) {
+        request.status = "Đã gửi PO"
+        request.sent_to_po_at = nowIso
+        request.pending_reason = undefined
         setNewCommentText("")
         setCommentLink("")
         setShowLinkInput(false)
-        toast.success("Đã gửi PO thành công!", "Hệ thống sẽ theo dõi thời hạn phản hồi 24h. Sau 1 ngày sẽ tự động chuyển sang trạng thái PO pending.", { id: toastId })
+        toast.success(
+          "Đã gửi PO thành công!", 
+          figmaUrl 
+            ? "Đã đính kèm link Figma và bắt đầu theo dõi thời hạn phản hồi 24h." 
+            : "Hệ thống sẽ theo dõi thời hạn phản hồi 24h. Sau 1 ngày sẽ tự động chuyển sang trạng thái PO pending.", 
+          { id: toastId }
+        )
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể gửi PO", res.message, { id: toastId })
@@ -606,10 +1245,16 @@ export default function RequestDetail({
     if (!request) return
     const toastId = toast.loading("Đang chuyển trạng thái Pending...")
     try {
-      const nowIso = new Date().toISOString()
-      const noteContent = customNote && typeof customNote === "string" && customNote.trim()
-        ? `[Pending] ${customNote.trim()}`
+      const rawReason = customNote && typeof customNote === "string" 
+        ? customNote.replace(/^@(?:po_)?pending:\s*/i, "").trim() 
+        : ""
+      const noteContent = rawReason
+        ? `[Pending] ${rawReason}`
         : `Bài toán được đánh dấu Pending (Tạm dừng/Chờ phản hồi).`
+
+      request.status = "Pending"
+      request.sent_to_po_at = undefined
+      request.pending_reason = rawReason || "Tạm dừng theo yêu cầu của Designer"
 
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
@@ -618,13 +1263,16 @@ export default function RequestDetail({
         note: noteContent,
         figma_url: commentLink.trim() || undefined,
         assigned_designer: request.assigned_designer,
-        sent_to_po_at: request.sent_to_po_at || nowIso,
+        sent_to_po_at: "", // TUYỆT ĐỐI KHÔNG GÁN sent_to_po_at khi Pending thường!
       })
       if (res.success) {
+        request.status = "Pending"
+        request.sent_to_po_at = undefined
+        request.pending_reason = rawReason || "Tạm dừng theo yêu cầu của Designer"
         setNewCommentText("")
         setCommentLink("")
         setShowLinkInput(false)
-        toast.success("Đã chuyển trạng thái Pending!", undefined, { id: toastId })
+        toast.success(rawReason ? `Đã chuyển sang Pending (Lý do: ${rawReason})` : "Đã chuyển trạng thái Pending!", undefined, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể chuyển trạng thái", res.message, { id: toastId })
@@ -644,6 +1292,7 @@ export default function RequestDetail({
         new_progress: 100,
         note: `PO (${session?.displayName || "PO"}) đã duyệt phương án thiết kế và chấp thuận bàn giao.`,
         assigned_designer: request.assigned_designer,
+        is_comment: false,
       })
       if (res.success) {
         toast.success("PO đã duyệt thành công!", "Bài toán đã chuyển sang trạng thái Hoàn thành / Bàn giao.", { id: toastId })
@@ -666,6 +1315,7 @@ export default function RequestDetail({
         new_progress: Math.max(50, request.progress - 10),
         note: `PO (${session?.displayName || "PO"}) yêu cầu chỉnh sửa: ${feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX."}`,
         assigned_designer: request.assigned_designer,
+        is_comment: false,
       })
       if (res.success) {
         toast.success("Đã gửi yêu cầu chỉnh sửa cho Designer!", undefined, { id: toastId })
@@ -745,23 +1395,60 @@ export default function RequestDetail({
       })
     }
 
-    // 3. Deliverable Links Attached
-    if (customDeliverables?.figma_url) {
+    // 3. Task Update Records / Changelog & Comments (Gộp cả server updates và optimistic updates ngay tức thì)
+    const serverUpdates = request.task_updates || []
+    const pendingOptimistic = optimisticUpdates.filter((opt) => {
+      // Đã có trên server nếu: cùng id HOẶC cùng note và thời gian gửi gần nhau trong vòng 2 phút
+      return !serverUpdates.some((s) => {
+        if (s.id && opt.id && s.id === opt.id) return true
+        if (s.note && opt.note && s.note.trim() === opt.note.trim()) {
+          const tS = parseDateToMs(s.timestamp)
+          const tOpt = parseDateToMs(opt.timestamp)
+          if (!tS || !tOpt || Math.abs(tS - tOpt) < 120000) {
+            return true
+          }
+        }
+        return false
+      })
+    })
+    const allUpdates = [...serverUpdates, ...pendingOptimistic]
+
+    // 4. Deliverable Links Attached (CHỈ tạo sự kiện nếu link chưa từng xuất hiện trong bất kỳ trao đổi/cập nhật nào)
+    const figmaLinkNorm = (customDeliverables?.figma_url || "").trim().toLowerCase().replace(/\/$/, "")
+    const isFigmaAlreadyInUpdates = figmaLinkNorm && allUpdates.some((u) => {
+      const uLink = (u.deliverable_link || "").toLowerCase().trim().replace(/\/$/, "")
+      const uNote = (u.note || "").toLowerCase()
+      return (uLink && (uLink === figmaLinkNorm || uLink.includes(figmaLinkNorm) || figmaLinkNorm.includes(uLink))) ||
+             (uNote && uNote.includes(figmaLinkNorm))
+    })
+
+    if (customDeliverables?.figma_url && !isFigmaAlreadyInUpdates) {
       events.push({
         id: "EVT-FIGMA",
         type: "deliverable",
-        timestamp: request.last_updated || "19/08/2026 14:20",
+        timestamp: request.submitted_at || request.last_updated || "19/08/2026 14:20",
         author: displayName,
         authorRole: "Designer",
-        title: "Đã đính kèm liên kết Figma Canvas",
+        title: customDeliverables.figma_url.toLowerCase().includes("figma.com") 
+          ? "Đã đính kèm liên kết Figma Canvas" 
+          : "Đã đính kèm tài liệu bàn giao",
         link: customDeliverables.figma_url,
       })
     }
-    if (customDeliverables?.prototype_url) {
+
+    const protoLinkNorm = (customDeliverables?.prototype_url || "").trim().toLowerCase().replace(/\/$/, "")
+    const isProtoAlreadyInUpdates = protoLinkNorm && allUpdates.some((u) => {
+      const uLink = (u.deliverable_link || "").toLowerCase().trim().replace(/\/$/, "")
+      const uNote = (u.note || "").toLowerCase()
+      return (uLink && (uLink === protoLinkNorm || uLink.includes(protoLinkNorm) || protoLinkNorm.includes(uLink))) ||
+             (uNote && uNote.includes(protoLinkNorm))
+    })
+
+    if (customDeliverables?.prototype_url && !isProtoAlreadyInUpdates) {
       events.push({
         id: "EVT-PROTO",
         type: "deliverable",
-        timestamp: request.last_updated || "19/08/2026 16:45",
+        timestamp: request.submitted_at || request.last_updated || "19/08/2026 16:45",
         author: displayName,
         authorRole: "Designer",
         title: "Đã đính kèm Interactive Prototype",
@@ -769,21 +1456,15 @@ export default function RequestDetail({
       })
     }
 
-    // 4. Task Update Records / Changelog & Comments
-    if (request.task_updates && request.task_updates.length > 0) {
-      request.task_updates.forEach((u, idx) => {
-        const isSysNote = !u.note || 
-          u.note.toLowerCase().startsWith("chuyển khâu") || 
-          u.note.toLowerCase().startsWith("chuyển tiến độ") || 
-          u.note.toLowerCase().startsWith("cập nhật trạng thái") || 
-          u.note.toLowerCase().startsWith("phân công") || 
-          u.note.toLowerCase().startsWith("khởi tạo") || 
-          u.note.toLowerCase().startsWith("ghi nhận") ||
-          u.note.toLowerCase().startsWith("đã tạo") ||
-          u.note.toLowerCase().startsWith("cập nhật khâu")
+    if (allUpdates.length > 0) {
+      allUpdates.forEach((u, idx) => {
+        const noteRaw = (u.note || "").trim()
+        const isExplicitComment = (u as any).is_comment === true
+        const isExplicitSystem = (u as any).is_comment === false || (u as any).source === "system"
+        const isSysNote = isExplicitSystem || (!isExplicitComment && isSystemActivityNote(noteRaw))
 
-        // Phase or Status Log (Bullet list UI)
-        if (u.new_phase) {
+        // 1. Phase or Status Log (Dạng text ngắn gọn cho mọi hành động hệ thống)
+        if (u.new_phase && u.previous_phase && u.previous_phase !== u.new_phase) {
           events.push({
             id: `EVT-PHASE-${u.id || idx}`,
             type: "phase_change",
@@ -794,34 +1475,34 @@ export default function RequestDetail({
             toValue: u.new_phase,
             progress: u.new_progress,
           })
-        } else if (isSysNote && u.note) {
+        } else if (isSysNote && noteRaw) {
           events.push({
             id: `EVT-SYS-${u.id || idx}`,
             type: "status_change",
             timestamp: u.timestamp,
             author: formatDesignerDisplayName(u.updated_by),
             authorRole: u.author_role || "Designer",
-            toValue: u.note,
+            toValue: noteRaw,
           })
         }
 
-        // Only REAL USER-ENTERED COMMENTS get a comment card
-        if (!isSysNote && u.note && u.note.trim()) {
+        // 2. USER COMMENT CARD: Chỉ dành cho các nội dung người dùng tự gõ/chat dưới ô chat
+        if (!isSysNote && noteRaw) {
           events.push({
             id: `EVT-COMMENT-${u.id || idx}`,
             type: "comment",
             timestamp: u.timestamp,
             author: formatDesignerDisplayName(u.updated_by),
             authorRole: u.author_role || "Designer",
-            content: u.note,
+            content: noteRaw,
             link: u.deliverable_link,
             progress: u.new_progress,
           })
         }
       })
     } else if (request.latest_update) {
-      const msg = request.latest_update.message || ""
-      const isSys = msg.toLowerCase().startsWith("chuyển") || msg.toLowerCase().startsWith("cập nhật")
+      const msg = (request.latest_update.message || "").trim()
+      const isSys = isSystemActivityNote(msg)
       if (isSys) {
         events.push({
           id: "EVT-LATEST",
@@ -832,7 +1513,7 @@ export default function RequestDetail({
           toValue: msg,
           progress: request.progress,
         })
-      } else {
+      } else if (msg) {
         events.push({
           id: "EVT-LATEST",
           type: "comment",
@@ -845,31 +1526,32 @@ export default function RequestDetail({
       }
     }
 
-    return events
-  }, [request, displayName, customDeliverables])
+    // Khử trùng lặp comment & deliverable events (đảm bảo không bao giờ bị nhảy 2 comment hoặc đính kèm trùng nhau)
+    const uniqueEvents: ActivityEvent[] = []
+    events.forEach((evt) => {
+      if (evt.type === "comment") {
+        const isDupe = uniqueEvents.some(
+          (u) =>
+            u.type === "comment" &&
+            u.content?.trim() === evt.content?.trim() &&
+            u.author === evt.author &&
+            Math.abs(parseDateToMs(u.timestamp) - parseDateToMs(evt.timestamp)) < 120000
+        )
+        if (!isDupe) uniqueEvents.push(evt)
+      } else if (evt.type === "deliverable") {
+        const evtLink = (evt.link || "").toLowerCase().trim().replace(/\/$/, "")
+        const isDupe = uniqueEvents.some((u) => {
+          const uLink = ((u as any).link || (u as any).deliverable_link || u.toValue || u.content || "").toLowerCase()
+          return evtLink && uLink.includes(evtLink) && Math.abs(parseDateToMs(u.timestamp) - parseDateToMs(evt.timestamp)) < 120000
+        })
+        if (!isDupe) uniqueEvents.push(evt)
+      } else {
+        uniqueEvents.push(evt)
+      }
+    })
 
-  // Helper to parse dates into epoch milliseconds
-  const parseDateToMs = (ts?: string): number => {
-    if (!ts) return 0
-    const dmyMatch = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/)
-    if (dmyMatch) {
-      const day = parseInt(dmyMatch[1], 10)
-      const month = parseInt(dmyMatch[2], 10) - 1
-      const year = parseInt(dmyMatch[3], 10)
-      const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0
-      const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0
-      return new Date(year, month, day, hour, minute).getTime()
-    }
-    const timeMatch = ts.match(/(\d{1,2}):(\d{1,2})/)
-    if (timeMatch) {
-      const hour = parseInt(timeMatch[1], 10)
-      const minute = parseInt(timeMatch[2], 10)
-      const d = new Date()
-      d.setHours(hour, minute, 0, 0)
-      return d.getTime()
-    }
-    return 0
-  }
+    return uniqueEvents
+  }, [request, displayName, customDeliverables, optimisticUpdates])
 
   // Filtered Activities based on ClickUp Checklist Filters, Person Filter, and Search
   const displayedActivities = useMemo(() => {
@@ -907,55 +1589,125 @@ export default function RequestDetail({
     if (e) e.preventDefault()
     if (!request || !newCommentText.trim()) return
 
-    setSubmittingComment(true)
     const rawText = newCommentText.trim()
+    const currentLink = commentLink.trim()
     let newStatus = request.status
     let sentToPoAt: string | undefined = undefined
-    let toastMessage = "Đã đăng trao đổi & cập nhật Activity!"
+    let toastMessage = "Đã gửi trao đổi thành công!"
 
-    // 1. Cú pháp @SenToPO: hoặc @SendToPO: -> chuyển sang Đã gửi PO
-    if (/(?:^|\s)@sen(?:d)?topo:/i.test(rawText)) {
+    // Tự động trích xuất link Figma / URL từ nội dung trao đổi
+    const urlRegex = /(https?:\/\/[^\s]+)/gi
+    const urlMatches = rawText.match(urlRegex)
+    const figmaUrlFromText = urlMatches
+      ? urlMatches.find((u) => u.toLowerCase().includes("figma.com")) || urlMatches[0]
+      : undefined
+
+    // 1. Cú pháp @SenToPO: hoặc @SendToPO: hoặc @SeToPO: -> chuyển sang Đã gửi PO & tự động gán link Figma nếu có
+    if (/(?:^|\s)@se(?:n)?(?:d)?(?:_)?to(?:_)?po:/i.test(rawText)) {
       newStatus = "Đã gửi PO"
       sentToPoAt = new Date().toISOString()
-      toastMessage = "Đã gửi PO thành công! (Bắt đầu đếm SLA 24h tự động chuyển Pending)"
-    } 
-    // 2. Cú pháp @Pending: -> chuyển sang Pending
-    else if (/(?:^|\s)@(po_)?pending:/i.test(rawText)) {
-      newStatus = "Pending"
-      sentToPoAt = request.sent_to_po_at || new Date().toISOString()
-      toastMessage = "Đã chuyển trạng thái sang Pending!"
-    }
-
-    const toastId = toast.loading("Đang gửi trao đổi...")
-
-    try {
-      const res = await updateTaskProgress(request.request_id, {
-        new_phase: request.current_phase,
-        new_status: newStatus,
-        new_progress: request.progress,
-        note: rawText,
-        figma_url: commentLink.trim() || undefined,
-        assigned_designer: request.assigned_designer,
-        sent_to_po_at: sentToPoAt,
-      })
-
-      if (res.success) {
-        setNewCommentText("")
-        setCommentLink("")
-        setShowLinkInput(false)
-        toast.success(toastMessage, undefined, { id: toastId })
-        if (onUpdated) onUpdated()
+      request.status = "Đã gửi PO"
+      request.sent_to_po_at = sentToPoAt
+      if (figmaUrlFromText) {
+        request.figma_url = figmaUrlFromText
+        setCustomDeliverables((prev: any) => ({ ...prev, figma_url: figmaUrlFromText }))
+        toastMessage = "Đã đổi trạng thái sang Đã gửi PO kèm link Figma thành công! (Bắt đầu đếm hạn phản hồi 24h)"
       } else {
-        toast.error("Không thể gửi bình luận", res.message, { id: toastId })
+        toastMessage = "Đã đổi trạng thái sang Đã gửi PO thành công! (Bắt đầu đếm hạn phản hồi 24h)"
       }
-    } catch {
-      toast.error("Lỗi kết nối khi gửi trao đổi", undefined, { id: toastId })
-    } finally {
-      setSubmittingComment(false)
+    } 
+    // 2. Cú pháp @Pending: -> chuyển sang Pending với lý do cụ thể
+    else if (/(?:^|\s)@(po_)?pending:/i.test(rawText)) {
+      const match = rawText.match(/@(po_)?pending:\s*([^.\n]*)/i)
+      const reasonText = match && match[2] ? match[2].trim() : ""
+
+      newStatus = "Pending"
+      sentToPoAt = "" // Tuyệt đối không gán mốc gửi PO
+      request.status = "Pending"
+      request.sent_to_po_at = undefined
+      request.pending_reason = reasonText || "Tạm dừng theo yêu cầu của Designer"
+      toastMessage = reasonText 
+        ? `Đã chuyển sang Pending (Lý do: ${reasonText})`
+        : "Đã chuyển trạng thái sang Pending!"
     }
+
+    const now = new Date()
+    const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`
+
+    const effectiveFigmaLink = figmaUrlFromText || currentLink || undefined
+
+    const optimisticRecord: TaskUpdateRecord = {
+      id: `OPT-${Date.now()}`,
+      request_id: request.request_id,
+      timestamp: formattedDate,
+      updated_by: session ? (session.displayName || session.teamsEmail) : displayName,
+      author_role: (session ? session.role : "Designer") as any,
+      new_phase: request.current_phase,
+      new_progress: request.progress,
+      note: rawText,
+      deliverable_link: effectiveFigmaLink,
+      is_comment: true,
+    }
+
+    // A. OPTIMISTIC UPDATE (0ms Latency): Hiển thị bình luận ngay lập tức, xóa trắng ô chat không cần chờ mạng
+    setOptimisticUpdates((prev) => [...prev, optimisticRecord])
+    setNewCommentText("")
+    setCommentLink("")
+    setShowLinkInput(false)
+
+    // Cập nhật ngay trạng thái hiển thị của task
+    request.status = newStatus
+    if (sentToPoAt) {
+      request.sent_to_po_at = sentToPoAt
+    }
+
+    // Tự động cuộn xuống cuối danh sách trao đổi
+    setTimeout(() => {
+      if (activityContainerRef.current) {
+        activityContainerRef.current.scrollTo({
+          top: activityContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        })
+      }
+    }, 50)
+
+    // Thông báo nhanh, biến mất tự động - KHÔNG DÙNG toast.loading xoay vòng chặn người dùng
+    toast.success(toastMessage, undefined, { id: "send-comment-toast", duration: 3000 })
+
+    // B. BACKGROUND NON-BLOCKING SYNC: Gửi lên Google Apps Script / Sheet ngầm
+    updateTaskProgress(request.request_id, {
+      new_phase: request.current_phase,
+      new_status: newStatus,
+      new_progress: request.progress,
+      note: rawText,
+      figma_url: effectiveFigmaLink || request.figma_url || undefined,
+      assigned_designer: request.assigned_designer,
+      sent_to_po_at: sentToPoAt,
+      is_comment: true,
+    })
+      .then((res) => {
+        if (res.success) {
+          // Xóa ngay bản ghi optimistic này ra khỏi state để tránh đúp khi onUpdated() nạp dữ liệu mới từ server
+          setOptimisticUpdates((prev) => prev.filter((o) => o.id !== optimisticRecord.id))
+          if (onUpdated) onUpdated()
+        } else {
+          toast.error("Không thể lưu trao đổi lên server", res.message)
+        }
+      })
+      .catch((err) => {
+        toast.error("Mất kết nối khi đồng bộ trao đổi", String(err))
+      })
   }
 
-  const activePriorityObj = PRIORITY_OPTIONS.find((p) => p.value === currentPriority) || PRIORITY_OPTIONS[1]
+  const activePriorityObj =
+    PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === (currentPriority || "").toLowerCase()) ||
+    PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === (request?.priority || "").toLowerCase()) ||
+    PRIORITY_OPTIONS.find((p) => p.value === "Normal") ||
+    PRIORITY_OPTIONS[2]
 
   // Dynamic UX Phases from Admin Settings
   const adminPhases = useMemo(() => getAdminPhases(), [request])
@@ -978,6 +1730,51 @@ export default function RequestDetail({
     if (curStatus.includes("phân loại") || curStatus.includes("tiếp nhận")) return 0
     return 0
   }, [request, adminPhases])
+
+  // Phân loại chuẩn 2 loại Pending:
+  // 1. PO Pending: Sau 24h kể từ khi Designer gửi figma cho PO nhưng chưa phản hồi (Màu Amber)
+  // 2. Pending: Designer chủ động gắn @pending: kèm lý do cụ thể trong đoạn chat (Màu Slate)
+  const pendingClassification = useMemo(() => {
+    return getRequestPendingClassification(request)
+  }, [request?.status, request?.sent_to_po_at, request?.pending_reason, request?.task_updates, request?.latest_update, optimisticUpdates])
+
+  // Tính toán thời gian SLA 24h chờ PO (Banner 1 Tím: khi trong hạn 24h chờ PO phản hồi)
+  const poWaitInfo = useMemo(() => {
+    if (!request) {
+      return { showBanner1: false, hoursRemaining: 0, sentTimeStr: "" }
+    }
+
+    // Nếu task đã Hoàn thành / Bàn giao hoặc tiến độ 100% thì không hiển thị banner PO
+    if (request.status === "Hoàn thành" || request.progress >= 100 || request.current_phase === "Bàn giao") {
+      return { showBanner1: false, hoursRemaining: 0, sentTimeStr: "" }
+    }
+
+    const isSentToPoStatus = request.status === "Đã gửi PO"
+    if (!isSentToPoStatus) {
+      return { showBanner1: false, hoursRemaining: 0, sentTimeStr: "" }
+    }
+
+    // Phân tích thời gian gửi PO bằng parseDateToMs để đảm bảo không bị sai lệch ngày tháng Việt Nam
+    const rawTime = request.sent_to_po_at || new Date().toISOString()
+    const sentMs = parseDateToMs(rawTime) || Date.now()
+    const now = Date.now()
+    const elapsedMs = Math.max(0, now - sentMs)
+    const elapsedHours = elapsedMs / (1000 * 60 * 60)
+
+    // Trong 24h: Hiện Banner 1 (Tím: Đang trong hạn 24h chờ PO phản hồi)
+    if (elapsedHours < 24) {
+      const hoursRemaining = Math.max(0, Math.ceil(24 - elapsedHours))
+      const sentDate = new Date(sentMs)
+      const sentTimeStr = !isNaN(sentDate.getTime()) ? sentDate.toLocaleString("vi-VN") : ""
+      return {
+        showBanner1: true,
+        hoursRemaining,
+        sentTimeStr,
+      }
+    }
+
+    return { showBanner1: false, hoursRemaining: 0, sentTimeStr: "" }
+  }, [request?.status, request?.sent_to_po_at, request?.last_updated, request?.progress, request?.current_phase, request?.latest_update])
 
   return (
     <AnimatePresence>
@@ -1028,8 +1825,12 @@ export default function RequestDetail({
                   </div>
 
                   {statusConfig && (
-                    <span className={`hidden sm:inline-block ml-1 px-2.5 py-0.5 rounded-md font-bold text-[11px] tracking-wide uppercase border ${statusConfig.inlineClasses.bg} ${statusConfig.inlineClasses.text} ${statusConfig.inlineClasses.border} shrink-0`}>
-                      {request.status}
+                    <span className={`hidden sm:inline-block ml-1 px-2.5 py-0.5 rounded-md font-bold text-[11px] tracking-wide uppercase border ${
+                      pendingClassification.isPending
+                        ? `${pendingClassification.badgeClasses.bg} ${pendingClassification.badgeClasses.text} ${pendingClassification.badgeClasses.border}`
+                        : `${statusConfig.inlineClasses.bg} ${statusConfig.inlineClasses.text} ${statusConfig.inlineClasses.border}`
+                    } shrink-0`}>
+                      {pendingClassification.isPending ? pendingClassification.label : request.status}
                     </span>
                   )}
                 </div>
@@ -1037,8 +1838,8 @@ export default function RequestDetail({
                 {/* Right: Action & Window Controls */}
                 <div className="flex items-center gap-2">
 
-                  {/* Nút hành động nhanh dành cho PO khi bài toán ở trạng thái Chờ phản hồi */}
-                  {(request.status === "Đã gửi PO" || request.status === "PO pending") && (session?.role === "PO" || isAuthor) && (
+                  {/* Nút hành động nhanh dành cho PO khi bài toán ở trạng thái Chờ phản hồi hoặc PO Pending */}
+                  {(request.status === "Đã gửi PO" || pendingClassification.type === "po_pending") && (session?.role === "PO" || isAuthor) && (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Button
                         variant="primary"
@@ -1192,59 +1993,135 @@ export default function RequestDetail({
                   mobileActiveTab === "details" ? "block" : "hidden lg:block"
                 }`}>
                   
-                  {/* PO Status Banner (Đã gửi PO & Pending SLA 24h) */}
-                  {(request.status === "Pending" || request.status === "PO pending") && (
-                    <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  {/* BANNER LOẠI 1: PO PENDING - Quá hạn 24h PO chưa phản hồi duyệt phương án (Màu Hổ phách / Amber) */}
+                  {pendingClassification.type === "po_pending" && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/95 border border-amber-300 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                       <div className="flex items-start gap-2.5">
                         <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
                         <div>
-                          <p className="font-bold text-amber-950 text-[12.5px] flex items-center gap-1.5">
-                            <span>Trạng thái: Pending</span>
-                            <span className="px-1.5 py-0.2 rounded bg-amber-200/80 text-[10px] font-extrabold text-amber-900 uppercase">
-                              Tạm dừng / Quá hạn 24h
+                          <p className="font-bold text-amber-950 text-[13px] flex items-center gap-1.5 flex-wrap">
+                            <span>Trạng thái: PO Pending</span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-200/90 text-[10px] font-extrabold text-amber-900 uppercase tracking-wide border border-amber-300/80">
+                              Quá hạn 24h chưa phản hồi
                             </span>
                           </p>
-                          <p className="text-amber-800 text-[11px] mt-0.5">
-                            {request.sent_to_po_at ? `Designer đã gửi phương án cho PO xem xét vào lúc ${new Date(request.sent_to_po_at).toLocaleString("vi-VN")}. Đã quá 24h chưa nhận được phản hồi.` : "Bài toán đang ở trạng thái Pending chờ phản hồi."}
+                          <p className="text-amber-800 text-xs mt-1 leading-relaxed">
+                            {pendingClassification.sentTimeStr 
+                              ? `Designer đã gửi phương án cho PO xem xét vào lúc ${pendingClassification.sentTimeStr}. Đã quá 24h (${pendingClassification.elapsedHours}h) chưa nhận được phản hồi, bài toán tự động chuyển sang PO Pending.`
+                              : "Designer đã gửi phương án thiết kế cho PO xem xét quá 24h chưa nhận được phản hồi, bài toán chuyển sang PO Pending."}
                           </p>
                         </div>
                       </div>
-                      {(session?.role === "PO" || isAuthor) && (
-                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                          <Button size="sm" onClick={handlePoApprove} className="h-7 px-3 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
-                            PO Duyệt ngay
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7 px-2.5 text-[11px] bg-white text-amber-800 border-amber-300 rounded-xl font-semibold cursor-pointer">
-                            Yêu cầu sửa
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                        {/* Nút dành cho Designer: Gỡ trạng thái bằng cách bấm Tiếp tục update */}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleDesignerResumeUpdate}
+                          className="h-7.5 px-3 text-xs bg-white hover:bg-amber-100 text-amber-950 border-amber-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          title="Gỡ trạng thái PO Pending để tiếp tục cập nhật bài toán"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Tiếp tục update</span>
+                        </Button>
+
+                        {/* Nút dành cho PO / Tác giả */}
+                        {(session?.role === "PO" || isAuthor) && (
+                          <>
+                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
+                              PO Duyệt ngay
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 rounded-xl font-semibold cursor-pointer">
+                              Yêu cầu sửa
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {request.status === "Đã gửi PO" && (
-                    <div className="p-3.5 rounded-2xl bg-purple-50/90 border border-purple-200 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  {/* BANNER LOẠI 2: PENDING - Tạm dừng theo đoạn chat của Designer khi viết @pending: (Màu Slate xám) */}
+                  {pendingClassification.type === "designer_pending" && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-100/95 border border-slate-300 text-xs text-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                       <div className="flex items-start gap-2.5">
-                        <Send className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                        <PauseCircle className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-bold text-purple-950 text-[12.5px] flex items-center gap-1.5">
-                            <span>Đang chờ PO phản hồi (SLA 24h)</span>
+                          <p className="font-bold text-slate-900 text-[13px] flex items-center gap-1.5 flex-wrap">
+                            <span>Trạng thái: Pending</span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-200 text-[10px] font-extrabold text-slate-700 uppercase tracking-wide border border-slate-300/80">
+                              Tạm dừng theo yêu cầu
+                            </span>
                           </p>
-                          <p className="text-purple-800 text-[11px] mt-0.5">
-                            Designer đã gửi bài toán cho PO xem xét {request.sent_to_po_at ? `vào lúc ${new Date(request.sent_to_po_at).toLocaleString("vi-VN")}` : ""}. Nếu sau 1 ngày chưa phản hồi, hệ thống sẽ tự động chuyển sang "PO pending".
+                          <div className="mt-1 space-y-0.5">
+                            <p className="text-xs text-slate-900 font-semibold flex items-center gap-1.5 flex-wrap">
+                              <span className="text-slate-500 font-normal">Lý do:</span>
+                              <span className="text-[#1057FB] bg-blue-50/90 px-2 py-0.5 rounded-md border border-blue-200/80 font-medium">
+                                {pendingClassification.reason || "Tạm dừng theo yêu cầu của Designer"}
+                              </span>
+                            </p>
+                            <p className="text-[11.5px] text-slate-500">
+                              Bài toán đang ở trạng thái tạm dừng, đồng hồ theo dõi tiến độ SLA được đóng băng.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleDesignerResumeUpdate}
+                          className="h-7.5 px-3 text-xs bg-white hover:bg-slate-200/80 text-slate-800 border-slate-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          title="Tiếp tục thực hiện bài toán"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Tiếp tục làm</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BANNER 3: Đang chờ PO phản hồi SLA 24h (Hiện ngay khi Designer gửi @SendToPO: trong 24h đầu) */}
+                  {poWaitInfo.showBanner1 && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-purple-50/90 border border-purple-200 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <Send className="w-4 h-4 text-purple-600 shrink-0 mt-0.5 animate-pulse" />
+                        <div>
+                          <p className="font-bold text-purple-950 text-[13px] flex items-center gap-1.5 flex-wrap">
+                            <span>Đang chờ PO phản hồi (SLA 24h)</span>
+                            <span className="px-2 py-0.5 rounded-full bg-purple-200/80 text-[10px] font-extrabold text-purple-900 uppercase tracking-wide border border-purple-300/80">
+                              Còn {poWaitInfo.hoursRemaining}h
+                            </span>
+                          </p>
+                          <p className="text-purple-800 text-xs mt-1 leading-relaxed">
+                            Designer đã gửi bài toán cho PO xem xét {poWaitInfo.sentTimeStr ? `vào lúc ${poWaitInfo.sentTimeStr}` : ""}. Đang trong thời hạn 24h chờ PO phản hồi. Nếu sau 24h chưa duyệt, hệ thống sẽ tự động chuyển sang PO Pending.
                           </p>
                         </div>
                       </div>
-                      {(session?.role === "PO" || isAuthor) && (
-                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                          <Button size="sm" onClick={handlePoApprove} className="h-7 px-3 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
-                            PO Duyệt
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7 px-2.5 text-[11px] bg-white text-purple-800 border-purple-200 rounded-xl font-semibold cursor-pointer">
-                            Yêu cầu sửa
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                        {/* Nút dành cho Designer: Gỡ trạng thái cho PO bằng cách bấm Tiếp tục update */}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleDesignerResumeUpdate}
+                          className="h-7.5 px-3 text-xs bg-white hover:bg-purple-100 text-purple-900 border-purple-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          title="Gỡ trạng thái chờ PO để tiếp tục cập nhật bài toán"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Tiếp tục update</span>
+                        </Button>
+
+                        {/* Nút dành cho PO / Tác giả */}
+                        {(session?.role === "PO" || isAuthor) && (
+                          <>
+                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs">
+                              PO Duyệt
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-purple-800 border-purple-200 rounded-xl font-semibold cursor-pointer">
+                              Yêu cầu sửa
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1294,10 +2171,10 @@ export default function RequestDetail({
                     )}
                   </div>
 
-                  {/* ClickUp Task Properties Grid (Status is Khâu UX, Dates is Start -> Estimate End Date, Assignees, Priority) */}
+                  {/* ClickUp Task Properties Grid (Status replaces Khâu UX, Dates, Assignees, Priority) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 py-5 border-y border-slate-100 text-xs">
                     
-                    {/* 1. Status (Chính xác là request.status - Đã gửi PO, Đang thực hiện, PO pending, Hoàn thành, ...) */}
+                    {/* 1. Status (Chính là Khâu UX: Phân loại, Discovery, User Flow, UI Design, Prototype, Bàn giao) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
                         <Target className="w-4 h-4 text-slate-400" />
@@ -1305,68 +2182,81 @@ export default function RequestDetail({
                       </div>
                       <div className="flex-1 relative">
                         {(() => {
-                          const displayPhase = request.current_phase || request.status
+                          const displayPhase = request.current_phase || "Khâu 1. Phân loại"
                           const cfg = getStatusConfig(displayPhase)
-                          const isActive = request.status === "Đang thực hiện" || Boolean(request.current_phase)
                           return (
-                            <button
-                              type="button"
-                              onClick={() => setOpenDropdown(openDropdown === "status" ? null : "status")}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0 ${isActive ? "animate-pulse" : ""}`} />
-                              <span>{displayPhase}</span>
-                            </button>
+                            <>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenDropdown(openDropdown === "phase" ? null : "phase")}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                  <span>{displayPhase}</span>
+                                </button>
+
+                                {pendingClassification.isPending && (
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${pendingClassification.badgeClasses.bg} ${pendingClassification.badgeClasses.text} ${pendingClassification.badgeClasses.border} shadow-2xs`}
+                                    title={pendingClassification.type === "po_pending" ? "Quá hạn 24h PO chưa phản hồi duyệt" : `Pending: ${pendingClassification.reason}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${pendingClassification.badgeClasses.dot} shrink-0`} />
+                                    <span>{pendingClassification.label}</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Phase Dropdown Popover */}
+                              <AnimatePresence>
+                                {openDropdown === "phase" && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                                    className="absolute top-full left-0 mt-1.5 z-50 w-64 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden select-none"
+                                  >
+                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between border-b border-slate-100 mb-1">
+                                      <span>Trạng thái bài toán (Khâu UX)</span>
+                                      <span className="text-[9px] font-semibold text-slate-400">Đồng bộ SLA</span>
+                                    </div>
+                                    {adminPhases.map((phase, pIdx) => {
+                                      const isCurrent = request.current_phase === phase.key || (!request.current_phase && pIdx === 0)
+                                      const phaseCfg = getStatusConfig(phase.key)
+                                      return (
+                                        <button
+                                          key={`drop-phase-${phase.key}`}
+                                          type="button"
+                                          onClick={() => handleUpdatePhase(phase.key, phase.progress)}
+                                          className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-50/60 cursor-pointer text-xs transition-colors group ${
+                                            isCurrent ? "bg-blue-50/80 font-bold text-[#1057FB]" : "text-slate-700 font-medium"
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <span className={`w-2 h-2 rounded-full ${phaseCfg.inlineClasses?.dot || "bg-blue-500"}`} />
+                                            <span className={isCurrent ? "font-bold text-[#1057FB]" : "text-slate-800"}>
+                                              {phase.label}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-mono text-slate-400 font-semibold group-hover:text-[#1057FB]">
+                                              {phase.progress}%
+                                            </span>
+                                            {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                                          </div>
+                                        </button>
+                                      )
+                                    })}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </>
                           )
                         })()}
-
-                        {/* Status Dropdown Popover - Dùng duy nhất bộ Khâu quy trình từ Admin Settings */}
-                        <AnimatePresence>
-                          {openDropdown === "status" && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 mt-1.5 z-50 w-64 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
-                            >
-                              <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between border-b border-slate-100 mb-1">
-                                <span>Khâu quy trình (Admin)</span>
-                                <span className="text-[9px] font-semibold text-slate-400">Đồng bộ SLA</span>
-                              </div>
-                              {adminPhases.map((phase, pIdx) => {
-                                const isCurrent = request.current_phase === phase.key || (request.status === phase.key) || (!request.current_phase && pIdx === 0 && (request.status === "Đang phân loại" || request.status === "Phân loại"))
-                                const phaseCfg = getStatusConfig(phase.key)
-                                return (
-                                  <button
-                                    key={`drop-phase-${phase.key}`}
-                                    type="button"
-                                    onClick={() => handleUpdatePhase(phase.key, phase.progress)}
-                                    className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-50/60 cursor-pointer text-xs transition-colors group ${
-                                      isCurrent ? "bg-blue-50/80 font-bold text-[#1057FB]" : "text-slate-700 font-medium"
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span className={`w-2 h-2 rounded-full ${phaseCfg.inlineClasses?.dot || "bg-blue-500"}`} />
-                                      <span className={isCurrent ? "font-bold text-[#1057FB]" : "text-slate-800"}>
-                                        {phase.label}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-mono text-slate-400 font-semibold group-hover:text-[#1057FB]">
-                                        {phase.progress}%
-                                      </span>
-                                      {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                                    </div>
-                                  </button>
-                                )
-                              })}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
                       </div>
                     </div>
 
-                    {/* 2. Assignees (Click to select - Support Unassigned State) */}
+                    {/* 2. Assignees (Click to select - Support Multi-Assignees) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
                         <UserCheck className="w-4 h-4 text-slate-400" />
@@ -1376,13 +2266,33 @@ export default function RequestDetail({
                         <button
                           type="button"
                           onClick={() => setOpenDropdown(openDropdown === "assignee" ? null : "assignee")}
-                          className="flex items-center gap-2 min-w-0 p-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                          className="flex items-center gap-2 min-w-0 p-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer max-w-full"
                         >
                           {isAssigned ? (
-                            <>
-                              <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
-                              <span className="font-bold text-slate-900 truncate text-xs">{displayName}</span>
-                            </>
+                            <div className="flex items-center gap-2 min-w-0 max-w-full">
+                              {localAssignees.length === 1 ? (
+                                <>
+                                  <UserAvatar name={localAssignees[0]} avatarUrl={getDesignerAvatar(localAssignees[0])} size="xs" />
+                                  <span className="font-bold text-slate-900 truncate text-xs">{localAssignees[0]}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center -space-x-2 overflow-hidden shrink-0">
+                                    {localAssignees.slice(0, 3).map((name, i) => (
+                                      <div key={`assignee-av-${name}-${i}`} className="ring-2 ring-white rounded-full">
+                                        <UserAvatar name={name} avatarUrl={getDesignerAvatar(name)} size="xs" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <span className="font-bold text-slate-900 truncate text-xs" title={localAssignees.join(", ")}>
+                                    {localAssignees.join(", ")}
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
+                                    {localAssignees.length}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           ) : (
                             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 text-slate-500 hover:text-[#1057FB] hover:border-blue-400 hover:bg-blue-50/50 transition-all text-xs font-semibold">
                               <User className="w-3.5 h-3.5 text-slate-400" />
@@ -1391,19 +2301,41 @@ export default function RequestDetail({
                           )}
                         </button>
 
-                        {/* Assignee Dropdown Popover */}
+                        {/* Assignee Dropdown Popover (Multi-Select) */}
                         <AnimatePresence>
                           {openDropdown === "assignee" && (
                             <motion.div
                               initial={{ opacity: 0, y: 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden select-none"
+                              className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[460px]"
                             >
                               {/* Header & Search Input */}
-                              <div className="px-3 pt-1.5 pb-2 border-b border-slate-100 space-y-1.5">
-                                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                  Phân công Designer
+                              <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/50">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                                      Phân công Designer
+                                    </span>
+                                    {localAssignees.length > 0 && (
+                                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 text-[#1057FB] border border-blue-200">
+                                        {localAssignees.length} đã chọn
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10.5px] text-slate-400 font-medium truncate max-w-[110px]" title={`Squad: ${taskSquadName}`}>
+                                      Squad: <strong className="text-slate-700">{taskSquadName}</strong>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenDropdown(null)}
+                                      className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                      title="Đóng"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                                 <div className="relative">
                                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1414,7 +2346,7 @@ export default function RequestDetail({
                                     onChange={(e) => setAssigneeSearchQuery(e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                     autoFocus
-                                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#1057FB] rounded-lg outline-none transition-all placeholder:text-slate-400 text-slate-800"
+                                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 focus:border-[#1057FB] rounded-lg outline-none transition-all placeholder:text-slate-400 text-slate-800 shadow-2xs"
                                   />
                                   {assigneeSearchQuery && (
                                     <button
@@ -1428,59 +2360,172 @@ export default function RequestDetail({
                                 </div>
                               </div>
 
-                              {/* Designer List with Unassign Option */}
-                              <div className="max-h-60 overflow-y-auto py-1 divide-y divide-slate-50">
+                              {/* Designer List with Unassign Option & 2 Categorized Sections */}
+                              <div className="flex-1 overflow-y-auto py-1 divide-y divide-slate-50">
+                                {/* Gợi ý thông minh: Nếu task chưa gán đúng nhân sự phụ trách squad */}
+                                {squadDesigners.length > 0 && !localAssignees.some((name) => squadDesigners.some((sd) => matchesPerson(name, sd))) && (
+                                  <div className="p-2.5 mx-2.5 my-1.5 bg-blue-50/90 border border-blue-200/90 rounded-xl text-[11px] text-blue-900 flex items-center justify-between gap-2 shadow-2xs">
+                                    <div className="min-w-0 flex-1">
+                                      <span className="font-bold text-blue-950">Phụ trách {taskSquadName}:</span>{" "}
+                                      <span className="font-semibold text-blue-800">{squadDesigners.map((d) => d.name).join(", ")}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveAssignees([squadDesigners[0].name])}
+                                      className="px-2 py-1 bg-[#1057FB] hover:bg-blue-700 text-white rounded-lg font-bold text-[10.5px] shrink-0 cursor-pointer transition-colors shadow-2xs"
+                                    >
+                                      Gán {squadDesigners[0].name}
+                                    </button>
+                                  </div>
+                                )}
+
                                 {/* Option 0: Unassign / Chưa phân công */}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    handleUpdateAssignee("")
-                                    setAssigneeSearchQuery("")
+                                    handleClearAssignees()
                                   }}
                                   className="w-full px-3 py-2 text-left flex items-center gap-2.5 hover:bg-slate-50 transition-colors cursor-pointer text-xs"
                                 >
-                                  <div className="w-7 h-7 rounded-full border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                                  <div className="w-6 h-6 rounded-full border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
                                     <User className="w-3.5 h-3.5" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="font-semibold text-slate-700 truncate">Chưa phân công</p>
-                                    <p className="text-[10px] text-slate-400">Để trống chưa chỉ định nhân sự</p>
+                                    <p className="text-[10px] text-slate-400">Bỏ chọn tất cả nhân sự</p>
                                   </div>
                                   {!isAssigned && <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[2.5]" />}
                                 </button>
 
-                                {DESIGNER_OPTIONS.filter((des) => {
-                                  if (!assigneeSearchQuery.trim()) return true
-                                  const q = assigneeSearchQuery.toLowerCase().trim()
-                                  return des.name.toLowerCase().includes(q) || des.role.toLowerCase().includes(q)
-                                }).length === 0 ? (
-                                  <div className="px-3 py-4 text-center text-xs text-slate-400 font-medium">
-                                    Không tìm thấy designer phù hợp
-                                  </div>
-                                ) : (
-                                  DESIGNER_OPTIONS.filter((des) => {
+                                {(() => {
+                                  const filterByQuery = (d: (typeof availableDesigners)[0]) => {
                                     if (!assigneeSearchQuery.trim()) return true
                                     const q = assigneeSearchQuery.toLowerCase().trim()
-                                    return des.name.toLowerCase().includes(q) || des.role.toLowerCase().includes(q)
-                                  }).map((des) => (
-                                    <button
-                                      key={des.name}
-                                      type="button"
-                                      onClick={() => {
-                                        handleUpdateAssignee(des.name)
-                                        setAssigneeSearchQuery("")
-                                      }}
-                                      className="w-full px-3 py-2 text-left flex items-center gap-2.5 hover:bg-slate-50 transition-colors cursor-pointer text-xs"
-                                    >
-                                      <UserAvatar name={des.name} avatarUrl={des.avatar} size="md" />
-                                      <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-slate-900 truncate">{des.name}</p>
-                                        <p className="text-[10px] text-slate-400">{des.role}</p>
+                                    return (
+                                      d.name.toLowerCase().includes(q) ||
+                                      d.role.toLowerCase().includes(q) ||
+                                      Boolean(d.squad && d.squad.toLowerCase().includes(q))
+                                    )
+                                  }
+
+                                  const filteredSquadDesigners = squadDesigners.filter(filterByQuery)
+                                  const filteredSupportingDesigners = supportingDesigners.filter(filterByQuery)
+
+                                  const renderItem = (des: (typeof availableDesigners)[0], isSquadRole: boolean) => {
+                                    const isSelected = localAssignees.some(
+                                      (name) =>
+                                        name.toLowerCase().trim() === des.name.toLowerCase().trim() ||
+                                        Boolean(des.email && name.toLowerCase().includes(des.email.toLowerCase().trim()))
+                                    )
+
+                                    return (
+                                      <button
+                                        key={des.name}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleToggleAssignee(des.name)
+                                        }}
+                                        className={`w-full px-3 py-2 text-left flex items-center gap-2.5 transition-colors cursor-pointer text-xs ${
+                                          isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
+                                        }`}
+                                      >
+                                        <div
+                                          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+                                            isSelected
+                                              ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                                              : "border-slate-300 bg-white"
+                                          }`}
+                                        >
+                                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                        </div>
+                                        <UserAvatar name={des.name} avatarUrl={des.avatar} size="sm" />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <p className={`font-bold truncate ${isSelected ? "text-blue-900" : "text-slate-900"}`}>{des.name}</p>
+                                            {isSquadRole ? (
+                                              <span className="text-[9.5px] font-semibold text-[#1057FB] bg-blue-50 border border-blue-200/80 px-1.5 py-0.2 rounded shrink-0">
+                                                Phụ trách Squad
+                                              </span>
+                                            ) : (
+                                              <span className="text-[9.5px] font-medium text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.2 rounded shrink-0">
+                                                Hỗ trợ
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-[10px] text-slate-400 truncate">
+                                            {des.role}{des.squad ? ` • ${des.squad}` : ""}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    )
+                                  }
+
+                                  if (filteredSquadDesigners.length === 0 && filteredSupportingDesigners.length === 0) {
+                                    return (
+                                      <div className="px-3 py-5 text-center text-xs text-slate-400 font-medium">
+                                        Không tìm thấy designer phù hợp
                                       </div>
-                                      {displayName === des.name && <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[2.5]" />}
-                                    </button>
-                                  ))
+                                    )
+                                  }
+
+                                  return (
+                                    <>
+                                      {/* Phần 1: Designer phụ trách squad */}
+                                      {filteredSquadDesigners.length > 0 && (
+                                        <div className="pt-1">
+                                          <div className="px-3 py-1 bg-blue-50/70 border-y border-blue-100/80 text-[10px] font-bold uppercase tracking-wider text-[#1057FB] flex items-center justify-between">
+                                            <span>Designer phụ trách Squad ({taskSquadName})</span>
+                                            <span className="bg-blue-200/80 text-[#1057FB] px-1.5 py-0.2 rounded-full font-bold text-[9.5px]">
+                                              {filteredSquadDesigners.length}
+                                            </span>
+                                          </div>
+                                          <div className="divide-y divide-slate-50">
+                                            {filteredSquadDesigners.map((d) => renderItem(d, true))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Phần 2: Designer hỗ trợ (ngoài squad) */}
+                                      {filteredSupportingDesigners.length > 0 && (
+                                        <div className="pt-1 border-t border-slate-100">
+                                          <div className="px-3 py-1 bg-slate-50/90 border-y border-slate-200/70 text-[10px] font-bold uppercase tracking-wider text-slate-600 flex items-center justify-between">
+                                            <span>Designer hỗ trợ (Ngoài Squad)</span>
+                                            <span className="bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded-full font-bold text-[9.5px]">
+                                              {filteredSupportingDesigners.length}
+                                            </span>
+                                          </div>
+                                          <div className="divide-y divide-slate-50">
+                                            {filteredSupportingDesigners.map((d) => renderItem(d, false))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  )
+                                })()}
+                              </div>
+
+                              {/* Sticky Footer Toolbar */}
+                              <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/90 flex items-center justify-between gap-2 shrink-0">
+                                {localAssignees.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleClearAssignees}
+                                    className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                                  >
+                                    Bỏ chọn ({localAssignees.length})
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">Chọn 1 hoặc nhiều người</span>
                                 )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => setOpenDropdown(null)}
+                                  className="h-7 text-xs px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium cursor-pointer shadow-2xs"
+                                >
+                                  Hoàn tất
+                                </Button>
                               </div>
                             </motion.div>
                           )}
@@ -1488,25 +2533,25 @@ export default function RequestDetail({
                       </div>
                     </div>
 
-                    {/* 3. Dates (Bắt đầu nhận task -> Estimate End Date trên 1 dòng) */}
+                    {/* 3. Dates (Lịch trình thiết kế UX: Bắt đầu -> Hạn hoàn thành thiết kế) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0" title="Lịch trình thiết kế UX của Designer">
                         <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>Dates</span>
+                        <span>Hạn UX</span>
                       </div>
                       <div className="flex-1 relative flex items-center gap-2 font-medium text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
                         <span className="text-slate-500 flex items-center gap-1 shrink-0 whitespace-nowrap" title="Thời gian Design bắt đầu nhận task">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{request.submitted_at || "Start"}</span>
+                          <span>{request.submitted_at || "Bắt đầu"}</span>
                         </span>
+                        <span className="text-slate-300 font-bold">→</span>
                         <button
                           type="button"
                           onClick={() => setOpenDropdown(openDropdown === "date" ? null : "date")}
-                          className="text-blue-600 font-bold flex items-center gap-1 hover:bg-blue-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
-                          title="Estimate End Date (Bấm để đổi hạn chót)"
+                          className="text-[#1057FB] font-bold flex items-center gap-1 bg-blue-50/80 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                          title="Hạn hoàn thành thiết kế UX (Design End Date - Bấm để đổi hạn)"
                         >
-                          <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                          <span>{customDeadline || request.expected_deadline || "Estimate End Date"}</span>
+                          <Calendar className="w-3.5 h-3.5 text-[#1057FB] shrink-0" />
+                          <span>{customDeadline || "Hạn thiết kế"}</span>
                         </button>
 
                         {/* ReUI Date Picker Popover */}
@@ -1520,9 +2565,12 @@ export default function RequestDetail({
                             >
                               {/* Header Month/Year Selector */}
                               <div className="flex items-center justify-between mb-3 px-1">
-                                <span className="text-xs font-extrabold text-slate-900">
-                                  {monthNamesVi[calMonth]} {calYear}
-                                </span>
+                                <div>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hạn thiết kế UX</span>
+                                  <span className="text-xs font-extrabold text-slate-900">
+                                    {monthNamesVi[calMonth]} {calYear}
+                                  </span>
+                                </div>
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
@@ -1647,22 +2695,23 @@ export default function RequestDetail({
                               <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
                                 Độ ưu tiên
                               </div>
-                              {PRIORITY_OPTIONS.map((pr) => (
-                                <button
-                                  key={pr.value}
-                                  type="button"
-                                  onClick={() => {
-                                    setCurrentPriority(pr.value)
-                                    setOpenDropdown(null)
-                                    toast.success(`Đã cập nhật độ ưu tiên: ${pr.label}`)
-                                  }}
-                                  className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 cursor-pointer text-xs font-semibold text-slate-700"
-                                >
-                                  <Flag className={`w-3.5 h-3.5 ${pr.flagFill}`} />
-                                  <span className="flex-1">{pr.label}</span>
-                                  {currentPriority === pr.value && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                                </button>
-                              ))}
+                              {PRIORITY_OPTIONS.map((pr) => {
+                                const isSelected = (currentPriority || "").toLowerCase() === pr.value.toLowerCase()
+                                return (
+                                  <button
+                                    key={pr.value}
+                                    type="button"
+                                    onClick={() => handleUpdatePriority(pr.value)}
+                                    className={`w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 cursor-pointer text-xs font-semibold ${
+                                      isSelected ? "text-slate-900 bg-slate-50/80" : "text-slate-700"
+                                    }`}
+                                  >
+                                    <Flag className={`w-3.5 h-3.5 ${pr.flagFill}`} />
+                                    <span className="flex-1">{pr.label}</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                  </button>
+                                )
+                              })}
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -1671,251 +2720,236 @@ export default function RequestDetail({
 
                   </div>
 
-                  {/* 📋 TÀI LIỆU ĐẦU BÀI TỪ PO (PO REQUIREMENTS SPEC - REVIEW SHEET STYLE) */}
-                  <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs space-y-0">
-                    {/* Section Header with Role Switcher / PO Edit Trigger */}
-                    <div className="px-4 sm:px-5 py-3 bg-slate-50/90 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-[#1057FB]" />
-                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                          ĐẦU BÀI TỪ PRODUCT OWNER (PO SPEC)
+                  {/* 📋 ĐẦU BÀI TỪ PRODUCT OWNER (CLEAN & MINIMALIST CANVAS LAYOUT - KHÔNG NHIỀU KHỐI HỘP) */}
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 space-y-5 shadow-2xs">
+                    {/* Header: Title + Subline metadata + Actions */}
+                    <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                            Đầu bài từ Product Owner
+                          </h2>
+                          {(() => {
+                            const rawSq = (request.squad_name || request.preferred_squad || "").trim()
+                            const prod = (request.product || "").trim().toLowerCase()
+                            const hasSq = Boolean(rawSq && rawSq.toLowerCase() !== prod && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad")
+                            const squadLabel = hasSq ? rawSq : "Chưa phân squad"
+                            return (
+                              <span className="text-xs sm:text-[13px] font-medium text-slate-600 flex items-center gap-1.5 flex-wrap">
+                                <span>• {request.product || "App MBBank"}</span>
+                                <span>•</span>
+                                <span className={hasSq ? "text-indigo-600 font-semibold" : "text-slate-400 italic font-normal"}>
+                                  {squadLabel}
+                                </span>
+                                <span>• {request.request_type || "Yêu cầu UX"}</span>
+                              </span>
+                            )
+                          })()}
+                        </div>
+                        <p className="text-xs sm:text-[13.5px] text-slate-600 flex items-center gap-2 flex-wrap">
+                          <span>
+                            Người tạo: <strong className="text-slate-900 font-semibold">{request.requester_name || "PO"}</strong>
+                            {request.requester_email && (
+                              <span className="text-slate-500 font-mono font-normal"> ({request.requester_email})</span>
+                            )}
+                          </span>
+                          {request.expected_deadline && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span>
+                                Release dự kiến: <strong className="text-rose-600 font-mono font-bold">{request.expected_deadline}</strong>
+                                {request.deadline_reason && (
+                                  <span className="text-slate-500 font-normal"> ({request.deadline_reason})</span>
+                                )}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      {isAuthor ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowPoEditModal(true)}
+                          className="h-9 px-3.5 text-xs sm:text-[13px] font-semibold rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Chỉnh sửa đầu bài</span>
+                        </Button>
+                      ) : (
+                        <span 
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 shrink-0" 
+                          title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) mới có quyền sửa nội dung đầu bài.`}
+                        >
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Chỉ tác giả được sửa</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 1. Mô tả nhu cầu UX & Luồng nghiệp vụ */}
+                    <div className="space-y-1.5">
+                      <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide block">
+                        Mô tả nhu cầu UX & Luồng nghiệp vụ
+                      </span>
+                      <p className="text-sm sm:text-base text-slate-900 leading-relaxed whitespace-pre-wrap font-normal">
+                        {request.description || "Chưa có mô tả chi tiết bài toán từ PO."}
+                      </p>
+                    </div>
+
+                    {/* 2. Tiêu chuẩn nghiệp vụ (Key-Value dạng danh sách sạch sẽ, chữ to rõ ràng) */}
+                    <div className="pt-3.5 border-t border-slate-100 space-y-2.5 text-sm sm:text-[14.5px]">
+                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
+                        <span className="text-slate-700 font-semibold shrink-0">Lý do cần thiết:</span>
+                        <span className={`leading-relaxed ${request.business_need ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
+                          {request.business_need || "Chưa cung cấp lý do kinh doanh"}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* Edit Button (Available if isAuthor) */}
-                        {isAuthor ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => setShowPoEditModal(true)}
-                            className="h-7 px-2.5 text-xs font-bold bg-[#1057FB] hover:bg-blue-700 text-white rounded-lg flex items-center gap-1 cursor-pointer shadow-2xs"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>Chỉnh sửa đầu bài</span>
-                          </Button>
-                        ) : (
-                          <span 
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs" 
-                            title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) mới có quyền sửa nội dung đầu bài.`}
-                          >
-                            <Lock className="w-3 h-3 text-slate-400" />
-                            <span>Chỉ tác giả đề bài được sửa</span>
-                          </span>
-                        )}
+                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
+                        <span className="text-slate-700 font-semibold shrink-0">Vấn đề người dùng:</span>
+                        <span className={`leading-relaxed ${request.user_problem ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
+                          {request.user_problem || "Chưa cung cấp vấn đề người dùng"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
+                        <span className="text-slate-700 font-semibold shrink-0">Đối tượng mục tiêu:</span>
+                        <span className={`leading-relaxed ${request.target_user ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
+                          {request.target_user || "Người dùng chung"}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Structured Definition Body (Review Sheet Style) */}
-                    <div className="p-4 sm:p-5 space-y-4 text-xs">
-                      {/* Product & Request Type */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-slate-100">
-                        <div>
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                            Nền tảng / Sản phẩm
-                          </span>
-                          <span className="font-bold text-slate-900 text-xs sm:text-sm">
-                            {request.product || "Mobile App"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                            Loại yêu cầu
-                          </span>
-                          <span className="font-bold text-slate-900 text-xs sm:text-sm">
-                            {request.request_type || "Tính năng mới"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Requester Info */}
-                      <div className="pb-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                            Người tạo yêu cầu (PO / PM)
-                          </span>
-                          <span className="font-semibold text-slate-800">
-                            {request.requester_name}
-                          </span>
-                          <span className="text-slate-400 font-mono text-[11px] ml-1.5">
-                            ({request.requester_email || "po@mbbank.com.vn"})
-                          </span>
-                        </div>
-                        <Badge variant="outline" className="text-[10px] text-slate-600 bg-slate-50">
-                          {request.department || "Khối Ngân hàng số"}
-                        </Badge>
-                      </div>
-
-                      {/* UX Scope & Detailed Description */}
-                      <div>
-                        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                          Mô tả nhu cầu UX & Luồng nghiệp vụ
+                    {/* 3. Tài liệu & Tệp đính kèm (gọn gàng, chữ to rõ ràng) */}
+                    <div className="pt-3.5 border-t border-slate-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                          <Paperclip className="w-4 h-4 text-slate-500" />
+                          <span>Tài liệu & Tệp đính kèm ({(request.attachments?.length || 0) + (request.doc_links?.length || 0)})</span>
                         </span>
-                        <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/80 font-normal text-slate-800 whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] break-all max-w-full overflow-hidden">
-                          {request.description || "Chưa có mô tả chi tiết bài toán từ PO."}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => taskFileInputRef.current?.click()}
+                          disabled={isUploadingTaskAttachment}
+                          className="text-xs sm:text-sm font-semibold text-[#1057FB] hover:text-blue-700 flex items-center gap-1 cursor-pointer hover:underline"
+                        >
+                          <UploadCloud className="w-4 h-4" />
+                          <span>{isUploadingTaskAttachment ? "Đang tải..." : "+ Tải thêm tệp"}</span>
+                        </button>
+                        <input
+                          ref={taskFileInputRef}
+                          type="file"
+                          multiple
+                          onChange={handleUploadTaskFile}
+                          className="hidden"
+                        />
                       </div>
 
-                      {/* Business Need & User Problem */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1 overflow-hidden">
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Lý do cần thiết (Business Need)
-                          </span>
-                          <p className="text-slate-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] break-all max-w-full">
-                            {request.business_need || "Chưa cung cấp lý do kinh doanh."}
-                          </p>
-                        </div>
+                      {/* Attachments List */}
+                      {((request.attachments && request.attachments.length > 0) || (request.doc_links && request.doc_links.length > 0)) ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {/* Files */}
+                          {request.attachments?.map((att, idx) => {
+                            const hasExt = att.name.includes(".")
+                            const ext = hasExt ? att.name.split(".").pop()?.toLowerCase() || "" : ""
+                            
+                            let iconEl = <FileText className="w-4.5 h-4.5 text-[#1057FB]" />
+                            let bgClass = "bg-blue-50 text-[#1057FB] border-blue-200/60"
+                            
+                            if (ext === "pdf") {
+                              iconEl = <FileText className="w-4.5 h-4.5 text-rose-600" />
+                              bgClass = "bg-rose-50 text-rose-600 border-rose-200/60"
+                            } else if (["doc", "docx"].includes(ext)) {
+                              iconEl = <FileText className="w-4.5 h-4.5 text-blue-600" />
+                              bgClass = "bg-blue-50 text-blue-600 border-blue-200/60"
+                            } else if (["xls", "xlsx", "csv"].includes(ext)) {
+                              iconEl = <FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600" />
+                              bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200/60"
+                            } else if (["png", "jpg", "jpeg", "svg", "webp", "gif"].includes(ext)) {
+                              iconEl = <ImageIcon className="w-4.5 h-4.5 text-purple-600" />
+                              bgClass = "bg-purple-50 text-purple-600 border-purple-200/60"
+                            } else if (["zip", "rar", "7z", "tar"].includes(ext)) {
+                              iconEl = <FileBox className="w-4.5 h-4.5 text-amber-600" />
+                              bgClass = "bg-amber-50 text-amber-600 border-amber-200/60"
+                            }
 
-                        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1 overflow-hidden">
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Vấn đề người dùng (User Problem)
-                          </span>
-                          <p className="text-slate-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] break-all max-w-full">
-                            {request.user_problem || "Chưa cung cấp vấn đề người dùng."}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Target User */}
-                      {request.target_user && (
-                        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                            Đối tượng mục tiêu (Target User)
-                          </span>
-                          <p className="font-medium text-slate-800">{request.target_user}</p>
-                        </div>
-                      )}
-
-                      {/* PO Attached Documentation & Files */}
-                      <div className="pt-2 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Paperclip className="w-3.5 h-3.5" />
-                            <span>TÀI LIỆU & TỆP ĐÍNH KÈM ({(request.attachments?.length || 0) + (request.doc_links?.length || 0)})</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => taskFileInputRef.current?.click()}
-                            disabled={isUploadingTaskAttachment}
-                            className="text-[11px] font-bold text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer bg-blue-50/70 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-100"
-                          >
-                            <UploadCloud className="w-3 h-3" />
-                            <span>{isUploadingTaskAttachment ? "Đang tải..." : "+ Tải thêm tệp"}</span>
-                          </button>
-                          <input
-                            ref={taskFileInputRef}
-                            type="file"
-                            multiple
-                            onChange={handleUploadTaskFile}
-                            className="hidden"
-                          />
-                        </div>
-
-                        {/* Attachments List */}
-                        {((request.attachments && request.attachments.length > 0) || (request.doc_links && request.doc_links.length > 0)) ? (
-                          <div className="space-y-1.5">
-                            {/* 1. Files from request.attachments */}
-                            {request.attachments?.map((att, idx) => {
-                              const hasExt = att.name.includes(".")
-                              const ext = hasExt ? att.name.split(".").pop()?.toLowerCase() || "" : ""
-                              
-                              let iconEl = <FileText className="w-4 h-4 text-[#1057FB]" />
-                              let bgClass = "bg-blue-50 border-blue-200/80"
-                              
-                              if (ext === "pdf") {
-                                iconEl = <FileText className="w-4 h-4 text-rose-600" />
-                                bgClass = "bg-rose-50 border-rose-200/80"
-                              } else if (["doc", "docx"].includes(ext)) {
-                                iconEl = <FileText className="w-4 h-4 text-blue-600" />
-                                bgClass = "bg-blue-50 border-blue-200/80"
-                              } else if (["xls", "xlsx", "csv"].includes(ext)) {
-                                iconEl = <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                                bgClass = "bg-emerald-50 border-emerald-200/80"
-                              } else if (["png", "jpg", "jpeg", "svg", "webp", "gif"].includes(ext)) {
-                                iconEl = <ImageIcon className="w-4 h-4 text-purple-600" />
-                                bgClass = "bg-purple-50 border-purple-200/80"
-                              } else if (["zip", "rar", "7z", "tar"].includes(ext)) {
-                                iconEl = <FileBox className="w-4 h-4 text-amber-600" />
-                                bgClass = "bg-amber-50 border-amber-200/80"
-                              }
-
-                              return (
-                                <div
-                                  key={`att-${idx}`}
-                                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-white hover:border-[#1057FB]/40 transition-all group shadow-2xs"
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className={`w-8 h-8 rounded-xl ${bgClass} flex items-center justify-center shrink-0 border shadow-2xs`}>
-                                      {iconEl}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="font-semibold text-slate-900 text-xs truncate group-hover:text-[#1057FB] transition-colors">{att.name}</p>
-                                      {att.size ? (
-                                        <p className="text-[10px] text-slate-400">{(att.size / 1024).toFixed(0)} KB · Google Drive</p>
-                                      ) : (
-                                        <p className="text-[10px] text-slate-400">Google Drive · Đính kèm</p>
-                                      )}
-                                    </div>
+                            return (
+                              <div
+                                key={`att-${idx}`}
+                                className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-[#1057FB]/40 transition-all group"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className={`w-9 h-9 rounded-xl ${bgClass} flex items-center justify-center shrink-0 border`}>
+                                    {iconEl}
                                   </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <a
-                                      href={att.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="p-1.5 rounded-lg text-slate-400 hover:text-[#1057FB] hover:bg-blue-50 transition-colors"
-                                      title="Xem / Tải file"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </a>
+                                  <div className="min-w-0 space-y-0.5">
+                                    <p className="font-semibold text-slate-900 text-sm sm:text-[14.5px] truncate group-hover:text-[#1057FB] transition-colors">{att.name}</p>
+                                    {att.size ? (
+                                      <p className="text-xs text-slate-500 font-medium">{(att.size / 1024).toFixed(0)} KB · Google Drive</p>
+                                    ) : (
+                                      <p className="text-xs text-slate-500 font-medium">Google Drive · Đính kèm</p>
+                                    )}
                                   </div>
                                 </div>
-                              )
-                            })}
-
-                            {/* 2. Links from request.doc_links (if not duplicated with attachments) */}
-                            {request.doc_links
-                              ?.filter((l) => !request.attachments?.some((a) => a.url === l))
-                              .map((link, idx) => (
                                 <a
-                                  key={`link-${idx}`}
-                                  href={link}
+                                  href={att.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-blue-50/50 hover:border-blue-200 text-[#1057FB] transition-all group"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-[#1057FB] transition-colors shrink-0"
+                                  title="Mở tệp"
                                 >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/80 text-[#1057FB] flex items-center justify-center shrink-0 shadow-2xs">
-                                      <Paperclip className="w-4 h-4" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <span className="font-mono text-[11px] truncate block text-slate-700 group-hover:text-[#1057FB] transition-colors">{link}</span>
-                                      <span className="text-[10px] text-slate-400">Liên kết trực tuyến</span>
-                                    </div>
-                                  </div>
-                                  <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-60 group-hover:opacity-100" />
+                                  <ExternalLink className="w-4 h-4" />
                                 </a>
-                              ))}
-                          </div>
-                        ) : (
-                          <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-slate-400">
-                            Chưa có tệp đính kèm nào. Bấm <strong>+ Tải thêm tệp</strong> để đính kèm từ máy tính.
-                          </div>
-                        )}
-                      </div>
+                              </div>
+                            )
+                          })}
+
+                          {/* Doc Links */}
+                          {request.doc_links
+                            ?.filter((l) => !request.attachments?.some((a) => a.url === l))
+                            .map((link, idx) => (
+                              <a
+                                key={`link-${idx}`}
+                                href={link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-[#1057FB]/40 transition-all group"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/60 text-[#1057FB] flex items-center justify-center shrink-0">
+                                    <Paperclip className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 space-y-0.5">
+                                    <span className="font-mono text-xs sm:text-[13px] truncate block text-slate-800 group-hover:text-[#1057FB] transition-colors font-medium">{link}</span>
+                                    <span className="text-xs text-slate-500">Liên kết trực tuyến</span>
+                                  </div>
+                                </div>
+                                <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#1057FB] shrink-0" />
+                              </a>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500 italic">
+                          Chưa có tài liệu hoặc tệp đính kèm.
+                        </p>
+                      )}
                     </div>
                   </div>
+
 
                     {/* Deliverables Sub-cards (ClickUp Linked Items Hub) */}
                     <div className="space-y-2.5 pt-2">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <h3 className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
                           <span>DELIVERABLES & TÀI LIỆU BÀN GIAO</span>
                         </h3>
                         <button
                           type="button"
                           onClick={() => setShowAddDeliverableModal(true)}
-                          className="text-xs font-bold text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer"
+                          className="text-xs sm:text-sm font-bold text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Thêm link</span>
@@ -1923,10 +2957,10 @@ export default function RequestDetail({
                       </div>
 
                       {/* Figma Item Card */}
-                      <div className="p-3 rounded-xl border border-slate-200 hover:border-purple-300 bg-white transition-all shadow-2xs flex items-center justify-between">
+                      <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 hover:border-purple-300 bg-white transition-all shadow-2xs flex items-center justify-between">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0 border border-purple-100">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0 border border-purple-100">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                               <path d="M5 5.5C5 3.567 6.567 2 8.5 2H12V9H8.5C6.567 9 5 7.433 5 5.5Z" fill="#F24E1E"/>
                               <path d="M12 2H15.5C17.433 2 19 3.567 19 5.5C19 7.433 17.433 9 15.5 9H12V2Z" fill="#FF7262"/>
                               <path d="M12 9H15.5C17.433 9 19 10.567 19 12.5C19 14.433 17.433 16 15.5 16H12V9Z" fill="#1ABCFE"/>
@@ -1935,8 +2969,8 @@ export default function RequestDetail({
                             </svg>
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-900">Figma Design Canvas</p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-xs">
+                            <p className="text-sm sm:text-[14.5px] font-bold text-slate-900">Figma Design Canvas</p>
+                            <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md">
                               {customDeliverables?.figma_url || "Chưa đính kèm liên kết Figma"}
                             </p>
                           </div>
@@ -1947,7 +2981,7 @@ export default function RequestDetail({
                             href={customDeliverables.figma_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs sm:text-sm transition-colors"
                           >
                             <span>Mở Canvas</span>
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -2126,7 +3160,7 @@ export default function RequestDetail({
                   </div>
 
                   {/* Activity History & Comments Timeline List */}
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+                  <div ref={activityContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
                     {displayedActivities.length === 0 ? (
                       <div className="py-8 text-center text-xs text-slate-400">
                         Không có hoạt động nào phù hợp bộ lọc.
@@ -2138,85 +3172,193 @@ export default function RequestDetail({
                         const olderItems = hasOlder ? displayedActivities.slice(0, displayedActivities.length - olderThreshold) : []
                         const recentItems = hasOlder ? displayedActivities.slice(displayedActivities.length - olderThreshold) : displayedActivities
 
+                        const renderRichCommentContent = (content?: string) => {
+                          if (!content) return null
+
+                          // Tách text theo URL: /(https?:\/\/[^\s]+)/g
+                          const urlRegex = /(https?:\/\/[^\s]+)/g
+                          const parts = content.split(urlRegex)
+
+                          return parts.map((part, index) => {
+                            if (/^https?:\/\//i.test(part)) {
+                              return (
+                                <a
+                                  key={`link-${index}`}
+                                  href={part}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[#1057FB] hover:text-[#0b40bd] hover:underline font-semibold break-all inline-flex items-center gap-1.5 bg-blue-50/90 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition-colors border border-blue-200 text-xs my-0.5 shadow-2xs"
+                                  title={part}
+                                >
+                                  <Paperclip className="w-3 h-3 shrink-0" />
+                                  <span>{part}</span>
+                                  <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-80" />
+                                </a>
+                              )
+                            }
+
+                            // Highlight cú pháp @SenToPO:, @SendToPO:, @SeToPO: hoặc @Pending:
+                            const mentionRegex = /(@se(?:n)?(?:d)?(?:_)?to(?:_)?po:|@(po_)?pending:)/gi
+                            if (mentionRegex.test(part)) {
+                              const subParts = part.split(mentionRegex)
+                              return subParts.map((sub, sIdx) => {
+                                if (/^@se(?:n)?(?:d)?(?:_)?to(?:_)?po:$/i.test(sub)) {
+                                  return (
+                                    <span
+                                      key={`mention-${index}-${sIdx}`}
+                                      className="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200/90 shadow-2xs"
+                                    >
+                                      {sub}
+                                    </span>
+                                  )
+                                }
+                                if (/^@(po_)?pending:$/i.test(sub)) {
+                                  return (
+                                    <span
+                                      key={`mention-${index}-${sIdx}`}
+                                      className="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200/90 shadow-2xs"
+                                    >
+                                      {sub}
+                                    </span>
+                                  )
+                                }
+                                return <span key={`sub-${index}-${sIdx}`}>{sub}</span>
+                              })
+                            }
+
+                            return <span key={`txt-${index}`}>{part}</span>
+                          })
+                        }
+
                         const renderSingleActivity = (event: ActivityEvent, keyPrefix: string | number) => {
                           const evtAvatar = getDesignerAvatar(event.author)
                           const reactions = commentReactions[event.id] || {}
                           const eventKey = event.id ? `evt-${event.id}-${keyPrefix}` : `evt-act-${keyPrefix}`
 
-                          // USER COMMENT CARD (ClickUp Style)
+                          // USER COMMENT CARD (ClickUp / Linear Modern Comment Card)
                           if (event.type === "comment") {
                             return (
-                              <div key={eventKey} className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 group hover:border-[#1057FB]/30 transition-all">
-                                <div className="flex items-center gap-2">
-                                  <UserAvatar name={event.author} avatarUrl={evtAvatar} size="sm" />
-                                  <span className="text-xs font-bold text-slate-900">{event.author}</span>
-                                  <span className="text-[11px] text-slate-400 font-normal">{event.timestamp}</span>
-                                </div>
+                              <div key={eventKey} className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 group hover:border-[#1057FB]/40 transition-all">
+                                <div className="flex items-start gap-3">
+                                  <UserAvatar name={event.author} avatarUrl={evtAvatar} size="md" className="shrink-0 mt-0.5 ring-2 ring-slate-100 shadow-2xs" />
+                                  <div className="min-w-0 flex-1 space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-slate-900">{event.author}</span>
+                                        {event.authorRole && (
+                                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                            event.authorRole === "PO" 
+                                              ? "bg-purple-50 text-purple-700 border-purple-200/80"
+                                              : event.authorRole === "Admin" || event.authorRole === "Design Owner"
+                                              ? "bg-slate-900 text-white border-slate-900"
+                                              : "bg-blue-50 text-[#1057FB] border-blue-200/80"
+                                          }`}>
+                                            {event.authorRole}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-xs text-slate-400 font-medium whitespace-nowrap">{event.timestamp}</span>
+                                    </div>
 
-                                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap pl-8">
-                                  {event.content}
-                                </p>
+                                    <div className="text-[13.5px] sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-normal">
+                                      {renderRichCommentContent(event.content)}
+                                    </div>
 
-                                {event.link && (
-                                  <div className="pl-8 pt-0.5">
-                                    <a
-                                      href={event.link}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-[#1057FB] text-[11px] hover:underline font-mono"
-                                    >
-                                      <Paperclip className="w-3 h-3" />
-                                      <span className="truncate max-w-[200px]">{event.link}</span>
-                                      <ExternalLink className="w-3 h-3" />
-                                    </a>
+                                    {(() => {
+                                      if (!event.link) return null
+                                      // Kiểm tra xem link này đã xuất hiện trong nội dung text chưa (hoặc có URL nào trong text trùng với link)
+                                      const contentText = (event.content || "").toLowerCase()
+                                      const linkUrl = event.link.trim().toLowerCase().replace(/\/$/, "")
+                                      const urlInContent = (contentText.match(/https?:\/\/[^\s]+/i)?.[0] || "").replace(/\/$/, "")
+
+                                      if (
+                                        contentText.includes(linkUrl) ||
+                                        (urlInContent && (urlInContent === linkUrl || urlInContent.includes(linkUrl) || linkUrl.includes(urlInContent)))
+                                      ) {
+                                        return null // Link đã được render đẹp trong nội dung comment, không lặp lại bên dưới
+                                      }
+
+                                      return (
+                                        <div className="pt-1">
+                                          <a
+                                            href={event.link}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-[#1057FB] text-xs font-semibold border border-blue-200/80 transition-colors group"
+                                          >
+                                            <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate max-w-[260px]">{event.link}</span>
+                                            <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-75 group-hover:opacity-100" />
+                                          </a>
+                                        </div>
+                                      )
+                                    })()}
                                   </div>
-                                )}
+                                </div>
                               </div>
                             )
                           }
 
-                          // SYSTEM EVENT ROW (ClickUp Bullet List Style - Top-Aligned)
+                          // SYSTEM EVENT ROW (Dạng text ngắn gọn, thanh lịch)
+                          const getDotColor = () => {
+                            if (event.type === "create") return "bg-emerald-500 ring-2 ring-emerald-100"
+                            if (event.type === "assignment") return "bg-blue-500 ring-2 ring-blue-100"
+                            if (event.type === "phase_change") return "bg-indigo-500 ring-2 ring-indigo-100"
+                            if (event.type === "deliverable") return "bg-purple-500 ring-2 ring-purple-100"
+                            const val = (event.toValue || "").toLowerCase()
+                            if (val.includes("hạn thiết kế") || val.includes("design end date")) return "bg-amber-500 ring-2 ring-amber-100"
+                            if (val.includes("đầu bài") || val.includes("po")) return "bg-purple-500 ring-2 ring-purple-100"
+                            if (val.includes("hoàn thành") || val.includes("duyệt")) return "bg-emerald-500 ring-2 ring-emerald-100"
+                            if (val.includes("tiến độ") || val.includes("khâu")) return "bg-blue-500 ring-2 ring-blue-100"
+                            return "bg-slate-400 ring-2 ring-slate-100"
+                          }
+
                           return (
-                            <div key={eventKey} className="flex items-start justify-between gap-2.5 py-1.5 px-1 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors">
+                            <div key={eventKey} className="flex items-start justify-between gap-2 py-1.5 px-2 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors">
                               <div className="flex items-start gap-2 min-w-0 flex-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0 mt-1.5" />
-                                <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${getDotColor()}`} />
+                                <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-medium">
                                   {event.type === "create" && (
                                     <>
-                                      <span>Đã khởi tạo yêu cầu cho</span>
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200/90">
+                                      <span className="font-bold text-slate-800">{event.author || "PO"}</span>
+                                      <span>đã khởi tạo yêu cầu cho</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200/90">
                                         {request.product || "Lending"}
                                       </span>
                                     </>
                                   )}
                                   {event.type === "assignment" && (
                                     <>
-                                      <span>Đã phân công Designer</span>
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-xs font-bold border border-blue-200/80">
+                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                      <span>đã phân công Designer</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-bold border border-blue-200/80">
                                         {event.toValue}
                                       </span>
                                     </>
                                   )}
                                   {event.type === "phase_change" && (
                                     <>
-                                      <span>Đã chuyển khâu từ</span>
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-xs font-semibold border border-blue-200/80">
+                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                      <span>đã chuyển khâu từ</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-semibold border border-blue-200/80">
                                         {event.fromValue || "Phân loại"}
                                       </span>
                                       <span>sang</span>
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/80">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-200/80">
                                         {event.toValue}
                                       </span>
                                     </>
                                   )}
                                   {event.type === "deliverable" && (
                                     <>
-                                      <span>Đã đính kèm</span>
+                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                      <span>đã đính kèm</span>
                                       <a
                                         href={event.link}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200/80 hover:underline"
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[11px] font-semibold border border-purple-200/80 hover:underline"
                                       >
                                         <Paperclip className="w-3 h-3" />
                                         <span>{event.title || "Tài liệu bàn giao"}</span>
@@ -2225,21 +3367,32 @@ export default function RequestDetail({
                                   )}
                                   {event.type === "status_change" && (
                                     <>
-                                      <span>Đã cập nhật trạng thái</span>
-                                      {event.fromValue && (
+                                      {event.fromValue ? (
                                         <>
-                                          <span>từ</span>
-                                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                                          {event.author && <span className="font-bold text-slate-800">{event.author}:</span>}
+                                          <span>Đã cập nhật trạng thái từ</span>
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200">
                                             {event.fromValue}
                                           </span>
-                                        </>
-                                      )}
-                                      {event.toValue && (
-                                        <>
                                           <span>sang</span>
-                                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200/80">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80">
                                             {event.toValue}
                                           </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {(() => {
+                                            const val = event.toValue || ""
+                                            const hasAuthor = event.author && val.toLowerCase().includes(event.author.toLowerCase())
+                                            return (
+                                              <>
+                                                {event.author && !hasAuthor && (
+                                                  <span className="font-bold text-slate-800">{event.author}:</span>
+                                                )}
+                                                <span className="text-slate-700 font-medium">{val}</span>
+                                              </>
+                                            )
+                                          })()}
                                         </>
                                       )}
                                     </>
@@ -2297,11 +3450,7 @@ export default function RequestDetail({
                       onChange={setNewCommentText}
                       onSubmit={handleSendComment}
                       submitting={submittingComment}
-                      placeholder="Nhập ghi chú hoặc trao đổi tiến độ bài toán..."
-                      linkValue={commentLink}
-                      onLinkChange={setCommentLink}
-                      showLinkInput={showLinkInput}
-                      onToggleLinkInput={() => setShowLinkInput(!showLinkInput)}
+                      placeholder="Nhập ghi chú hoặc trao đổi tiến độ bài toán (gõ @ để mở menu lệnh)..."
                       onSendToPo={(note) => handleSendToPo(note)}
                       onPending={(note) => handlePending(note)}
                     />
@@ -2332,7 +3481,11 @@ export default function RequestDetail({
                       className="inline-flex items-center gap-1.5 px-4 h-9 bg-[#1057FB] hover:bg-blue-700 text-white font-bold rounded-xl shadow-2xs text-xs"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Mở Figma</span>
+                      <span>
+                        {customDeliverables.figma_url.toLowerCase().includes("figma.com")
+                          ? "Mở Figma"
+                          : "Mở liên kết"}
+                      </span>
                     </a>
                   )}
                 </div>
@@ -2496,25 +3649,55 @@ export default function RequestDetail({
                   />
                 </div>
 
-                {/* 2. Nền tảng & Loại yêu cầu */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 2. Nền tảng, Squad nghiệp vụ & Loại yêu cầu (Được chọn như lúc nhập) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Nền tảng / Sản phẩm</label>
-                    <input
-                      type="text"
-                      value={poFormProduct}
-                      onChange={(e) => setPoFormProduct(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none focus:border-[#1057FB]"
-                    />
+                    <label className="font-bold text-slate-700 block mb-1">Nền tảng / Sản phẩm *</label>
+                    <div className="relative">
+                      <select
+                        value={poFormProduct}
+                        onChange={(e) => setPoFormProduct(e.target.value)}
+                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                      >
+                        <option value="" disabled>Chọn sản phẩm...</option>
+                        {editProductOptions.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Loại yêu cầu</label>
-                    <input
-                      type="text"
-                      value={poFormReqType}
-                      onChange={(e) => setPoFormReqType(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none focus:border-[#1057FB]"
-                    />
+                    <label className="font-bold text-slate-700 block mb-1">Squad nghiệp vụ</label>
+                    <div className="relative">
+                      <select
+                        value={poFormSquad}
+                        onChange={(e) => setPoFormSquad(e.target.value)}
+                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                      >
+                        <option value="">Chưa phân squad</option>
+                        {editSquadOptions.map((sq) => (
+                          <option key={sq} value={sq}>{sq}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Loại yêu cầu *</label>
+                    <div className="relative">
+                      <select
+                        value={poFormReqType}
+                        onChange={(e) => setPoFormReqType(e.target.value)}
+                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                      >
+                        <option value="" disabled>Chọn loại yêu cầu...</option>
+                        {editRequestTypeOptions.map((rt) => (
+                          <option key={rt} value={rt}>{rt}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
@@ -2551,16 +3734,69 @@ export default function RequestDetail({
                   </div>
                 </div>
 
-                {/* 5. Đối tượng mục tiêu */}
+                {/* 5. Đối tượng mục tiêu & Ngày release dự kiến */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Đối tượng mục tiêu</label>
+                    <div className="relative">
+                      <select
+                        value={poFormTargetUser}
+                        onChange={(e) => setPoFormTargetUser(e.target.value)}
+                        className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                      >
+                        <option value="">Chọn đối tượng mục tiêu...</option>
+                        {editTargetUserOptions.map((tu) => (
+                          <option key={tu} value={tu}>{tu}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    {poFormTargetUser === "Khác" && (
+                      <input
+                        type="text"
+                        placeholder="Nhập đối tượng mục tiêu tùy chỉnh..."
+                        onChange={(e) => setPoFormTargetUser(e.target.value)}
+                        className="w-full mt-1.5 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-[#1057FB]"
+                        autoFocus
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Ngày release dự kiến *</label>
+                    <input
+                      type="date"
+                      value={poFormExpectedDeadline}
+                      onChange={(e) => setPoFormExpectedDeadline(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none focus:border-[#1057FB] bg-white font-medium text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Lý do hạn chót / Mục tiêu Release */}
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Đối tượng mục tiêu (Target User)</label>
-                  <input
-                    type="text"
-                    value={poFormTargetUser}
-                    onChange={(e) => setPoFormTargetUser(e.target.value)}
-                    placeholder="Khách hàng cá nhân, Doanh nghiệp SME..."
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs outline-none focus:border-[#1057FB]"
-                  />
+                  <label className="font-bold text-slate-700 block mb-1">Lý do hạn chót / Sự kiện Release</label>
+                  <div className="relative">
+                    <select
+                      value={poFormDeadlineReason}
+                      onChange={(e) => setPoFormDeadlineReason(e.target.value)}
+                      className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 text-xs font-semibold outline-none focus:border-[#1057FB] bg-white text-slate-800 appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                    >
+                      <option value="">Chọn lý do hạn chót...</option>
+                      {editDeadlineReasonOptions.map((dr) => (
+                        <option key={dr} value={dr}>{dr}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  {poFormDeadlineReason === "Khác" && (
+                    <input
+                      type="text"
+                      placeholder="Nhập lý do hạn chót tùy chỉnh..."
+                      onChange={(e) => setPoFormDeadlineReason(e.target.value)}
+                      className="w-full mt-1.5 p-2 rounded-lg border border-slate-200 text-xs outline-none focus:border-[#1057FB]"
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 {/* 6. Link tài liệu đính kèm từ PO */}

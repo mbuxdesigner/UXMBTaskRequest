@@ -147,7 +147,7 @@ export default function TongQuanPage() {
 
     // Status breakdown for horizontal segmented bar
     const segments = [
-      { label: "Chưa gán", count: unassigned, color: "bg-zinc-400" },
+      { label: "Chưa gán", count: unassigned, color: "bg-slate-400" },
       { label: "Khảo sát & Flow", count: requests.filter(r => r.current_phase === "Discovery" || r.current_phase === "User Flow").length, color: "bg-indigo-500" },
       { label: "Đang làm UI/Proto", count: inProgress, color: "bg-[#1057FB]" },
       { label: "Đã hoàn thành", count: completed, color: "bg-emerald-500" },
@@ -211,7 +211,7 @@ export default function TongQuanPage() {
   }, [requests])
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-zinc-900 min-h-screen animate-in fade-in-50 duration-200 pb-16">
+    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-slate-900 min-h-screen animate-in fade-in-50 duration-200 pb-16">
       {/* =========================================================================
           REUI HEADER BREADCRUMB & COMMAND BAR
           ========================================================================= */}
@@ -233,7 +233,7 @@ export default function TongQuanPage() {
             size="sm"
             onClick={() => loadData(true)}
             loading={refreshing}
-            className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-zinc-200 text-zinc-700 shadow-2xs hover:bg-zinc-50 cursor-pointer gap-1.5"
+            className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
             <span>Đồng bộ dữ liệu</span>
@@ -253,24 +253,24 @@ export default function TongQuanPage() {
           ========================================================================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: In Progress */}
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-2 hover:border-zinc-300 transition-all">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Đang triển khai</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Đang triển khai</span>
             <span className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/70 flex items-center justify-center text-[#1057FB]">
               <Clock className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-3xl font-extrabold text-zinc-900 font-mono tracking-tight">
+          <div className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">
             {inProgressCount}
-            <span className="text-xs text-zinc-400 font-sans font-normal ml-1">tasks</span>
+            <span className="text-xs text-slate-400 font-sans font-normal ml-1">tasks</span>
           </div>
-          <p className="text-[11.5px] text-zinc-500">Đang lên UI & Prototype đa Squad</p>
+          <p className="text-[11.5px] text-slate-500">Đang lên UI & Prototype đa Squad</p>
         </div>
 
         {/* Card 2: SLA On-time */}
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-2 hover:border-zinc-300 transition-all">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Đúng hạn SLA</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Đúng hạn SLA</span>
             <span className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/70 flex items-center justify-center text-emerald-600">
               <CheckCircle className="w-4 h-4" />
             </span>
@@ -278,37 +278,37 @@ export default function TongQuanPage() {
           <div className="text-3xl font-extrabold text-emerald-600 font-mono tracking-tight">
             96.4<span className="text-base text-emerald-500 font-sans font-normal">%</span>
           </div>
-          <p className="text-[11.5px] text-zinc-500">
+          <p className="text-[11.5px] text-slate-500">
             <span className="font-bold text-emerald-600 font-mono">+3.8%</span> so với tháng trước
           </p>
         </div>
 
         {/* Card 3: First Time Right */}
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-2 hover:border-zinc-300 transition-all">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Nghiệm thu tuần</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nghiệm thu tuần</span>
             <span className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200/70 flex items-center justify-center text-purple-600">
               <FileCheck className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-3xl font-extrabold text-zinc-900 font-mono tracking-tight">
+          <div className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">
             {completedCount}
-            <span className="text-xs text-zinc-400 font-sans font-normal ml-1">đã duyệt</span>
+            <span className="text-xs text-slate-400 font-sans font-normal ml-1">đã duyệt</span>
           </div>
-          <p className="text-[11.5px] text-zinc-500">Bàn giao Tech thành công</p>
+          <p className="text-[11.5px] text-slate-500">Bàn giao Tech thành công</p>
         </div>
 
         {/* Card 4: Risks & Blockers */}
-        <div className="bg-white p-5 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-2 hover:border-zinc-300 transition-all">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Cần hỗ trợ / Gấp</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cần hỗ trợ / Gấp</span>
             <span className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200/70 flex items-center justify-center text-rose-600">
               <AlertTriangle className="w-4 h-4" />
             </span>
           </div>
           <div className="text-3xl font-extrabold text-rose-600 font-mono tracking-tight">
             {blockedCount || (riskTask ? 1 : 0)}
-            <span className="text-xs text-zinc-400 font-sans font-normal ml-1">rủi ro</span>
+            <span className="text-xs text-slate-400 font-sans font-normal ml-1">rủi ro</span>
           </div>
           <p className="text-[11.5px] text-rose-600 font-medium">Cần Leader can thiệp giải tỏa</p>
         </div>
@@ -319,21 +319,21 @@ export default function TongQuanPage() {
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left: AI Executive Briefing (7 Cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-zinc-200/90 p-5 sm:p-6 shadow-2xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs flex flex-col justify-between space-y-4">
           <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="p-1 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/80 shadow-2xs">
                   <Sparkles className="w-4 h-4" />
                 </span>
-                <h3 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   AI Executive Digest
                 </h3>
               </div>
-              <span className="text-[11px] font-mono text-zinc-400 font-semibold">Realtime Synthesis</span>
+              <span className="text-[11px] font-mono text-slate-400 font-semibold">Realtime Synthesis</span>
             </div>
 
-            <div className="text-xs sm:text-sm text-zinc-600 leading-relaxed space-y-3">
+            <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
               <p>
                 Đội ngũ <strong>UXTeamMB</strong> đang đồng loạt tăng tốc các sáng kiến số hóa trọng điểm:{" "}
                 {activeKeyTasks.map((t, i) => (
@@ -341,7 +341,7 @@ export default function TongQuanPage() {
                     <CircleDot className="w-3 h-3 text-[#1057FB] inline" />
                     <span 
                       onClick={() => setSelectedRequest(t)}
-                      className="font-bold text-zinc-900 hover:text-[#1057FB] cursor-pointer underline decoration-zinc-300 underline-offset-2"
+                      className="font-bold text-slate-900 hover:text-[#1057FB] cursor-pointer underline decoration-slate-300 underline-offset-2"
                     >
                       {t.title}
                     </span>
@@ -373,24 +373,24 @@ export default function TongQuanPage() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-500">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>Tổng số: <strong>{totalCount}</strong> đề bài được tiếp nhận</span>
             <span className="font-mono text-emerald-600 font-bold">{completedCount} hoàn thành</span>
           </div>
         </div>
 
         {/* Right: Workload by Status & Team Distribution (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-zinc-200/90 p-5 sm:p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-3">
-              <h3 className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Phân bổ Tải trọng (Workload Status)
               </h3>
-              <span className="text-xs font-mono font-bold text-zinc-500">{totalCount} tasks</span>
+              <span className="text-xs font-mono font-bold text-slate-500">{totalCount} tasks</span>
             </div>
 
             {/* Segmented Bar */}
-            <div className="w-full h-3.5 bg-zinc-100 rounded-full overflow-hidden flex shadow-inner mb-3">
+            <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-3">
               {statusSegments.map((seg, i) => {
                 const pct = totalCount > 0 ? (seg.count / totalCount) * 100 : 0
                 if (pct <= 0) return null
@@ -408,25 +408,25 @@ export default function TongQuanPage() {
             {/* Breakdown List */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               {statusSegments.map((seg, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 border border-zinc-100">
+                <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${seg.color}`} />
-                    <span className="text-zinc-600 truncate">{seg.label}</span>
+                    <span className="text-slate-600 truncate">{seg.label}</span>
                   </div>
-                  <span className="font-mono font-bold text-zinc-900">{seg.count}</span>
+                  <span className="font-mono font-bold text-slate-900">{seg.count}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Designer capacity pills */}
-          <div className="pt-3 border-t border-zinc-100">
-            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Nhân sự chủ chốt</p>
+          <div className="pt-3 border-t border-slate-100">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nhân sự chủ chốt</p>
             <div className="flex items-center gap-2 flex-wrap">
               {assigneeStats.map((item, idx) => (
-                <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-50 border border-zinc-200/80 text-xs">
+                <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
                   <UserAvatar name={item.name} size="xs" />
-                  <span className="font-medium text-zinc-700">{item.name.split(" ").slice(-1)[0]}</span>
+                  <span className="font-medium text-slate-700">{item.name.split(" ").slice(-1)[0]}</span>
                   <span className="font-mono font-bold text-[#1057FB] text-[11px]">({item.open})</span>
                 </div>
               ))}
@@ -446,17 +446,17 @@ export default function TongQuanPage() {
       {/* =========================================================================
           ROW 4: LATEST ACTIVITY STREAM (reUI Timeline Cards)
           ========================================================================= */}
-      <div className="bg-white rounded-2xl border border-zinc-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-zinc-900">
+            <h3 className="text-sm font-bold text-slate-900">
               Nhật ký Hoạt động Tác nghiệp Gần nhất
             </h3>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-slate-500">
               Cập nhật tương tác, đổi khâu và phản hồi trực tiếp giữa PO & Designer
             </p>
           </div>
-          <span className="text-xs font-mono text-zinc-400 font-semibold">{recentActivities.length} sự kiện</span>
+          <span className="text-xs font-mono text-slate-400 font-semibold">{recentActivities.length} sự kiện</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
@@ -464,23 +464,23 @@ export default function TongQuanPage() {
             <div
               key={act.id || `act-card-${idx}`}
               onClick={() => setSelectedRequest(act.request)}
-              className="p-4 rounded-xl border border-zinc-200/80 bg-white hover:border-[#1057FB]/60 hover:shadow-sm transition-all cursor-pointer space-y-3 flex flex-col justify-between group"
+              className="p-4 rounded-xl border border-slate-200/80 bg-white hover:border-[#1057FB]/60 hover:shadow-sm transition-all cursor-pointer space-y-3 flex flex-col justify-between group"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold text-zinc-900 truncate group-hover:text-[#1057FB] transition-colors">
+                <p className="text-xs font-bold text-slate-900 truncate group-hover:text-[#1057FB] transition-colors">
                   {act.taskTitle}
                 </p>
-                <span className="text-[10px] font-mono text-zinc-400 shrink-0">{act.time}</span>
+                <span className="text-[10px] font-mono text-slate-400 shrink-0">{act.time}</span>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200/70 text-xs text-zinc-700 leading-snug">
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-snug">
                 {act.detail || "Cập nhật tài liệu thiết kế và prototype"}
               </div>
 
-              <div className="flex items-center gap-2 pt-1 border-t border-zinc-100 text-[11px] text-zinc-500">
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-500">
                 <UserAvatar name={act.user} size="xs" />
                 <span className="truncate">
-                  <strong className="text-zinc-800">{act.user}</strong> {act.action}
+                  <strong className="text-slate-800">{act.user}</strong> {act.action}
                 </span>
               </div>
             </div>
@@ -499,17 +499,19 @@ export default function TongQuanPage() {
         onSelectRequest={setSelectedRequest}
       />
 
-      <RequestDetail
-        open={Boolean(selectedRequest)}
-        request={selectedRequest}
-        onClose={() => setSelectedRequest(null)}
-        onUpdated={async () => {
-          await loadData(true)
-          const allReqs = await fetchRequests()
-          const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
-          if (found) setSelectedRequest(found)
-        }}
-      />
+      {selectedRequest && (
+        <RequestDetail
+          open={Boolean(selectedRequest)}
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onUpdated={async () => {
+            await loadData(true)
+            const allReqs = await fetchRequests()
+            const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
+            if (found) setSelectedRequest(found)
+          }}
+        />
+      )}
     </main>
   )
 }

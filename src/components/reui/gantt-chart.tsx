@@ -13,7 +13,8 @@ import {
   CheckCircle2, 
   AlertTriangle,
   Filter,
-  Check
+  Check,
+  Clock
 } from "lucide-react"
 
 interface ReUIGanttChartProps {
@@ -32,7 +33,7 @@ interface TimelinePhaseBlock {
   startRatio: number // 0 to 1
   widthRatio: number // 0 to 1
   colorClass: string
-  icon?: "lock" | "check" | "alert"
+  icon?: "lock" | "check" | "alert" | "clock"
   startDateStr: string
   endDateStr: string
   slaDays: number
@@ -46,7 +47,7 @@ interface HoveredBlockInfo {
   clientY: number
 }
 
-// 6 Official UX Stages from statusConfig.ts
+// 7 Official UX Stages & Review from statusConfig.ts
 export const UX_STAGES = [
   { key: "1_phan_loai", label: "1. Phân loại", fullTitle: "1. Phân loại đề bài", color: "bg-amber-100 text-amber-900 border border-amber-300", dot: "bg-amber-500", sla: 1, deliverable: "Phân loại & tiếp nhận yêu cầu" },
   { key: "2_discovery", label: "2. Discovery", fullTitle: "2. Khảo sát & Discovery", color: "bg-purple-100 text-purple-900 border border-purple-300", dot: "bg-purple-500", sla: 2, deliverable: "Nghiên cứu & PRD Specs" },
@@ -54,6 +55,7 @@ export const UX_STAGES = [
   { key: "4_ui_design", label: "4. UI Design", fullTitle: "4. Thiết kế UI Design", color: "bg-blue-100 text-blue-900 border border-blue-300", dot: "bg-blue-600", sla: 3, deliverable: "Figma High-Fidelity UI Layouts" },
   { key: "5_prototype", label: "5. Prototype", fullTitle: "5. Interactive Prototype", color: "bg-teal-100 text-teal-900 border border-teal-300", dot: "bg-teal-500", sla: 2, deliverable: "Prototype tương tác & Review" },
   { key: "6_ban_giao", label: "6. Bàn giao", fullTitle: "6. Nghiệm thu & Bàn giao Tech", color: "bg-emerald-100 text-emerald-900 border border-emerald-300", dot: "bg-emerald-500", sla: 1, deliverable: "Dev Handoff & Assets Export" },
+  { key: "7_po_pending", label: "7. PO Pending", fullTitle: "7. PO Pending (Chờ PO duyệt nghiệm thu)", color: "bg-slate-100 text-slate-700 border border-slate-300", dot: "bg-slate-400", sla: 2, deliverable: "PO rà soát & Phê duyệt nghiệm thu" },
 ]
 
 // Date helpers
@@ -83,6 +85,17 @@ function formatDueDate(dateStr?: string): string {
 }
 
 function getStatusBadgeConfig(status?: string, phase?: string, isOverdue?: boolean) {
+  const s = (status || "").toLowerCase().trim()
+  const isPendingPO = s.includes("pending") || s.includes("đã gửi po") || s.includes("chờ duyệt")
+
+  if (isPendingPO) {
+    return {
+      dot: "bg-slate-400",
+      text: "PO Pending",
+      badgeClass: "bg-slate-100 text-slate-700 border border-slate-200",
+    }
+  }
+
   if (isOverdue) {
     return {
       dot: "bg-rose-500",
@@ -90,39 +103,57 @@ function getStatusBadgeConfig(status?: string, phase?: string, isOverdue?: boole
       badgeClass: "bg-rose-50 text-rose-700 border border-rose-200",
     }
   }
-  if (status === "Hoàn thành" || status === "Hoành thành") {
+  if (status === "Hoàn thành" || status === "Hoành thành" || status === "Done") {
     return {
       dot: "bg-emerald-500",
       text: "Done",
       badgeClass: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
     }
   }
-  if (status === "Đang thực hiện") {
+  if (status === "Đang thực hiện" || s.includes("thực hiện")) {
     return {
       dot: "bg-blue-500",
       text: "In Progress",
-      badgeClass: "bg-purple-50 text-purple-700 border border-purple-200/80",
+      badgeClass: "bg-blue-50 text-blue-700 border border-blue-200/80",
     }
   }
-  if (status === "Bị chặn") {
+  if (status === "Bị chặn" || s.includes("chặn") || s.includes("block")) {
     return {
-      dot: "bg-amber-500",
+      dot: "bg-rose-500",
       text: "Blocked",
-      badgeClass: "bg-amber-50 text-amber-800 border border-amber-200/80",
+      badgeClass: "bg-rose-50 text-rose-800 border border-rose-200/80",
     }
   }
   return {
-    dot: "border-2 border-zinc-400 bg-white",
+    dot: "border-2 border-slate-400 bg-white",
     text: "To Do",
-    badgeClass: "bg-zinc-100 text-zinc-700 border border-zinc-200",
+    badgeClass: "bg-slate-100 text-slate-700 border border-slate-200",
   }
 }
 
-// Map task's status or current_phase to one of the 6 stages index (0 to 5)
+// Map task's status or current_phase to one of the 7 stages index (0 to 6)
 function getTaskStageIndex(req: UXRequest): number {
-  if (req.status === "Hoàn thành" || req.status === "Hoành thành") return 5
-  
-  const text = `${req.current_phase || ""} ${req.status || ""}`.toLowerCase()
+  const s = (req.status || "").toLowerCase().trim()
+  const p = (req.current_phase || "").toLowerCase().trim()
+  const text = `${p} ${s}`
+
+  if (s === "hoàn thành" || s === "done") return 5
+
+  if (
+    s === "pending" ||
+    s === "po pending" ||
+    s === "pending po" ||
+    s === "đã gửi po" ||
+    s === "chờ duyệt" ||
+    s.includes("po pending") ||
+    s.includes("pending po") ||
+    s.includes("đã gửi po") ||
+    text.includes("po pending") ||
+    text.includes("pending po")
+  ) {
+    return 6 // 7. PO Pending stage
+  }
+
   if (text.includes("bàn giao") || text.includes("handoff")) return 5
   if (text.includes("prototype") || text.includes("review")) return 4
   if (text.includes("ui") || text.includes("design")) return 3
@@ -131,12 +162,12 @@ function getTaskStageIndex(req: UXRequest): number {
   if (text.includes("phân loại") || text.includes("tiếp nhận") || text.includes("mới")) return 0
 
   // Fallback by progress
-  const p = req.progress ?? 50
-  if (p >= 100) return 5
-  if (p >= 75) return 4
-  if (p >= 50) return 3
-  if (p >= 30) return 2
-  if (p >= 15) return 1
+  const prog = req.progress ?? 50
+  if (prog >= 100) return 5
+  if (prog >= 85) return 4
+  if (prog >= 70) return 3
+  if (prog >= 50) return 2
+  if (prog >= 30) return 1
   return 0
 }
 
@@ -385,9 +416,10 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
     // Full day of Today: includes all 24 hours of the current day up to midnight
     const nowMs = today.getTime() + msPerDay
 
-    // Determine current active stage index (0 to 5)
+    // Determine current active stage index (0 to 6)
     const activeStageIdx = getTaskStageIndex(req)
-    const isCompleted = req.status === "Hoàn thành" || req.status === "Hoành thành" || activeStageIdx === 5
+    const isPendingPO = activeStageIdx === 6
+    const isCompleted = req.status === "Hoàn thành" || req.status === "Hoành thành" || (activeStageIdx === 5 && !isPendingPO && req.status !== "Done")
 
     // Total days to distribute across completed & active stages
     const stageCount = activeStageIdx + 1
@@ -406,25 +438,43 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
       const endRatio = toRatio(pEndMs)
       const widthRatio = Math.max(0.038, endRatio - startRatio)
 
-      const isAlert = isOverdue && isCurrentActive
+      const isAlert = isOverdue && isCurrentActive && !isPendingPO
       const colorClass = isAlert
         ? "bg-rose-100 text-rose-950 border border-rose-300 font-bold shadow-xs"
         : isCurrentActive
         ? `${stage.color} font-bold shadow-2xs`
         : `${stage.color} opacity-90 font-medium`
 
+      const iconType = isAlert
+        ? "alert"
+        : isCurrentActive
+        ? isPendingPO
+          ? "clock"
+          : undefined
+        : "check"
+
       blocks.push({
         id: `stg-${req.request_id}-${stage.key}`,
         phaseKey: stage.key,
         phaseName: isAlert ? `Cảnh báo Quá hạn (${stage.fullTitle})` : stage.fullTitle,
         label: stage.label,
-        timeBadge: isAlert ? "Overdue" : isCurrentActive ? "Hôm nay" : "Done",
+        timeBadge: isAlert
+          ? "Overdue"
+          : isCurrentActive
+          ? isPendingPO
+            ? "Chờ PO duyệt"
+            : "Hôm nay"
+          : "Done",
         startRatio,
         widthRatio,
         colorClass,
-        icon: isAlert ? "alert" : (i === 5 || !isCurrentActive) ? "check" : undefined,
+        icon: iconType,
         startDateStr: new Date(pStartMs).toLocaleDateString("vi-VN"),
-        endDateStr: isCurrentActive ? "Hôm nay (Đang thực hiện)" : new Date(pEndMs).toLocaleDateString("vi-VN"),
+        endDateStr: isCurrentActive
+          ? isPendingPO
+            ? "Chờ PO duyệt nghiệm thu"
+            : "Hôm nay (Đang thực hiện)"
+          : new Date(pEndMs).toLocaleDateString("vi-VN"),
         slaDays: stage.sla,
         deliverable: stage.deliverable,
       })
@@ -434,17 +484,17 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200/90 shadow-sm overflow-hidden flex flex-col font-sans select-none relative">
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col font-sans select-none relative">
       {/* =========================================================================
           TOP TOOLBAR (reUI Style: Today | Month ⌵ | < > | Title)
           ========================================================================= */}
-      <div className="h-14 px-4 sm:px-6 border-b border-zinc-200/80 bg-white flex items-center justify-between gap-4">
+      <div className="h-14 px-4 sm:px-6 border-b border-slate-200/80 bg-white flex items-center justify-between gap-4">
         {/* Left Navigation Controls */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleResetToday}
-            className="text-xs font-semibold text-zinc-800 hover:text-zinc-950 px-2.5 py-1.5 rounded-lg hover:bg-zinc-100/80 transition-colors cursor-pointer"
+            className="text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer"
           >
             Today
           </button>
@@ -454,14 +504,14 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
             <button
               type="button"
               onClick={() => setShowScaleDropdown(!showScaleDropdown)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-zinc-800 hover:text-zinc-950 px-2.5 py-1.5 rounded-lg hover:bg-zinc-100/80 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer"
             >
               <span>{viewScale}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </button>
 
             {showScaleDropdown && (
-              <div className="absolute left-0 top-full mt-1 w-28 bg-white rounded-xl border border-zinc-200 shadow-lg py-1 z-40 animate-in fade-in-50">
+              <div className="absolute left-0 top-full mt-1 w-28 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-40 animate-in fade-in-50">
                 {(["Day", "Week", "Month", "Year"] as ViewScale[]).map((scale) => (
                   <button
                     key={scale}
@@ -470,8 +520,8 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                       setViewScale(scale)
                       setShowScaleDropdown(false)
                     }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 cursor-pointer ${
-                      viewScale === scale ? "text-[#1057FB] font-bold bg-blue-50/50" : "text-zinc-700"
+                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 cursor-pointer ${
+                      viewScale === scale ? "text-[#1057FB] font-bold bg-blue-50/50" : "text-slate-700"
                     }`}
                   >
                     {scale}
@@ -482,11 +532,11 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
           </div>
 
           {/* Steppers < > */}
-          <div className="flex items-center gap-0.5 text-zinc-700">
+          <div className="flex items-center gap-0.5 text-slate-700">
             <button
               type="button"
               onClick={handlePrev}
-              className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-600 transition-colors cursor-pointer"
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               title="Lùi thời gian"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -494,7 +544,7 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
             <button
               type="button"
               onClick={handleNext}
-              className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-600 transition-colors cursor-pointer"
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               title="Tiến thời gian"
             >
               <ChevronRight className="w-4 h-4" />
@@ -502,7 +552,7 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
           </div>
 
           {/* Title */}
-          <span className="text-sm font-bold text-zinc-900 ml-1">
+          <span className="text-sm font-bold text-slate-900 ml-1">
             {headerTitle}
           </span>
         </div>
@@ -510,13 +560,13 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
         {/* Right Search & Squad Filter Popover */}
         <div className="flex items-center gap-2.5">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Tìm kiếm task..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 pr-3 text-xs bg-zinc-50 hover:bg-white focus:bg-white rounded-lg border border-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#1057FB] focus:border-[#1057FB] text-zinc-800 placeholder-zinc-400 w-36 sm:w-48 transition-all"
+              className="h-8 pl-8 pr-3 text-xs bg-slate-50 hover:bg-white focus:bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#1057FB] focus:border-[#1057FB] text-slate-800 placeholder-slate-400 w-36 sm:w-48 transition-all"
             />
           </div>
 
@@ -528,7 +578,7 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
               className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 selectedSquads.length > 0
                   ? "bg-blue-50 border-[#1057FB] text-[#1057FB]"
-                  : "bg-zinc-50 hover:bg-white border-zinc-200 text-zinc-700"
+                  : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -542,9 +592,9 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
 
             {/* Squad Filter Popover Modal */}
             {showSquadFilterPopover && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-zinc-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
-                  <span className="text-xs font-bold text-zinc-900">Lọc theo Squad</span>
+              <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-900">Lọc theo Squad</span>
                   {selectedSquads.length > 0 && (
                     <button
                       type="button"
@@ -568,7 +618,7 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                         key={sq}
                         onClick={() => handleToggleSquadFilter(sq)}
                         className={`flex items-center justify-between p-2 rounded-xl text-xs font-medium cursor-pointer transition-colors ${
-                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-zinc-50 text-zinc-700"
+                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -576,14 +626,14 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                             className={`w-4 h-4 rounded-md border flex items-center justify-center ${
                               isChecked
                                 ? "bg-[#1057FB] border-[#1057FB] text-white"
-                                : "border-zinc-300 bg-white"
+                                : "border-slate-300 bg-white"
                             }`}
                           >
                             {isChecked && <Check className="w-3 h-3" />}
                           </div>
                           <span>{sq}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-zinc-400 font-bold">
+                        <span className="text-[10px] font-mono text-slate-400 font-bold">
                           {count}
                         </span>
                       </div>
@@ -591,14 +641,14 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                   })}
                 </div>
 
-                <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
-                  <span className="text-[11px] text-zinc-400">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">
                     {filteredRequests.length} tasks hiển thị
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowSquadFilterPopover(false)}
-                    className="px-2.5 py-1 bg-zinc-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-zinc-800"
+                    className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
                   >
                     Đóng
                   </button>
@@ -612,21 +662,21 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
       {/* =========================================================================
           SPLIT VIEW: EXACT 1-TO-1 ALIGNMENT BETWEEN LEFT TABLE & RIGHT TIMELINE
           ========================================================================= */}
-      <div className="flex overflow-x-auto divide-x divide-zinc-200">
+      <div className="flex overflow-x-auto divide-x divide-slate-200">
         {/* =========================================================================
             LEFT COLUMN (GANTT-1): NAME | STATUS | ASSIGNEE | DUE DATE | +
             ========================================================================= */}
-        <div className="w-[480px] sm:w-[520px] shrink-0 bg-white flex flex-col">
+        <div className="w-[540px] sm:w-[580px] shrink-0 bg-white flex flex-col">
           {/* Header Row (Height: 40px) */}
-          <div className="h-10 px-4 bg-white border-b border-zinc-200 flex items-center text-xs font-semibold text-zinc-400">
+          <div className="h-10 px-4 bg-white border-b border-slate-200 flex items-center text-sm font-bold text-slate-500">
             <div className="flex-1 pl-6">Name</div>
-            <div className="w-20 text-center">Assignee</div>
-            <div className="w-20 text-left pl-2">Due date</div>
-            <div className="w-8 text-center text-zinc-400 hover:text-zinc-600 cursor-pointer font-bold">+</div>
+            <div className="w-24 text-center">Assignee</div>
+            <div className="w-24 text-left pl-3">Due date</div>
+            <div className="w-8 text-center text-slate-400 hover:text-slate-600 cursor-pointer font-bold text-base">+</div>
           </div>
 
           {/* Table Body (Each row exact h-12: 48px) */}
-          <div className="divide-y divide-zinc-100 flex-1">
+          <div className="divide-y divide-slate-100 flex-1">
             {Object.entries(groupedTasks).map(([groupName, tasks], gIdx) => {
               const isCollapsed = Boolean(collapsedGroups[groupName])
 
@@ -635,22 +685,22 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                   {/* Group Header Row */}
                   <div
                     onClick={() => toggleGroup(groupName)}
-                    className="h-12 px-4 bg-white hover:bg-zinc-50/70 border-b border-zinc-100 flex items-center cursor-pointer transition-colors group"
+                    className="h-12 px-4 bg-white hover:bg-slate-50/70 border-b border-slate-100 flex items-center cursor-pointer transition-colors group"
                   >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <ChevronDown
-                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${
+                        className={`w-4 h-4 text-slate-400 transition-transform ${
                           isCollapsed ? "-rotate-90" : ""
                         }`}
                       />
-                      <ListTree className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="text-xs font-bold text-zinc-900 truncate">
+                      <ListTree className="w-4 h-4 text-slate-600" />
+                      <span className="text-sm sm:text-[15px] font-bold text-slate-900 truncate">
                         {groupName}
                       </span>
-                      <span className="w-3.5 h-3.5 rounded-full border-2 border-zinc-300 border-t-zinc-700 inline-block shrink-0" />
+                      <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-700 inline-block shrink-0" />
                     </div>
 
-                    <div className="w-8 flex justify-end text-zinc-300 group-hover:text-zinc-600">
+                    <div className="w-8 flex justify-end text-slate-300 group-hover:text-slate-600">
                       <MoreHorizontal className="w-4 h-4" />
                     </div>
                   </div>
@@ -671,32 +721,32 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                         <div
                           key={req.request_id || `left-task-${rIdx}`}
                           onClick={() => onSelectRequest?.(req)}
-                          className="h-12 px-4 bg-white hover:bg-zinc-50/80 flex items-center cursor-pointer transition-colors group border-b border-zinc-100/60"
+                          className="h-12 px-4 bg-white hover:bg-slate-50/80 flex items-center cursor-pointer transition-colors group border-b border-slate-100/60"
                         >
                           {/* Name Column with dot */}
                           <div className="flex-1 flex items-center gap-2.5 pl-6 min-w-0 pr-2">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${badge.dot}`} />
-                            <span className="text-xs font-medium text-zinc-800 truncate group-hover:text-[#1057FB] transition-colors">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${badge.dot}`} />
+                            <span className="text-sm font-semibold text-slate-800 truncate group-hover:text-[#1057FB] transition-colors">
                               {req.title}
                             </span>
                           </div>
 
                           {/* Assignee Avatar (Single User) */}
-                          <div className="w-20 flex justify-center shrink-0">
+                          <div className="w-24 flex justify-center shrink-0">
                             {req.assigned_designer && req.assigned_designer.trim() && req.assigned_designer !== "Chưa phân công" ? (
-                              <UserAvatar name={req.assigned_designer} size="xs" />
+                              <UserAvatar name={req.assigned_designer} size="sm" />
                             ) : (
-                              <div className="w-5 h-5 rounded-full border border-dashed border-zinc-300" title="Chưa phân công" />
+                              <div className="w-6 h-6 rounded-full border border-dashed border-slate-300" title="Chưa phân công" />
                             )}
                           </div>
 
                           {/* Due Date */}
-                          <div className={`w-20 pl-2 text-xs font-medium shrink-0 ${isOverdue ? "text-rose-600 font-bold" : "text-zinc-600"}`}>
+                          <div className={`w-24 pl-3 text-sm font-semibold shrink-0 ${isOverdue ? "text-rose-600" : "text-slate-700"}`}>
                             {dueDateFormatted}
                           </div>
 
                           {/* Three-dots menu */}
-                          <div className="w-8 flex justify-end text-zinc-300 group-hover:text-zinc-600 shrink-0">
+                          <div className="w-8 flex justify-end text-slate-300 group-hover:text-slate-600 shrink-0">
                             <MoreHorizontal className="w-4 h-4" />
                           </div>
                         </div>
@@ -713,37 +763,37 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
             ========================================================================= */}
         <div className="flex-1 min-w-[720px] bg-white flex flex-col overflow-x-auto relative">
           {/* Header Row (Height: 40px) */}
-          <div className="h-10 bg-white border-b border-zinc-200 flex sticky top-0 z-20">
+          <div className="h-10 bg-white border-b border-slate-200 flex sticky top-0 z-20">
             {columns.map((col) => (
               <div
                 key={col.id}
-                className={`flex-1 min-w-[28px] border-r border-zinc-100 text-[10.5px] flex flex-col items-center justify-center font-mono ${
+                className={`flex-1 min-w-[28px] border-r border-slate-100 text-xs flex flex-col items-center justify-center font-mono ${
                   col.isToday
                     ? "bg-rose-50/70 text-rose-600 font-bold"
                     : col.isWeekend
-                    ? "bg-zinc-50/70 text-zinc-400"
-                    : "text-zinc-600"
+                    ? "bg-slate-50/70 text-slate-400"
+                    : "text-slate-600"
                 }`}
               >
-                <span className="leading-none text-[9px] uppercase font-sans">
+                <span className="leading-none text-[10px] uppercase font-bold font-sans">
                   {col.label}
                 </span>
                 {col.subLabel && (
-                  <span className="leading-tight font-bold mt-0.5">{col.subLabel}</span>
+                  <span className="leading-tight text-[11.5px] font-extrabold mt-0.5">{col.subLabel}</span>
                 )}
               </div>
             ))}
           </div>
 
           {/* Timeline Body Rows with CONTINUOUS RED TODAY LINE */}
-          <div className="flex-1 relative divide-y divide-zinc-100 bg-[repeating-linear-gradient(45deg,#fafafa_0,#fafafa_1px,transparent_0,transparent_50%)] bg-[size:12px_12px]">
+          <div className="flex-1 relative divide-y divide-slate-100 bg-[repeating-linear-gradient(45deg,#fafafa_0,#fafafa_1px,transparent_0,transparent_50%)] bg-[size:12px_12px]">
             {/* CONTINUOUS VERTICAL RED TODAY LINE */}
             {todayPositionPercent !== null && (
               <div
                 className="absolute top-0 bottom-0 z-30 pointer-events-none flex flex-col items-center"
                 style={{ left: `${todayPositionPercent}%`, transform: "translateX(-50%)" }}
               >
-                <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm -mt-3.5 z-40 whitespace-nowrap">
+                <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm -mt-3.5 z-40 whitespace-nowrap">
                   Today
                 </span>
                 <div className="w-[2px] bg-rose-500 flex-1 shadow-sm" />
@@ -756,10 +806,10 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
               return (
                 <React.Fragment key={`right-grp-${groupName}-${gIdx}`}>
                   {/* Group Spacer Row (h-12) */}
-                  <div className="h-12 bg-zinc-50/40 border-b border-zinc-100 relative">
+                  <div className="h-12 bg-slate-50/40 border-b border-slate-100 relative">
                     <div className="absolute inset-0 flex pointer-events-none">
                       {columns.map((col) => (
-                        <div key={`gcol-bg-${col.id}`} className="flex-1 min-w-[28px] border-r border-zinc-100/60" />
+                        <div key={`gcol-bg-${col.id}`} className="flex-1 min-w-[28px] border-r border-slate-100/60" />
                       ))}
                     </div>
                   </div>
@@ -772,15 +822,15 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                       return (
                         <div
                           key={`right-row-${gIdx}-${rIdx}`}
-                          className="h-12 relative flex items-center hover:bg-zinc-50/40 transition-colors border-b border-zinc-100/60"
+                          className="h-12 relative flex items-center hover:bg-slate-50/40 transition-colors border-b border-slate-100/60"
                         >
                           {/* Background Grid Lines & Weekend Shading */}
                           <div className="absolute inset-0 flex pointer-events-none">
                             {columns.map((col) => (
                               <div
                                 key={`tcol-bg-${col.id}`}
-                                className={`flex-1 min-w-[28px] border-r border-zinc-200/50 ${
-                                  col.isWeekend ? "bg-zinc-50/60" : ""
+                                className={`flex-1 min-w-[28px] border-r border-slate-200/50 ${
+                                  col.isWeekend ? "bg-slate-50/60" : ""
                                 } ${col.isToday ? "bg-rose-50/20" : ""}`}
                               />
                             ))}
@@ -816,12 +866,13 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                                   left: `${leftPct}%`,
                                   width: `${Math.max(5.2, widthPct)}%`,
                                 }}
-                                className={`absolute h-7.5 rounded-lg ${block.colorClass} flex items-center justify-center px-2 text-[11.5px] font-semibold shadow-2xs hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group z-10`}
+                                className={`absolute h-8 rounded-lg ${block.colorClass} flex items-center justify-center px-2.5 text-xs sm:text-[12.5px] font-bold shadow-2xs hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group z-10`}
                               >
                                 <div className="flex items-center gap-1.5 truncate">
-                                  {block.icon === "lock" && <Lock className="w-3 h-3 shrink-0 opacity-75" />}
-                                  {block.icon === "check" && <CheckCircle2 className="w-3 h-3 shrink-0 opacity-75" />}
-                                  {block.icon === "alert" && <AlertTriangle className="w-3 h-3 shrink-0 opacity-75" />}
+                                  {block.icon === "lock" && <Lock className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+                                  {block.icon === "check" && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+                                  {block.icon === "alert" && <AlertTriangle className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+                                  {block.icon === "clock" && <Clock className="w-3.5 h-3.5 shrink-0 opacity-80" />}
                                   <span className="truncate drop-shadow-2xs">{block.label}</span>
                                 </div>
                               </div>
@@ -867,11 +918,11 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
               top: 0,
               left: 0,
             }}
-            className="w-72 bg-zinc-900/95 backdrop-blur-md text-white rounded-2xl p-3.5 shadow-2xl z-50 pointer-events-none border border-zinc-700/80 space-y-2.5 will-change-transform"
+            className="w-72 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-3.5 shadow-2xl z-50 pointer-events-none border border-slate-700/80 space-y-2.5 will-change-transform"
           >
             {/* Tooltip Header */}
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[10px] font-mono font-bold">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-mono font-bold">
                 {hoveredTooltip.request.preferred_squad || hoveredTooltip.request.product || "MBBank"}
               </span>
               <span className="text-[11px] font-bold text-amber-400">
@@ -885,42 +936,42 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
             </p>
 
             {/* Details Grid */}
-            <div className="space-y-1.5 text-[11px] text-zinc-300">
+            <div className="space-y-1.5 text-[11px] text-slate-300">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Phụ trách:</span>
+                <span className="text-slate-400">Phụ trách:</span>
                 <span className="font-semibold text-white">
                   {hoveredTooltip.request.assigned_designer || "Chưa gán"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Hạn bàn giao:</span>
+                <span className="text-slate-400">Hạn bàn giao:</span>
                 <span className="font-mono text-emerald-400 font-bold">
                   {hoveredTooltip.request.expected_deadline || "Chưa hạn"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Thời gian xử lý:</span>
+                <span className="text-slate-400">Thời gian xử lý:</span>
                 <span className="font-mono text-white font-medium">
                   {hoveredTooltip.block.slaDays} ngày làm việc
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Tiến độ khâu:</span>
+                <span className="text-slate-400">Tiến độ khâu:</span>
                 <span className="font-mono text-white font-bold">
                   {hoveredTooltip.request.progress || 0}%
                 </span>
               </div>
 
-              <div className="pt-1.5 border-t border-zinc-800/80 text-[10.5px] text-zinc-400">
-                📎 Bàn giao: <span className="text-zinc-300">{hoveredTooltip.block.deliverable}</span>
+              <div className="pt-1.5 border-t border-slate-800/80 text-[10.5px] text-slate-400">
+                📎 Bàn giao: <span className="text-slate-300">{hoveredTooltip.block.deliverable}</span>
               </div>
             </div>
 
             {/* Hint */}
-            <div className="pt-1 text-[10px] text-zinc-500 font-medium text-center">
+            <div className="pt-1 text-[10px] text-slate-500 font-medium text-center">
               💡 Click để mở chi tiết đề bài & cập nhật tiến độ
             </div>
           </motion.div>
@@ -930,18 +981,19 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
       {/* =========================================================================
           FOOTER LEGEND (6 Official UX Stages from Dropdown Menu)
           ========================================================================= */}
-      <div className="px-4 py-3 bg-zinc-50/80 border-t border-zinc-200 flex items-center justify-between text-xs text-zinc-500">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="font-semibold text-zinc-700">Khâu UX (Status):</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> 1. Phân loại</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> 2. Discovery</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> 3. User Flow</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> 4. UI Design</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" /> 5. Prototype</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> 6. Bàn giao</span>
+      <div className="px-4 py-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-sm text-slate-600">
+        <div className="flex items-center gap-3.5 flex-wrap">
+          <span className="font-bold text-slate-800">Khâu UX (Status):</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-amber-500" /> 1. Phân loại</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-purple-500" /> 2. Discovery</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-indigo-500" /> 3. User Flow</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-blue-600" /> 4. UI Design</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-teal-500" /> 5. Prototype</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-emerald-500" /> 6. Bàn giao</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-slate-400 ring-2 ring-slate-400/25" /> 7. PO Pending</span>
         </div>
 
-        <div className="text-[11.5px] text-zinc-400 font-medium">
+        <div className="text-xs text-slate-500 font-medium">
           💡 Rê chuột vào thanh để xem Tooltip • Click để mở chi tiết đề bài
         </div>
       </div>

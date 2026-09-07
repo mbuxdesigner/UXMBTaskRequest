@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from "react"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { getRequestPendingClassification } from "@/config/statusConfig"
 import { 
   Calendar, 
   ChevronLeft,
@@ -14,7 +15,9 @@ import {
   Palette,
   PlaySquare,
   CheckCircle2,
-  Flag
+  Flag,
+  Clock,
+  PauseCircle
 } from "lucide-react"
 
 export interface KanbanBoardProps {
@@ -165,25 +168,58 @@ function getProductPillStyle(product?: string): string {
   return "bg-slate-100 text-slate-700 border-slate-200/80"
 }
 
-// Status badge dot + label (RELEASE, IN PROGRESS, TRIAGE, QUEUED, BLOCKED)
-function getStatusBadgeDetails(status?: string, phase?: string): { label: string; dotClass: string } {
-  if (status === "Hoàn thành" || phase === "Bàn giao") {
-    return { label: "RELEASE", dotClass: "bg-emerald-500" }
+// Squad badge dot + label (Thay thế badge TRIAGE/Status bằng Squad theo yêu cầu)
+function getSquadBadgeDetails(req: UXRequest): { label: string; dotClass: string; hasSquad: boolean } {
+  const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
+  const prod = (req.product || "").trim().toLowerCase()
+  const hasSquad = Boolean(
+    rawSquad &&
+    rawSquad.toLowerCase() !== prod &&
+    rawSquad !== "Chưa phân công" &&
+    rawSquad !== "Chưa có squad" &&
+    rawSquad !== "Chưa phân squad" &&
+    rawSquad !== "Triage Squad"
+  )
+  if (!hasSquad) {
+    return { label: "Chưa phân squad", dotClass: "bg-slate-300", hasSquad: false }
   }
-  if (status === "Bị chặn") {
-    return { label: "BLOCKED", dotClass: "bg-rose-500" }
-  }
-  if (status === "Đang thực hiện" || phase === "UI Design" || phase === "Prototype" || phase === "User Flow" || phase === "Discovery") {
-    return { label: "IN PROGRESS", dotClass: "bg-[#1057FB]" }
-  }
-  if (status === "Đang phân loại" || phase === "Phân loại") {
-    return { label: "TRIAGE", dotClass: "bg-amber-500" }
-  }
-  if (status === "Chờ tiếp nhận" || phase === "Chờ tiếp nhận") {
-    return { label: "QUEUED", dotClass: "bg-slate-400" }
-  }
-  return { label: "IN PROGRESS", dotClass: "bg-[#1057FB]" }
+  return { label: rawSquad, dotClass: "bg-[#1057FB]", hasSquad: true }
 }
+
+// Kiểm tra trạng thái Pending của thẻ Kanban - Phân loại chuẩn xác 2 loại:
+// 1. PO Pending: Sau 24h kể từ khi Designer gửi lại figma cho PO nhưng chưa phản hồi (Amber)
+// 2. Pending: Lí do theo đoạn chat của designer khi viết @pending (Slate)
+function getRequestPendingInfo(req: UXRequest) {
+  const p = getRequestPendingClassification(req)
+  if (!p.isPending) {
+    return { isPending: false, type: null, label: "", badgeClass: "", dotClass: "", tooltip: "", reason: "", elapsedHours: 0 }
+  }
+
+  if (p.type === "po_pending") {
+    return {
+      isPending: true,
+      type: "po_pending" as const,
+      label: "PO Pending",
+      badgeClass: "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100",
+      dotClass: "bg-amber-500",
+      tooltip: "PO Pending: Sau 24h kể từ khi Designer gửi lại figma cho PO nhưng chưa phản hồi",
+      reason: p.reason,
+      elapsedHours: p.elapsedHours,
+    }
+  }
+
+  return {
+    isPending: true,
+    type: "designer_pending" as const,
+    label: "Pending",
+    badgeClass: "border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200",
+    dotClass: "bg-slate-500",
+    tooltip: `Pending: ${p.reason || "Theo đoạn chat của designer khi viết @pending"}`,
+    reason: p.reason,
+    elapsedHours: 0,
+  }
+}
+
 
 // Circular SVG progress ring component
 function CircularProgress({ value }: { value: number }) {
@@ -448,7 +484,8 @@ export default function KanbanBoard({
                         ? 100
                         : column.defaultProgress)
 
-                    const statusBadge = getStatusBadgeDetails(req.status, req.current_phase || column.phase)
+                    const squadBadge = getSquadBadgeDetails(req)
+                    const pendingInfo = getRequestPendingInfo(req)
 
                     return (
                       <div
@@ -457,42 +494,86 @@ export default function KanbanBoard({
                         onDragStart={(e) => handleDragStart(e, req.request_id)}
                         onDragEnd={handleDragEnd}
                         onClick={() => onSelectRequest(req)}
-                        className={`group relative bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all duration-200 cursor-grab active:cursor-grabbing select-none space-y-2.5 ${
+                        className={`group relative rounded-2xl border transition-all duration-200 cursor-grab active:cursor-grabbing select-none overflow-hidden ${
+                          pendingInfo.type === "po_pending"
+                            ? "bg-white border-amber-300/90 shadow-2xs ring-1 ring-amber-200/50 hover:border-amber-400 hover:shadow-md"
+                            : pendingInfo.type === "designer_pending"
+                            ? "bg-white border-slate-300/90 shadow-2xs ring-1 ring-slate-200/60 hover:border-slate-400 hover:shadow-md"
+                            : "bg-white border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300"
+                        } hover:-translate-y-0.5 ${
                           isDragging
                             ? "opacity-35 scale-[0.98] rotate-1 ring-2 ring-[#1057FB]"
                             : "opacity-100"
                         }`}
                       >
-                        {/* Top Line: [Product Tag] ... [Status Badge with dot] */}
-                        <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                        {/* SLEEK PENDING HEADER RIBBON (Tách biệt hoàn toàn lên mép trên, không làm chật chội bên trong thẻ) */}
+                        {pendingInfo.isPending && (
+                          pendingInfo.type === "po_pending" ? (
+                            <div 
+                              className="flex items-center justify-between gap-1.5 px-3 py-1 bg-amber-50 text-amber-900 border-b border-amber-200/80 text-[11px]"
+                              title="PO Pending: Sau 24h kể từ khi Designer gửi lại figma cho PO nhưng chưa phản hồi"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span className="font-bold text-[10px] uppercase tracking-wide text-amber-800">PO Pending</span>
+                                <span className="text-amber-700 font-medium truncate">· Quá hạn 24h</span>
+                              </div>
+                              {pendingInfo.elapsedHours ? (
+                                <span className="text-[9.5px] font-bold text-amber-800 bg-amber-200/70 px-1.5 py-0.2 rounded shrink-0">
+                                  {pendingInfo.elapsedHours}h trễ
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div 
+                              className="flex items-center justify-between gap-1.5 px-3 py-1 bg-slate-100/95 text-slate-800 border-b border-slate-200/80 text-[11px]"
+                              title={`Pending: ${pendingInfo.reason || "Tạm dừng theo yêu cầu của Designer"}`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <PauseCircle className="w-3 h-3 text-slate-600 shrink-0" />
+                                <span className="font-bold text-[10px] uppercase tracking-wide text-slate-700">Pending</span>
+                                <span className="text-slate-600 truncate">
+                                  · Lí do: <strong className="text-[#1057FB] font-medium">{pendingInfo.reason || "Tạm dừng"}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        )}
+
+                        <div className="p-3.5 space-y-2.5">
+                          {/* Top Line: [Product Tag] ... [Squad Badge] (Rộng rãi, không bị co chữ thành A...) */}
+                          <div className="flex items-center justify-between gap-1.5">
                             <span
                               className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${getProductPillStyle(
                                 req.product
                               )} truncate max-w-[130px]`}
                             >
-                              {req.product || "App"}
+                              {req.product || "App MBBank"}
                             </span>
+
+                            {/* Squad Pill Badge with dot */}
+                            <div 
+                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-slate-200/90 bg-slate-50/50 text-[10.5px] shrink-0 max-w-[125px] ${
+                                squadBadge.hasSquad ? "text-slate-700 font-semibold" : "text-slate-400 italic font-normal"
+                              }`}
+                              title={`Squad: ${squadBadge.label}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${squadBadge.dotClass} shrink-0`} />
+                              <span className="truncate">
+                                {squadBadge.label}
+                              </span>
+                            </div>
                           </div>
 
-                          {/* Status Pill Badge with dot */}
-                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200/90 bg-white text-[11px] font-medium text-slate-700 shrink-0 shadow-2xs">
-                            <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dotClass} shrink-0`} />
-                            <span className="text-[11px] font-medium text-slate-700">
-                              {statusBadge.label}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Title */}
-                        <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:anywhere] break-all max-w-full">
-                          {req.title}
-                        </h4>
+                          {/* Title */}
+                          <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:anywhere] break-all max-w-full">
+                            {req.title}
+                          </h4>
 
                         {/* Bottom Row: Assignee Avatar | Date Pill | Circular Progress */}
                         <div className="flex items-center justify-between gap-1.5 pt-0.5 text-xs">
                           {/* Assignee Avatar (ko cần tên designer) */}
-                          <div className="flex items-center shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {isAssigned ? (
                               <div title={`Designer: ${displayName}`}>
                                 <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
@@ -504,6 +585,22 @@ export default function KanbanBoard({
                               >
                                 ?
                               </div>
+                            )}
+
+                            {/* Quick Pending toggle nếu task chưa Pending */}
+                            {!pendingInfo.isPending && onUpdateStatus && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onUpdateStatus(req.request_id, "Pending")
+                                }}
+                                className="text-[10px] font-medium text-slate-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded border border-slate-200/70 hover:border-amber-300 opacity-0 group-hover:opacity-100 transition-all cursor-pointer flex items-center gap-1"
+                                title="Chuyển sang trạng thái Pending"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                <span>+ Pending</span>
+                              </button>
                             )}
                           </div>
 
@@ -527,6 +624,7 @@ export default function KanbanBoard({
                               </span>
                             </div>
                           </div>
+                        </div>
                         </div>
                       </div>
                     )
