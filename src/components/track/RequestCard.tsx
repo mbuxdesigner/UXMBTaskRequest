@@ -216,7 +216,14 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
             <p className="text-slate-400 text-[10.5px] font-semibold mb-0.5">Squad</p>
             {(() => {
               const rawSquad = request.squad_name || request.preferred_squad
-              const hasSquad = rawSquad && rawSquad !== request.product && rawSquad !== "Chưa phân công" && rawSquad !== "Triage Squad"
+              const hasSquad = Boolean(
+                rawSquad &&
+                rawSquad !== "Chưa phân công" &&
+                rawSquad !== "Chưa có squad" &&
+                rawSquad !== "Chưa phân squad" &&
+                rawSquad !== "Triage Squad" &&
+                rawSquad.trim() !== ""
+              )
               if (!hasSquad) {
                 return (
                   <p className="text-slate-400 italic font-normal truncate text-[11.5px]">

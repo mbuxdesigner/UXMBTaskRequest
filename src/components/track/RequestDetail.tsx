@@ -3203,119 +3203,90 @@ export default function RequestDetail({
                     </div>
 
                     {/* 3. Tài liệu & Tệp đính kèm (gọn gàng, chữ to rõ ràng) */}
-                    <div className="pt-3.5 border-t border-slate-100 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                          <Paperclip className="w-4 h-4 text-slate-500" />
-                          <span>Tài liệu & Tệp đính kèm ({(request.attachments?.length || 0) + (request.doc_links?.length || 0)})</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => taskFileInputRef.current?.click()}
-                          disabled={isUploadingTaskAttachment}
-                          className="text-xs sm:text-sm font-semibold text-[#1057FB] hover:text-blue-700 flex items-center gap-1 cursor-pointer hover:underline"
-                        >
-                          <UploadCloud className="w-4 h-4" />
-                          <span>{isUploadingTaskAttachment ? "Đang tải..." : "+ Tải thêm tệp"}</span>
-                        </button>
-                        <input
-                          ref={taskFileInputRef}
-                          type="file"
-                          multiple
-                          onChange={handleUploadTaskFile}
-                          className="hidden"
-                        />
-                      </div>
+                    {/* 3. Tài liệu & Tệp đính kèm (chỉ cần title Tài liệu 1, Tài liệu 2, bấm vào mở link) */}
+                    {(() => {
+                      const allDocs: { title: string; url: string }[] = []
+                      let docCounter = 1
 
-                      {/* Attachments List */}
-                      {((request.attachments && request.attachments.length > 0) || (request.doc_links && request.doc_links.length > 0)) ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {/* Files */}
-                          {request.attachments?.map((att, idx) => {
-                            const hasExt = att.name.includes(".")
-                            const ext = hasExt ? att.name.split(".").pop()?.toLowerCase() || "" : ""
-                            
-                            let iconEl = <FileText className="w-4.5 h-4.5 text-[#1057FB]" />
-                            let bgClass = "bg-blue-50 text-[#1057FB] border-blue-200/60"
-                            
-                            if (ext === "pdf") {
-                              iconEl = <FileText className="w-4.5 h-4.5 text-rose-600" />
-                              bgClass = "bg-rose-50 text-rose-600 border-rose-200/60"
-                            } else if (["doc", "docx"].includes(ext)) {
-                              iconEl = <FileText className="w-4.5 h-4.5 text-blue-600" />
-                              bgClass = "bg-blue-50 text-blue-600 border-blue-200/60"
-                            } else if (["xls", "xlsx", "csv"].includes(ext)) {
-                              iconEl = <FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600" />
-                              bgClass = "bg-emerald-50 text-emerald-600 border-emerald-200/60"
-                            } else if (["png", "jpg", "jpeg", "svg", "webp", "gif"].includes(ext)) {
-                              iconEl = <ImageIcon className="w-4.5 h-4.5 text-purple-600" />
-                              bgClass = "bg-purple-50 text-purple-600 border-purple-200/60"
-                            } else if (["zip", "rar", "7z", "tar"].includes(ext)) {
-                              iconEl = <FileBox className="w-4.5 h-4.5 text-amber-600" />
-                              bgClass = "bg-amber-50 text-amber-600 border-amber-200/60"
-                            }
+                      if (Array.isArray(request.attachments)) {
+                        request.attachments.forEach((att) => {
+                          if (att && att.url) {
+                            allDocs.push({
+                              title: `Tài liệu ${docCounter++}`,
+                              url: att.url,
+                            })
+                          }
+                        })
+                      }
 
-                            return (
-                              <div
-                                key={`att-${idx}`}
-                                className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-[#1057FB]/40 transition-all group"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className={`w-9 h-9 rounded-xl ${bgClass} flex items-center justify-center shrink-0 border`}>
-                                    {iconEl}
-                                  </div>
-                                  <div className="min-w-0 space-y-0.5">
-                                    <p className="font-semibold text-slate-900 text-sm sm:text-[14.5px] truncate group-hover:text-[#1057FB] transition-colors">{att.name}</p>
-                                    {att.size ? (
-                                      <p className="text-xs text-slate-500 font-medium">{(att.size / 1024).toFixed(0)} KB · Google Drive</p>
-                                    ) : (
-                                      <p className="text-xs text-slate-500 font-medium">Google Drive · Đính kèm</p>
-                                    )}
-                                  </div>
-                                </div>
+                      if (Array.isArray(request.doc_links)) {
+                        request.doc_links.forEach((link) => {
+                          if (link && typeof link === "string" && link.trim() && !allDocs.some((d) => d.url === link.trim())) {
+                            allDocs.push({
+                              title: `Tài liệu ${docCounter++}`,
+                              url: link.trim(),
+                            })
+                          }
+                        })
+                      }
+
+                      return (
+                        <div className="pt-3.5 border-t border-slate-100 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                              <Paperclip className="w-4 h-4 text-slate-500" />
+                              <span>Tài liệu & Tệp đính kèm ({allDocs.length})</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => taskFileInputRef.current?.click()}
+                              disabled={isUploadingTaskAttachment}
+                              className="text-xs sm:text-sm font-semibold text-[#1057FB] hover:text-blue-700 flex items-center gap-1 cursor-pointer hover:underline"
+                            >
+                              <UploadCloud className="w-4 h-4" />
+                              <span>{isUploadingTaskAttachment ? "Đang tải..." : "+ Tải thêm tệp"}</span>
+                            </button>
+                            <input
+                              ref={taskFileInputRef}
+                              type="file"
+                              multiple
+                              onChange={handleUploadTaskFile}
+                              className="hidden"
+                            />
+                          </div>
+
+                          {/* Attachments List */}
+                          {allDocs.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {allDocs.map((doc, idx) => (
                                 <a
-                                  href={att.url}
+                                  key={`doc-link-${idx}`}
+                                  href={doc.url}
                                   target="_blank"
-                                  rel="noreferrer"
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-[#1057FB] transition-colors shrink-0"
-                                  title="Mở tệp"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-blue-50/50 hover:border-[#1057FB]/50 transition-all group cursor-pointer shadow-2xs"
+                                  title={`Mở ${doc.title}`}
                                 >
-                                  <ExternalLink className="w-4 h-4" />
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200/60 text-[#1057FB] flex items-center justify-center shrink-0 group-hover:bg-[#1057FB] group-hover:text-white transition-colors">
+                                      <FileText className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-slate-800 text-sm group-hover:text-[#1057FB] transition-colors truncate">
+                                      {doc.title}
+                                    </span>
+                                  </div>
+                                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#1057FB] transition-colors shrink-0" />
                                 </a>
-                              </div>
-                            )
-                          })}
-
-                          {/* Doc Links */}
-                          {request.doc_links
-                            ?.filter((l) => !request.attachments?.some((a) => a.url === l))
-                            .map((link, idx) => (
-                              <a
-                                key={`link-${idx}`}
-                                href={link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-[#1057FB]/40 transition-all group"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/60 text-[#1057FB] flex items-center justify-center shrink-0">
-                                    <Paperclip className="w-4 h-4" />
-                                  </div>
-                                  <div className="min-w-0 space-y-0.5">
-                                    <span className="font-mono text-xs sm:text-[13px] truncate block text-slate-800 group-hover:text-[#1057FB] transition-colors font-medium">{link}</span>
-                                    <span className="text-xs text-slate-500">Liên kết trực tuyến</span>
-                                  </div>
-                                </div>
-                                <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#1057FB] shrink-0" />
-                              </a>
-                            ))}
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500 italic">
+                              Chưa có tài liệu hoặc tệp đính kèm.
+                            </p>
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-slate-500 italic">
-                          Chưa có tài liệu hoặc tệp đính kèm.
-                        </p>
-                      )}
-                    </div>
+                      )
+                    })()}
                   </div>
 
 

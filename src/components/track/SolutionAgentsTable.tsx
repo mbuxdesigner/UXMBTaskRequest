@@ -680,7 +680,14 @@ export default function SolutionAgentsTable({
                               <td className={`${rowHeightClass} px-3 min-w-0 overflow-hidden`}>
                                 {(() => {
                                   const rawSquad = req.squad_name || req.preferred_squad
-                                  const hasSquad = rawSquad && rawSquad !== req.product && rawSquad !== "Chưa phân công" && rawSquad !== "Triage Squad"
+                                  const hasSquad = Boolean(
+                                    rawSquad &&
+                                    rawSquad !== "Chưa phân công" &&
+                                    rawSquad !== "Chưa có squad" &&
+                                    rawSquad !== "Chưa phân squad" &&
+                                    rawSquad !== "Triage Squad" &&
+                                    rawSquad.trim() !== ""
+                                  )
                                   const squadDisplay = hasSquad ? rawSquad : "Chưa phân squad"
 
                                   if (!hasSquad) {
