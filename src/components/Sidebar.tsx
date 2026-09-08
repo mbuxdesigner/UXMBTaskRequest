@@ -176,7 +176,7 @@ export default function Sidebar({
 
   const displayName = session?.displayName || "Lê Hoàng Nam"
   const userRole = session?.role || "Designer"
-  const isSuperAdminOrLeader = userRole === "Admin" || userRole === "Design Owner"
+  const isAdmin = userRole === "Admin"
   const canSwitchRoles = userRole === "Admin" || Boolean(session?.isImpersonating) || session?.originalRole === "Admin"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
   const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create
@@ -348,8 +348,8 @@ export default function Sidebar({
 
       {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
       <div className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" ref={userMenuRef}>
-        {/* Admin setting - Chỉ hiển thị cho Admin & Design Owner có quyền */}
-        {isSuperAdminOrLeader && currentRoleVisibility.manage && (
+        {/* Admin setting - Chỉ hiển thị duy nhất cho vai trò Admin */}
+        {isAdmin && currentRoleVisibility.manage && (
           <button
             type="button"
             onClick={() => onNavigate("manage")}

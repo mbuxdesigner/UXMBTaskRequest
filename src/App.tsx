@@ -146,9 +146,9 @@ export default function App() {
       const current = getStoredSession()
 
       if (hash === "manage" || hash === "admin") {
-        // Chưa đăng nhập hoặc PO không được tự động vào trang quản trị
-        if (!current || current.role === "PO") {
-          const fallback: Page = current?.role === "PO" ? "track" : "overview"
+        // Chỉ tài khoản có vai trò Admin mới được phép vào trang quản trị hệ thống
+        if (!current || current.role !== "Admin") {
+          const fallback: Page = current?.role === "PO" || current?.role === "Business" ? "track" : "overview"
           setPage(fallback)
           window.location.hash = `#${fallback}`
           return
@@ -178,9 +178,13 @@ export default function App() {
     }
   }, [])
 
-  // Tự động chuyển PO & Business về màn hình "Yêu cầu của tôi" khi đăng nhập
+  // Tự động chuyển PO & Business về màn hình "Yêu cầu của tôi" khi đăng nhập, chặn non-Admin vào manage
   useEffect(() => {
-    if ((session?.role === "PO" || session?.role === "Business") && (page === "overview" || page === "manage")) {
+    if (session && session.role !== "Admin" && page === "manage") {
+      const fallback: Page = session.role === "PO" || session.role === "Business" ? "track" : "overview"
+      setPage(fallback)
+      window.location.hash = `#${fallback}`
+    } else if ((session?.role === "PO" || session?.role === "Business") && page === "overview") {
       setPage("track")
       window.location.hash = "#track"
     }

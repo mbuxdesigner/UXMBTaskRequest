@@ -1084,15 +1084,21 @@ function CompactRoleMemberSelector({
 
 export default function QuanLyPage() {
   const session = getStoredSession()
-  const isAdmin = session?.role === "Admin" || session?.role === "Design Owner"
+  const isAdmin = session?.role === "Admin"
 
   // Tự động chuyển hướng về trang chủ nếu user không có quyền quản trị
   useEffect(() => {
     if (!isAdmin) {
-      window.location.hash = session?.role === "PO" ? "track" : "overview"
-      window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: session?.role === "PO" ? "track" : "overview" } }))
+      toast.error("Không có quyền truy cập", "Chỉ tài khoản Admin mới có quyền vào mục Cài đặt hệ thống.")
+      const targetPage = session?.role === "PO" || session?.role === "Business" ? "track" : "overview"
+      window.location.hash = `#${targetPage}`
+      window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: targetPage } }))
     }
   }, [isAdmin, session?.role])
+
+  if (!isAdmin) {
+    return null
+  }
 
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const hash = window.location.hash
