@@ -594,7 +594,7 @@ export default function SolutionAgentsTable({
                                 fetchSingleTaskUpdate(req.request_id)
                               }
                             }}
-                            className="h-13 hover:bg-slate-50/70 transition-colors border-b border-slate-100/80 group/run-row cursor-pointer"
+                            className="min-h-[52px] hover:bg-slate-50/70 transition-colors border-b border-slate-100/80 group/run-row cursor-pointer"
                           >
                             {/* 1. Tiêu đề + Subtitle */}
                             <td className="px-4 py-2.5 align-middle">
@@ -606,29 +606,44 @@ export default function SolutionAgentsTable({
                                   >
                                     {req.title}
                                   </span>
-                                    {pendingInfo.isPending && group.id !== "pending" && (
-                                      <span
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
-                                          pendingInfo.type === "po_pending"
-                                            ? "bg-amber-50 text-amber-800 border-amber-300"
-                                            : "bg-slate-100 text-slate-700 border-slate-300"
-                                        }`}
-                                        title={pendingInfo.type === "po_pending" ? "PO Pending: Quá hạn 24h PO chưa duyệt" : `Pending: ${pendingInfo.reason}`}
-                                      >
-                                        <span className={`size-1.5 rounded-full shrink-0 ${pendingInfo.type === "po_pending" ? "bg-amber-500" : "bg-slate-500"}`} />
-                                        <span>{pendingInfo.label}</span>
-                                      </span>
-                                    )}
-                                    <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
-                                  </div>
-
-                                  {/* Subtitle / Step / Context */}
-                                  <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
-                                    <span className="font-normal text-slate-500">{req.request_id}</span>
-                                    <span>·</span>
-                                    <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
-                                  </p>
+                                  {pendingInfo.isPending && group.id !== "pending" && (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
+                                        pendingInfo.type === "po_pending"
+                                          ? "bg-amber-50 text-amber-800 border-amber-300"
+                                          : "bg-slate-100 text-slate-700 border-slate-300"
+                                      }`}
+                                      title={pendingInfo.type === "po_pending" ? "PO Pending: Quá hạn 24h PO chưa duyệt" : `Pending: ${pendingInfo.reason}`}
+                                    >
+                                      <span className={`size-1.5 rounded-full shrink-0 ${pendingInfo.type === "po_pending" ? "bg-amber-500" : "bg-slate-500"}`} />
+                                      <span>{pendingInfo.label}</span>
+                                    </span>
+                                  )}
+                                  <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
                                 </div>
+
+                                {/* Dòng lý do Pending */}
+                                {pendingInfo.isPending && Boolean(pendingInfo.reason || req.pending_reason) && (
+                                  <div className="flex items-center gap-1.5 text-xs min-w-0 my-0.5">
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0 leading-none">
+                                      Lí do
+                                    </span>
+                                    <span 
+                                      className="text-[#1057FB] text-xs font-normal truncate max-w-sm sm:max-w-md lg:max-w-lg" 
+                                      title={pendingInfo.reason || req.pending_reason}
+                                    >
+                                      {pendingInfo.reason || req.pending_reason}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Subtitle / Step / Context */}
+                                <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
+                                  <span className="font-normal text-slate-500">{req.request_id}</span>
+                                  <span>·</span>
+                                  <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
+                                </p>
+                              </div>
                             </td>
 
                             {/* 2. Squad / Sản phẩm (2 dòng theo UI cột title: chữ to trên squad, chữ bé dưới sản phẩm) */}
