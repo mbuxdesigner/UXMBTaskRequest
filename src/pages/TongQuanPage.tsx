@@ -89,7 +89,7 @@ export default function TongQuanPage() {
   }
 
   useEffect(() => {
-    loadData()
+    loadData(true)
   }, [])
 
   // =========================================================================
@@ -235,11 +235,11 @@ export default function TongQuanPage() {
             size="sm"
             onClick={() => loadData(true)}
             loading={refreshing}
-            aria-label="Đồng bộ dữ liệu bảng điều hành"
+            aria-label="Làm mới dữ liệu bảng điều hành"
             className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            <span>Đồng bộ dữ liệu</span>
+            <span>Làm mới</span>
           </Button>
         }
       />

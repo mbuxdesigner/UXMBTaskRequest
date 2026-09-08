@@ -160,25 +160,23 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [remainingSeconds, setRemainingSeconds] = useState(getRemainingSessionSeconds())
 
-  const loadData = async (forceRefresh = false) => {
+  const loadData = async (forceRefresh = false, isUserInitiated = false) => {
     setLoading(true)
     const startTime = Date.now()
     try {
       const reqs = await fetchRequests(forceRefresh)
-      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 400ms khi bấm làm mới
-      if (forceRefresh) {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 400) {
-          await new Promise((r) => setTimeout(r, 400 - elapsed))
-        }
+      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 400ms
+      const elapsed = Date.now() - startTime
+      if (elapsed < 400) {
+        await new Promise((r) => setTimeout(r, 400 - elapsed))
       }
       setAllRequests(reqs)
-      if (forceRefresh) {
+      if (isUserInitiated) {
         toast.success("Đã làm mới dữ liệu bài toán mới nhất!")
       }
     } catch (err) {
       console.warn("Could not load requests:", err)
-      if (forceRefresh) {
+      if (isUserInitiated) {
         toast.error("Lỗi làm mới dữ liệu", "Không thể tải danh sách yêu cầu.")
       }
     } finally {
@@ -187,7 +185,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   useEffect(() => {
-    loadData()
+    loadData(true)
   }, [])
 
   // Lắng nghe sự kiện điều hướng từ màn hình Thành công (Tạo bài toán) -> Tự động mở chi tiết bài toán
@@ -654,17 +652,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               )}
             </div>
 
-            {/* Đồng bộ dữ liệu button (matching Dashboard) */}
+            {/* Nút Làm mới (thay thế nút Đồng bộ dữ liệu) */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => loadData(true)}
+              onClick={() => loadData(true, true)}
               loading={loading}
-              aria-label="Đồng bộ dữ liệu tiến độ task"
+              aria-label="Làm mới dữ liệu bài toán"
               className="h-10 px-4 text-xs font-medium rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5 shrink-0"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span>Đồng bộ dữ liệu</span>
+              <span>Làm mới</span>
             </Button>
           </div>
         }
@@ -765,16 +763,6 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 <span>Thu gọn nhóm</span>
               </button>
             )}
-
-            {/* Làm mới */}
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              className="h-8 px-3 rounded-4xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Làm mới</span>
-            </button>
 
             {/* Tạo task mới */}
             <button
