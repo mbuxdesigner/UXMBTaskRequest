@@ -10,7 +10,7 @@ import {
 } from "../../data/mockData"
 import UpdateProgressModal from "./UpdateProgressModal"
 import { getStoredSession, getUserInitials } from "../../services/otpAuthService"
-import { uploadFileToDrive, fetchSingleTaskUpdate } from "../../services/googleSheetService"
+import { uploadFileToDrive, fetchSingleTaskUpdate, fetchTeamMembersFromSheet } from "../../services/googleSheetService"
 import {
   subscribeToTask,
   startTaskActivePolling,
@@ -181,40 +181,17 @@ export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean):
   return false
 }
 
-const DESIGNER_OPTIONS = [
-  { 
-    name: "Lê Hoàng Nam", 
-    role: "Designer", 
-    email: "nam.designer@mbbank.com.vn", 
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-    squad: "Lending & Vay vốn",
-    squads: ["Lending & Vay vốn", "Cards & Thanh toán số", "BaaS & Open API", "App/Lending", "App/Card"]
-  },
-  { 
-    name: "Nguyễn Văn Cường", 
-    role: "Design Owner", 
-    email: "cuong.owner@mbbank.com.vn", 
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-    squad: "Design System & Core",
-    squads: ["Design System & Core", "Core Banking & Tài khoản", "Lending & Vay vốn", "All Squads"]
-  },
-  { 
-    name: "Phạm Hải Đăng", 
-    role: "UX Designer", 
-    email: "dang.designer@mbbank.com.vn", 
-    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    squad: "Digital Wealth & Đầu tư",
-    squads: ["Digital Wealth & Đầu tư", "Core Banking & Tài khoản", "App/Core", "App/Saving"]
-  },
-  { 
-    name: "Vũ Phương Linh", 
-    role: "UI/UX Designer", 
-    email: "linh.designer@mbbank.com.vn", 
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-    squad: "eSaving",
-    squads: ["eSaving", "Biz eSaving", "Chuyển tiền & Tiện ích số"]
-  },
-]
+export const isMockDesigner = (name?: string, email?: string): boolean => {
+  const n = (name || "").toLowerCase().trim()
+  const e = (email || "").toLowerCase().trim()
+  if (n === "lê hoàng nam" || e === "nam.designer@mbbank.com.vn") return true
+  if (n === "phạm hải đăng" || e === "dang.designer@mbbank.com.vn") return true
+  if (n === "vũ phương linh" || e === "linh.designer@mbbank.com.vn") return true
+  if (n === "nguyễn văn cường" || e === "cuong.owner@mbbank.com.vn" || e === "cuong.designowner@mbbank.com.vn") return true
+  return false
+}
+
+const DESIGNER_OPTIONS: any[] = []
 
 const STATUS_OPTIONS = [
   { value: "Chờ tiếp nhận", label: "Chờ tiếp nhận", color: "bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200" },
@@ -289,15 +266,6 @@ const TAG_OPTIONS = ["Mobile App", "Web Banking", "UX Research", "Design System"
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
   const clean = rawName.trim()
-  if (clean.toLowerCase().includes("nam.designer") || clean.toLowerCase().includes("nam.")) {
-    return "Lê Hoàng Nam"
-  }
-  if (clean.toLowerCase().includes("cuong") || clean.toLowerCase().includes("owner")) {
-    return "Nguyễn Văn Cường"
-  }
-  if (clean.toLowerCase().includes("lan") || clean.toLowerCase().includes("po")) {
-    return "Trần Mai Lan"
-  }
   if (clean.includes("@")) {
     const userPart = clean.split("@")[0]
     return userPart
@@ -398,9 +366,17 @@ export default function RequestDetail({
         if (payload.task.status) request.status = payload.task.status
         if (payload.task.current_phase) request.current_phase = payload.task.current_phase
         if (typeof payload.task.progress === "number") request.progress = payload.task.progress
-        if (payload.task.assigned_designer) {
+        if (payload.task.assigned_designer !== undefined) {
           request.assigned_designer = payload.task.assigned_designer
           setLocalAssignee(payload.task.assigned_designer)
+        }
+        if (payload.task.priority) {
+          request.priority = payload.task.priority
+          setCurrentPriority(payload.task.priority)
+        }
+        if (payload.task.design_deadline !== undefined) {
+          request.design_deadline = payload.task.design_deadline
+          setCustomDeadline(payload.task.design_deadline || "")
         }
         if (payload.task.product) {
           request.product = payload.task.product
@@ -424,6 +400,21 @@ export default function RequestDetail({
         const fresh = await fetchSingleTaskUpdate(id)
         if (fresh) {
           setLiveSyncTime("Vừa xong")
+          if (fresh.current_phase) request.current_phase = fresh.current_phase
+          if (fresh.status) request.status = fresh.status
+          if (typeof fresh.progress === "number") request.progress = fresh.progress
+          if (fresh.assigned_designer !== undefined) {
+            request.assigned_designer = fresh.assigned_designer
+            setLocalAssignee(fresh.assigned_designer)
+          }
+          if (fresh.priority) {
+            request.priority = fresh.priority
+            setCurrentPriority(fresh.priority)
+          }
+          if (fresh.design_deadline !== undefined) {
+            request.design_deadline = fresh.design_deadline
+            setCustomDeadline(fresh.design_deadline || "")
+          }
           setRequirementUpdateTick((c) => c + 1)
         }
       } finally {
@@ -477,59 +468,80 @@ export default function RequestDetail({
     return false
   }, [isNameMatching])
 
-  // Lấy danh sách Designer từ cả mbbank_admin_team và mbbank_team_members kết hợp với DESIGNER_OPTIONS
-  const availableDesigners = useMemo(() => {
+  // Quản lý danh sách nhân sự thực tế, đồng bộ từ Google Sheet hoặc LocalStorage, loại bỏ mock users
+  const [teamMemberList, setTeamMemberList] = useState<any[]>(() => {
     try {
       const cached = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
       if (cached) {
-        const members: any[] = JSON.parse(cached)
-        if (Array.isArray(members) && members.length > 0) {
-          const list = members
-            .map((m) => ({
-              name: String(m.name || m.displayName || "").trim(),
-              role: String(m.role || "Designer").trim(),
-              email: String(m.email || m.teamsEmail || "").trim(),
-              avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(m.name || m.displayName || "")),
-              squad: String(m.squad || "").trim(),
-              squads: Array.isArray(m.squads) ? m.squads : (m.squad ? [m.squad] : []),
-            }))
-            .filter((m) => {
-              if (!m.name) return false
-              const roleLower = m.role.toLowerCase()
-              // Chỉ chọn designer/design owner, loại bỏ PO, Business, BA, Tester, Guest...
-              if (
-                roleLower === "po" ||
-                roleLower.includes("product owner") ||
-                roleLower === "business" ||
-                roleLower === "biz" ||
-                roleLower === "ba" ||
-                roleLower === "tester" ||
-                roleLower === "guest"
-              ) {
-                return false
-              }
-              return (
-                roleLower.includes("design") ||
-                roleLower.includes("ux") ||
-                roleLower.includes("ui") ||
-                roleLower.includes("lead") ||
-                roleLower.includes("owner") ||
-                roleLower.includes("admin")
-              )
-            })
-
-          if (list.length > 0) {
-            const names = new Set(list.map((l) => l.name.toLowerCase()))
-            DESIGNER_OPTIONS.forEach((d) => {
-              if (!names.has(d.name.toLowerCase())) list.push(d)
-            })
-            return list
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed.filter((m: any) => !isMockDesigner(m.name || m.displayName, m.email || m.teamsEmail))
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem("mbbank_admin_team", JSON.stringify(cleaned))
+            localStorage.setItem("mbbank_team_members", JSON.stringify(cleaned))
           }
+          return cleaned
         }
       }
     } catch {}
-    return DESIGNER_OPTIONS
-  }, [])
+    return []
+  })
+
+  useEffect(() => {
+    if (teamMemberList.length === 0) {
+      fetchTeamMembersFromSheet().then((members) => {
+        if (members && Array.isArray(members) && members.length > 0) {
+          const cleaned = members.filter((m: any) => !isMockDesigner(m.name || m.displayName, m.email || m.teamsEmail))
+          setTeamMemberList(cleaned)
+          try {
+            localStorage.setItem("mbbank_admin_team", JSON.stringify(cleaned))
+            localStorage.setItem("mbbank_team_members", JSON.stringify(cleaned))
+          } catch {}
+        }
+      }).catch(() => {})
+    }
+  }, [teamMemberList.length])
+
+  // Lấy danh sách Designer từ teamMemberList (lấy từ Google Sheet/Admin, loại bỏ mock)
+  const availableDesigners = useMemo(() => {
+    if (!Array.isArray(teamMemberList) || teamMemberList.length === 0) {
+      return []
+    }
+    return teamMemberList
+      .map((m) => ({
+        name: String(m.name || m.displayName || "").trim(),
+        role: String(m.role || "Designer").trim(),
+        email: String(m.email || m.teamsEmail || "").trim(),
+        avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(m.name || m.displayName || "")),
+        squad: String(m.squad || "").trim(),
+        squads: Array.isArray(m.squads) ? m.squads : (m.squad ? [m.squad] : []),
+      }))
+      .filter((m) => {
+        if (!m.name) return false
+        if (isMockDesigner(m.name, m.email)) return false
+        const roleLower = m.role.toLowerCase()
+        // Chỉ chọn designer/design owner, loại bỏ PO, Business, BA, Tester, Guest...
+        if (
+          roleLower === "po" ||
+          roleLower.includes("product owner") ||
+          roleLower === "business" ||
+          roleLower === "biz" ||
+          roleLower === "ba" ||
+          roleLower === "tester" ||
+          roleLower === "guest"
+        ) {
+          return false
+        }
+        return (
+          roleLower.includes("design") ||
+          roleLower.includes("ux") ||
+          roleLower.includes("ui") ||
+          roleLower.includes("lead") ||
+          roleLower.includes("owner") ||
+          roleLower.includes("admin")
+        )
+      })
+  }, [teamMemberList])
 
   // Tách thành 2 nhóm: Designer phụ trách Squad CHUẨN XÁC theo cấu hình Admin và Designer hỗ trợ (ngoài Squad)
   const { squadDesigners, supportingDesigners, taskSquadName, assignedSquadDesignerNames } = useMemo(() => {
@@ -1100,9 +1112,8 @@ export default function RequestDetail({
     calDays.push(d)
   }
 
-  const handleSelectCalDay = async (day: number) => {
+  const handleSaveDeadline = async (formatted: string) => {
     if (!request) return
-    const formatted = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
     setCustomDeadline(formatted)
     setOpenDropdown(null)
     request.design_deadline = formatted
@@ -1113,22 +1124,29 @@ export default function RequestDetail({
         new_phase: request.current_phase,
         new_status: request.status,
         new_progress: request.progress,
-        note: `Cập nhật Hạn thiết kế UX (Design End Date) sang: ${formatted}`,
+        note: formatted ? `Cập nhật Hạn thiết kế UX (Design End Date) sang: ${formatted}` : "Gỡ bỏ Hạn thiết kế UX",
         assigned_designer: request.assigned_designer,
         design_deadline: formatted,
         is_comment: false,
       })
+      setRequirementUpdateTick((c) => c + 1)
       if (res.success) {
-        toast.success(`Đã cập nhật Hạn thiết kế UX (Design End Date): ${formatted}`, undefined, { id: toastId })
+        toast.success(formatted ? `Đã cập nhật Hạn thiết kế UX: ${formatted}` : "Đã gỡ bỏ Hạn thiết kế UX!", undefined, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
         toast.warning(res.message || `Đã cập nhật Hạn thiết kế UX: ${formatted}`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
       }
     } catch {
-      toast.success(`Đã cập nhật Hạn thiết kế UX (Design End Date): ${formatted}`, undefined, { id: toastId })
+      setRequirementUpdateTick((c) => c + 1)
+      toast.success(formatted ? `Đã cập nhật Hạn thiết kế UX: ${formatted}` : "Đã gỡ bỏ Hạn thiết kế UX!", undefined, { id: toastId })
       if (onUpdated) onUpdated()
     }
+  }
+
+  const handleSelectCalDay = async (day: number) => {
+    const formatted = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    await handleSaveDeadline(formatted)
   }
 
   const monthNamesVi = [
@@ -1142,7 +1160,7 @@ export default function RequestDetail({
     const prevProd = (request.product || "").trim()
     const newProd = poFormProduct.trim()
     const prevSquad = (request.squad_name || request.preferred_squad || "").trim()
-    const newSquad = cleanSquad
+    const newSquad = poFormSquad.trim()
 
     const changes: string[] = []
     if (prevProd && newProd && prevProd !== newProd) {
@@ -1157,8 +1175,8 @@ export default function RequestDetail({
 
     request.title = poFormTitle
     request.product = poFormProduct
-    request.squad_name = cleanSquad
-    request.preferred_squad = cleanSquad
+    request.squad_name = newSquad
+    request.preferred_squad = newSquad
     request.request_type = poFormReqType
     request.description = poFormDesc
     request.business_need = poFormBizNeed
@@ -1171,7 +1189,7 @@ export default function RequestDetail({
 
     setTitleValue(poFormTitle)
     setDescValue(poFormDesc)
-    setLocalSquad(cleanSquad)
+    setLocalSquad(newSquad)
     setLocalProduct(poFormProduct)
     setRequirementUpdateTick((c) => c + 1)
     setShowPoEditModal(false)
@@ -1185,8 +1203,8 @@ export default function RequestDetail({
         assigned_designer: request.assigned_designer,
         release_date: poFormExpectedDeadline,
         product: poFormProduct,
-        squad_name: cleanSquad,
-        preferred_squad: cleanSquad,
+        squad_name: newSquad,
+        preferred_squad: newSquad,
         title: poFormTitle,
         description: poFormDesc,
         business_need: poFormBizNeed,
@@ -1341,6 +1359,7 @@ export default function RequestDetail({
         assigned_designer: targetName,
         is_comment: false,
       })
+      setRequirementUpdateTick((c) => c + 1)
       if (res.success) {
         toast.success(`Đã cập nhật phân công: ${targetLabel}!`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
@@ -1349,6 +1368,7 @@ export default function RequestDetail({
         if (onUpdated) onUpdated()
       }
     } catch {
+      setRequirementUpdateTick((c) => c + 1)
       toast.success(`Đã cập nhật phân công: ${targetLabel}!`, undefined, { id: toastId })
       if (onUpdated) onUpdated()
     }
@@ -1401,6 +1421,7 @@ export default function RequestDetail({
         priority: newPriority,
         is_comment: false,
       })
+      setRequirementUpdateTick((c) => c + 1)
       if (res.success) {
         toast.success(`Đã cập nhật độ ưu tiên: ${targetLabel}!`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
@@ -1409,6 +1430,7 @@ export default function RequestDetail({
         if (onUpdated) onUpdated()
       }
     } catch {
+      setRequirementUpdateTick((c) => c + 1)
       toast.success(`Đã cập nhật độ ưu tiên: ${targetLabel}!`, undefined, { id: toastId })
       if (onUpdated) onUpdated()
     }
@@ -1434,6 +1456,7 @@ export default function RequestDetail({
         request.current_phase = newPhase
         request.status = nextStatus
         request.progress = progressVal
+        setRequirementUpdateTick((c) => c + 1)
         toast.success(`Đã chuyển sang khâu [${newPhase}]!`, "Hệ thống đã tự động gỡ trạng thái chờ PO.", { id: toastId })
         if (onUpdated) onUpdated()
       } else {
@@ -3000,10 +3023,7 @@ export default function RequestDetail({
                               <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setCustomDeadline("")
-                                    setOpenDropdown(null)
-                                  }}
+                                  onClick={() => handleSaveDeadline("")}
                                   className="text-slate-400 hover:text-rose-500 font-semibold cursor-pointer"
                                 >
                                   Xóa chọn
@@ -3013,9 +3033,7 @@ export default function RequestDetail({
                                   onClick={() => {
                                     const today = new Date()
                                     const formatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
-                                    setCustomDeadline(formatted)
-                                    setOpenDropdown(null)
-                                    toast.success(`Đã cập nhật Estimate End Date: ${formatted}`)
+                                    handleSaveDeadline(formatted)
                                   }}
                                   className="text-[#1E5AF6] hover:underline font-bold cursor-pointer"
                                 >

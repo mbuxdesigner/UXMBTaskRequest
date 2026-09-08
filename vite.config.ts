@@ -1,20 +1,30 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import compression from 'compression'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json' with { type: 'json' }
 
+function compressionMiddlewarePlugin(): Plugin {
+  return {
+    name: 'compression-middleware-plugin',
+    configureServer(server) {
+      server.middlewares.use(compression())
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(compression())
+    },
+  }
+}
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
-  const emitSourcemaps = mode === 'development'
-
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : './',
     build: {
-      sourcemap: emitSourcemaps ? 'inline' : false,
-      minify: !emitSourcemaps,
+      sourcemap: false,
+      minify: true,
       cssCodeSplit: true,
       chunkSizeWarningLimit: 800,
       reportCompressedSize: true,
@@ -31,6 +41,15 @@ export default defineConfig(({ mode }) => {
               if (id.includes('framer-motion')) {
                 return 'vendor-motion'
               }
+              if (id.includes('xlsx')) {
+                return 'vendor-xlsx'
+              }
+              if (id.includes('jszip')) {
+                return 'vendor-jszip'
+              }
+              if (id.includes('matter-js')) {
+                return 'vendor-matter'
+              }
               if (
                 id.includes('@radix-ui') ||
                 id.includes('clsx') ||
@@ -46,6 +65,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      compressionMiddlewarePlugin(),
       react(),
       tailwindcss(),
       figmaSiteConfiguration(siteConfiguration as any),
@@ -63,10 +83,22 @@ export default defineConfig(({ mode }) => {
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
+      headers: {
+        'Content-Security-Policy': "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: ws: wss: http://localhost:* http://127.0.0.1:*; font-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'self' https: 'unsafe-inline'; script-src 'self' https: 'unsafe-inline' 'unsafe-eval';",
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+      },
     },
     preview: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      headers: {
+        'Content-Security-Policy': "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: ws: wss: http://localhost:* http://127.0.0.1:*; font-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'self' https: 'unsafe-inline'; script-src 'self' https: 'unsafe-inline' 'unsafe-eval';",
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+      },
     },
   }
 })

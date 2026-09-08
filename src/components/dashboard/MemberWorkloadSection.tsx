@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react"
 import { UXRequest } from "../../data/mockData"
+import { isMockDesigner } from "@/components/track/RequestDetail"
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FrameBody } from "@/components/reui/frame"
 import { IconTile } from "@/components/reui/icon-tile"
 import { Badge } from "@/components/ui/badge"
@@ -47,53 +48,7 @@ interface MemberWorkloadSectionProps {
   onSelectRequest: (req: UXRequest) => void
 }
 
-const DEFAULT_MEMBERS = [
-  {
-    id: "mem-1",
-    name: "Nguyễn Văn Cường",
-    email: "cuong.designowner@mbbank.com.vn",
-    role: "Design Owner",
-    squads: ["Design System & Core", "Core Banking & Tài khoản", "Lending & Vay vốn"],
-    capacityLimit: 6,
-    qualityScore: 98,
-  },
-  {
-    id: "mem-2",
-    name: "Lê Hoàng Nam",
-    email: "nam.designer@mbbank.com.vn",
-    role: "Senior UX Designer",
-    squads: ["Lending & Vay vốn", "Cards & Thanh toán số"],
-    capacityLimit: 5,
-    qualityScore: 94,
-  },
-  {
-    id: "mem-3",
-    name: "Trần Mai Lan",
-    email: "lan.po@mbbank.com.vn",
-    role: "Lead PO",
-    squads: ["Cards & Thanh toán số", "Digital Wealth & Đầu tư"],
-    capacityLimit: 8,
-    qualityScore: 92,
-  },
-  {
-    id: "mem-4",
-    name: "Phạm Hải Đăng",
-    email: "dang.designer@mbbank.com.vn",
-    role: "Product Designer",
-    squads: ["Digital Wealth & Đầu tư", "Core Banking & Tài khoản"],
-    capacityLimit: 5,
-    qualityScore: 95,
-  },
-  {
-    id: "mem-5",
-    name: "Vũ Thùy Linh",
-    email: "linh.designer@mbbank.com.vn",
-    role: "UI/UX Designer",
-    squads: ["BaaS & Open API", "Cards & Thanh toán số"],
-    capacityLimit: 5,
-    qualityScore: 90,
-  },
-]
+const DEFAULT_MEMBERS: any[] = []
 
 export default function MemberWorkloadSection({
   requests,
@@ -103,9 +58,33 @@ export default function MemberWorkloadSection({
   const [filterRole, setFilterRole] = useState<string>("ALL")
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
 
-  // Compute live metrics per team member based on REAL requests
+  // Compute live metrics per team member based on REAL requests (loại bỏ mock users)
   const memberMetricsList: MemberMetrics[] = useMemo(() => {
-    return DEFAULT_MEMBERS.map((base) => {
+    let sourceMembers: any[] = []
+    try {
+      const cached = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          sourceMembers = parsed
+            .filter((m: any) => !isMockDesigner(m.name || m.displayName, m.email || m.teamsEmail))
+            .map((m: any, idx: number) => ({
+              id: m.id || `mem-${idx + 1}`,
+              name: m.name || m.displayName || "",
+              email: m.email || m.teamsEmail || "",
+              role: m.role || "Designer",
+              squads: Array.isArray(m.squads) ? m.squads : (m.squad ? [m.squad] : []),
+              capacityLimit: m.capacityLimit || 5,
+              qualityScore: 95,
+            }))
+        }
+      }
+    } catch {}
+    if (sourceMembers.length === 0) {
+      sourceMembers = DEFAULT_MEMBERS.filter((m: any) => !isMockDesigner(m.name, m.email))
+    }
+
+    return sourceMembers.map((base) => {
       // Find matching requests by assigned designer, ux_owner or requester email
       const assigned = requests.filter((r) => {
         const designerMatch = r.assigned_designer && (

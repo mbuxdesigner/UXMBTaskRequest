@@ -499,7 +499,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
   })
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-20">
+    <main id="main-content" tabIndex={-1} className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-20 outline-none">
       {/* 1. Page Header Chuẩn ReUI */}
       <PageHeader
         breadcrumb={{
@@ -514,6 +514,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
               variant="outline"
               size="sm"
               onClick={handleClearAll}
+              aria-label={`Xóa tất cả ${originalImages.length} ảnh`}
               className="gap-1.5 font-medium text-rose-600 border-slate-200 hover:bg-rose-50/50 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -529,6 +530,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
         multiple
         accept="image/png,image/jpeg,image/jpg,image/webp"
         className="hidden"
+        aria-label="Tải ảnh lên để nén"
         onChange={(e) => handleAddFiles(e.target.files)}
       />
 

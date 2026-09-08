@@ -574,6 +574,7 @@ export async function updateTaskProgressInSheet(
   }
 
   // Cập nhật LocalStorage và Memory Cache ngay tức thì
+  let updatedReq: UXRequest | undefined
   try {
     const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
     let existingList: UXRequest[] = cached ? JSON.parse(cached) : []
@@ -582,7 +583,7 @@ export async function updateTaskProgressInSheet(
     if (targetIdx !== -1) {
       const oldReq = existingList[targetIdx]
       const rawDocLink = (params.doc_links && params.doc_links.length > 0) ? params.doc_links.join("\n") : oldReq.doc_link
-      const updatedReq: UXRequest = {
+      updatedReq = {
         ...oldReq,
         current_phase: params.new_phase,
         status: params.new_status,
@@ -641,6 +642,8 @@ export async function updateTaskProgressInSheet(
   // Đồng bộ lên Google Sheet nếu có cấu hình
   if (config.scriptUrl && config.scriptUrl.trim()) {
     try {
+      const currentReq = updatedReq || cachedRequestsMemory?.find((r) => r.request_id === requestId)
+
       const payload = {
         action: "update_task_progress",
         session_token: session?.sessionToken || "DEMO_TOKEN",
@@ -650,25 +653,29 @@ export async function updateTaskProgressInSheet(
         new_phase: params.new_phase,
         new_status: params.new_status,
         new_progress: params.new_progress,
-        priority: params.priority || "",
-        product: params.product || "",
-        squad_name: params.squad_name !== undefined ? params.squad_name : "",
-        preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name || ""),
-        title: params.title || "",
-        description: params.description || "",
-        business_need: params.business_need || "",
-        user_problem: params.user_problem || "",
-        target_user: params.target_user || "",
-        request_type: params.request_type || "",
-        deadline_reason: params.deadline_reason || "",
-        doc_links: params.doc_links || [],
+        priority: params.priority !== undefined ? params.priority : (currentReq?.priority || "Normal"),
+        product: params.product !== undefined ? params.product : (currentReq?.product || ""),
+        squad_name: params.squad_name !== undefined
+          ? params.squad_name
+          : (currentReq?.squad_name || currentReq?.preferred_squad || ""),
+        preferred_squad: params.preferred_squad !== undefined
+          ? params.preferred_squad
+          : (currentReq?.preferred_squad || currentReq?.squad_name || ""),
+        title: params.title !== undefined ? params.title : (currentReq?.title || ""),
+        description: params.description !== undefined ? params.description : (currentReq?.description || ""),
+        business_need: params.business_need !== undefined ? params.business_need : (currentReq?.business_need || ""),
+        user_problem: params.user_problem !== undefined ? params.user_problem : (currentReq?.user_problem || ""),
+        target_user: params.target_user !== undefined ? params.target_user : (currentReq?.target_user || ""),
+        request_type: params.request_type !== undefined ? params.request_type : (currentReq?.request_type || ""),
+        deadline_reason: params.deadline_reason !== undefined ? params.deadline_reason : (currentReq?.deadline_reason || ""),
+        doc_links: params.doc_links !== undefined ? params.doc_links : (currentReq?.doc_links || []),
         is_po_edit: params.is_po_edit || false,
-        design_deadline: params.design_deadline || "",
-        release_date: params.release_date || "",
+        design_deadline: params.design_deadline !== undefined ? params.design_deadline : (currentReq?.design_deadline || currentReq?.expected_deadline || ""),
+        release_date: params.release_date !== undefined ? params.release_date : (currentReq?.release_date || currentReq?.expected_deadline || ""),
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
-        figma_url: params.figma_url || "",
-        assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : "",
-        sent_to_po_at: params.sent_to_po_at || "",
+        figma_url: params.figma_url || (currentReq?.deliverables?.figma_url || ""),
+        assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : (currentReq?.assigned_designer || ""),
+        sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : (currentReq?.sent_to_po_at || ""),
         timestamp: now.toISOString(),
       }
 

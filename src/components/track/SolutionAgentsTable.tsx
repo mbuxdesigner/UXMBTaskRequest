@@ -243,6 +243,7 @@ export default function SolutionAgentsTable({
   loading = false,
   onSelectRequest,
   onNavigateToCreate,
+  hideHeader = false,
   onResetFilters,
   hasActiveFilters,
 }: SolutionAgentsTableProps) {
@@ -389,22 +390,22 @@ export default function SolutionAgentsTable({
   }
 
   return (
-    <section className="flex w-full flex-col p-3 sm:p-4 space-y-4 select-none">
+    <section className="flex w-full flex-col p-0 select-none">
       {/* ReUI Solution Agents 2 Triage Table */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left text-xs min-w-[960px] border-collapse">
+      <div className={`overflow-hidden flex flex-col w-full ${hideHeader ? "bg-white" : "rounded-2xl border border-slate-200/90 bg-white shadow-2xs"}`}>
+        <div className="overflow-x-auto w-full">
+          <table className="w-full table-fixed text-left text-xs min-w-[1020px] border-collapse">
             {/* Table Header: 8 Cột sắp xếp khoa học, chuẩn xác */}
-            <thead className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <thead className="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
               <tr>
-                <th className="py-2.5 px-4 sm:px-5 w-[26%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
-                <th className="py-2.5 px-3 w-[11%]">Sản phẩm</th>
-                <th className="py-2.5 px-3 w-[11%]">Squad</th>
-                <th className="py-2.5 px-3 w-[14%]">Người thực hiện</th>
-                <th className="py-2.5 px-3 w-[12%] text-left">Trạng thái</th>
-                <th className="py-2.5 px-3 w-[8%] text-right">Độ ưu tiên</th>
-                <th className="py-2.5 px-3 w-[15%] min-w-[155px] text-right whitespace-nowrap">Thời hạn & Release</th>
-                <th className="py-2.5 px-2 w-[3%] text-right" />
+                <th className="py-3 px-5 sm:px-6 w-[32%]">Yêu cầu / Task & Luồng nghiệp vụ</th>
+                <th className="py-3 px-4 w-[11%]">Sản phẩm</th>
+                <th className="py-3 px-4 w-[11%]">Squad</th>
+                <th className="py-3 px-4 w-[14%]">Người thực hiện</th>
+                <th className="py-3 px-4 w-[12%] text-left">Trạng thái</th>
+                <th className="py-3 px-4 w-[7%] text-right">Độ ưu tiên</th>
+                <th className="py-3 px-4 w-[11%] min-w-[155px] text-right whitespace-nowrap">Thời hạn & Release</th>
+                <th className="py-3 px-3 w-[2%] text-right" />
               </tr>
             </thead>
 
@@ -413,41 +414,41 @@ export default function SolutionAgentsTable({
               {loading ? (
                 [...Array(6)].map((_, i) => (
                   <tr key={`load-skel-${i}`} className="animate-pulse bg-white">
-                    {/* Col 1: Bài toán & Nhu cầu UX (26%) */}
-                    <td className="py-3 px-3 sm:px-4 w-[26%]">
+                    {/* Col 1: Bài toán & Nhu cầu UX (32%) */}
+                    <td className="py-4 px-5 sm:px-6 w-[32%]">
                       <div className="h-4 bg-slate-200/80 rounded w-3/4 mb-1.5" />
                       <div className="h-3 bg-slate-100 rounded w-1/2" />
                     </td>
                     {/* Col 2: Sản phẩm (11%) */}
-                    <td className="py-3 px-3 w-[11%]">
+                    <td className="py-4 px-4 w-[11%]">
                       <div className="h-5 bg-slate-100 rounded-full w-20" />
                     </td>
                     {/* Col 3: Squad (11%) */}
-                    <td className="py-3 px-3 w-[11%]">
+                    <td className="py-4 px-4 w-[11%]">
                       <div className="h-5 bg-slate-100 rounded-md w-16" />
                     </td>
                     {/* Col 4: Người thực hiện (14%) */}
-                    <td className="py-3 px-3 w-[14%]">
+                    <td className="py-4 px-4 w-[14%]">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-slate-200/80 shrink-0" />
                         <div className="h-3.5 bg-slate-100 rounded w-20" />
                       </div>
                     </td>
                     {/* Col 5: Trạng thái (12%) */}
-                    <td className="py-3 px-3 w-[12%]">
+                    <td className="py-4 px-4 w-[12%]">
                       <div className="h-5 bg-slate-100 rounded-full w-24" />
                     </td>
-                    {/* Col 6: Độ ưu tiên (8%) */}
-                    <td className="py-3 px-3 w-[8%] text-right">
+                    {/* Col 6: Độ ưu tiên (7%) */}
+                    <td className="py-4 px-4 w-[7%] text-right">
                       <div className="h-4 bg-slate-100 rounded-md w-12 ml-auto" />
                     </td>
-                    {/* Col 7: Thời hạn & Release (15%) */}
-                    <td className="py-3 px-3 w-[15%] text-right">
+                    {/* Col 7: Thời hạn & Release (11%) */}
+                    <td className="py-4 px-4 w-[11%] text-right">
                       <div className="h-3.5 bg-slate-100 rounded w-24 ml-auto mb-1" />
                       <div className="h-3 bg-slate-100/60 rounded w-16 ml-auto" />
                     </td>
-                    {/* Col 8: Menu (3%) */}
-                    <td className="py-3 px-2 w-[3%] text-right">
+                    {/* Col 8: Menu (2%) */}
+                    <td className="py-4 px-3 w-[2%] text-right">
                       <div className="w-5 h-5 bg-slate-100 rounded-full ml-auto" />
                     </td>
                   </tr>
@@ -489,22 +490,22 @@ export default function SolutionAgentsTable({
                       {/* Collapsible Group Row Header (ReUI Solution Agents 2 'ip' Style) */}
                       <tr
                         onClick={() => toggleGroup(group.id)}
-                        className="bg-slate-100/75 hover:bg-slate-100 transition-colors border-y border-slate-200/90 cursor-pointer select-none"
+                        className="bg-slate-100/80 hover:bg-slate-100 transition-colors border-y border-slate-200/90 cursor-pointer select-none"
                       >
-                        <td colSpan={8} className="py-2 px-3 sm:px-4">
+                        <td colSpan={8} className="py-2.5 px-5 sm:px-6">
                           <div className="flex items-center justify-between">
                             {/* Left: Chevron + Dot + Group Label + Count badge */}
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   toggleGroup(group.id)
                                 }}
-                                className="p-0.5 rounded text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                               >
                                 <ChevronRight
-                                  className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                                  className={`w-4 h-4 transition-transform duration-150 ${
                                     isExpanded ? "rotate-90 text-slate-800" : "text-slate-400"
                                   }`}
                                 />
@@ -512,11 +513,11 @@ export default function SolutionAgentsTable({
 
                               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${group.dotClass}`} />
 
-                              <span className="font-bold text-sm sm:text-[14.5px] text-slate-900 truncate">
+                              <span className="font-bold text-sm sm:text-base text-slate-900 truncate">
                                 {group.label}
                               </span>
 
-                              <span className="px-2 py-0.2 rounded-full text-xs font-bold bg-white text-slate-600 border border-slate-200/90 shadow-2xs shrink-0">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-white text-slate-600 border border-slate-200/90 shadow-2xs shrink-0">
                                 {group.count}
                               </span>
                             </div>
@@ -545,7 +546,7 @@ export default function SolutionAgentsTable({
                           const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
                           const progressVal = req.progress ?? (req.status === "Hoàn thành" ? 100 : 35)
 
-                          const rowHeightClass = (density as string) === "compact" ? "py-2.5" : "py-3"
+                          const rowHeightClass = (density as string) === "compact" ? "py-2.5" : "py-3.5 sm:py-4"
                           const priorityStr = (req.priority || "Normal").toLowerCase()
 
                           // Dates
@@ -582,11 +583,11 @@ export default function SolutionAgentsTable({
                               }`}
                             >
                               {/* 1. Task Title & UX Business Need & Journey */}
-                              <td className={`${rowHeightClass} px-4 sm:px-5 min-w-0 max-w-0 overflow-hidden`}>
+                              <td className={`${rowHeightClass} px-5 sm:px-6 min-w-0 max-w-0 overflow-hidden`}>
                                 <div className="space-y-1 min-w-0 pr-2">
                                   {/* Line 1: Tiêu đề bài toán + Badge PO Pending / Pending nếu có (Ẩn khi đang trong group Pending) */}
                                   <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className="text-sm sm:text-[14.5px] font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug truncate" title={req.title}>
+                                    <span className="text-sm sm:text-[15px] font-bold text-slate-900 group-hover:text-[#1057FB] transition-colors leading-snug truncate" title={req.title}>
                                       {req.title}
                                     </span>
                                     {pendingInfo.isPending && group.id !== "pending" && (
@@ -612,7 +613,7 @@ export default function SolutionAgentsTable({
                                         <span className="inline-flex items-center px-1.5 py-0.2 rounded font-bold bg-slate-200/90 text-slate-800 text-[10px] shrink-0">
                                           Lí do
                                         </span>
-                                        <span className="text-[#1057FB] font-medium truncate min-w-0 text-[11.5px]">
+                                        <span className="text-[#1057FB] font-medium truncate min-w-0 text-[12px]">
                                           {pendingInfo.reason || "Theo đoạn chat của designer khi viết @pending"}
                                         </span>
                                       </div>
@@ -621,7 +622,7 @@ export default function SolutionAgentsTable({
                                         <span className="inline-flex items-center px-1.5 py-0.2 rounded font-bold bg-amber-200 text-amber-900 text-[10px] shrink-0">
                                           Quá hạn 24h
                                         </span>
-                                        <span className="text-amber-800 font-medium truncate min-w-0 text-[11.5px]">
+                                        <span className="text-amber-800 font-medium truncate min-w-0 text-[12px]">
                                           Designer đã gửi lại Figma cho PO nhưng chưa nhận được phản hồi duyệt{pendingInfo.elapsedHours ? ` (${pendingInfo.elapsedHours}h)` : ""}
                                         </span>
                                       </div>
@@ -629,17 +630,17 @@ export default function SolutionAgentsTable({
                                   ) : uxNeedText ? (
                                     <div className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0" title={`Nhu cầu UX: ${uxNeedText}`}>
                                       {showJourneyBadge && (
-                                        <span className="inline-flex items-center px-1.5 py-0.2 rounded font-medium bg-blue-50 text-blue-800 border border-blue-100 text-[10.5px] shrink-0">
+                                        <span className="inline-flex items-center px-1.5 py-0.2 rounded font-medium bg-blue-50 text-blue-800 border border-blue-100 text-[11px] shrink-0">
                                           {req.feature_journey}
                                         </span>
                                       )}
-                                      <span className="text-slate-500 font-normal truncate min-w-0">
+                                      <span className="text-slate-500 font-normal truncate min-w-0 text-xs sm:text-[12.5px]">
                                         {uxNeedText}
                                       </span>
                                     </div>
                                   ) : showJourneyBadge ? (
                                     <div className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0">
-                                      <span className="inline-flex items-center px-1.5 py-0.2 rounded font-medium bg-blue-50 text-blue-800 border border-blue-100 text-[10.5px] shrink-0">
+                                      <span className="inline-flex items-center px-1.5 py-0.2 rounded font-medium bg-blue-50 text-blue-800 border border-blue-100 text-[11px] shrink-0">
                                         {req.feature_journey}
                                       </span>
                                     </div>
@@ -647,8 +648,8 @@ export default function SolutionAgentsTable({
 
                                   {/* Line 3: ID task & Ngày cập nhật lần cuối (Thay cho Khâu) */}
                                   {showContext && (
-                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-normal truncate">
-                                      <span>{req.request_id}</span>
+                                    <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400 font-normal truncate">
+                                      <span className="font-mono">{req.request_id}</span>
                                       <span>•</span>
                                       <span>
                                         Cập nhật {formatDateLabel(req.last_updated)}
@@ -658,17 +659,17 @@ export default function SolutionAgentsTable({
                                 </div>
                               </td>
 
-                              {/* 3. Sản phẩm (Product) */}
-                              <td className={`${rowHeightClass} px-3 min-w-0 overflow-hidden`}>
+                              {/* 2. Sản phẩm (Product) */}
+                              <td className={`${rowHeightClass} px-4 min-w-0 overflow-hidden`}>
                                 {(() => {
                                   const prodName = req.product || "App MBBank"
                                   const prodColor = getProductColorDef(prodName)
                                   return (
                                     <span
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${prodColor.badgeClass} shadow-2xs h-[24px]`}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold ${prodColor.badgeClass} shadow-2xs h-[26px]`}
                                     >
                                       <span className={`w-1.5 h-1.5 rounded-full ${prodColor.dotClass} shrink-0`} />
-                                      <span className="truncate max-w-[110px]" title={prodName}>
+                                      <span className="truncate max-w-full" title={prodName}>
                                         {prodName}
                                       </span>
                                     </span>
@@ -676,8 +677,8 @@ export default function SolutionAgentsTable({
                                 })()}
                               </td>
 
-                              {/* 4. Squad nghiệp vụ */}
-                              <td className={`${rowHeightClass} px-3 min-w-0 overflow-hidden`}>
+                              {/* 3. Squad nghiệp vụ */}
+                              <td className={`${rowHeightClass} px-4 min-w-0 overflow-hidden`}>
                                 {(() => {
                                   const rawSquad = req.squad_name || req.preferred_squad
                                   const hasSquad = Boolean(
@@ -692,7 +693,7 @@ export default function SolutionAgentsTable({
 
                                   if (!hasSquad) {
                                     return (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-normal text-slate-400 bg-slate-50 border border-slate-200/60 h-[24px]">
+                                      <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-normal text-slate-400 bg-slate-50 border border-slate-200/60 h-[26px]">
                                         Chưa phân squad
                                       </span>
                                     )
@@ -701,17 +702,17 @@ export default function SolutionAgentsTable({
                                   const squadColor = getSquadColorDef(rawSquad, req.product)
                                   return (
                                     <span
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${squadColor.badgeClass} shadow-2xs h-[24px]`}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold ${squadColor.badgeClass} shadow-2xs h-[26px]`}
                                     >
                                       <span className={`w-1.5 h-1.5 rounded-full ${squadColor.dotClass} shrink-0`} />
-                                      <span className="truncate max-w-[110px]" title={squadDisplay}>{squadDisplay}</span>
+                                      <span className="truncate max-w-full" title={squadDisplay}>{squadDisplay}</span>
                                     </span>
                                   )
                                 })()}
                               </td>
 
                               {/* 4. Người thực hiện (Assignee) */}
-                              <td className={`${rowHeightClass} px-3 min-w-0 overflow-hidden`}>
+                              <td className={`${rowHeightClass} px-4 min-w-0 overflow-hidden`}>
                                 {isAssigned ? (
                                   <div className="flex items-center gap-2 min-w-0">
                                     <UserAvatar
@@ -731,7 +732,7 @@ export default function SolutionAgentsTable({
                               </td>
 
                               {/* 5. Trạng thái (Khâu UX theo Cấu hình Quy trình & SLA) */}
-                              <td className={`${rowHeightClass} px-3 text-left`}>
+                              <td className={`${rowHeightClass} px-4 text-left`}>
                                 {(() => {
                                   const phaseInfo = getTaskPhaseStatus(req)
                                   const cfg = getStatusConfig(phaseInfo.name)
@@ -740,53 +741,53 @@ export default function SolutionAgentsTable({
                                   if (pendingClass.isPending) {
                                     return (
                                       <span
-                                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-[24px]"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-[26px]"
                                         title={`Pending: ${pendingClass.reason || pendingClass.label}`}
                                       >
                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                                        <span className="truncate max-w-[110px]">{pendingClass.label || phaseInfo.name}</span>
+                                        <span className="truncate max-w-full">{pendingClass.label || phaseInfo.name}</span>
                                       </span>
                                     )
                                   }
 
                                   return (
                                     <span
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap h-[24px] ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border shadow-2xs whitespace-nowrap h-[26px] ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
                                       title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
                                     >
                                       <span className={`w-1.5 h-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
-                                      <span className="truncate max-w-[115px]">{phaseInfo.name}</span>
+                                      <span className="truncate max-w-full">{phaseInfo.name}</span>
                                     </span>
                                   )
                                 })()}
                               </td>
 
-                              {/* 6. Độ ưu tiên (Priority Badge) - Đồng nhất chiều cao h-[24px] */}
-                              <td className={`${rowHeightClass} px-3 text-right`}>
+                              {/* 6. Độ ưu tiên (Priority Badge) - Đồng nhất chiều cao h-[26px] */}
+                              <td className={`${rowHeightClass} px-4 text-right`}>
                                 {priorityStr === "urgent" || priorityStr === "khẩn cấp" ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs h-[24px]">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs h-[26px]">
                                     Khẩn cấp
                                   </span>
                                 ) : priorityStr === "high" || priorityStr === "cao" ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs h-[24px]">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs h-[26px]">
                                     Cao
                                   </span>
                                 ) : priorityStr === "low" || priorityStr === "thấp" ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 h-[24px]">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 h-[26px]">
                                     Thấp
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 h-[24px]">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 h-[26px]">
                                     Normal
                                   </span>
                                 )}
                               </td>
 
                               {/* 7. Thời hạn & Release: Design done (trên) & Release (dưới) - Không xuống dòng */}
-                              <td className={`${rowHeightClass} px-3 text-right whitespace-nowrap shrink-0 min-w-[155px]`}>
+                              <td className={`${rowHeightClass} px-4 text-right whitespace-nowrap shrink-0 min-w-[155px]`}>
                                 <div className="flex flex-col items-end gap-0.5 whitespace-nowrap shrink-0">
                                   {/* Design done (Hạn hoàn thành UX) - Nằm trên */}
-                                  <div className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-800 font-mono whitespace-nowrap shrink-0" title={`Hạn hoàn thành thiết kế (Design done): ${formatDisplayDate(designDoneDate)}`}>
+                                  <div className="inline-flex items-center gap-1.5 text-xs sm:text-[13.5px] font-semibold text-slate-800 font-mono whitespace-nowrap shrink-0" title={`Hạn hoàn thành thiết kế (Design done): ${formatDisplayDate(designDoneDate)}`}>
                                     <span className="text-xs text-slate-400 font-sans font-normal whitespace-nowrap shrink-0">Design done:</span>
                                     <span className="whitespace-nowrap shrink-0">{formatDisplayDate(designDoneDate)}</span>
                                     {isOverdue && group.id !== "overload" && (
@@ -798,7 +799,7 @@ export default function SolutionAgentsTable({
                                   {/* Release dự kiến - Nằm dưới */}
                                   {releaseDate && (
                                     <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-mono whitespace-nowrap shrink-0" title={`Ngày Release dự kiến: ${formatDisplayDate(releaseDate)}`}>
-                                      <span className="text-[11px] text-slate-400 font-sans font-normal whitespace-nowrap shrink-0">Release:</span>
+                                      <span className="text-[11.5px] text-slate-400 font-sans font-normal whitespace-nowrap shrink-0">Release:</span>
                                       <span className="font-semibold text-rose-600 whitespace-nowrap shrink-0">{formatDisplayDate(releaseDate)}</span>
                                     </div>
                                   )}
@@ -806,7 +807,7 @@ export default function SolutionAgentsTable({
                               </td>
 
                               {/* 8. Thao tác nhanh (Action Menu) */}
-                              <td className={`${rowHeightClass} px-2 text-right relative`} onClick={(e) => e.stopPropagation()}>
+                              <td className={`${rowHeightClass} px-3 text-right relative`} onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -819,16 +820,14 @@ export default function SolutionAgentsTable({
                                   <MoreHorizontal className="w-4 h-4" />
                                 </button>
 
+                                {/* Action Popover */}
                                 {activeActionMenuId === req.request_id && (
-                                  <div
-                                    className="absolute right-2 top-full mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-left"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
+                                  <div className="absolute right-3 top-8 z-30 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 text-left animate-in fade-in-50 zoom-in-95">
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setActiveActionMenuId(null)
                                         onSelectRequest(req)
+                                        setActiveActionMenuId(null)
                                       }}
                                       className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                                     >
@@ -866,7 +865,7 @@ export default function SolutionAgentsTable({
         </div>
 
         {/* 4. Queue Mix Footer (ReUI Solution Agents 2 Style) */}
-        <div className="bg-slate-50/80 border-t border-slate-200/90 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-500">
+        <div className="bg-slate-50/90 border-t border-slate-200/90 px-5 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-500">
           {/* Left: Info */}
           <div className="flex items-center gap-2">
             <span className="text-slate-600 font-medium">Bảng theo dõi tiến độ bài toán UX</span>
@@ -877,7 +876,7 @@ export default function SolutionAgentsTable({
             <span className="font-semibold text-slate-700 font-mono">
               {totalVisible}/{requests.length}
             </span>
-            <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
+            <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
               totalVisible !== requests.length
                 ? "bg-blue-50 text-[#1057FB] border-blue-200"
                 : "bg-slate-100 text-slate-600 border-slate-200"

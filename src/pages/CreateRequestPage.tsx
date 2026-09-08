@@ -22,10 +22,12 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
 
   return (
     <main
+      id="main-content"
+      tabIndex={-1}
       className={
         isSuccess
-          ? "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-2 min-h-[calc(100vh-1rem)] flex flex-col justify-center animate-in fade-in-50 duration-200"
-          : "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16"
+          ? "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-2 min-h-[calc(100vh-1rem)] flex flex-col justify-center animate-in fade-in-50 duration-200 outline-none"
+          : "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none"
       }
     >
       {isPo && !isSuccess && (
@@ -37,6 +39,7 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
               if (onBack) onBack()
               else window.location.hash = "#track"
             }}
+            aria-label="Quay lại Danh sách yêu cầu"
             className="text-slate-600 hover:text-slate-900 font-semibold gap-2 rounded-xl -ml-2.5 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-[#1057FB]" />

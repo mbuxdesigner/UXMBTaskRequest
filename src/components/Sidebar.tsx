@@ -161,18 +161,21 @@ export default function Sidebar({
   const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
 
   const renderSidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
+    <nav aria-label="Menu điều hướng ứng dụng" className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
       
       {/* 1. Header / Workspace Brand */}
       <div className="px-4 pt-5 pb-3">
         <button
           type="button"
           onClick={() => onNavigate("overview")}
+          aria-label="Về trang chủ MB UXTeam"
           className="flex items-center gap-2.5 font-bold text-slate-900 text-left cursor-pointer group select-none"
         >
           <img
             src="/favicon.svg"
             alt="MB UXTeam"
+            width="28"
+            height="28"
             className="w-7 h-7 object-contain shrink-0 group-hover:scale-105 transition-transform"
           />
           <span className="text-[15px] font-bold text-slate-900 tracking-tight">
@@ -187,7 +190,7 @@ export default function Sidebar({
         {/* SECTION 1: QUẢN LÝ CÔNG VIỆC (Platform) */}
         {hasPlatformItems && (
           <div className="space-y-1.5">
-            <p className="px-3 pt-1 pb-1.5 text-xs font-medium text-slate-400 tracking-normal">
+            <p className="px-3 pt-1 pb-1.5 text-xs font-semibold text-slate-600 tracking-normal">
               {APP_CONTENT.sidebar.sections.platform}
             </p>
 
@@ -262,7 +265,7 @@ export default function Sidebar({
         {/* SECTION 2: TOOLS (Resources) */}
         {hasResourceItems && (
           <div className="space-y-1">
-            <p className="px-3 py-1 text-xs font-medium text-slate-400 tracking-normal">
+            <p className="px-3 py-1 text-xs font-semibold text-slate-600 tracking-normal">
               {APP_CONTENT.sidebar.sections.resources}
             </p>
 
@@ -353,7 +356,8 @@ export default function Sidebar({
 
           <button
             type="button"
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1"
+            aria-label="Tùy chọn người dùng"
+            className="text-slate-500 hover:text-slate-800 transition-colors p-1"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
@@ -462,7 +466,7 @@ export default function Sidebar({
           </div>
         )}
       </div>
-    </div>
+    </nav>
   )
 
   return (
@@ -488,6 +492,8 @@ export default function Sidebar({
           <img
             src="/favicon.svg"
             alt="MB UXTeam"
+            width="28"
+            height="28"
             className="w-7 h-7 object-contain shrink-0"
           />
           <span className="text-[15px] font-bold text-slate-900 tracking-tight">MB UXTeam</span>
@@ -495,6 +501,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
           className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-200/60 cursor-pointer"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

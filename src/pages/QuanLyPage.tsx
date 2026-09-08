@@ -20,6 +20,7 @@ import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { BlurFade } from "@/components/jolyui/blur-fade"
 import PageHeader from "@/components/common/PageHeader"
+import { isMockDesigner } from "@/components/track/RequestDetail"
 import {
   Users,
   Eye,
@@ -247,36 +248,8 @@ export const AVAILABLE_SQUADS_LIST = [
   "Design System MB",
 ]
 
-// Initial Mock Data
+// Initial Mock Data (loại bỏ mock user)
 const INITIAL_TEAM_MEMBERS: TeamMember[] = [
-  {
-    id: "mem-1",
-    name: "Nguyễn Văn Cường",
-    email: "cuong.designowner@mbbank.com.vn",
-    role: "Design Owner",
-    squad: "Design System & Core",
-    squads: ["Design System & Core", "Core Banking & Tài khoản", "Lending & Vay vốn"],
-    products: ["App MBBank", "Core Banking", "Design System MB"],
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-    activeTasks: 4,
-    capacityLimit: 6,
-    status: "Active",
-    permissions: { canAssign: true, canApprovePo: true, canExport: true, canManageSystem: true },
-  },
-  {
-    id: "mem-2",
-    name: "Lê Hoàng Nam",
-    email: "nam.designer@mbbank.com.vn",
-    role: "Designer",
-    squad: "Lending Squad",
-    squads: ["Lending & Vay vốn", "Cards & Thanh toán số", "BaaS & Open API"],
-    products: ["Lending & Vay vốn", "Cards & Digital Payment"],
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-    activeTasks: 3,
-    capacityLimit: 5,
-    status: "Active",
-    permissions: { canAssign: false, canApprovePo: false, canExport: true, canManageSystem: false },
-  },
   {
     id: "mem-3",
     name: "Trần Mai Lan",
@@ -290,20 +263,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     capacityLimit: 8,
     status: "Active",
     permissions: { canAssign: false, canApprovePo: true, canExport: true, canManageSystem: false },
-  },
-  {
-    id: "mem-4",
-    name: "Phạm Hải Đăng",
-    email: "dang.designer@mbbank.com.vn",
-    role: "Designer",
-    squad: "Digital Wealth",
-    squads: ["Digital Wealth & Đầu tư", "Core Banking & Tài khoản"],
-    products: ["Digital Wealth", "Private Banking & VIP"],
-    avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    activeTasks: 2,
-    capacityLimit: 5,
-    status: "Active",
-    permissions: { canAssign: false, canApprovePo: false, canExport: true, canManageSystem: false },
   },
   {
     id: "mem-5",
@@ -1242,11 +1201,17 @@ export default function QuanLyPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        list = parsed.map((m: any) => ({
-          ...m,
-          squads: Array.isArray(m.squads) && m.squads.length > 0 ? m.squads : (m.squad ? [m.squad] : []),
-          products: Array.isArray(m.products) && m.products.length > 0 ? m.products : (m.product ? [m.product] : []),
-        }))
+        list = parsed
+          .filter((m: any) => !isMockDesigner(m.name || m.displayName, m.email || m.teamsEmail))
+          .map((m: any) => ({
+            ...m,
+            squads: Array.isArray(m.squads) && m.squads.length > 0 ? m.squads : (m.squad ? [m.squad] : []),
+            products: Array.isArray(m.products) && m.products.length > 0 ? m.products : (m.product ? [m.product] : []),
+          }))
+        if (parsed.length !== list.length) {
+          localStorage.setItem("mbbank_admin_team", JSON.stringify(list))
+          localStorage.setItem("mbbank_team_members", JSON.stringify(list))
+        }
       } catch {}
     }
     // Đảm bảo luôn có ít nhất nhân sự vai trò Business và PO nếu danh sách cũ chưa có
@@ -2489,7 +2454,7 @@ export default function QuanLyPage() {
   }
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
+    <main id="main-content" tabIndex={-1} className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none">
       
       {/* 1. Page Header Đồng Bộ */}
       <BlurFade delay={0.02}>
@@ -2508,6 +2473,7 @@ export default function QuanLyPage() {
                 size="sm"
                 disabled={isPullingMasterData}
                 onClick={handlePullMasterDataFromSheet}
+                aria-label="Tải toàn bộ cấu hình từ Google Sheet"
                 className="h-9 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                 title="Tải toàn bộ cấu hình (Squads, Sản phẩm, Khâu UX, Trạng thái, Phân quyền) từ Google Sheet về máy"
               >

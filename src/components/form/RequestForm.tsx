@@ -478,7 +478,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
           {/* 01 · THÔNG TIN YÊU CẦU */}
           <div className="space-y-4">
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               01 · THÔNG TIN YÊU CẦU
             </h2>
 
@@ -545,40 +545,6 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                   className="w-full"
                   buttonClassName="w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800"
                 />
-                {form.preferred_squad && (() => {
-                  const selectedSq = relevantSquads.find(
-                    (s: any) => (s.name || s.squad_name) === form.preferred_squad
-                  )
-                  if (!selectedSq) return null
-                  const pos: string[] = selectedSq.pos || (selectedSq.leadPo ? [selectedSq.leadPo] : [])
-                  const businesses: string[] = selectedSq.businesses || (selectedSq.leadBusiness ? [selectedSq.leadBusiness] : [])
-                  const designers: string[] = selectedSq.designers || (selectedSq.leadDesigner ? [selectedSq.leadDesigner] : [])
-
-                  if (pos.length === 0 && businesses.length === 0 && designers.length === 0) return null
-
-                  return (
-                    <div className="text-[11.5px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200/80 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      {pos.length > 0 && (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                          <strong className="text-purple-800 font-medium">PO:</strong> {pos.join(", ")}
-                        </span>
-                      )}
-                      {businesses.length > 0 && (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          <strong className="text-amber-800 font-medium">Biz:</strong> {businesses.join(", ")}
-                        </span>
-                      )}
-                      {designers.length > 0 && (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          <strong className="text-blue-800 font-medium">UX:</strong> {designers.join(", ")}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })()}
               </div>
 
               {/* Cột 3: Loại yêu cầu */}
@@ -603,7 +569,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
           {/* 02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ */}
           <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ
             </h2>
 
@@ -670,7 +636,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
           {/* 03 · TÀI LIỆU ĐÍNH KÈM */}
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                 03 · TÀI LIỆU ĐÍNH KÈM
               </h2>
 

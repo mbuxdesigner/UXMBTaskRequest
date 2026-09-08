@@ -567,7 +567,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const completedCount = groupCounts.completed
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16">
+    <main id="main-content" tabIndex={-1} className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none">
       {/* 1. Page Header Đồng Bộ theo Design System */}
       <PageHeader
         breadcrumb={{
@@ -701,6 +701,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               variant="outline"
               size="sm"
               onClick={() => loadData(true)}
+              aria-label="Làm mới danh sách task"
               className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -711,7 +712,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       />
 
       {/* Unified Container Card */}
-      <div className="bg-white rounded-2xl shadow-xs overflow-hidden min-h-[calc(100vh-13rem)] flex flex-col justify-between">
+      <div className="bg-white rounded-2xl shadow-xs overflow-hidden border border-slate-200/80 flex flex-col">
         {/* Unified Filter & Toolbar Bar */}
         <div className="p-4 sm:px-6 bg-slate-50/50 border-b border-slate-100">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
@@ -722,6 +723,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Tìm kiếm yêu cầu, designer, squad..."
+                aria-label="Tìm kiếm yêu cầu theo mã, tiêu đề, designer hoặc squad"
                 startIcon={<Search className="w-4 h-4 text-slate-400" />}
                 className="h-10 text-xs sm:text-sm bg-white rounded-xl border-slate-200 shadow-2xs w-full"
               />
@@ -730,14 +732,23 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             {/* Right: View Mode Switcher + Filter Popover */}
             <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
               {/* View Mode Switcher: Bảng | Kanban | Lưới */}
-              <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
+              <div role="tablist" aria-label="Chế độ xem task" className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
                 <button
                   type="button"
-                  onClick={() => setViewMode("table")}
+                  role="tab"
+                  aria-selected={viewMode === "table"}
+                  aria-label="Xem dạng bảng chi tiết"
+                  onClick={() => {
+                    if (typeof document !== "undefined" && "startViewTransition" in document) {
+                      (document as any).startViewTransition(() => setViewMode("table"))
+                    } else {
+                      setViewMode("table")
+                    }
+                  }}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
                     viewMode === "table"
                       ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-500 hover:text-slate-900 font-medium"
+                      : "text-slate-600 hover:text-slate-900 font-medium"
                   }`}
                   title="Dạng bảng chi tiết"
                 >
@@ -746,11 +757,20 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("kanban")}
+                  role="tab"
+                  aria-selected={viewMode === "kanban"}
+                  aria-label="Xem bảng Kanban"
+                  onClick={() => {
+                    if (typeof document !== "undefined" && "startViewTransition" in document) {
+                      (document as any).startViewTransition(() => setViewMode("kanban"))
+                    } else {
+                      setViewMode("kanban")
+                    }
+                  }}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
                     viewMode === "kanban"
                       ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-500 hover:text-slate-900 font-medium"
+                      : "text-slate-600 hover:text-slate-900 font-medium"
                   }`}
                   title="Bảng Kanban"
                 >
@@ -759,11 +779,20 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("grid")}
+                  role="tab"
+                  aria-selected={viewMode === "grid"}
+                  aria-label="Xem dạng lưới thẻ"
+                  onClick={() => {
+                    if (typeof document !== "undefined" && "startViewTransition" in document) {
+                      (document as any).startViewTransition(() => setViewMode("grid"))
+                    } else {
+                      setViewMode("grid")
+                    }
+                  }}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
                     viewMode === "grid"
                       ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-500 hover:text-slate-900 font-medium"
+                      : "text-slate-600 hover:text-slate-900 font-medium"
                   }`}
                   title="Dạng lưới thẻ"
                 >
@@ -878,7 +907,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="p-0 flex-1 flex flex-col"
+              className="p-0 w-full"
             >
               <SolutionAgentsTable
                 requests={filteredRequests}

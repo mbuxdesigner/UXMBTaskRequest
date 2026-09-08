@@ -211,7 +211,7 @@ export default function TongQuanPage() {
   }, [requests])
 
   return (
-    <main className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-slate-900 min-h-screen animate-in fade-in-50 duration-200 pb-16">
+    <main id="main-content" tabIndex={-1} className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 text-slate-900 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none">
       {/* =========================================================================
           REUI HEADER BREADCRUMB & COMMAND BAR
           ========================================================================= */}
@@ -233,6 +233,7 @@ export default function TongQuanPage() {
             size="sm"
             onClick={() => loadData(true)}
             loading={refreshing}
+            aria-label="Đồng bộ dữ liệu bảng điều hành"
             className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
@@ -323,14 +324,14 @@ export default function TongQuanPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <span className="p-1 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/80 shadow-2xs">
+                <span className="p-1 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/80 shadow-2xs" aria-hidden="true">
                   <Sparkles className="w-4 h-4" />
                 </span>
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   AI Executive Digest
-                </h3>
+                </h2>
               </div>
-              <span className="text-[11px] font-mono text-slate-400 font-semibold">Realtime Synthesis</span>
+              <span className="text-[11px] font-mono text-slate-600 font-semibold">Realtime Synthesis</span>
             </div>
 
             <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
@@ -373,9 +374,9 @@ export default function TongQuanPage() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
             <span>Tổng số: <strong>{totalCount}</strong> đề bài được tiếp nhận</span>
-            <span className="font-mono text-emerald-600 font-bold">{completedCount} hoàn thành</span>
+            <span className="font-mono text-[#047857] font-bold">{completedCount} hoàn thành</span>
           </div>
         </div>
 
@@ -383,10 +384,10 @@ export default function TongQuanPage() {
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Phân bổ Tải trọng (Workload Status)
-              </h3>
-              <span className="text-xs font-mono font-bold text-slate-500">{totalCount} tasks</span>
+              </h2>
+              <span className="text-xs font-mono font-bold text-slate-600">{totalCount} tasks</span>
             </div>
 
             {/* Segmented Bar */}
@@ -421,7 +422,7 @@ export default function TongQuanPage() {
 
           {/* Designer capacity pills */}
           <div className="pt-3 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nhân sự chủ chốt</p>
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">Nhân sự chủ chốt</p>
             <div className="flex items-center gap-2 flex-wrap">
               {assigneeStats.map((item, idx) => (
                 <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
@@ -449,14 +450,14 @@ export default function TongQuanPage() {
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">
+            <h2 className="text-sm font-bold text-slate-900">
               Nhật ký Hoạt động Tác nghiệp Gần nhất
-            </h3>
-            <p className="text-xs text-slate-500">
+            </h2>
+            <p className="text-xs text-slate-600">
               Cập nhật tương tác, đổi khâu và phản hồi trực tiếp giữa PO & Designer
             </p>
           </div>
-          <span className="text-xs font-mono text-slate-400 font-semibold">{recentActivities.length} sự kiện</span>
+          <span className="text-xs font-mono text-slate-600 font-semibold">{recentActivities.length} sự kiện</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
@@ -470,7 +471,7 @@ export default function TongQuanPage() {
                 <p className="text-xs font-bold text-slate-900 truncate group-hover:text-[#1057FB] transition-colors">
                   {act.taskTitle}
                 </p>
-                <span className="text-[10px] font-mono text-slate-400 shrink-0">{act.time}</span>
+                <span className="text-[10px] font-mono text-slate-600 shrink-0">{act.time}</span>
               </div>
 
               <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-snug">

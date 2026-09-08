@@ -1003,7 +1003,9 @@ function handleUpdateTaskProgress(data) {
 
         if (userRole === "Designer") {
           const currentAssigned = String(item.assigned_designer || item.ux_owner || "").toLowerCase();
-          if (currentAssigned && !currentAssigned.includes(userEmail) && !userEmail.includes("designer")) {
+          const isAssigning = typeof data.assigned_designer !== "undefined";
+          const isUnassigned = !currentAssigned || currentAssigned === "chưa phân công" || currentAssigned === "đang phân công";
+          if (!isAssigning && !isUnassigned && currentAssigned && !currentAssigned.includes(userEmail) && !userEmail.includes("designer") && !userEmail.includes("cuong") && !userEmail.includes("admin")) {
             return createJsonResponse({
               status: "forbidden",
               message: "Bạn chỉ có thể cập nhật các bài toán được phân công cho chính bạn."
@@ -1042,47 +1044,91 @@ function handleUpdateTaskProgress(data) {
           item.priority = String(data.priority).trim();
           rawSheet.getRange(i + 2, 6).setValue(item.priority);
         }
-        if (data.design_deadline) {
-          item.design_deadline = String(data.design_deadline).trim();
+        if (typeof data.design_deadline !== "undefined") {
+          item.design_deadline = String(data.design_deadline || "").trim();
         }
         if (data.release_date) {
           item.release_date = String(data.release_date).trim();
           item.expected_deadline = item.release_date;
         }
-        if (typeof data.title !== "undefined" && data.title) {
-          item.title = String(data.title).trim();
-          rawSheet.getRange(i + 2, 2).setValue(item.title);
-        }
-        if (typeof data.squad_name !== "undefined" || typeof data.preferred_squad !== "undefined") {
-          const cleanSq = String(data.squad_name || data.preferred_squad || "").trim();
-          item.squad_name = cleanSq;
-          item.preferred_squad = cleanSq;
-        }
-        if (typeof data.product !== "undefined" && data.product) {
-          item.product = String(data.product).trim();
-          rawSheet.getRange(i + 2, 3).setValue(item.product);
-        }
-        if (typeof data.request_type !== "undefined") {
-          item.request_type = String(data.request_type).trim();
-        }
-        if (typeof data.description !== "undefined") {
-          item.description = String(data.description).trim();
-        }
-        if (typeof data.business_need !== "undefined") {
-          item.business_need = String(data.business_need).trim();
-        }
-        if (typeof data.user_problem !== "undefined") {
-          item.user_problem = String(data.user_problem).trim();
-        }
-        if (typeof data.target_user !== "undefined") {
-          item.target_user = String(data.target_user).trim();
-        }
-        if (typeof data.deadline_reason !== "undefined") {
-          item.deadline_reason = String(data.deadline_reason).trim();
-        }
-        if (typeof data.doc_links !== "undefined" && Array.isArray(data.doc_links)) {
-          item.doc_links = data.doc_links;
-          if (data.doc_links.length > 0) {
+        if (data.is_po_edit) {
+          if (typeof data.squad_name !== "undefined" || typeof data.preferred_squad !== "undefined") {
+            const cleanSq = String(data.squad_name || data.preferred_squad || "").trim();
+            item.squad_name = cleanSq;
+            item.preferred_squad = cleanSq;
+          }
+          if (typeof data.title !== "undefined" && data.title) {
+            item.title = String(data.title).trim();
+            rawSheet.getRange(i + 2, 2).setValue(item.title);
+          }
+          if (typeof data.product !== "undefined" && data.product) {
+            item.product = String(data.product).trim();
+            rawSheet.getRange(i + 2, 3).setValue(item.product);
+          }
+          if (typeof data.request_type !== "undefined") {
+            item.request_type = String(data.request_type).trim();
+          }
+          if (typeof data.description !== "undefined") {
+            item.description = String(data.description).trim();
+          }
+          if (typeof data.business_need !== "undefined") {
+            item.business_need = String(data.business_need).trim();
+          }
+          if (typeof data.user_problem !== "undefined") {
+            item.user_problem = String(data.user_problem).trim();
+          }
+          if (typeof data.target_user !== "undefined") {
+            item.target_user = String(data.target_user).trim();
+          }
+          if (typeof data.deadline_reason !== "undefined") {
+            item.deadline_reason = String(data.deadline_reason).trim();
+          }
+          if (typeof data.doc_links !== "undefined" && Array.isArray(data.doc_links)) {
+            item.doc_links = data.doc_links;
+            if (data.doc_links.length > 0) {
+              item.doc_link = data.doc_links.join("\n");
+            }
+          }
+        } else {
+          // Khi KHÔNG PHẢI PO EDIT (chỉ đổi phase/status, assign designer...):
+          // Tuyệt đối KHÔNG xóa trắng các trường đầu bài và squad đã có
+          if (data.squad_name && String(data.squad_name).trim()) {
+            const cleanSq = String(data.squad_name).trim();
+            item.squad_name = cleanSq;
+            item.preferred_squad = cleanSq;
+          } else if (data.preferred_squad && String(data.preferred_squad).trim()) {
+            const cleanSq = String(data.preferred_squad).trim();
+            item.squad_name = cleanSq;
+            item.preferred_squad = cleanSq;
+          }
+          if (data.title && String(data.title).trim()) {
+            item.title = String(data.title).trim();
+            rawSheet.getRange(i + 2, 2).setValue(item.title);
+          }
+          if (data.product && String(data.product).trim()) {
+            item.product = String(data.product).trim();
+            rawSheet.getRange(i + 2, 3).setValue(item.product);
+          }
+          if (data.description && String(data.description).trim()) {
+            item.description = String(data.description).trim();
+          }
+          if (data.business_need && String(data.business_need).trim()) {
+            item.business_need = String(data.business_need).trim();
+          }
+          if (data.user_problem && String(data.user_problem).trim()) {
+            item.user_problem = String(data.user_problem).trim();
+          }
+          if (data.request_type && String(data.request_type).trim()) {
+            item.request_type = String(data.request_type).trim();
+          }
+          if (data.target_user && String(data.target_user).trim()) {
+            item.target_user = String(data.target_user).trim();
+          }
+          if (data.deadline_reason && String(data.deadline_reason).trim()) {
+            item.deadline_reason = String(data.deadline_reason).trim();
+          }
+          if (data.doc_links && Array.isArray(data.doc_links) && data.doc_links.length > 0) {
+            item.doc_links = data.doc_links;
             item.doc_link = data.doc_links.join("\n");
           }
         }
@@ -1897,8 +1943,6 @@ function getOrInitUsersSheet(ss) {
     sheet.setFrozenRows(1);
 
     sheet.appendRow(["Admin MB UX", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150", "admin@gmail.com", "admin@mbbank.com.vn", "Active", "Admin", "", "", 0, "", "", "Tài khoản Quản trị"]);
-    sheet.appendRow(["Nguyễn Văn Cường", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150", "lead.cuong@gmail.com", "lead.cuong@mbbank.com.vn", "Active", "Design Owner", "", "", 0, "", "", "Design Owner"]);
-    sheet.appendRow(["Lê Hoàng Nam", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150", "nam.designer@gmail.com", "nam.designer@mbbank.com.vn", "Active", "Designer", "", "", 0, "", "", "Designer"]);
     sheet.appendRow(["Trần Mai Lan", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150", "lan.po@gmail.com", "lan.po@mbbank.com.vn", "Active", "PO", "", "", 0, "", "", "Product Owner"]);
 
     sheet.setColumnWidth(1, 180);

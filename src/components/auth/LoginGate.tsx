@@ -69,11 +69,11 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   const [email, setEmail] = useState("")
   const [quoteIndex, setQuoteIndex] = useState(0)
 
-  // Tự động xoay chuyển 5 câu châm ngôn mỗi 5 giây
+  // Tự động xoay chuyển 5 câu châm ngôn mỗi 15 giây (cho người dùng đủ thời gian đọc)
   useEffect(() => {
     const timer = setInterval(() => {
       setQuoteIndex((prev) => (prev + 1) % QUOTES.length)
-    }, 5000)
+    }, 15000)
     return () => clearInterval(timer)
   }, [])
 
@@ -220,37 +220,26 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
       {/* Top subtle ambient border glow */}
       <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-blue-500/40 via-purple-500/30 to-amber-500/30 z-30" />
 
-      {/* Atmospheric Pastel Gradient Mesh Blobs (ReUI Onboarding-9 Signature Aesthetic) */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden z-0">
-        {/* Top-Right Warm Peach/Amber Glow */}
-        <div className="absolute -top-16 -right-16 w-[550px] h-[550px] rounded-full bg-gradient-to-br from-[#FED7AA]/40 to-[#FDBA74]/25 blur-[120px]" />
-        {/* Center-Right Soft Rose/Magenta Glow */}
-        <div className="absolute top-[28%] -right-12 w-[600px] h-[600px] rounded-full bg-gradient-to-bl from-[#FBCFE8]/40 via-[#F472B6]/20 to-transparent blur-[130px]" />
-        {/* Lower-Right Lavender/Violet Glow */}
-        <div className="absolute bottom-[-10%] right-[10%] w-[580px] h-[580px] rounded-full bg-gradient-to-tl from-[#DDD6FE]/40 via-[#C084FC]/25 to-transparent blur-[140px]" />
-        {/* Bottom-Center Soft Cyan/Sky Blue Glow */}
-        <div className="absolute -bottom-24 right-[28%] w-[520px] h-[520px] rounded-full bg-gradient-to-tr from-[#BAE6FD]/40 to-[#7DD3FC]/25 blur-[130px]" />
-        {/* Subtle grid pattern overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000005_1px,transparent_1px),linear-gradient(to_bottom,#00000005_1px,transparent_1px)] bg-[size:4px_4px] opacity-40 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
-      </div>
+      {/* Atmospheric Pastel Gradient (Zero-overhead Hardware Accelerated) */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden z-0 bg-[radial-gradient(ellipse_600px_600px_at_top_right,#FED7AA33,transparent_70%),radial-gradient(ellipse_600px_600px_at_80%_40%,#FBCFE826,transparent_70%),radial-gradient(ellipse_600px_600px_at_bottom_right,#DDD6FE26,transparent_70%),radial-gradient(ellipse_600px_600px_at_60%_bottom,#BAE6FD26,transparent_70%)]" />
 
       {/* TOP NAVIGATION BAR */}
       <header className="w-full max-w-7xl mx-auto px-6 sm:px-12 pt-8 pb-4 flex items-center justify-end z-20">
         {/* Right: Step Indicator */}
-        <div className="text-xs font-medium text-neutral-400 tracking-wide">
+        <div className="text-xs font-semibold text-neutral-500 tracking-wide">
           {step === "email" ? "Step 1 of 2" : "Step 2 of 2"}
         </div>
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-8 my-auto z-10">
+      <main id="main-content" tabIndex={-1} className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-8 my-auto z-10 outline-none">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           {/* LEFT COLUMN: HERO TEXT & VALUE PROPOSITION */}
           <div className="lg:col-span-6 xl:col-span-7 space-y-6">
             {/* Pill Badge: Design Philosophy với animation nháy màu sống động */}
             <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border bg-white/90 backdrop-blur-md shadow-2xs text-xs font-semibold text-neutral-800 animate-badge-color transition-all">
               <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 animate-dot-color" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 animate-dot-color will-change-transform transform-gpu" />
                 <span className="relative inline-flex rounded-full h-2 w-2 animate-dot-color" />
               </span>
               <span className="font-semibold tracking-wide">Design Philosophy</span>
@@ -268,25 +257,29 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
 
               {/* Phân trang & Tên tác giả ở góc phải */}
               <div className="flex items-center justify-between pt-5 border-t border-neutral-200/60 mt-4">
-                {/* 5 chấm chuyển câu */}
-                <div className="flex items-center gap-2">
+                {/* 5 chấm chuyển câu với touch target >= 32px đạt chuẩn WCAG / Lighthouse 100 */}
+                <div className="flex items-center gap-1">
                   {QUOTES.map((_, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setQuoteIndex(idx)}
-                      className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                        quoteIndex === idx
-                          ? "w-7 bg-neutral-900"
-                          : "w-1.5 bg-neutral-300 hover:bg-neutral-400"
-                      }`}
-                      aria-label={`Câu ${idx + 1}`}
-                    />
+                      className="min-w-[32px] min-h-[32px] flex items-center justify-center p-1 rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                      aria-label={`Chuyển sang câu ${idx + 1}`}
+                    >
+                      <span
+                        className={`h-1.5 rounded-full transition-all duration-300 block ${
+                          quoteIndex === idx
+                            ? "w-7 bg-neutral-900"
+                            : "w-1.5 bg-neutral-400 hover:bg-neutral-500"
+                        }`}
+                      />
+                    </button>
                   ))}
                 </div>
 
                 {/* Tên tác giả ở góc phải */}
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={quoteIndex}
                     initial={{ opacity: 0, x: 12, filter: "blur(4px)" }}
@@ -302,12 +295,10 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: REUI ONBOARDING CARD (AUDITED SENIOR UI) */}
+          {/* RIGHT COLUMN: REUI ONBOARDING CARD */}
           <div className="lg:col-span-6 xl:col-span-5 flex justify-center lg:justify-end">
-            <motion.div
-              layout
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-[460px] bg-white/95 backdrop-blur-2xl border border-neutral-200/80 rounded-3xl p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] transition-all"
+            <div
+              className="w-full max-w-[460px] bg-white border border-neutral-200/90 rounded-3xl p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] transition-all"
             >
               {/* Header Unit */}
               <div>
@@ -319,6 +310,8 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                     <img
                       src="/img-logo-UXTeamWith.webp"
                       alt="MB UX Team"
+                      width="193"
+                      height="32"
                       className="h-8 w-auto object-contain"
                       onError={() => setLogoFailed(true)}
                     />
@@ -357,7 +350,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                 {/* Input bên trên: Tài khoản MB */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-neutral-700 block">
+                    <label htmlFor="login_email_input" className="text-xs font-semibold text-neutral-700 block">
                       Tài khoản MB
                     </label>
                     {step === "otp" && (
@@ -377,12 +370,15 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                   </div>
                   
                   <div className="relative flex items-center h-11 rounded-xl bg-neutral-50/70 border border-neutral-200 hover:border-neutral-300 focus-within:bg-white focus-within:border-neutral-900 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all overflow-hidden shadow-2xs">
-                    <div className="pl-3.5 pr-2 text-neutral-400 pointer-events-none shrink-0">
+                    <div className="pl-3.5 pr-2 text-neutral-400 pointer-events-none shrink-0" aria-hidden="true">
                       <Mail className="w-4 h-4" />
                     </div>
 
                     <input
+                      id="login_email_input"
+                      name="username"
                       type="text"
+                      autoComplete="username"
                       value={emailPrefix}
                       disabled={step === "otp" || isSendingOtp}
                       onChange={(e) => {
@@ -396,7 +392,7 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                       placeholder="Nhập mail MB"
                       required
                       autoFocus={step === "email"}
-                      className="flex-1 h-full bg-transparent text-sm text-neutral-900 disabled:text-neutral-600 outline-none placeholder:text-neutral-400 min-w-0 px-2 font-medium"
+                      className="flex-1 h-full bg-transparent text-sm text-neutral-900 disabled:text-neutral-600 outline-none focus:outline-none focus-visible:outline-none placeholder:text-neutral-400 min-w-0 px-2 font-medium"
                     />
                     
                     <div className="pr-3 pl-2.5 py-1 mr-1.5 text-xs font-medium text-neutral-600 bg-neutral-100 rounded-lg select-none pointer-events-none shrink-0 flex items-center">
@@ -516,20 +512,60 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                     </>
                   )}
                 </button>
+
+                {/* Hoặc Đăng nhập Demo Nhanh (1-Click) - Ẩn đi sau khi hoàn thành demo (chỉ hiển thị khi có tham số ?demo trên URL) */}
+                {typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo") && (
+                  <div className="pt-4 border-t border-neutral-200/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-semibold text-neutral-600">
+                        Đăng nhập nhanh theo vai trò:
+                      </span>
+                      <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.2 rounded font-bold">
+                        Demo 1-Click
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {DEMO_ACCOUNTS.slice(0, 4).map((acc) => (
+                        <button
+                          key={acc.role}
+                          type="button"
+                          onClick={() => handleQuickDemoLogin(acc)}
+                          className="flex items-center gap-2 p-2 rounded-xl border border-neutral-200/80 bg-neutral-50/80 hover:bg-neutral-100 hover:border-neutral-300 transition-all text-left cursor-pointer group"
+                          title={`Đăng nhập dưới vai trò ${acc.role}`}
+                        >
+                          <UserAvatar
+                            name={acc.displayName}
+                            avatarUrl={acc.avatarUrl}
+                            size="sm"
+                            role={acc.role}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-neutral-900 truncate group-hover:text-blue-600">
+                              {acc.role}
+                            </p>
+                            <p className="text-[10px] text-neutral-500 truncate">
+                              {acc.displayName.split(" ")[0]}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </form>
-            </motion.div>
+            </div>
           </div>
         </div>
       </main>
 
       {/* FOOTER BAR */}
-      <footer className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-400 border-t border-neutral-200/60 z-20">
+      <footer className="w-full max-w-7xl mx-auto px-6 sm:px-12 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-600 border-t border-neutral-200/70 z-20">
         <div className="flex items-center gap-2">
           <span>© 2026 MB Digital Banking Division • UX Team</span>
         </div>
-        <div className="flex items-center gap-4 text-neutral-500">
+        <div className="flex items-center gap-4 text-neutral-600 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
             <span>Enterprise Security • 8h Session</span>
           </span>
           <span>•</span>

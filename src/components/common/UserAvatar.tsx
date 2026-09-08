@@ -70,6 +70,10 @@ export function UserAvatar({
       <img
         src={avatarUrl}
         alt={name}
+        loading="lazy"
+        decoding="async"
+        width="40"
+        height="40"
         onError={() => setImgError(true)}
         className={`${sizeClasses} rounded-full object-cover shrink-0 ${
           showBorder ? "border border-slate-200/80 shadow-2xs" : ""

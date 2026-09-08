@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense, useEffect } from "react"
-import Sidebar, { Page } from "./components/Sidebar"
+import type { Page } from "./components/Sidebar"
 import LoginGate from "./components/auth/LoginGate"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Frame } from "@/components/reui/frame"
@@ -9,9 +9,10 @@ import { Plus, ArrowLeft, LogOut } from "lucide-react"
 import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
 import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession, syncSessionRoleFromSheet } from "./services/otpAuthService"
-import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 
-// Code-splitting via React.lazy
+// Code-splitting non-critical entry chunks via React.lazy
+const Sidebar = lazy(() => import("./components/Sidebar"))
+const RolePreviewBanner = lazy(() => import("./components/common/RolePreviewBanner").then(m => ({ default: m.RolePreviewBanner })))
 const TongQuanPage = lazy(() => import("./pages/TongQuanPage"))
 const CreateRequestPage = lazy(() => import("./pages/CreateRequestPage"))
 const TrackRequestPage = lazy(() => import("./pages/TrackRequestPage"))
@@ -45,7 +46,7 @@ export const preloadPage = (page: Page) => {
 
 function PageLoadingSkeleton() {
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-in fade-in-50 duration-200">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-in fade-in-50 duration-200">
       <Frame className="p-6 space-y-3 bg-white">
         <Skeleton className="h-4 w-32 rounded-lg" />
         <Skeleton className="h-8 w-72 rounded-xl" />
@@ -64,7 +65,7 @@ function PageLoadingSkeleton() {
         <Skeleton className="h-6 w-48 rounded-lg" />
         <Skeleton className="h-40 w-full rounded-2xl" />
       </Frame>
-    </main>
+    </div>
   )
 }
 
@@ -94,6 +95,33 @@ export default function App() {
       return next
     })
   }
+
+  // Chuyển trang mượt mà bằng View Transitions API (Modern Web Guidance)
+  const handleNavigate = (newPage: Page) => {
+    if (page === newPage) return
+    if (typeof document !== "undefined" && "startViewTransition" in document) {
+      (document as any).startViewTransition(() => {
+        setPage(newPage)
+        window.location.hash = `#${newPage}`
+      })
+    } else {
+      setPage(newPage)
+      window.location.hash = `#${newPage}`
+    }
+  }
+
+  // Đồng bộ tiêu đề trang (Document Title) theo từng ngữ cảnh nghiệp vụ
+  useEffect(() => {
+    const pageTitles: Record<Page, string> = {
+      overview: "Tổng quan & Tiến độ — MB UX Request Portal",
+      track: "Quản lý & Theo dõi Task — MB UX Request Portal",
+      create: "Tạo yêu cầu thiết kế mới — MB UX Request Portal",
+      manage: "Quản trị hệ thống & Cấu hình — MB UX Request Portal",
+      test: "Khảo sát & Đánh giá năng lực UX — MB UX Request Portal",
+      compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
+    }
+    document.title = pageTitles[page] || "MB UX Request Portal - MB Bank UX Team"
+  }, [page])
 
   // Lắng nghe sự kiện thay đổi phiên (Đăng nhập / Đăng xuất)
   useEffect(() => {
@@ -220,23 +248,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FCFCFD]">
       {/* Role Impersonation / Preview Floating Controller */}
-      <RolePreviewBanner session={session} />
+      <Suspense fallback={null}>
+        <RolePreviewBanner session={session} />
+      </Suspense>
 
-      <Sidebar
-        currentPage={page}
-        onNavigate={setPage}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebarCollapse}
-      />
+      <Suspense fallback={<div className="hidden md:block w-60 h-screen fixed top-0 left-0 bg-white border-r border-slate-200/80 z-40" />}>
+        <Sidebar
+          currentPage={page}
+          onNavigate={handleNavigate}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+        />
+      </Suspense>
 
       {/* Container chính: Offset theo sidebar w-60 (240px) */}
       <div className="md:ml-60 pt-14 md:pt-0 min-h-screen bg-[#FCFCFD]">
         <Suspense fallback={<PageLoadingSkeleton />}>
           {page === "overview" && <TongQuanPage />}
           {page === "create" && (
-            <CreateRequestPage onBack={() => setPage("track")} />
+            <CreateRequestPage onBack={() => handleNavigate("track")} />
           )}
-          {page === "track" && <TrackRequestPage onNavigateToCreate={() => setPage("create")} />}
+          {page === "track" && <TrackRequestPage onNavigateToCreate={() => handleNavigate("create")} />}
           {page === "manage" && <QuanLyPage />}
           {page === "test" && <TestAssessmentPage />}
           {page === "compressor" && <ImageCompressorPage />}

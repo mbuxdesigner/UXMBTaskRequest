@@ -28,6 +28,11 @@ export const CharacterMorph = React.forwardRef<HTMLDivElement, CharacterMorphPro
     const [internalIndex, setInternalIndex] = React.useState(0)
     const isControlled = typeof controlledIndex === "number"
     const currentIndex = isControlled ? controlledIndex : internalIndex
+    const isFirstRender = React.useRef(true)
+
+    React.useEffect(() => {
+      isFirstRender.current = false
+    }, [])
 
     React.useEffect(() => {
       if (isControlled) return
@@ -53,11 +58,11 @@ export const CharacterMorph = React.forwardRef<HTMLDivElement, CharacterMorphPro
         className={cn("relative flex flex-wrap items-baseline", className)}
         style={{ perspective: 1200 }}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={currentIndex}
             className="flex flex-wrap items-baseline gap-y-2"
-            initial="initial"
+            initial={isFirstRender.current ? false : "initial"}
             animate="animate"
             exit="exit"
           >
