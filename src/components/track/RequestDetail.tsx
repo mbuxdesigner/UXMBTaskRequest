@@ -2683,49 +2683,13 @@ export default function RequestDetail({
                   )}
 
                   {/* Task Title Header */}
-                  <div className="group relative">
-                    {isEditingTitle && isAuthor ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={titleValue}
-                          onChange={(e) => setTitleValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveTitle()
-                            if (e.key === "Escape") setIsEditingTitle(false)
-                          }}
-                          autoFocus
-                          className="w-full text-lg sm:text-xl font-bold text-slate-900 border-b-2 border-[#1057FB] outline-none pb-1 bg-transparent"
-                        />
-                        <Button size="sm" onClick={handleSaveTitle} className="h-8 text-xs bg-slate-900 text-white rounded-lg cursor-pointer">
-                          Lưu
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-3">
-                        <h1 
-                          onClick={() => {
-                            if (isAuthor) setIsEditingTitle(true)
-                          }}
-                          className={`text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug transition-colors break-words [overflow-wrap:break-word] max-w-full ${
-                            isAuthor ? "hover:text-[#1057FB] cursor-pointer" : "cursor-default"
-                          }`}
-                          title={isAuthor ? "Tác giả đề bài: Bấm để sửa tiêu đề" : "Tiêu đề bài toán"}
-                        >
-                          {titleValue || "Chưa đặt tiêu đề bài toán"}
-                        </h1>
-                        {isAuthor && (
-                          <button
-                            type="button"
-                            onClick={() => setIsEditingTitle(true)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-opacity cursor-pointer shrink-0"
-                            title="Sửa tiêu đề"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    )}
+                  <div>
+                    <h1 
+                      className="text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug break-words [overflow-wrap:break-word] max-w-full cursor-default"
+                      title="Tiêu đề bài toán"
+                    >
+                      {titleValue || "Chưa đặt tiêu đề bài toán"}
+                    </h1>
                   </div>
 
                   {/* ClickUp Task Properties Grid (Status replaces Khâu UX, Dates, Assignees, Priority) */}
