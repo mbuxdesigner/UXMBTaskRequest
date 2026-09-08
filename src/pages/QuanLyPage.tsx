@@ -4423,12 +4423,21 @@ export default function QuanLyPage() {
                     <p className="text-xs text-slate-500">Bắn thông báo realtime khi có đề bài mới hoặc bàn giao</p>
                   </div>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 group">
+                  <div
+                    className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                      autoNotifySlack
+                        ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                        : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
+                    }`}
+                  >
+                    {autoNotifySlack && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                  </div>
                   <input
                     type="checkbox"
                     checked={autoNotifySlack}
                     onChange={(e) => setAutoNotifySlack(e.target.checked)}
-                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    className="sr-only"
                   />
                   <span>Bật thông báo</span>
                 </label>
@@ -4713,7 +4722,16 @@ export default function QuanLyPage() {
                           }`}
                         >
                           <div className="px-3 py-2 flex items-center justify-between bg-slate-50/50">
-                            <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                            <label className="flex items-center gap-2 cursor-pointer min-w-0 group">
+                              <div
+                                className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                                  isProdSelected
+                                    ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                                    : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
+                                }`}
+                              >
+                                {isProdSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                              </div>
                               <input
                                 type="checkbox"
                                 checked={isProdSelected}
@@ -4735,7 +4753,7 @@ export default function QuanLyPage() {
                                     })
                                   }
                                 }}
-                                className="rounded border-slate-300 text-[#1057FB] focus:ring-blue-200 size-3.5"
+                                className="sr-only"
                               />
                               <span className={`text-xs truncate ${isProdSelected ? "font-semibold text-slate-900" : "text-slate-600 font-normal"}`}>
                                 {prodName}
@@ -5924,6 +5942,15 @@ export default function QuanLyPage() {
                                   : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100/60"
                               }`}
                             >
+                              <div
+                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all shrink-0 ${
+                                  isChecked
+                                    ? "bg-[#1057FB] border-[#1057FB] text-white"
+                                    : "bg-white border-slate-300"
+                                }`}
+                              >
+                                {isChecked && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                              </div>
                               <input
                                 type="checkbox"
                                 checked={isChecked}

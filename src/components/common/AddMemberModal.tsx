@@ -465,13 +465,21 @@ export default function AddMemberModal({
                         onClick={() => handleToggleProduct(prodName)}
                         className="px-3.5 py-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0 group">
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                              isProdSelected
+                                ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                                : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
+                            }`}
+                          >
+                            {isProdSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                          </div>
                           <input
                             type="checkbox"
                             checked={isProdSelected}
                             onChange={() => handleToggleProduct(prodName)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="rounded-md border-slate-300 text-[#1057FB] focus:ring-blue-200 size-4 cursor-pointer"
+                            className="sr-only"
                           />
                           <div className="min-w-0">
                             <span className={`text-xs font-semibold block truncate ${

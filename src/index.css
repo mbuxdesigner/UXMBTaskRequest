@@ -598,3 +598,10 @@ select:focus-visible,
     animation: none !important;
   }
 }
+
+/* Fix Chrome/Windows native checkbox pitch black issue */
+input[type="checkbox"] {
+  color-scheme: light;
+  accent-color: #1057fb;
+  background-color: #ffffff;
+}
