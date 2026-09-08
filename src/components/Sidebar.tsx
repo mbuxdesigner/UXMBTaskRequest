@@ -21,7 +21,7 @@ import { preloadPage } from "../App"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import AddMemberModal from "@/components/common/AddMemberModal"
 import { toast } from "@/components/ui/toast"
-import { filterRequestsByRole } from "@/lib/accessControl"
+import { filterRequestsByRole, canRoleAccessCapability } from "@/lib/accessControl"
 import {
   getRoleNavConfig,
   getNavOrderConfig,
@@ -50,6 +50,10 @@ export default function Sidebar({
   const [activeTaskCount, setActiveTaskCount] = useState<number>(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [canInvite, setCanInvite] = useState<boolean>(() => {
+    const currentSession = getStoredSession()
+    return canRoleAccessCapability(currentSession?.role, "cap-invite")
+  })
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(getNavOrderConfig())
 
@@ -58,18 +62,22 @@ export default function Sidebar({
   // Load session & live active task count & nav config
   useEffect(() => {
     const handleStorage = () => {
-      setSession(getStoredSession())
+      const s = getStoredSession()
+      setSession(s)
       setNavConfig(getRoleNavConfig())
       setNavOrder(getNavOrderConfig())
+      setCanInvite(canRoleAccessCapability(s?.role, "cap-invite"))
     }
     window.addEventListener("storage", handleStorage)
     window.addEventListener("auth_session_changed", handleStorage)
     window.addEventListener("nav_visibility_changed", handleStorage)
+    window.addEventListener("rbac_permissions_changed", handleStorage)
     const interval = setInterval(handleStorage, 1000)
     return () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("auth_session_changed", handleStorage)
       window.removeEventListener("nav_visibility_changed", handleStorage)
+      window.removeEventListener("rbac_permissions_changed", handleStorage)
       clearInterval(interval)
     }
   }, [])
@@ -356,15 +364,17 @@ export default function Sidebar({
           </button>
         )}
 
-        {/* Invite Team (Chuẩn ReUI App Shell 12) */}
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-        >
-          <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
-          <span className="truncate">Invite Team</span>
-        </button>
+        {/* Invite Team (Chuẩn ReUI App Shell 12 - Kiểm soát bởi RBAC Matrix) */}
+        {canInvite && (
+          <button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+          >
+            <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="truncate">Invite Team</span>
+          </button>
+        )}
       </div>
     </nav>
   )
@@ -405,14 +415,16 @@ export default function Sidebar({
       </aside>
 
       {/* Invite Team Modal - Đồng bộ hoàn toàn với Thêm nhân sự */}
-      <AddMemberModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        title="Invite Team - Mời nhân sự mới"
-        subtitle="Cấu hình thông tin tài khoản, vai trò và phân bổ Squad theo từng Sản phẩm"
-        submitLabel="Gửi lời mời & Thêm nhân sự"
-        initialRole="Designer"
-      />
+      {canInvite && (
+        <AddMemberModal
+          open={inviteOpen}
+          onClose={() => setInviteOpen(false)}
+          title="Invite Team - Mời nhân sự mới"
+          subtitle="Cấu hình thông tin tài khoản, vai trò và phân bổ Squad theo từng Sản phẩm"
+          submitLabel="Gửi lời mời & Thêm nhân sự"
+          initialRole="Designer"
+        />
+      )}
     </>
   )
 }

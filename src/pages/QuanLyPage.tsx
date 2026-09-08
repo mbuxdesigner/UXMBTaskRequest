@@ -829,6 +829,12 @@ const RBAC_CAPABILITIES = [
     category: "Quản trị Nhân sự",
   },
   {
+    id: "cap-invite",
+    title: "Mời thành viên & Phân quyền (Invite Team)",
+    description: "Hiển thị nút 'Invite Team' trên thanh Menu (Sidebar) và cho phép gửi lời mời, cấp quyền tài khoản nhân sự mới.",
+    category: "Quản trị Nhân sự",
+  },
+  {
     id: "cap-workflow",
     title: "Tùy biến khâu quy trình & SLA",
     description: "Sắp xếp thứ tự các bước trong 6 khâu UX, thiết lập số ngày cam kết SLA và tài liệu bàn giao bắt buộc.",
@@ -1113,20 +1119,27 @@ export default function QuanLyPage() {
   const [memberSearchQuery, setMemberSearchQuery] = useState<string>("")
   const [selectedRbacRole, setSelectedRbacRole] = useState<UserRole>("Design Owner")
   const [rbacRolesPermissions, setRbacRolesPermissions] = useState<Record<string, string[]>>(() => {
-    const saved = localStorage.getItem("mbbank_admin_rbac")
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch {}
-    }
-    return {
+    const defaultRbac: Record<string, string[]> = {
       "cap-approve": ["Admin", "Design Owner"],
       "cap-test": ["Admin", "Design Owner"],
       "cap-capacity": ["Admin", "Design Owner"],
+      "cap-invite": ["Admin", "Design Owner"],
       "cap-workflow": ["Admin"],
       "cap-request": ["Admin", "Design Owner", "Designer", "PO", "Business"],
       "cap-audit": ["Admin", "Design Owner"],
     }
+    const saved = localStorage.getItem("mbbank_admin_rbac")
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return {
+          ...defaultRbac,
+          ...parsed,
+          "cap-invite": parsed["cap-invite"] ?? defaultRbac["cap-invite"],
+        }
+      } catch {}
+    }
+    return defaultRbac
   })
 
   const AUDIT_LOGS_STORAGE_KEY = "mbbank_admin_audit_logs"
@@ -1182,6 +1195,8 @@ export default function QuanLyPage() {
     const updated = { ...rbacRolesPermissions, [capId]: nextRoles }
     setRbacRolesPermissions(updated)
     localStorage.setItem("mbbank_admin_rbac", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new Event("rbac_permissions_changed"))
     const capName = RBAC_CAPABILITIES.find((c) => c.id === capId)?.title || "Quyền hạn"
     toast.success(`Đã ${isCurrentlyOn ? "tắt" : "bật"} quyền "${capName}" cho vai trò ${role}!`, undefined, {
       id: `toast-cap-${capId}-${role}`,
@@ -2824,12 +2839,16 @@ export default function QuanLyPage() {
                         "cap-approve": ["Admin", "Design Owner"],
                         "cap-test": ["Admin", "Design Owner"],
                         "cap-capacity": ["Admin", "Design Owner"],
+                        "cap-invite": ["Admin", "Design Owner"],
                         "cap-workflow": ["Admin"],
-                        "cap-request": ["Admin", "Design Owner", "Designer", "PO"],
+                        "cap-request": ["Admin", "Design Owner", "Designer", "PO", "Business"],
                         "cap-audit": ["Admin", "Design Owner"],
                       }
                       setRbacRolesPermissions(defaultRbac)
                       localStorage.setItem("mbbank_admin_rbac", JSON.stringify(defaultRbac))
+                      window.dispatchEvent(new Event("storage"))
+                      window.dispatchEvent(new Event("rbac_permissions_changed"))
+                      syncMasterDataToSheet({ rbac: defaultRbac })
                       toast.success("Đã khôi phục ma trận phân quyền vai trò về mặc định!")
                     }}
                     className="h-8 text-xs gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50"

@@ -242,3 +242,39 @@ export function filterRequestsByRole(requests: UXRequest[], session: UserSession
   if (!requests || requests.length === 0) return []
   return requests.filter((r) => canUserAccessRequest(r, session))
 }
+
+export const DEFAULT_RBAC_PERMISSIONS: Record<string, string[]> = {
+  "cap-approve": ["Admin", "Design Owner"],
+  "cap-test": ["Admin", "Design Owner"],
+  "cap-capacity": ["Admin", "Design Owner"],
+  "cap-invite": ["Admin", "Design Owner"],
+  "cap-workflow": ["Admin"],
+  "cap-request": ["Admin", "Design Owner", "Designer", "PO", "Business"],
+  "cap-audit": ["Admin", "Design Owner"],
+}
+
+export function getRbacPermissions(): Record<string, string[]> {
+  try {
+    const saved = localStorage.getItem("mbbank_admin_rbac")
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed && typeof parsed === "object") {
+        return {
+          ...DEFAULT_RBAC_PERMISSIONS,
+          ...parsed,
+          "cap-invite": parsed["cap-invite"] ?? DEFAULT_RBAC_PERMISSIONS["cap-invite"],
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Could not read mbbank_admin_rbac:", e)
+  }
+  return DEFAULT_RBAC_PERMISSIONS
+}
+
+export function canRoleAccessCapability(role: string | undefined | null, capId: string): boolean {
+  if (!role) return false
+  const permissions = getRbacPermissions()
+  const allowed = permissions[capId] || DEFAULT_RBAC_PERMISSIONS[capId] || []
+  return allowed.includes(role)
+}
