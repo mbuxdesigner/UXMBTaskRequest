@@ -561,14 +561,6 @@ export default function SolutionAgentsTable({
                           req.status !== "Done"
                         )
 
-                        // Business need & Journey description
-                        const uxNeedText = req.business_need || req.user_problem || req.description || ""
-                        const showJourneyBadge = Boolean(
-                          req.feature_journey &&
-                          req.feature_journey.trim() !== "" &&
-                          req.feature_journey.trim().toLowerCase() !== req.title.trim().toLowerCase()
-                        )
-
                         const pendingInfo = getRequestPendingClassification(req)
                         const isLastRow = rowIdx === group.items.length - 1
                         const isSecondToLast = rowIdx === group.items.length - 2 && group.items.length >= 3
@@ -635,17 +627,6 @@ export default function SolutionAgentsTable({
                                     <span className="font-normal text-slate-500">{req.request_id}</span>
                                     <span>·</span>
                                     <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
-                                    {uxNeedText ? (
-                                      <>
-                                        <span>·</span>
-                                        <span className="truncate max-w-xs">{uxNeedText}</span>
-                                      </>
-                                    ) : showJourneyBadge ? (
-                                      <>
-                                        <span>·</span>
-                                        <span className="truncate max-w-xs">{req.feature_journey}</span>
-                                      </>
-                                    ) : null}
                                   </p>
                                 </div>
                             </td>
