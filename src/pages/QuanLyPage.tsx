@@ -1096,10 +1096,6 @@ export default function QuanLyPage() {
     }
   }, [isAdmin, session?.role])
 
-  if (!isAdmin) {
-    return null
-  }
-
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const hash = window.location.hash
     if (hash.includes("tab=")) {
@@ -2448,7 +2444,28 @@ export default function QuanLyPage() {
   })
 
   if (!isAdmin) {
-    return null
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl border border-slate-200 mt-6 shadow-xs">
+        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-3">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-semibold text-slate-900">Khu vực dành riêng cho Quản trị viên (Admin)</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Tài khoản hiện tại ({session?.displayName || "Bạn"} - vai trò {session?.role || "Khách"}) không có quyền truy cập trang Cài đặt Quản trị.
+        </p>
+        <Button
+          type="button"
+          onClick={() => {
+            const target = session?.role === "PO" || session?.role === "Business" ? "track" : "overview"
+            window.location.hash = `#${target}`
+            window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: target } }))
+          }}
+          className="mt-4 h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+        >
+          Quay lại trang chủ
+        </Button>
+      </div>
+    )
   }
 
   return (
