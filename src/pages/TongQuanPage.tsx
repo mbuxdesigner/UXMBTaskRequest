@@ -526,19 +526,17 @@ export default function TongQuanPage() {
         onSelectRequest={setSelectedRequest}
       />
 
-      {selectedRequest && (
-        <RequestDetail
-          open={Boolean(selectedRequest)}
-          request={selectedRequest}
-          onClose={() => setSelectedRequest(null)}
-          onUpdated={async () => {
-            await loadData(true)
-            const allReqs = await fetchRequests()
-            const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
-            if (found) setSelectedRequest(found)
-          }}
-        />
-      )}
+      <RequestDetail
+        open={Boolean(selectedRequest)}
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onUpdated={async () => {
+          await loadData(true)
+          const allReqs = await fetchRequests()
+          const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
+          if (found) setSelectedRequest(found)
+        }}
+      />
     </main>
   )
 }

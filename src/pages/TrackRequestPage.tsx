@@ -893,19 +893,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       </div>
 
       {/* SLIDE-OVER DRAWER XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
-      {selectedRequest && (
-        <RequestDetail
-          open={Boolean(selectedRequest)}
-          request={selectedRequest}
-          onClose={() => setSelectedRequest(null)}
-          onUpdated={async () => {
-            const reqs = await fetchRequests(true)
-            setAllRequests(reqs)
-            const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
-            if (found) setSelectedRequest(found)
-          }}
-        />
-      )}
+      <RequestDetail
+        open={Boolean(selectedRequest)}
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onUpdated={async () => {
+          const reqs = await fetchRequests(true)
+          setAllRequests(reqs)
+          const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
+          if (found) setSelectedRequest(found)
+        }}
+      />
     </main>
   )
 }

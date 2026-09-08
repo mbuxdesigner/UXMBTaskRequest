@@ -443,14 +443,31 @@ function parseDateToMs(ts?: string): number {
 }
 
 export default function RequestDetail({
-  request,
+  request: rawRequest,
   open = true,
   onBack,
   onClose,
   onUpdated,
 }: RequestDetailProps) {
-  const handleDismiss = onClose || onBack || (() => {})
-  const isVisible = Boolean(open && request)
+  const lastValidRequestRef = useRef<UXRequest | null>(rawRequest || null)
+  if (rawRequest) {
+    lastValidRequestRef.current = rawRequest
+  }
+  const request = rawRequest || lastValidRequestRef.current
+
+  const [isClosing, setIsClosing] = useState(false)
+
+  const handleDismiss = useCallback(() => {
+    if (isClosing) return
+    setIsClosing(true)
+    setTimeout(() => {
+      onClose?.()
+      onBack?.()
+      setIsClosing(false)
+    }, 280)
+  }, [isClosing, onClose, onBack])
+
+  const isVisible = Boolean(open && rawRequest) && !isClosing
   const session = getStoredSession()
 
   // Local state for immediate optimistic update of Assignee (Hỗ trợ chọn nhiều người)
@@ -2350,29 +2367,38 @@ export default function RequestDetail({
   return (
     <AnimatePresence>
       {isVisible && request && (
-        <div className="fixed inset-0 z-50 overflow-hidden" onClick={() => setOpenDropdown(null)}>
+        <motion.div 
+          key="request-detail-root"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          className="fixed inset-0 z-50 overflow-hidden" 
+          onClick={() => setOpenDropdown(null)}
+        >
           {/* Backdrop Blur Overlay */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs"
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs cursor-pointer"
             onClick={handleDismiss}
           />
 
           {/* Floating Slide-over Sheet / Fullscreen Modal */}
-          <div className={`fixed z-50 transition-all duration-300 ${
+          <div className={`fixed z-50 pointer-events-none transition-all duration-300 ${
             isFullScreen 
               ? "inset-0 sm:inset-3 md:inset-4 flex items-center justify-center" 
               : "inset-0 sm:inset-y-3 sm:right-3 sm:left-auto flex justify-end"
           }`}>
             <motion.aside 
-              initial={{ x: "100%", opacity: 0.5 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "100%", opacity: 0 }}
-              transition={{ type: "spring", damping: 28, stiffness: 260 }}
-              className={`bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transition-all duration-300 transform-gpu will-change-transform ${
+              key="request-detail-drawer"
+              initial={isFullScreen ? { scale: 0.95, opacity: 0 } : { x: "100%", opacity: 0.5 }}
+              animate={isFullScreen ? { scale: 1, opacity: 1 } : { x: 0, opacity: 1 }}
+              exit={isFullScreen ? { scale: 0.95, opacity: 0 } : { x: "100%", opacity: 0 }}
+              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              className={`pointer-events-auto bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transition-all duration-300 transform-gpu will-change-transform ${
                 isFullScreen
                   ? "w-full max-w-none"
                   : "w-full sm:w-[680px] md:w-[780px] lg:w-[1020px] xl:w-[1200px]"
@@ -4033,7 +4059,7 @@ export default function RequestDetail({
               </div>
             </motion.aside>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Modal Cập nhật Tiến độ */}
