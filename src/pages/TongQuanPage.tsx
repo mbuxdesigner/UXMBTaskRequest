@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { DashboardSkeleton } from "@/components/common/ReuiSkeletons"
 import { Squad, UXRequest } from "../data/mockData"
@@ -66,6 +66,10 @@ export default function TongQuanPage() {
   
   // Modals & Drawers State
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
+  const selectedRequestRef = useRef<UXRequest | null>(null)
+  useEffect(() => {
+    selectedRequestRef.current = selectedRequest
+  }, [selectedRequest])
   const [selectedSquad, setSelectedSquad] = useState<Squad | null>(null)
   const [selectedMember, setSelectedMember] = useState<MemberMetrics | null>(null)
 
@@ -529,12 +533,24 @@ export default function TongQuanPage() {
       <RequestDetail
         open={Boolean(selectedRequest)}
         request={selectedRequest}
-        onClose={() => setSelectedRequest(null)}
+        onClose={() => {
+          selectedRequestRef.current = null
+          setSelectedRequest(null)
+        }}
         onUpdated={async () => {
           await loadData(true)
           const allReqs = await fetchRequests()
-          const found = allReqs.find((r) => r.request_id === selectedRequest?.request_id)
-          if (found) setSelectedRequest(found)
+          // CHỈ cập nhật bài toán NẾU người dùng VẪN ĐANG MỞ bài toán đó.
+          // Nếu người dùng đã đóng bài toán (selectedRequestRef.current === null),
+          // TUYỆT ĐỐI KHÔNG gọi setSelectedRequest để tránh tự động mở lại!
+          if (selectedRequestRef.current) {
+            const activeId = selectedRequestRef.current.request_id
+            const found = allReqs.find((r) => r.request_id === activeId)
+            if (found && selectedRequestRef.current?.request_id === activeId) {
+              selectedRequestRef.current = found
+              setSelectedRequest(found)
+            }
+          }
         }}
       />
     </main>

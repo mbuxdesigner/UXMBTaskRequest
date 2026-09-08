@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
@@ -144,6 +144,10 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [productFilter, setProductFilter] = useState<string>("all")
   const [viewMode, setViewMode] = useState<"table" | "kanban" | "grid">("table")
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
+  const selectedRequestRef = useRef<UXRequest | null>(null)
+  useEffect(() => {
+    selectedRequestRef.current = selectedRequest
+  }, [selectedRequest])
   const [allRequests, setAllRequests] = useState<UXRequest[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -896,12 +900,24 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       <RequestDetail
         open={Boolean(selectedRequest)}
         request={selectedRequest}
-        onClose={() => setSelectedRequest(null)}
+        onClose={() => {
+          selectedRequestRef.current = null
+          setSelectedRequest(null)
+        }}
         onUpdated={async () => {
           const reqs = await fetchRequests(true)
           setAllRequests(reqs)
-          const found = reqs.find((r) => r.request_id === selectedRequest?.request_id)
-          if (found) setSelectedRequest(found)
+          // CHỈ cập nhật bài toán NẾU người dùng VẪN ĐANG MỞ bài toán đó.
+          // Nếu người dùng đã đóng bài toán (selectedRequestRef.current === null),
+          // TUYỆT ĐỐI KHÔNG gọi setSelectedRequest để tránh tự động mở lại!
+          if (selectedRequestRef.current) {
+            const activeId = selectedRequestRef.current.request_id
+            const found = reqs.find((r) => r.request_id === activeId)
+            if (found && selectedRequestRef.current?.request_id === activeId) {
+              selectedRequestRef.current = found
+              setSelectedRequest(found)
+            }
+          }
         }}
       />
     </main>

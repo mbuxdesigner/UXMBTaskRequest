@@ -460,11 +460,11 @@ export default function RequestDetail({
   const handleDismiss = useCallback(() => {
     if (isClosing) return
     setIsClosing(true)
+    onClose?.()
+    onBack?.()
     setTimeout(() => {
-      onClose?.()
-      onBack?.()
       setIsClosing(false)
-    }, 280)
+    }, 300)
   }, [isClosing, onClose, onBack])
 
   const isVisible = Boolean(open && rawRequest) && !isClosing
