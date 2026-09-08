@@ -911,9 +911,9 @@ export default function RequestDetail({
     return prods
   }, [poFormProduct])
 
-  // Danh sách Squad đầy đủ (không bao giờ rỗng), ưu tiên đưa squad khớp Product lên trước
-  const editSquadOptions = useMemo(() => {
-    let squadsList: any[] = mockSquads
+  // Danh sách Squad chuẩn theo cấu hình Admin và lọc chính xác theo Sản phẩm được chọn
+  const squadDropdownOptions: DropdownOption[] = useMemo(() => {
+    let squadsList: any[] = []
     try {
       const raw = localStorage.getItem("mbbank_admin_squads")
       if (raw) {
@@ -922,136 +922,79 @@ export default function RequestDetail({
       }
     } catch {}
 
-    const allSquadNames = Array.from(new Set([
-      ...squadsList.map((s: any) => (s.name || s.squad_name || "").trim()).filter(Boolean),
-      ...mockSquads.map((s: any) => (s.squad_name || s.name || "").trim()).filter(Boolean),
-      "BaaS Gateway",
-      "Cards & Thanh toán số",
-      "Lending & Vay vốn",
-      "Core Banking & Tài khoản",
-      "Digital Wealth & Đầu tư",
-      "Chuyển tiền & Tiện ích số",
-      "eSaving",
-      "Biz Lending",
-      "Biz eSaving",
-      "Payroll & Quản lý lương",
-      "Design System MB"
-    ]))
+    if (squadsList.length === 0) {
+      squadsList = mockSquads
+    }
 
     const prodTarget = (poFormProduct || "").toLowerCase().trim()
-    const matchingSquads: string[] = []
-    const otherSquads: string[] = []
 
-    allSquadNames.forEach((squadName) => {
-      const sqObj = squadsList.find((s: any) => (s.name || s.squad_name || "").trim().toLowerCase() === squadName.toLowerCase())
-      const prodOfSq = ((sqObj?.productName || sqObj?.product_name || "") as string).toLowerCase().trim()
+    // 1. Lọc các Squad thuộc đúng Sản phẩm đang chọn theo cấu hình Admin
+    const matchingSquads: DropdownOption[] = []
+    squadsList.forEach((sq: any) => {
+      const sqName = String(sq.name || sq.squad_name || "").trim()
+      if (!sqName) return
+      const prodOfSq = String(sq.productName || sq.product_name || "").toLowerCase().trim()
 
-      if (prodTarget && prodOfSq && (prodOfSq === prodTarget || prodOfSq.includes(prodTarget) || prodTarget.includes(prodOfSq))) {
-        matchingSquads.push(squadName)
-      } else {
-        otherSquads.push(squadName)
+      if (
+        prodTarget &&
+        prodOfSq &&
+        (prodOfSq === prodTarget || prodOfSq.includes(prodTarget) || prodTarget.includes(prodOfSq))
+      ) {
+        if (!matchingSquads.some((m) => m.value.toLowerCase() === sqName.toLowerCase())) {
+          matchingSquads.push({
+            value: sqName,
+            label: sqName,
+            description: sq.domain || undefined,
+          })
+        }
       }
     })
 
-    const combined = [...matchingSquads, ...otherSquads]
-    if (poFormSquad && !combined.includes(poFormSquad)) {
-      return [poFormSquad, ...combined]
-    }
-    return combined
-  }, [poFormProduct, poFormSquad])
-
-  // Danh sách phân loại Squad cho Popover chọn nhanh ngoài Task Detail Grid
-  const allAvailableSquads = useMemo(() => {
-    let squadsList: any[] = mockSquads
-    try {
-      const raw = localStorage.getItem("mbbank_admin_squads")
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed) && parsed.length > 0) squadsList = parsed
+    // Nếu sản phẩm có các Squad trong Admin (VD: Digi invest có 5 squads: TransferD, Gold, Trái phiếu, Chứng chỉ quỹ, BeeRich):
+    if (matchingSquads.length > 0) {
+      const result: DropdownOption[] = [
+        { value: "", label: "Chưa phân squad" },
+        ...matchingSquads,
+      ]
+      // Nếu task đang có squad hiện tại mà chưa nằm trong danh sách này, bổ sung lên đầu để không mất dữ liệu
+      if (poFormSquad && !result.some((r) => r.value.toLowerCase() === poFormSquad.toLowerCase())) {
+        result.splice(1, 0, { value: poFormSquad, label: poFormSquad })
       }
-    } catch {}
+      return result
+    }
 
-    const allSquadNames = Array.from(new Set([
-      ...squadsList.map((s: any) => (s.name || s.squad_name || "").trim()).filter(Boolean),
-      ...mockSquads.map((s: any) => (s.squad_name || s.name || "").trim()).filter(Boolean),
-      "BaaS Gateway",
-      "Cards & Thanh toán số",
-      "Lending & Vay vốn",
-      "Core Banking & Tài khoản",
-      "Digital Wealth & Đầu tư",
-      "Chuyển tiền & Tiện ích số",
-      "eSaving",
-      "Biz Lending",
-      "Biz eSaving",
-      "Payroll & Quản lý lương",
-      "Design System MB"
-    ]))
-
-    const currentProd = (localProduct || request?.product || "").toLowerCase().trim()
-    const matching: string[] = []
-    const others: string[] = []
-
-    allSquadNames.forEach((sqName) => {
-      const sqObj = squadsList.find((s: any) => (s.name || s.squad_name || "").trim().toLowerCase() === sqName.toLowerCase())
-      const prod = ((sqObj?.productName || sqObj?.product_name || "") as string).toLowerCase().trim()
-      if (currentProd && prod && (prod === currentProd || prod.includes(currentProd) || currentProd.includes(prod))) {
-        matching.push(sqName)
-      } else {
-        others.push(sqName)
+    // 2. Nếu sản phẩm chưa có Squad nào được cấu hình riêng trong Admin:
+    if (poFormProduct) {
+      const defaultProdSquad = `Squad ${poFormProduct}`
+      const result: DropdownOption[] = [
+        { value: "", label: "Chưa phân squad" },
+        { value: defaultProdSquad, label: defaultProdSquad, description: `Squad theo sản phẩm ${poFormProduct}` },
+      ]
+      if (poFormSquad && !result.some((r) => r.value.toLowerCase() === poFormSquad.toLowerCase())) {
+        result.splice(1, 0, { value: poFormSquad, label: poFormSquad })
       }
-    })
-
-    return {
-      matching,
-      others,
-      all: [...matching, ...others],
+      return result
     }
-  }, [localProduct, request?.product])
 
-  const editRequestTypeOptions = useMemo(() => {
-    const base = REQUEST_TYPES
-    if (poFormReqType && !base.includes(poFormReqType)) {
-      return [poFormReqType, ...base]
-    }
-    return base
-  }, [poFormReqType])
-
-  const editTargetUserOptions = useMemo(() => {
-    const base = [
-      "Người dùng chung",
-      "Khách hàng cá nhân",
-      "Khách hàng Priority / Private",
-      "Hộ kinh doanh cá thể & SME",
-      "Khách hàng Doanh nghiệp (SME & Corporate)",
-      "Gen Z & Millennials",
-      "Nội bộ MBBank (Cán bộ nhân viên)",
-      "Khác",
-    ]
-    if (poFormTargetUser && !base.includes(poFormTargetUser)) {
-      return [poFormTargetUser, ...base]
-    }
-    return base
-  }, [poFormTargetUser])
-
-  const editDeadlineReasonOptions = useMemo(() => {
-    const base = DEADLINE_REASONS
-    if (poFormDeadlineReason && !base.includes(poFormDeadlineReason)) {
-      return [poFormDeadlineReason, ...base]
-    }
-    return base
-  }, [poFormDeadlineReason])
-
-  // Chuẩn hóa danh sách DropdownOption theo chuẩn ReUI cho Form Sửa PO
-  const productDropdownOptions: DropdownOption[] = useMemo(() => {
-    return editProductOptions.map((p) => ({ value: p, label: p }))
-  }, [editProductOptions])
-
-  const squadDropdownOptions: DropdownOption[] = useMemo(() => {
-    return [
+    // 3. Nếu chưa chọn sản phẩm: hiển thị danh sách tất cả squad đã cấu hình trong Admin
+    const allOptions: DropdownOption[] = [
       { value: "", label: "Chưa phân squad" },
-      ...editSquadOptions.map((sq) => ({ value: sq, label: sq })),
     ]
-  }, [editSquadOptions])
+    squadsList.forEach((s: any) => {
+      const name = String(s.name || s.squad_name || "").trim()
+      if (name && !allOptions.some((o) => o.value.toLowerCase() === name.toLowerCase())) {
+        allOptions.push({
+          value: name,
+          label: name,
+          description: s.productName || s.product_name || s.domain || undefined,
+        })
+      }
+    })
+    if (poFormSquad && !allOptions.some((o) => o.value.toLowerCase() === poFormSquad.toLowerCase())) {
+      allOptions.splice(1, 0, { value: poFormSquad, label: poFormSquad })
+    }
+    return allOptions
+  }, [poFormProduct, poFormSquad])
 
   const requestTypeDropdownOptions: DropdownOption[] = useMemo(() => {
     return editRequestTypeOptions.map((rt) => ({ value: rt, label: rt }))
@@ -4223,7 +4166,31 @@ export default function RequestDetail({
                     <DropdownMenu
                       options={productDropdownOptions}
                       value={poFormProduct}
-                      onChange={(val) => setPoFormProduct(val)}
+                      onChange={(val) => {
+                        setPoFormProduct(val)
+                        const prodTarget = val.toLowerCase().trim()
+                        let squadsList: any[] = []
+                        try {
+                          const raw = localStorage.getItem("mbbank_admin_squads")
+                          if (raw) {
+                            const parsed = JSON.parse(raw)
+                            if (Array.isArray(parsed) && parsed.length > 0) squadsList = parsed
+                          }
+                        } catch {}
+                        if (squadsList.length === 0) squadsList = mockSquads
+                        const matching = squadsList.filter((s: any) => {
+                          const prod = String(s.productName || s.product_name || "").toLowerCase().trim()
+                          return prod === prodTarget || prod.includes(prodTarget) || prodTarget.includes(prod)
+                        })
+                        if (matching.length > 0) {
+                          const hasCurrent = matching.some((s: any) => String(s.name || s.squad_name || "").trim().toLowerCase() === poFormSquad.toLowerCase())
+                          if (!hasCurrent) {
+                            setPoFormSquad("")
+                          }
+                        } else {
+                          setPoFormSquad("")
+                        }
+                      }}
                       placeholder="Chọn sản phẩm..."
                       className="w-full"
                       buttonClassName="w-full h-10 bg-white hover:bg-slate-50 border-slate-200 rounded-xl px-3 justify-between font-semibold text-xs text-slate-800 shadow-2xs"
