@@ -1709,17 +1709,57 @@ export default function QuanLyPage() {
     }
   }
 
-  // Tải Master Data cấu hình (Squads, Sản phẩm, Quy trình UX, Status Rules, RBAC, Logs) từ Google Sheet về máy
+  // Tải toàn bộ cấu hình Master Data & Danh sách Nhân sự từ Google Sheet về máy
   const handlePullMasterDataFromSheet = async () => {
     setIsPullingMasterData(true)
-    const toastId = toast.loading("Đang tải cấu hình Master Data từ Google Sheet...")
+    const toastId = toast.loading("Đang tải toàn bộ dữ liệu & cấu hình từ Google Sheet...")
     try {
-      const res = await fetchMasterDataFromSheet()
+      const [res, sheetMembers] = await Promise.all([
+        fetchMasterDataFromSheet(),
+        fetchTeamMembersFromSheet().catch(() => null),
+      ])
       setIsPullingMasterData(false)
       toast.dismiss(toastId)
 
+      let updatedCount = 0
+
+      // 1. Cập nhật nhân sự nếu có từ bảng UX_TEAM_MEMBERS hoặc từ res.data.team_members
+      if (sheetMembers && Array.isArray(sheetMembers) && sheetMembers.length > 0) {
+        const formatted: TeamMember[] = sheetMembers.map((m, idx) => ({
+          id: m.id || `mem-${idx + 1}-${Date.now()}`,
+          name: m.name || m.displayName || "Thành viên UX",
+          displayName: m.displayName || m.name || "Thành viên UX",
+          email: m.email || m.teamsEmail || "",
+          teamsEmail: m.teamsEmail || m.email || "",
+          personalEmail: m.personalEmail || "",
+          avatarUrl: m.avatarUrl || "",
+          role: m.role || "Designer",
+          squad: m.squad || (m.squads && m.squads[0]) || "Chưa phân bổ",
+          squads: Array.isArray(m.squads) && m.squads.length > 0 ? m.squads : [m.squad || "Chưa phân bổ"],
+          products: Array.isArray(m.products) && m.products.length > 0 ? m.products : ["Chưa gán"],
+          status: m.status || "Active",
+          maxCapacity: m.maxCapacity || 5,
+          activeTasks: m.activeTasks || 0,
+          pendingTasks: m.pendingTasks || 0,
+          completedTasks: m.completedTasks || 0,
+          rating: m.rating || 5.0,
+          specialties: Array.isArray(m.specialties) ? m.specialties : ["UX Design", "UI Design"],
+          joinDate: m.joinDate || "2024-01-01",
+          phone: m.phone || "",
+        }))
+        const cleaned = formatted.filter((m) => !isMockDesigner(m.name, m.email))
+        setTeamMembers(cleaned)
+        localStorage.setItem("mbbank_admin_team", JSON.stringify(cleaned))
+        localStorage.setItem("mbbank_team_members", JSON.stringify(cleaned))
+        updatedCount++
+      } else if (res.success && res.data && Array.isArray(res.data.team_members) && res.data.team_members.length > 0) {
+        setTeamMembers(res.data.team_members)
+        localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))
+        localStorage.setItem("mbbank_team_members", JSON.stringify(res.data.team_members))
+        updatedCount++
+      }
+
       if (res.success && res.data) {
-        let updatedCount = 0
         if (Array.isArray(res.data.products) && res.data.products.length > 0) {
           setProducts(res.data.products)
           localStorage.setItem("mbbank_admin_products", JSON.stringify(res.data.products))
@@ -1753,12 +1793,6 @@ export default function QuanLyPage() {
           saveRoleNavConfig(res.data.nav_items)
           updatedCount++
         }
-        if (Array.isArray(res.data.team_members) && res.data.team_members.length > 0) {
-          setTeamMembers(res.data.team_members)
-          localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))
-          localStorage.setItem("mbbank_team_members", JSON.stringify(res.data.team_members))
-          updatedCount++
-        }
         if (Array.isArray(res.data.audit_logs) && res.data.audit_logs.length > 0) {
           setAuditLogs((prev) => {
             const existingIds = new Set(prev.map((l) => l.id))
@@ -1769,8 +1803,10 @@ export default function QuanLyPage() {
           })
         }
 
-        toast.success(`Đã tải & đồng bộ thành công ${updatedCount} khối cấu hình từ Google Sheet về máy!`)
-        logAdminAction("Tải cấu hình từ Sheet", "RAW_SETTINGS", `Đồng bộ Master Data từ Cloud về thiết bị thành công`, "integration")
+        toast.success(`Đã tải & đồng bộ thành công toàn bộ dữ liệu từ Google Sheet về máy!`)
+        logAdminAction("Tải cấu hình từ Sheet", "RAW_SETTINGS", `Đồng bộ Master Data & Nhân sự từ Cloud về thiết bị thành công`, "integration")
+      } else if (updatedCount > 0) {
+        toast.success(`Đã tải danh sách nhân sự từ Google Sheet về máy!`)
       } else {
         toast.error("Không tìm thấy cấu hình", res.message || "Chưa có dữ liệu cấu hình trong RAW_SETTINGS trên Google Sheet.")
       }
@@ -2587,30 +2623,6 @@ export default function QuanLyPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isPullingMembers || isSyncingMembers}
-                    onClick={handlePullMembersFromSheet}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                    title="Tải và đồng bộ danh sách nhân sự từ Google Sheet về máy"
-                  >
-                    <Download className={`w-3.5 h-3.5 text-slate-500 ${isPullingMembers ? "animate-bounce" : ""}`} />
-                    <span>{isPullingMembers ? "Đang tải..." : "Tải từ Sheet"}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isSyncingMembers || isPullingMembers}
-                    onClick={handleManualSyncMembers}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                    title="Đồng bộ danh sách nhân sự hiện tại lên Google Sheet"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncingMembers ? "animate-spin" : ""}`} />
-                    <span>{isSyncingMembers ? "Đang đồng bộ..." : "Đồng bộ lên Sheet"}</span>
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -3857,19 +3869,6 @@ export default function QuanLyPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isSyncingMasterData}
-                  onClick={handleSyncMasterDataOnly}
-                  className="rounded-lg text-xs font-medium gap-1.5 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer"
-                  title="Đồng bộ ngay toàn bộ Squads & Sản phẩm lên Google Sheet"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncingMasterData ? "animate-spin" : ""}`} />
-                  <span>{isSyncingMasterData ? "Đang đồng bộ..." : "Đồng bộ lên Sheet"}</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => {
                     setNewSquadProduct(products[0]?.name || "App MBBank")
                     setNewSquadDesigners([])
@@ -4480,26 +4479,6 @@ export default function QuanLyPage() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span>{auditLogs.length} sự kiện · Auto-saved Local & Cloud</span>
                 </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    const toastId = toast.loading("Đang đồng bộ Audit Logs lên Google Sheet...")
-                    const res = await syncMasterDataToSheet({ audit_logs: auditLogs })
-                    toast.dismiss(toastId)
-                    if (res.success) {
-                      toast.success("Đã đồng bộ toàn bộ Nhật ký Audit Trail lên Google Sheet!")
-                    } else {
-                      toast.error("Lỗi đồng bộ", res.message)
-                    }
-                  }}
-                  className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 shadow-xs hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-slate-700 h-8"
-                  title="Đẩy toàn bộ Audit Logs lên Google Sheet (RAW_SETTINGS/AUDIT_LOGS_CONFIG)"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Đồng bộ lên Sheet</span>
-                </Button>
                 <Button
                   type="button"
                   variant="outline"
