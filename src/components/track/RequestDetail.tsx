@@ -996,6 +996,43 @@ export default function RequestDetail({
     return allOptions
   }, [poFormProduct, poFormSquad])
 
+  const editRequestTypeOptions = useMemo(() => {
+    const base = REQUEST_TYPES
+    if (poFormReqType && !base.includes(poFormReqType)) {
+      return [poFormReqType, ...base]
+    }
+    return base
+  }, [poFormReqType])
+
+  const editTargetUserOptions = useMemo(() => {
+    const base = [
+      "Người dùng chung",
+      "Khách hàng cá nhân",
+      "Khách hàng Priority / Private",
+      "Hộ kinh doanh cá thể & SME",
+      "Khách hàng Doanh nghiệp (SME & Corporate)",
+      "Gen Z & Millennials",
+      "Nội bộ MBBank (Cán bộ nhân viên)",
+      "Khác",
+    ]
+    if (poFormTargetUser && !base.includes(poFormTargetUser)) {
+      return [poFormTargetUser, ...base]
+    }
+    return base
+  }, [poFormTargetUser])
+
+  const editDeadlineReasonOptions = useMemo(() => {
+    const base = DEADLINE_REASONS
+    if (poFormDeadlineReason && !base.includes(poFormDeadlineReason)) {
+      return [poFormDeadlineReason, ...base]
+    }
+    return base
+  }, [poFormDeadlineReason])
+
+  const productDropdownOptions: DropdownOption[] = useMemo(() => {
+    return editProductOptions.map((p) => ({ value: p, label: p }))
+  }, [editProductOptions])
+
   const requestTypeDropdownOptions: DropdownOption[] = useMemo(() => {
     return editRequestTypeOptions.map((rt) => ({ value: rt, label: rt }))
   }, [editRequestTypeOptions])
