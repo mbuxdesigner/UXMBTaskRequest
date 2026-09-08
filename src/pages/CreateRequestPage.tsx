@@ -26,8 +26,8 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
       tabIndex={-1}
       className={
         isSuccess
-          ? "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-2 min-h-[calc(100vh-1rem)] flex flex-col justify-center animate-in fade-in-50 duration-200 outline-none"
-          : "w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none"
+          ? "w-full min-h-[calc(100vh-12rem)] flex flex-col justify-center animate-in fade-in-50 duration-200 outline-none"
+          : "w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none"
       }
     >
       {isPo && !isSuccess && (

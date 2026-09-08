@@ -10,6 +10,7 @@ import {
   fetchRequestsFromSheet,
   normalizeSheetRequest,
   updateTaskProgressInSheet,
+  deduplicateTaskIds,
   SelectionsData,
 } from "../services/googleSheetService"
 import { searchProtectedData } from "../services/otpAuthService"
@@ -147,14 +148,14 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
     request_id: finalRequestId,
     submitted_at: formattedDate,
     last_updated: formattedDate,
-    current_phase: "Chờ tiếp nhận",
-    status: "Chờ tiếp nhận",
+    current_phase: "Chờ xác nhận",
+    status: "Chờ xác nhận",
     progress: 10,
-    phases: buildPhases("Chờ tiếp nhận"),
+    phases: buildPhases("Chờ xác nhận"),
     latest_update: {
       date: formattedDate,
-      phase: "Chờ tiếp nhận",
-      message: "Yêu cầu đã được ghi nhận trên hệ thống và đang chờ tiếp nhận xử lý.",
+      phase: "Chờ xác nhận",
+      message: "Yêu cầu đã được ghi nhận trên hệ thống và đang chờ xác nhận xử lý.",
     },
     deliverables: data.deliverables || (data.figma_url && !data.figma_url.includes("viewpage") ? { figma_url: data.figma_url } : {}),
   })
@@ -163,7 +164,7 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
   try {
     const cached = localStorage.getItem("ux_portal_real_requests")
     const existingList: UXRequest[] = cached ? JSON.parse(cached) : []
-    const updated = [newRequest, ...existingList.filter((r) => r.request_id !== finalRequestId)]
+    const updated = deduplicateTaskIds([newRequest, ...existingList.filter((r) => r.request_id !== finalRequestId)])
     localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
   } catch (e) {
     console.warn("Could not cache new request locally:", e)

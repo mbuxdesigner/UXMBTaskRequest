@@ -11,14 +11,15 @@ import {
   Layers,
   Wrench,
   Camera,
-  BookOpen,
   Eye,
+  UserPlus,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
 import { fetchRequests } from "../api/api"
 import { preloadPage } from "../App"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import AddMemberModal from "@/components/common/AddMemberModal"
 import { toast } from "@/components/ui/toast"
 import { filterRequestsByRole } from "@/lib/accessControl"
 import {
@@ -48,6 +49,7 @@ export default function Sidebar({
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [activeTaskCount, setActiveTaskCount] = useState<number>(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(getNavOrderConfig())
 
@@ -69,6 +71,18 @@ export default function Sidebar({
       window.removeEventListener("auth_session_changed", handleStorage)
       window.removeEventListener("nav_visibility_changed", handleStorage)
       clearInterval(interval)
+    }
+  }, [])
+
+  // Listen for global mobile sidebar toggles from AppHeader
+  useEffect(() => {
+    const handleToggle = () => setMobileOpen((prev) => !prev)
+    const handleClose = () => setMobileOpen(false)
+    window.addEventListener("toggle_mobile_sidebar", handleToggle)
+    window.addEventListener("close_mobile_sidebar", handleClose)
+    return () => {
+      window.removeEventListener("toggle_mobile_sidebar", handleToggle)
+      window.removeEventListener("close_mobile_sidebar", handleClose)
     }
   }, [])
 
@@ -231,7 +245,7 @@ export default function Sidebar({
                       <CheckSquare className={`w-4 h-4 shrink-0 ${currentPage === "track" ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs shrink-0">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0">
                       {activeTaskCount}
                     </span>
                   </button>
@@ -287,7 +301,7 @@ export default function Sidebar({
                       <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${currentPage === "compressor" ? "ring-2 ring-emerald-200" : ""}`} />
                       <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
                     </div>
-                    <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-semibold text-slate-600">
+                    <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-medium text-slate-600">
                       Tool
                     </span>
                   </button>
@@ -311,7 +325,7 @@ export default function Sidebar({
                       <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                       <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
                     </div>
-                    <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-semibold text-blue-700">
+                    <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-medium text-blue-700">
                       Exam
                     </span>
                   </button>
@@ -342,129 +356,15 @@ export default function Sidebar({
           </button>
         )}
 
-        {/* User Profile Card (Y như ReUI App Shell 1) */}
-        <div 
-          onClick={() => setUserMenuOpen(!userMenuOpen)}
-          className="border border-slate-200/80 rounded-2xl p-2.5 bg-white hover:bg-slate-100/90 flex items-center justify-between cursor-pointer transition-colors shadow-2xs"
+        {/* Invite Team (Chuẩn ReUI App Shell 12) */}
+        <button
+          type="button"
+          onClick={() => setInviteOpen(true)}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <UserAvatar name={displayName} avatarUrl={session?.avatarUrl} size="md" />
-            <span className="font-semibold text-sm text-slate-900 truncate">
-              {displayName}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Tùy chọn người dùng"
-            className="text-slate-500 hover:text-slate-800 transition-colors p-1"
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* User Popup Menu */}
-        {userMenuOpen && (
-          <div className="absolute left-3 right-3 bottom-full mb-2 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2 z-50 animate-in fade-in-50 zoom-in-95 duration-150">
-            <div className="px-2.5 py-1.5 border-b border-slate-100 text-xs">
-              <p className="font-bold text-slate-900">{displayName}</p>
-              <p className="text-[11px] text-slate-400">{session?.teamsEmail || "user@mbbank.com.vn"}</p>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
-                  {userRole}
-                </span>
-                {session?.isImpersonating && (
-                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-300">
-                    Xem trước
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Đặc quyền Admin: Xem trước các vai trò khác */}
-            {canSwitchRoles && (
-              <div className="py-2 px-1 border-b border-slate-100 space-y-1.5">
-                <div className="flex items-center justify-between px-1.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
-                    <Eye className="w-3 h-3 text-amber-500" /> Xem dưới dạng
-                  </span>
-                  {session?.isImpersonating && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        stopRolePreview()
-                        setUserMenuOpen(false)
-                        toast.success("Đã quay về quyền Admin")
-                      }}
-                      className="text-[10px] text-amber-600 font-bold hover:underline cursor-pointer"
-                    >
-                      Về Admin
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                  {(["Admin", "Design Owner", "Designer", "PO", "Business"] as const).map((r) => {
-                    const isCurrent = userRole === r
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (r === "Admin") {
-                            stopRolePreview()
-                            toast.success("Đã trở về vai trò Admin")
-                          } else {
-                            startRolePreview(r)
-                            toast.info(`Đang xem dưới vai trò ${r}`)
-                          }
-                          setUserMenuOpen(false)
-                        }}
-                        className={`px-2 py-1 rounded-lg text-[11px] transition-all text-center truncate cursor-pointer ${
-                          isCurrent
-                            ? "bg-blue-50 text-[#1057FB] font-bold border border-blue-200"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium"
-                        }`}
-                        title={`Xem dưới dạng ${r}`}
-                      >
-                        {r}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="pt-1 space-y-1">
-              <button
-                type="button"
-                disabled={uploadingAvatar}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  const input = document.getElementById("global_sidebar_avatar_input") as HTMLInputElement | null
-                  if (input) {
-                    input.value = ""
-                    input.click()
-                  }
-                }}
-                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs text-slate-700 hover:bg-slate-100 transition-colors text-left cursor-pointer font-medium ${uploadingAvatar ? "opacity-50 pointer-events-none" : ""}`}
-              >
-                <Camera className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span>{uploadingAvatar ? APP_CONTENT.common.buttons.loading : APP_CONTENT.sidebar.userMenu.changeAvatar}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer font-semibold"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{APP_CONTENT.sidebar.userMenu.logoutButton}</span>
-              </button>
-            </div>
-          </div>
-        )}
+          <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
+          <span className="truncate">Invite Team</span>
+        </button>
       </div>
     </nav>
   )
@@ -481,32 +381,6 @@ export default function Sidebar({
         disabled={uploadingAvatar}
         onChange={handleUploadMyAvatar}
       />
-
-      {/* Mobile Top Bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#F9FAFB]/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-4 z-40">
-        <button
-          type="button"
-          onClick={() => onNavigate("overview")}
-          className="flex items-center gap-2.5 text-left cursor-pointer"
-        >
-          <img
-            src="/favicon.svg"
-            alt="MB UXTeam"
-            width="28"
-            height="28"
-            className="w-7 h-7 object-contain shrink-0"
-          />
-          <span className="text-[15px] font-bold text-slate-900 tracking-tight">MB UXTeam</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label={mobileOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
-          className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-200/60 cursor-pointer"
-        >
-          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-      </div>
 
       {/* Mobile Overlay */}
       {mobileOpen && (
@@ -529,6 +403,16 @@ export default function Sidebar({
       <aside className="hidden md:flex fixed top-0 left-0 h-full w-60 bg-[#F9FAFB] border-r border-slate-200/80 z-30 flex-col">
         {renderSidebarContent()}
       </aside>
+
+      {/* Invite Team Modal - Đồng bộ hoàn toàn với Thêm nhân sự */}
+      <AddMemberModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        title="Invite Team - Mời nhân sự mới"
+        subtitle="Cấu hình thông tin tài khoản, vai trò và phân bổ Squad theo từng Sản phẩm"
+        submitLabel="Gửi lời mời & Thêm nhân sự"
+        initialRole="Designer"
+      />
     </>
   )
 }

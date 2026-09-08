@@ -499,7 +499,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
   })
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-20 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
       {/* 1. Page Header Chuẩn ReUI */}
       <PageHeader
         breadcrumb={{

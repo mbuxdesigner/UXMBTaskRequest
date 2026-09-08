@@ -1,4 +1,6 @@
-import React, { useState, useRef, useMemo } from "react"
+import React, { useState, useRef, useMemo, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
@@ -63,8 +65,14 @@ export function getKanbanColumns(): KanbanColumnDef[] {
           let icon = <Palette className="w-3.5 h-3.5 text-[#1057FB]" />
 
           const lower = name.toLowerCase()
-          if (lower.includes("phân loại") || lower.includes("tiếp nhận") || idx === 0) {
-            status = "Đang phân loại"
+          if (lower.includes("backlog") || lower.includes("blacklog")) {
+            status = "Chờ tiếp nhận"
+            dotColor = "bg-slate-500"
+            bgClass = "bg-slate-50"
+            borderClass = "border-slate-200/90"
+            icon = <Clock className="w-3.5 h-3.5 text-slate-600" />
+          } else if (lower.includes("xác nhận") || lower.includes("phân loại") || lower.includes("tiếp nhận") || idx === 0) {
+            status = "Chờ xác nhận"
             dotColor = "bg-amber-500"
             bgClass = "bg-[#FFF9EE]"
             borderClass = "border-amber-200/90"
@@ -140,8 +148,15 @@ export function getRequestKanbanPhase(req: UXRequest): string {
 
   // Fallbacks based on status
   if (req.status === "Hoàn thành") return columns[columns.length - 1]?.phase || "Bàn giao"
-  if (req.status === "Đang phân loại" || req.status === "Chờ tiếp nhận" || req.status === "Đã gửi" || req.status === "Mới tạo") {
-    return columns[0]?.phase || "Phân loại"
+  if (
+    req.status === "Chờ xác nhận" ||
+    req.status === "1. Chờ xác nhận" ||
+    req.status === "Đang phân loại" ||
+    req.status === "Chờ tiếp nhận" ||
+    req.status === "Đã gửi" ||
+    req.status === "Mới tạo"
+  ) {
+    return columns[0]?.phase || "Chờ xác nhận"
   }
 
   // Fallbacks based on progress percentage
@@ -152,7 +167,7 @@ export function getRequestKanbanPhase(req: UXRequest): string {
     }
   }
 
-  return columns[0]?.phase || "Phân loại"
+  return columns[0]?.phase || "Chờ xác nhận"
 }
 
 // Product / Category Pill style (Forms, Access, Auth, API, Mobile, Export style)
@@ -353,7 +368,13 @@ export default function KanbanBoard({
   onUpdatePhase,
   loading = false,
 }: KanbanBoardProps) {
-  const kanbanColumns = useMemo(() => getKanbanColumns(), [])
+  const [columnsVersion, setColumnsVersion] = useState(0)
+  useEffect(() => {
+    const onStorage = () => setColumnsVersion((v) => v + 1)
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [])
+  const kanbanColumns = useMemo(() => getKanbanColumns(), [columnsVersion])
   const [draggedRequestId, setDraggedRequestId] = useState<string | null>(null)
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -448,32 +469,63 @@ export default function KanbanBoard({
 
               {/* Column Body / Cards */}
               <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[calc(100vh-23rem)] pr-0.5 scrollbar-thin">
-                {loading ? (
-                  <div className="space-y-2.5">
-                    {[1, 2].map((k) => (
-                      <div key={`kskel-${column.id}-${k}`} className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5 animate-pulse">
-                        <div className="flex justify-between items-center">
-                          <div className="h-4 bg-slate-100 rounded w-16" />
-                          <div className="h-4 bg-slate-100 rounded-full w-14" />
-                        </div>
-                        <div className="h-4 bg-slate-100 rounded w-full" />
-                        <div className="h-3 bg-slate-100 rounded w-2/3" />
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 rounded-full bg-slate-100" />
-                            <div className="h-3 bg-slate-100 rounded w-14" />
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.div
+                      key={`kskel-col-${column.id}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-2.5"
+                    >
+                      {[1, 2].map((k) => (
+                        <div
+                          key={`kskel-${column.id}-${k}`}
+                          className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3"
+                        >
+                          <div className="flex justify-between items-center">
+                            <Skeleton className="h-4 w-16 rounded-md" />
+                            <Skeleton className="h-4 w-14 rounded-full" />
                           </div>
-                          <div className="h-4 bg-slate-100 rounded w-12" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-full rounded-md" />
+                            <Skeleton className="h-3.5 w-3/4 rounded-md" />
+                          </div>
+                          <div className="flex justify-between items-center pt-2.5 border-t border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="size-5 rounded-full" />
+                              <Skeleton className="h-3 w-16 rounded-md" />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="h-4 w-12 rounded-md" />
+                              <Skeleton className="size-4 rounded-full" />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : columnRequests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[220px] rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4">
-                    <p className="text-xs font-medium text-slate-400">No cards</p>
-                  </div>
-                ) : (
-                  columnRequests.map((req, idx) => {
+                      ))}
+                    </motion.div>
+                  ) : columnRequests.length === 0 ? (
+                    <motion.div
+                      key={`kempty-col-${column.id}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex flex-col items-center justify-center flex-1 min-h-[220px] rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4"
+                    >
+                      <p className="text-xs font-medium text-slate-400">No cards</p>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={`kcards-col-${column.id}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="space-y-2.5"
+                    >
+                      {columnRequests.map((req, idx) => {
                     const isDragging = draggedRequestId === req.request_id
                     const rawDesigner = req.assigned_designer || (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công" ? req.ux_owner : "") || ""
                     const isAssigned = Boolean(rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công")
@@ -629,9 +681,11 @@ export default function KanbanBoard({
                         </div>
                       </div>
                     )
-                  })
-                )}
-              </div>
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
             </div>
           )
         })}

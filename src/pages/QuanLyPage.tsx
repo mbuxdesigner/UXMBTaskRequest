@@ -20,6 +20,7 @@ import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { BlurFade } from "@/components/jolyui/blur-fade"
 import PageHeader from "@/components/common/PageHeader"
+import AddMemberModal from "@/components/common/AddMemberModal"
 import { isMockDesigner } from "@/components/track/RequestDetail"
 import {
   Users,
@@ -1452,14 +1453,6 @@ export default function QuanLyPage() {
   const [newPhaseDesc, setNewPhaseDesc] = useState("")
   const [newPhaseDeliverable, setNewPhaseDeliverable] = useState("")
 
-  // Add Member Form State (Multi-Squad & Multi-Product)
-  const [newMemName, setNewMemName] = useState("")
-  const [newMemEmail, setNewMemEmail] = useState("")
-  const [newMemRole, setNewMemRole] = useState<TeamMember["role"]>("Designer")
-  const [newMemSquads, setNewMemSquads] = useState<string[]>([])
-  const [newMemProducts, setNewMemProducts] = useState<string[]>([])
-  const [newMemCapacity, setNewMemCapacity] = useState(5)
-  const [newMemStatus, setNewMemStatus] = useState<TeamMember["status"]>("Active")
 
   // Add Squad Form State
   const [newSquadName, setNewSquadName] = useState("")
@@ -1515,6 +1508,7 @@ export default function QuanLyPage() {
 
   useEffect(() => {
     localStorage.setItem("mbbank_admin_phases", JSON.stringify(uxPhases))
+    window.dispatchEvent(new Event("storage"))
   }, [uxPhases])
 
   useEffect(() => {
@@ -1903,59 +1897,6 @@ export default function QuanLyPage() {
     })
   }
 
-  const handleAddMemberSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMemName.trim() || !newMemEmail.trim()) {
-      toast.error("Vui lòng nhập đầy đủ tên và email")
-      return
-    }
-
-    const defaultSq = allAvailableSquadNames[0] || "eSaving"
-    const defaultPr = allAvailableProductNames[0] || "App MBBank"
-
-    const newMem: TeamMember = {
-      id: `mem-${Date.now()}`,
-      name: newMemName.trim(),
-      email: newMemEmail.trim(),
-      role: newMemRole,
-      squad: newMemSquads[0] || defaultSq,
-      squads: newMemSquads.length > 0 ? newMemSquads : [defaultSq],
-      products: newMemProducts.length > 0 ? newMemProducts : [defaultPr],
-      avatarUrl: "",
-      activeTasks: 0,
-      capacityLimit: newMemCapacity,
-      status: newMemStatus,
-      permissions: {
-        canAssign: newMemRole === "Admin" || newMemRole === "Design Owner",
-        canApprovePo: newMemRole === "Admin" || newMemRole === "Design Owner" || newMemRole === "PO",
-        canExport: true,
-        canManageSystem: newMemRole === "Admin",
-      },
-    }
-
-    const updatedList = [newMem, ...teamMembers]
-    setTeamMembers(updatedList)
-    setShowAddMemberModal(false)
-    setNewMemName("")
-    setNewMemEmail("")
-    setNewMemSquads([])
-    setNewMemProducts([])
-
-    logAdminAction(
-      "Thêm nhân sự",
-      newMem.name,
-      `Phân bổ ${newMem.squads.length} Squads & ${newMem.products?.length || 0} Sản phẩm`,
-      "user"
-    )
-    toast.success(`Đã thêm nhân sự [${newMem.name}]!`)
-
-    // Tự động đồng bộ ngay lên Google Sheet
-    syncTeamMembersToSheet(updatedList).then((res) => {
-      if (res.success) {
-        toast.success(`Đã cập nhật nhân sự [${newMem.name}] vào Google Sheet!`)
-      }
-    })
-  }
 
   const handleUpdateMemberSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2454,7 +2395,7 @@ export default function QuanLyPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
       
       {/* 1. Page Header Đồng Bộ */}
       <BlurFade delay={0.02}>
@@ -2663,11 +2604,7 @@ export default function QuanLyPage() {
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => {
-                      setNewMemSquads(allAvailableSquadNames[0] ? [allAvailableSquadNames[0]] : [])
-                      setNewMemProducts(allAvailableProductNames[0] ? [allAvailableProductNames[0]] : [])
-                      setShowAddMemberModal(true)
-                    }}
+                    onClick={() => setShowAddMemberModal(true)}
                     className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
@@ -4741,82 +4678,145 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
-                {/* Multi-Squads Selection */}
-                <div className="space-y-1.5 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                {/* HIERARCHICAL PRODUCT -> SQUADS SELECTION */}
+                <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-800">
-                      Phân bổ Squads phụ trách (Chọn nhiều Squad):
+                    <label className="text-xs font-semibold text-slate-800">
+                      Phân bổ Sản phẩm & Squads phụ trách:
                     </label>
-                    <span className="text-[11px] text-slate-500 font-medium font-mono">
-                      {editingMember.squads.length} đã chọn
+                    <span className="text-[11px] text-slate-500 font-normal">
+                      <span className="font-medium text-slate-800">{(editingMember.products || []).length}</span> SP · <span className="font-medium text-slate-800">{editingMember.squads.length}</span> squads
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1 max-h-48 overflow-y-auto pr-1">
-                    {allAvailableSquadNames.map((sq) => {
-                      const isSelected = editingMember.squads.includes(sq)
-                      return (
-                        <label
-                          key={`edit-sq-${sq}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition-all ${
-                            isSelected
-                              ? "bg-white border-slate-900 text-slate-900 font-medium shadow-xs"
-                              : "bg-white/80 border-slate-200 text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              const nextSquads = isSelected
-                                ? editingMember.squads.filter((s) => s !== sq)
-                                : [...editingMember.squads, sq]
-                              setEditingMember({ ...editingMember, squads: nextSquads })
-                            }}
-                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                          />
-                          <span className="truncate">{sq}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
+                  <p className="text-[11px] text-slate-400 font-normal">
+                    Chọn sản phẩm và bấm vào các chip Squad tương ứng để phân bổ nhân sự.
+                  </p>
 
-                {/* Multi-Products Selection */}
-                <div className="space-y-1.5 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-800">
-                      Phân bổ Sản phẩm (PO gửi đề bài / Designer làm):
-                    </label>
-                    <span className="text-[11px] text-slate-500 font-medium font-mono">
-                      {(editingMember.products || []).length} sản phẩm
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1 max-h-36 overflow-y-auto pr-1">
-                    {allAvailableProductNames.map((pr) => {
-                      const isSelected = (editingMember.products || []).includes(pr)
+                  <div className="space-y-2 pt-1 max-h-72 overflow-y-auto pr-1">
+                    {allAvailableProductNames.map((prodName) => {
+                      const prodSquads = squads
+                        .filter((s) => (s.productName || "").trim().toLowerCase() === prodName.trim().toLowerCase())
+                        .map((s) => s.name)
+                      const isProdSelected = (editingMember.products || []).includes(prodName)
+                      const selectedSquadsInProd = prodSquads.filter((s) => editingMember.squads.includes(s))
+                      const allSquadsSelected = prodSquads.length > 0 && selectedSquadsInProd.length === prodSquads.length
+
                       return (
-                        <label
-                          key={`edit-pr-${pr}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition-all ${
-                            isSelected
-                              ? "bg-white border-slate-900 text-slate-900 font-medium shadow-xs"
-                              : "bg-white/80 border-slate-200 text-slate-600 hover:border-slate-300"
+                        <div
+                          key={`edit-prod-${prodName}`}
+                          className={`rounded-lg border transition-all overflow-hidden ${
+                            isProdSelected ? "bg-white border-blue-200 shadow-2xs" : "bg-white/70 border-slate-200"
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              const cur = editingMember.products || []
-                              const nextProds = isSelected
-                                ? cur.filter((p) => p !== pr)
-                                : [...cur, pr]
-                              setEditingMember({ ...editingMember, products: nextProds })
-                            }}
-                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                          />
-                          <span className="truncate">{pr}</span>
-                        </label>
+                          <div className="px-3 py-2 flex items-center justify-between bg-slate-50/50">
+                            <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isProdSelected}
+                                onChange={() => {
+                                  const curProds = editingMember.products || []
+                                  if (isProdSelected) {
+                                    setEditingMember({
+                                      ...editingMember,
+                                      products: curProds.filter((p) => p !== prodName),
+                                      squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
+                                    })
+                                  } else {
+                                    setEditingMember({
+                                      ...editingMember,
+                                      products: [...curProds, prodName],
+                                      squads: prodSquads[0] && !editingMember.squads.includes(prodSquads[0])
+                                        ? [...editingMember.squads, prodSquads[0]]
+                                        : editingMember.squads,
+                                    })
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-[#1057FB] focus:ring-blue-200 size-3.5"
+                              />
+                              <span className={`text-xs truncate ${isProdSelected ? "font-semibold text-slate-900" : "text-slate-600 font-normal"}`}>
+                                {prodName}
+                              </span>
+                              {selectedSquadsInProd.length > 0 && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-blue-50 text-[#1057FB] border border-blue-200/80">
+                                  {selectedSquadsInProd.length}/{prodSquads.length}
+                                </span>
+                              )}
+                            </label>
+
+                            {prodSquads.length > 0 && isProdSelected && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (allSquadsSelected) {
+                                    setEditingMember({
+                                      ...editingMember,
+                                      squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
+                                    })
+                                  } else {
+                                    const toAdd = prodSquads.filter((s) => !editingMember.squads.includes(s))
+                                    setEditingMember({
+                                      ...editingMember,
+                                      squads: [...editingMember.squads, ...toAdd],
+                                    })
+                                  }
+                                }}
+                                className="text-[10px] text-slate-500 hover:text-[#1057FB] transition-colors cursor-pointer px-1 py-0.5 rounded"
+                              >
+                                {allSquadsSelected ? "Bỏ chọn hết" : "Chọn hết"}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Squad Chips under Product */}
+                          <div className="p-2 pt-1.5 border-t border-slate-100 bg-white">
+                            {prodSquads.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {prodSquads.map((sqName) => {
+                                  const isSqSelected = editingMember.squads.includes(sqName)
+                                  return (
+                                    <button
+                                      key={`edit-sq-${prodName}-${sqName}`}
+                                      type="button"
+                                      onClick={() => {
+                                        let nextSquads: string[]
+                                        let nextProds = editingMember.products || []
+                                        if (isSqSelected) {
+                                          nextSquads = editingMember.squads.filter((s) => s !== sqName)
+                                        } else {
+                                          nextSquads = [...editingMember.squads, sqName]
+                                          if (!nextProds.includes(prodName)) {
+                                            nextProds = [...nextProds, prodName]
+                                          }
+                                        }
+                                        setEditingMember({
+                                          ...editingMember,
+                                          squads: nextSquads,
+                                          products: nextProds,
+                                        })
+                                      }}
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer select-none border ${
+                                        isSqSelected
+                                          ? "bg-[#1057FB] text-white border-[#1057FB] font-medium shadow-2xs"
+                                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 font-normal hover:border-slate-300"
+                                      }`}
+                                    >
+                                      {isSqSelected ? (
+                                        <Check className="w-2.5 h-2.5 text-white stroke-[2.5]" />
+                                      ) : (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                      )}
+                                      <span>{sqName}</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic">
+                                Chưa có squad nào thuộc sản phẩm này.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       )
                     })}
                   </div>
@@ -4847,197 +4847,27 @@ export default function QuanLyPage() {
       {/* ======================================================== */}
       {/* MODAL: THÊM NHÂN SỰ MỚI (ADD MEMBER MODAL)               */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {showAddMemberModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-xl shadow-xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <UserPlus className="w-4 h-4 text-slate-700" />
-                  <span>Thêm nhân sự mới & Phân bổ Đa-Squad</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAddMemberModal(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddMemberSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Họ và tên:</label>
-                    <Input
-                      required
-                      value={newMemName}
-                      onChange={(e) => setNewMemName(e.target.value)}
-                      placeholder="VD: Lê Thị Thu Trang"
-                      className="text-xs rounded-lg border-slate-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Email Teams:</label>
-                    <Input
-                      required
-                      type="email"
-                      value={newMemEmail}
-                      onChange={(e) => setNewMemEmail(e.target.value)}
-                      placeholder="trang.designer@mbbank.com.vn"
-                      className="text-xs rounded-lg border-slate-200 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Vai trò (Role):</label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={newMemRole}
-                      onChange={(val) => setNewMemRole(val as TeamMember["role"])}
-                      options={[
-                        { value: "Designer", label: "UX Designer" },
-                        { value: "Design Owner", label: "Design Owner" },
-                        { value: "PO", label: "Product Owner (PO)" },
-                        { value: "Business", label: "Business (Nghiệp vụ / Kinh doanh)" },
-                        { value: "Admin", label: "Admin" },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Trạng thái:</label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={newMemStatus}
-                      onChange={(val) => setNewMemStatus(val as TeamMember["status"])}
-                      options={[
-                        { value: "Active", label: "Active (Sẵn sàng)" },
-                        { value: "On Leave", label: "On Leave (Nghỉ phép)" },
-                        { value: "Busy", label: "Busy (Bận)" },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Hạn mức (Max task):</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={newMemCapacity}
-                      onChange={(e) => setNewMemCapacity(parseInt(e.target.value) || 5)}
-                      className="text-xs rounded-lg border-slate-200 text-center font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* Multi-Squads Selection */}
-                <div className="space-y-1.5 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-800">
-                      Phân bổ Squads phụ trách:
-                    </label>
-                    <span className="text-[11px] text-slate-500 font-medium font-mono">
-                      {newMemSquads.length} đã chọn
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1 max-h-48 overflow-y-auto pr-1">
-                    {allAvailableSquadNames.map((sq) => {
-                      const isSelected = newMemSquads.includes(sq)
-                      return (
-                        <label
-                          key={`add-sq-${sq}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition-all ${
-                            isSelected
-                              ? "bg-white border-slate-900 text-slate-900 font-medium shadow-xs"
-                              : "bg-white/80 border-slate-200 text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              const nextSquads = isSelected
-                                ? newMemSquads.filter((s) => s !== sq)
-                                : [...newMemSquads, sq]
-                              setNewMemSquads(nextSquads)
-                            }}
-                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                          />
-                          <span className="truncate">{sq}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Multi-Products Selection */}
-                <div className="space-y-1.5 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-800">
-                      Phân bổ Sản phẩm (PO được gửi đề bài):
-                    </label>
-                    <span className="text-[11px] text-slate-500 font-medium font-mono">
-                      {newMemProducts.length} sản phẩm
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1 max-h-36 overflow-y-auto pr-1">
-                    {allAvailableProductNames.map((pr) => {
-                      const isSelected = newMemProducts.includes(pr)
-                      return (
-                        <label
-                          key={`add-pr-${pr}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition-all ${
-                            isSelected
-                              ? "bg-white border-slate-900 text-slate-900 font-medium shadow-xs"
-                              : "bg-white/80 border-slate-200 text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              const nextProds = isSelected
-                                ? newMemProducts.filter((p) => p !== pr)
-                                : [...newMemProducts, pr]
-                              setNewMemProducts(nextProds)
-                            }}
-                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                          />
-                          <span className="truncate">{pr}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddMemberModal(false)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Thêm nhân sự
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ======================================================== */}
+      {/* MODAL: THÊM NHÂN SỰ MỚI (ADD MEMBER MODAL)               */}
+      {/* ======================================================== */}
+      <AddMemberModal
+        open={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        products={products}
+        squads={squads}
+        onSuccess={(newMem) => {
+          setTeamMembers((prev) => [
+            newMem,
+            ...prev.filter((m) => m.email.toLowerCase() !== newMem.email.toLowerCase()),
+          ])
+          logAdminAction(
+            "Thêm nhân sự",
+            newMem.name,
+            `Phân bổ ${newMem.squads.length} Squads & ${newMem.products?.length || 0} Sản phẩm`,
+            "user"
+          )
+        }}
+      />
 
       {/* ======================================================== */}
       {/* MODAL: SỬA KHÂU UX (EDIT UX PHASE MODAL)                 */}
@@ -5082,7 +4912,7 @@ export default function QuanLyPage() {
                     <Input
                       type="number"
                       min="1"
-                      max="30"
+                      max="999"
                       required
                       value={editingPhase.slaDays}
                       onChange={(e) => setEditingPhase({ ...editingPhase, slaDays: parseInt(e.target.value) || 1 })}
@@ -5093,11 +4923,11 @@ export default function QuanLyPage() {
                     <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
                     <Input
                       type="number"
-                      min="1"
+                      min="0"
                       max="100"
                       required
                       value={editingPhase.defaultProgress}
-                      onChange={(e) => setEditingPhase({ ...editingPhase, defaultProgress: parseInt(e.target.value) || 15 })}
+                      onChange={(e) => setEditingPhase({ ...editingPhase, defaultProgress: parseInt(e.target.value) || 0 })}
                       className="text-xs rounded-lg border-slate-200 font-bold text-center"
                     />
                   </div>
@@ -5190,7 +5020,7 @@ export default function QuanLyPage() {
                     <Input
                       type="number"
                       min="1"
-                      max="30"
+                      max="999"
                       required
                       value={newPhaseSla}
                       onChange={(e) => setNewPhaseSla(parseInt(e.target.value) || 1)}
@@ -5201,11 +5031,11 @@ export default function QuanLyPage() {
                     <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
                     <Input
                       type="number"
-                      min="1"
+                      min="0"
                       max="100"
                       required
                       value={newPhaseProgress}
-                      onChange={(e) => setNewPhaseProgress(parseInt(e.target.value) || 50)}
+                      onChange={(e) => setNewPhaseProgress(parseInt(e.target.value) || 0)}
                       className="text-xs rounded-lg border-slate-200 font-bold text-center"
                     />
                   </div>

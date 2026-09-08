@@ -65,14 +65,39 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
     e.target.value = ""
   }
 
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (e.clipboardData?.items) {
+      const items = Array.from(e.clipboardData.items)
+      const imageItems = items.filter((item) => item.type.startsWith("image/"))
+      if (imageItems.length > 0) {
+        e.preventDefault()
+        const newPastedFiles: File[] = []
+        imageItems.forEach((item, index) => {
+          const blob = item.getAsFile()
+          if (blob) {
+            const ext = item.type.split("/")[1] || "png"
+            const fileName = `screenshot-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${index + 1}.${ext}`
+            const file = new File([blob], fileName, { type: item.type })
+            newPastedFiles.push(file)
+          }
+        })
+        if (newPastedFiles.length > 0) {
+          addFiles(newPastedFiles)
+        }
+      }
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div
+        tabIndex={0}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragLeave={() => setDragging(false)}
         onClick={() => inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 select-none ${
+        onPaste={onPaste}
+        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 select-none outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 ${
           dragging
             ? "border-[#1B3A6B] bg-[#1B3A6B]/5 scale-[0.99]"
             : "border-slate-200 hover:border-[#1B3A6B]/50 hover:bg-slate-50/70"
@@ -99,8 +124,11 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
               Kéo thả tài liệu vào đây hoặc{" "}
               <span className="text-[#1B3A6B] underline underline-offset-4 font-extrabold">duyệt từ thiết bị</span>
             </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Hỗ trợ PDF, DOCX, PPTX, XLSX, PNG, JPG (Tối đa 25MB mỗi tệp)
+            <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+              <span>Hỗ trợ PDF, DOCX, PPTX, XLSX, PNG, JPG (Tối đa 25MB)</span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-100">
+                ⚡ Có thể dán ảnh chụp màn hình bằng Ctrl + V
+              </span>
             </p>
           </div>
         </div>

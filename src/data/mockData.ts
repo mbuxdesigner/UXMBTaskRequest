@@ -146,7 +146,13 @@ export const ALL_PHASES = [
 
 export function buildPhases(currentPhase: string): Phase[] {
   let normalized = currentPhase
-  if (normalized === "Đã gửi yêu cầu" || normalized === "Đã gửi" || normalized === "Mới tạo") {
+  if (
+    normalized === "Đã gửi yêu cầu" ||
+    normalized === "Đã gửi" ||
+    normalized === "Mới tạo" ||
+    normalized === "Chờ xác nhận" ||
+    normalized === "1. Chờ xác nhận"
+  ) {
     normalized = "Chờ tiếp nhận"
   }
   const currentIdx = ALL_PHASES.indexOf(normalized)

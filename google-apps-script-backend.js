@@ -130,6 +130,7 @@ function onOpen() {
     .addItem("🧪 Test gửi OTP qua Teams (testTeamsOtp)", "testTeamsOtp")
     .addItem("📁 Test tạo Folder Drive & Lưu Avatar (testAvatarDrive)", "testAvatarDrive")
     .addSeparator()
+    .addItem("🛠️ Kiểm tra & Tự động sửa trùng mã Request ID", "fixDuplicateRequestIds")
     .addItem("📊 Tách dữ liệu JSON cũ (Requests_Detail)", "parseJsonToDetailSheet")
     .addItem("ℹ️ Xem hướng dẫn bảo mật Teams OTP & Phân quyền", "showHelpDialog")
     .addToUi();
@@ -167,6 +168,16 @@ function doGet(e) {
       return createJsonResponse({
         status: "success",
         requests: requests,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "fix_duplicate_ids") {
+      const result = fixDuplicateRequestIds();
+      return createJsonResponse({
+        status: "success",
+        message: "Đã tự động kiểm tra và sửa trùng lặp mã Request ID thành công!",
+        result: result,
         timestamp: new Date().toISOString()
       });
     }
@@ -818,72 +829,115 @@ function setupAutoProjectionTrigger() {
  * Xử lý ghi nhận yêu cầu mới vào RAW_TASKS
  */
 function handleLogRequest(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const rawSheet = getOrInitRawTasksSheet(ss);
-  const now = new Date();
-  const formattedDate = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-
-  const lastRow = rawSheet.getLastRow();
-  const seqNum = Math.max(lastRow, 1);
-  const serverGeneratedId = "UXMB-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd") + "-" + ("000" + seqNum).slice(-3);
-  const finalRequestId = (data.request_id && !data.request_id.includes("TMP") && !data.request_id.includes("PENDING"))
-    ? data.request_id 
-    : serverGeneratedId;
-
-  const rawObj = data.raw_data || data;
-  rawObj.request_id = finalRequestId;
-  if (!rawObj.submitted_at) rawObj.submitted_at = formattedDate;
-  if (!rawObj.last_updated) rawObj.last_updated = formattedDate;
-  if (!rawObj.current_phase) rawObj.current_phase = "Phân loại";
-  if (!rawObj.status) rawObj.status = "Đang phân loại";
-  if (!rawObj.progress) rawObj.progress = 15;
-
-  if (!rawObj.task_updates || rawObj.task_updates.length === 0) {
-    rawObj.task_updates = [
-      {
-        id: "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
-        timestamp: formattedDate,
-        updated_by: rawObj.requester_name || rawObj.requester_email || "PO",
-        author_role: "PO",
-        new_phase: "Phân loại",
-        new_progress: 15,
-        note: "Khởi tạo yêu cầu thiết kế UX",
-        deliverable_link: ""
-      }
-    ];
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000); // Khóa 15 giây chống xung đột đồng thời (Race Condition)
+  } catch (e) {
+    Logger.log("Lock acquisition warning: " + e);
   }
 
-  const jsonPayloadString = JSON.stringify(rawObj, null, 2);
-
-  // Ghi 1 hàng vào RAW_TASKS
-  rawSheet.appendRow([
-    finalRequestId,
-    rawObj.title || "Yêu cầu thiết kế UX",
-    rawObj.product || "Khác",
-    rawObj.current_phase || "Phân loại",
-    rawObj.status || "Đang phân loại",
-    rawObj.priority || "Normal",
-    rawObj.assigned_designer || rawObj.ux_owner || "",
-    jsonPayloadString,
-    formattedDate,
-    formattedDate
-  ]);
-
-  // Đồng bộ legacy Requests_Log nếu tồn tại
   try {
-    const legSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
-    if (legSheet) {
-      legSheet.appendRow([formattedDate, finalRequestId, jsonPayloadString]);
-    }
-  } catch (e) {}
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const rawSheet = getOrInitRawTasksSheet(ss);
+    const now = new Date();
+    const formattedDate = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+    const todayPrefix = "UXMB-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd") + "-";
 
-  return createJsonResponse({
-    status: "success",
-    message: "Đã lưu yêu cầu vào RAW_TASKS thành công!",
-    request_id: finalRequestId,
-    row: rawSheet.getLastRow(),
-    timestamp: formattedDate
-  });
+    // Quét toàn bộ mã ID đã tồn tại trong cột A của RAW_TASKS để đảm bảo không bao giờ trùng lặp
+    const existingIds = new Set();
+    let maxDailySeq = 0;
+    const lastRow = rawSheet.getLastRow();
+
+    if (lastRow > 1) {
+      const idValues = rawSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let r = 0; r < idValues.length; r++) {
+        const idStr = String(idValues[r][0] || "").trim();
+        if (idStr) {
+          existingIds.add(idStr);
+          if (idStr.startsWith(todayPrefix)) {
+            const seqNumPart = parseInt(idStr.substring(todayPrefix.length), 10);
+            if (!isNaN(seqNumPart) && seqNumPart > maxDailySeq) {
+              maxDailySeq = seqNumPart;
+            }
+          }
+        }
+      }
+    }
+
+    let finalRequestId = (data.request_id && !data.request_id.includes("TMP") && !data.request_id.includes("PENDING"))
+      ? String(data.request_id).trim() 
+      : "";
+
+    // Nếu không có ID hoặc ID đã bị trùng trong Sheet: tự động cấp mã mới duy nhất
+    if (!finalRequestId || existingIds.has(finalRequestId)) {
+      let nextSeq = maxDailySeq + 1;
+      let candidateId = todayPrefix + ("000" + nextSeq).slice(-3);
+      while (existingIds.has(candidateId)) {
+        nextSeq++;
+        candidateId = todayPrefix + ("000" + nextSeq).slice(-3);
+      }
+      finalRequestId = candidateId;
+    }
+
+    const rawObj = data.raw_data || data;
+    rawObj.request_id = finalRequestId;
+    if (!rawObj.submitted_at) rawObj.submitted_at = formattedDate;
+    if (!rawObj.last_updated) rawObj.last_updated = formattedDate;
+    if (!rawObj.current_phase || rawObj.current_phase === "Phân loại" || rawObj.current_phase === "Chờ tiếp nhận") rawObj.current_phase = "Chờ xác nhận";
+    if (!rawObj.status || rawObj.status === "Đang phân loại" || rawObj.status === "Phân loại" || rawObj.status === "Chờ tiếp nhận") rawObj.status = "Chờ xác nhận";
+    if (!rawObj.progress || rawObj.progress === 15) rawObj.progress = 10;
+
+    if (!rawObj.task_updates || rawObj.task_updates.length === 0) {
+      rawObj.task_updates = [
+        {
+          id: "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
+          timestamp: formattedDate,
+          updated_by: rawObj.requester_name || rawObj.requester_email || "PO",
+          author_role: "PO",
+          new_phase: "Chờ xác nhận",
+          new_progress: 10,
+          note: "Khởi tạo yêu cầu thiết kế UX",
+          deliverable_link: ""
+        }
+      ];
+    }
+
+    const jsonPayloadString = JSON.stringify(rawObj, null, 2);
+
+    // Ghi 1 hàng vào RAW_TASKS
+    rawSheet.appendRow([
+      finalRequestId,
+      rawObj.title || "Yêu cầu thiết kế UX",
+      rawObj.product || "Khác",
+      rawObj.current_phase || "Chờ xác nhận",
+      rawObj.status || "Chờ xác nhận",
+      rawObj.priority || "Normal",
+      rawObj.assigned_designer || rawObj.ux_owner || "",
+      jsonPayloadString,
+      formattedDate,
+      formattedDate
+    ]);
+
+    // Đồng bộ legacy Requests_Log nếu tồn tại
+    try {
+      const legSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
+      if (legSheet) {
+        legSheet.appendRow([formattedDate, finalRequestId, jsonPayloadString]);
+      }
+    } catch (e) {}
+
+    return createJsonResponse({
+      status: "success",
+      message: "Đã lưu yêu cầu vào RAW_TASKS thành công!",
+      request_id: finalRequestId,
+      row: rawSheet.getLastRow(),
+      timestamp: formattedDate
+    });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (e) {}
+  }
 }
 
 /**
@@ -993,7 +1047,11 @@ function handleUpdateTaskProgress(data) {
     const rawRows = rawSheet.getRange(2, 1, lastRow - 1, 10).getValues();
     for (let i = 0; i < rawRows.length; i++) {
       const rowReqId = String(rawRows[i][0] || "").trim();
-      if (rowReqId === requestId) {
+      const rowTitle = String(rawRows[i][1] || "").trim();
+      const targetTitle = String(data.title || "").trim();
+      const isMatch = rowReqId === requestId || 
+        (data.original_request_id && rowReqId === String(data.original_request_id).trim() && targetTitle && rowTitle === targetTitle);
+      if (isMatch) {
         let item = {};
         try {
           item = JSON.parse(rawRows[i][7]); // Cột H: Payload_JSON
@@ -1216,6 +1274,8 @@ function getAllRequestsFromSheet() {
   const numCols = isRawTasks ? 10 : 3;
   const rawRows = rawSheet.getRange(2, 1, rawSheet.getLastRow() - 1, numCols).getValues();
   const requests = [];
+  const seenIds = new Set();
+  let hasFixedDuplicates = false;
 
   for (let i = 0; i < rawRows.length; i++) {
     const jsonStr = isRawTasks ? rawRows[i][7] : rawRows[i][2];
@@ -1232,11 +1292,71 @@ function getAllRequestsFromSheet() {
       if (!item.request_id && isRawTasks) item.request_id = rawRows[i][0];
       if (!item.submitted_at && isRawTasks) item.submitted_at = String(rawRows[i][8] || "");
       if (!item.priority && isRawTasks && rawRows[i][5]) item.priority = String(rawRows[i][5]);
+
+      // Tự động phát hiện và giải quyết mã trùng lặp (Self-Healing Deduplication)
+      let curId = String(item.request_id || "").trim();
+      if (seenIds.has(curId)) {
+        hasFixedDuplicates = true;
+        const match = curId.match(/^(UXMB-\d{8}-)(\d+)$/);
+        if (match) {
+          const prefix = match[1];
+          const digits = match[2];
+          let seq = parseInt(digits, 10) + 1;
+          let candidate = prefix + ("000" + seq).slice(-digits.length);
+          while (seenIds.has(candidate)) {
+            seq++;
+            candidate = prefix + ("000" + seq).slice(-digits.length);
+          }
+          item.request_id = candidate;
+          curId = candidate;
+        } else {
+          let s = 1;
+          let candidate = curId + "-" + s;
+          while (seenIds.has(candidate)) {
+            s++;
+            candidate = curId + "-" + s;
+          }
+          item.request_id = candidate;
+          curId = candidate;
+        }
+
+        // Tự động ghi đè sửa lại mã vào Google Sheet RAW_TASKS để vĩnh viễn không bị trùng lặp
+        if (isRawTasks) {
+          try {
+            rawSheet.getRange(i + 2, 1).setValue(curId); // Cột A: Request_ID
+            rawSheet.getRange(i + 2, 8).setValue(JSON.stringify(item, null, 2)); // Cột H: Payload_JSON
+          } catch (err) {
+            Logger.log("Could not auto-repair duplicate row in RAW_TASKS: " + err);
+          }
+        }
+      }
+
+      seenIds.add(curId);
       requests.push(item);
     }
   }
 
+  // Nếu có dòng được sửa mã, tự động đồng bộ lại Tasks_View
+  if (hasFixedDuplicates) {
+    try {
+      projectTasksToHumanSheets();
+    } catch (e) {}
+  }
+
   return requests.reverse();
+}
+
+/**
+ * Tiện ích menu: Quét và sửa sạch toàn bộ mã trùng lặp trên Google Sheet
+ */
+function fixDuplicateRequestIds() {
+  const reqs = getAllRequestsFromSheet();
+  try {
+    SpreadsheetApp.getUi().alert("✅ Đã kiểm tra và xử lý trùng lặp mã Request ID thành công!\nTổng cộng: " + reqs.length + " bài toán.");
+  } catch (e) {
+    Logger.log("fixDuplicateRequestIds completed: " + reqs.length + " items.");
+  }
+  return { success: true, count: reqs.length };
 }
 
 /**

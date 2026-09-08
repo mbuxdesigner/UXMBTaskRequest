@@ -8,6 +8,7 @@ import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
 import TaskFilterPopover from "@/components/reui/task-filter-popover"
 import SolutionAgentsTable, { getTaskGroup } from "@/components/track/SolutionAgentsTable"
+import { GridCardsSkeleton } from "@/components/common/ReuiSkeletons"
 import { AnimatedTableRow, tableContainerVariants } from "@/components/jolyui/animated-table"
 import {
   getStoredSession,
@@ -173,7 +174,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       }
       setAllRequests(reqs)
       if (forceRefresh) {
-        toast.success("Đã làm mới dữ liệu từ Google Sheet!")
+        toast.success("Đã làm mới dữ liệu bài toán mới nhất!")
       }
     } catch (err) {
       console.warn("Could not load requests:", err)
@@ -567,252 +568,226 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const completedCount = groupCounts.completed
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-h-screen animate-in fade-in-50 duration-200 pb-16 outline-none">
-      {/* 1. Page Header Đồng Bộ theo Design System */}
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 text-slate-900 animate-in fade-in-50 duration-200 pb-8 outline-none">
+      {/* 1. Page Header Synchronized with Dashboard */}
       <PageHeader
         breadcrumb={{
           parent: "MBBank UX Platform",
-          current: "Task của tôi",
+          current: "Track Task",
         }}
-        title="Task của tôi"
+        title="Theo Dõi Tiến Độ Bài Toán UX"
         badge={
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Live Sync
           </span>
         }
-        subtitle={
-          <div className="flex flex-wrap items-center gap-2.5 pt-0.5 select-none text-xs">
-            {/* Runs */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium text-xs">Runs</span>
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200/60 min-w-[20px]">
-                {runsCount}
-              </span>
-            </div>
+        subtitle="Quản lý và theo dõi tiến độ bài toán thiết kế UX & giải pháp liên phòng ban."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Metric summary pills */}
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              {/* Runs */}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-xs font-normal text-slate-500">Runs</span>
+                <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {runsCount}
+                </span>
+              </div>
 
-            {/* Overload (Chỉ hiển thị nếu > 0) */}
-            {overloadCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 font-medium text-xs">Overload</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 min-w-[20px]">
+              {/* Overload */}
+              {overloadCount > 0 && (
+                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                  <span className="truncate text-xs font-normal text-slate-500">Overload</span>
+                  <span className="rounded-4xl border border-rose-200 bg-rose-50 text-rose-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                     {overloadCount}
                   </span>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Chờ phân bổ (Chỉ hiển thị nếu > 0) */}
-            {unassignedCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 font-medium text-xs">Chờ phân bổ</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 min-w-[20px]">
+              {/* Chờ phân bổ */}
+              {unassignedCount > 0 && (
+                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                  <span className="truncate text-xs font-normal text-slate-500">Chờ phân bổ</span>
+                  <span className="rounded-4xl border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                     {unassignedCount}
                   </span>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Đang thực hiện */}
-            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium text-xs">Đang thực hiện</span>
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-[#1057FB] border border-blue-200 min-w-[20px]">
-                {runningCount}
-              </span>
-            </div>
+              {/* Đang thực hiện */}
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                <span className="truncate text-xs font-normal text-slate-500">Đang thực hiện</span>
+                <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {runningCount}
+                </span>
+              </div>
 
-            {/* PO Pending (Quá hạn 24h) */}
-            {poPendingCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
-                  <span className="text-slate-500 font-medium text-xs">PO Pending</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 min-w-[20px]">
+              {/* PO Pending */}
+              {poPendingCount > 0 && (
+                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
+                  <span className="truncate text-xs font-normal text-slate-500">Needs approval</span>
+                  <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                     {poPendingCount}
                   </span>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Pending (Tạm dừng theo chat @pending của Designer) */}
-            {designerPendingCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5" title="Pending: Tạm dừng theo đoạn chat của Designer khi viết @pending">
-                  <span className="text-slate-500 font-medium text-xs">Pending</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 min-w-[20px]">
+              {/* Pending Designer */}
+              {designerPendingCount > 0 && (
+                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="Tạm dừng theo chat @pending">
+                  <span className="truncate text-xs font-normal text-slate-500">Pending</span>
+                  <span className="rounded-4xl border border-slate-300 bg-slate-100 text-slate-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                     {designerPendingCount}
                   </span>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Fallback nếu không thuộc 2 loại trên nhưng pendingCount > 0 */}
-            {poPendingCount === 0 && designerPendingCount === 0 && pendingCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 font-medium text-xs">Pending</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 min-w-[20px]">
-                    {pendingCount}
-                  </span>
-                </div>
-              </>
-            )}
-
-            {/* Hoàn thành (Chỉ hiển thị nếu > 0) */}
-            {completedCount > 0 && (
-              <>
-                <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 font-medium text-xs">Hoàn thành</span>
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 min-w-[20px]">
+              {/* Hoàn thành */}
+              {completedCount > 0 && (
+                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                  <span className="truncate text-xs font-normal text-slate-500">Hoàn thành</span>
+                  <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                     {completedCount}
                   </span>
                 </div>
-              </>
-            )}
-          </div>
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                if (onNavigateToCreate) {
-                  onNavigateToCreate()
-                } else {
-                  window.location.hash = "#create"
-                }
-              }}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1.5 rounded-xl h-10 px-4 shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo task mới</span>
-            </Button>
+              )}
+            </div>
 
+            {/* Đồng bộ dữ liệu button (matching Dashboard) */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => loadData(true)}
-              aria-label="Làm mới danh sách task"
-              className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
+              loading={loading}
+              aria-label="Đồng bộ dữ liệu tiến độ task"
+              className="h-10 px-4 text-xs font-medium rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5 shrink-0"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span>Làm mới</span>
+              <span>Đồng bộ dữ liệu</span>
             </Button>
           </div>
         }
       />
 
-      {/* Unified Container Card */}
-      <div className="bg-white rounded-2xl shadow-xs overflow-hidden border border-slate-200/80 flex flex-col">
-        {/* Unified Filter & Toolbar Bar */}
-        <div className="p-4 sm:px-6 bg-slate-50/50 border-b border-slate-100">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
-            {/* Left: Search input */}
-            <div className="relative w-full sm:w-96 lg:w-[460px] max-w-xl">
-              <Input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tìm kiếm yêu cầu, designer, squad..."
-                aria-label="Tìm kiếm yêu cầu theo mã, tiêu đề, designer hoặc squad"
-                startIcon={<Search className="w-4 h-4 text-slate-400" />}
-                className="h-10 text-xs sm:text-sm bg-white rounded-xl border-slate-200 shadow-2xs w-full"
-              />
+      {/* 2. Unified Frame Container */}
+      <div data-slot="frame" className="relative flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-xs">
+        {/* Frame Panel Header / Toolbar - Flux AgentOps Style */}
+        <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between rounded-t-2xl relative z-30">
+          {/* Left: Search input */}
+          <div className="group/input-group relative flex items-center rounded-4xl border border-transparent bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-900/5 h-8 w-full min-w-0 sm:max-w-xs transition-all">
+            <div className="flex items-center justify-center pl-3 text-slate-400">
+              <Search className="size-3.5" />
+            </div>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Tìm kiếm task, designer, squad..."
+              aria-label="Tìm kiếm yêu cầu theo mã, tiêu đề, designer hoặc squad"
+              className="h-8 w-full border-0 bg-transparent px-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="mr-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Right: Controls (Segmented view toggle, Filter, Collapse, Refresh, New Task) */}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
+            {/* View Mode Switcher: Bảng | Kanban | Lưới */}
+            <div className="flex items-center rounded-4xl bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "table"
+                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <ListFilter className="size-3.5" />
+                <span>Bảng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("kanban")}
+                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "kanban"
+                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Columns3 className="size-3.5" />
+                <span>Kanban</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <LayoutGrid className="size-3.5" />
+                <span>Lưới</span>
+              </button>
             </div>
 
-            {/* Right: View Mode Switcher + Filter Popover */}
-            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-              {/* View Mode Switcher: Bảng | Kanban | Lưới */}
-              <div role="tablist" aria-label="Chế độ xem task" className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === "table"}
-                  aria-label="Xem dạng bảng chi tiết"
-                  onClick={() => {
-                    if (typeof document !== "undefined" && "startViewTransition" in document) {
-                      (document as any).startViewTransition(() => setViewMode("table"))
-                    } else {
-                      setViewMode("table")
-                    }
-                  }}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "table"
-                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900 font-medium"
-                  }`}
-                  title="Dạng bảng chi tiết"
-                >
-                  <ListFilter className="w-3.5 h-3.5" />
-                  <span>Bảng</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === "kanban"}
-                  aria-label="Xem bảng Kanban"
-                  onClick={() => {
-                    if (typeof document !== "undefined" && "startViewTransition" in document) {
-                      (document as any).startViewTransition(() => setViewMode("kanban"))
-                    } else {
-                      setViewMode("kanban")
-                    }
-                  }}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "kanban"
-                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900 font-medium"
-                  }`}
-                  title="Bảng Kanban"
-                >
-                  <Columns3 className="w-3.5 h-3.5" />
-                  <span>Kanban</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === "grid"}
-                  aria-label="Xem dạng lưới thẻ"
-                  onClick={() => {
-                    if (typeof document !== "undefined" && "startViewTransition" in document) {
-                      (document as any).startViewTransition(() => setViewMode("grid"))
-                    } else {
-                      setViewMode("grid")
-                    }
-                  }}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 px-2.5 text-xs ${
-                    viewMode === "grid"
-                      ? "bg-white text-[#1057FB] shadow-2xs font-bold"
-                      : "text-slate-600 hover:text-slate-900 font-medium"
-                  }`}
-                  title="Dạng lưới thẻ"
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span>Lưới</span>
-                </button>
-              </div>
+            {/* Filter Button */}
+            <TaskFilterPopover
+              requests={allRequests}
+              selectedPhases={selectedPhases}
+              selectedProducts={selectedProducts}
+              selectedSquads={selectedSquads}
+              onPhasesChange={setSelectedPhases}
+              onProductsChange={setSelectedProducts}
+              onSquadsChange={setSelectedSquads}
+              onClearAll={handleClearAllFilters}
+            />
 
-              {/* ReUI Task Filter Popover */}
-              <TaskFilterPopover
-                requests={allRequests}
-                selectedPhases={selectedPhases}
-                selectedProducts={selectedProducts}
-                selectedSquads={selectedSquads}
-                onPhasesChange={setSelectedPhases}
-                onProductsChange={setSelectedProducts}
-                onSquadsChange={setSelectedSquads}
-                onClearAll={handleClearAllFilters}
-              />
-            </div>
+            {/* Collapse Groups Button (in table mode) */}
+            {viewMode === "table" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const ev = new CustomEvent("toggle-all-table-groups")
+                  window.dispatchEvent(ev)
+                }}
+                className="h-8 px-3 rounded-4xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Thu gọn nhóm</span>
+              </button>
+            )}
+
+            {/* Làm mới */}
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              className="h-8 px-3 rounded-4xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Làm mới</span>
+            </button>
+
+            {/* Tạo task mới */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateToCreate) onNavigateToCreate()
+                else window.location.hash = "#create"
+              }}
+              className="h-8 px-3.5 rounded-4xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="size-3.5" />
+              <span>Tạo task</span>
+            </button>
           </div>
         </div>
 
@@ -844,60 +819,66 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               transition={{ duration: 0.2 }}
               className="p-4 sm:p-6 flex-1"
             >
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={`grid-skel-${i}`} className="p-5 rounded-2xl border border-slate-200 bg-white animate-pulse space-y-4">
-                      <div className="flex justify-between items-center">
-                        <div className="h-5 bg-slate-100 rounded-md w-24" />
-                        <div className="h-5 bg-slate-100 rounded-full w-16" />
-                      </div>
-                      <div className="h-5 bg-slate-100 rounded w-3/4" />
-                      <div className="h-4 bg-slate-100 rounded w-1/2" />
-                      <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-100" />
-                          <div className="h-3.5 bg-slate-100 rounded w-20" />
-                        </div>
-                        <div className="h-4 bg-slate-100 rounded w-12" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredRequests.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {filteredRequests.map((r, idx) => (
-                    <RequestCard key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`} request={r} onClick={setSelectedRequest} />
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 shadow-2xs">
-                  <EmptyState
-                    title="Không tìm thấy bài toán nào"
-                    description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
-                    secondaryAction={
-                      query || selectedPhases.length > 0 || selectedSquads.length > 0
-                        ? {
-                            label: "Đặt lại bộ lọc",
-                            onClick: handleClearAllFilters,
-                            icon: <RefreshCw className="w-4 h-4" />,
-                          }
-                        : undefined
-                    }
-                    primaryAction={
-                      session?.role === "PO" || session?.role === "Business"
-                        ? {
-                            label: "Tạo yêu cầu mới",
-                            onClick: () => {
-                              if (onNavigateToCreate) onNavigateToCreate()
-                            },
-                            icon: <Plus className="w-4 h-4" />,
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
-              )}
+              <AnimatePresence mode="wait">
+                {loading ? (
+                  <motion.div
+                    key="grid-loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <GridCardsSkeleton cardCount={6} />
+                  </motion.div>
+                ) : filteredRequests.length > 0 ? (
+                  <motion.div
+                    key="grid-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
+                  >
+                    {filteredRequests.map((r, idx) => (
+                      <RequestCard key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`} request={r} onClick={setSelectedRequest} />
+                    ))}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="grid-empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 shadow-2xs"
+                  >
+                    <EmptyState
+                      title="Không tìm thấy bài toán nào"
+                      description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
+                      secondaryAction={
+                        query || selectedPhases.length > 0 || selectedSquads.length > 0
+                          ? {
+                              label: "Đặt lại bộ lọc",
+                              onClick: handleClearAllFilters,
+                              icon: <RefreshCw className="w-4 h-4" />,
+                            }
+                          : undefined
+                      }
+                      primaryAction={
+                        session?.role === "PO" || session?.role === "Business"
+                          ? {
+                              label: "Tạo yêu cầu mới",
+                              onClick: () => {
+                                if (onNavigateToCreate) onNavigateToCreate()
+                              },
+                              icon: <Plus className="w-4 h-4" />,
+                            }
+                          : undefined
+                      }
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ) : (
             /* ReUI Solution Agents 2 Table View */

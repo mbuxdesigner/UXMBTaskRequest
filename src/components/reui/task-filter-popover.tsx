@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Filter, Check, X } from "lucide-react"
-import { KANBAN_PROCESS_COLUMNS, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
+import { getKanbanColumns, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
 import { UXRequest } from "@/data/mockData"
 import { getProductColorDef } from "@/lib/colorUtils"
 
@@ -50,14 +50,17 @@ export default function TaskFilterPopover({
     }
   }, [isOpen])
 
+  // Dynamic columns based on latest admin UX phases
+  const kanbanColumns = React.useMemo(() => getKanbanColumns(), [requests])
+
   // Count items per phase
   const phaseCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
-    KANBAN_PROCESS_COLUMNS.forEach((col) => {
+    kanbanColumns.forEach((col) => {
       counts[col.phase] = requests.filter((r) => getRequestKanbanPhase(r) === col.phase).length
     })
     return counts
-  }, [requests])
+  }, [requests, kanbanColumns])
 
   // Unique Products & count
   const productCounts = React.useMemo(() => {
@@ -118,9 +121,9 @@ export default function TaskFilterPopover({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-10 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer select-none ${
+        className={`h-8 px-3 rounded-4xl border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
           activeFilterCount > 0
-            ? "bg-[#1B3A6B] text-white border-[#1B3A6B] shadow-xs"
+            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
             : isOpen
             ? "bg-slate-100 text-slate-900 border-slate-300"
             : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
@@ -129,7 +132,7 @@ export default function TaskFilterPopover({
         <Filter className="w-3.5 h-3.5" />
         <span>Lọc</span>
         {activeFilterCount > 0 && (
-          <span className="w-5 h-5 rounded-full bg-white text-[#1B3A6B] text-[11px] font-bold flex items-center justify-center shrink-0">
+          <span className="w-4 h-4 rounded-full bg-white text-slate-900 text-[10px] font-bold flex items-center justify-center shrink-0">
             {activeFilterCount}
           </span>
         )}
@@ -143,7 +146,7 @@ export default function TaskFilterPopover({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.97, transition: { duration: 0.12 } }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-50 space-y-4"
+            className="absolute right-0 top-full mt-2 w-72 max-h-[min(580px,calc(100vh-140px))] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 z-50 space-y-4"
           >
             {/* Header: Filters + Clear button */}
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
@@ -163,7 +166,7 @@ export default function TaskFilterPopover({
             <div>
               <p className="text-xs font-bold text-slate-500 mb-2">Trạng thái công việc</p>
               <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-                {KANBAN_PROCESS_COLUMNS.map((col) => {
+                {kanbanColumns.map((col) => {
                   const isChecked = selectedPhases.includes(col.phase)
                   const count = phaseCounts[col.phase] || 0
 

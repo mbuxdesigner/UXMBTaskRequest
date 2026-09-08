@@ -25,10 +25,12 @@ import RequestReviewSheet from "./RequestReviewSheet"
 import SuccessCelebrationCard from "./SuccessCelebrationCard"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { motion, AnimatePresence } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FormSkeleton } from "@/components/common/ReuiSkeletons"
 import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { BorderBeam } from "@/components/jolyui/border-beam"
 import { ShimmerButton } from "@/components/jolyui/shimmer-button"
@@ -125,6 +127,44 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         requester_email: cur.teamsEmail || cur.personalEmail,
       }))
     }
+  }, [])
+
+  // Cho phép dán ảnh chụp màn hình trực tiếp bằng Ctrl + V vào form yêu cầu
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const clipboardData = e.clipboardData
+      if (!clipboardData) return
+
+      const items = Array.from(clipboardData.items || [])
+      const imageItems = items.filter((item) => item.type.startsWith("image/"))
+
+      if (imageItems.length > 0) {
+        const newPastedFiles: File[] = []
+        imageItems.forEach((item, index) => {
+          const blob = item.getAsFile()
+          if (blob) {
+            const ext = item.type.split("/")[1] || "png"
+            const fileName = `screenshot-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}-${index + 1}.${ext}`
+            const file = new File([blob], fileName, { type: item.type })
+            newPastedFiles.push(file)
+          }
+        })
+
+        if (newPastedFiles.length > 0) {
+          setFiles((prev) => {
+            const merged = [...prev, ...newPastedFiles]
+            return merged.filter((f, i, a) => a.findIndex((x) => x.name === f.name && x.size === f.size) === i)
+          })
+          setAttachMode("file")
+          toast.success(
+            `Đã dán ${newPastedFiles.length} ảnh chụp màn hình (Ctrl + V) vào mục Tài liệu đính kèm!`
+          )
+        }
+      }
+    }
+
+    window.addEventListener("paste", handlePaste)
+    return () => window.removeEventListener("paste", handlePaste)
   }, [])
 
   useEffect(() => {
@@ -229,6 +269,9 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         preferred_squad: form.preferred_squad || "",
         squad_name: form.preferred_squad || "",
         attachments: uploadedAttachments,
+        current_phase: "Chờ xác nhận",
+        status: "Chờ xác nhận",
+        progress: 10,
       })
       setRequestId(res.requestId)
       setSheetLogResult(res.googleSheetResult)
@@ -396,70 +439,71 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
     })),
   ]
 
-  if (loadingSelections) {
-    return (
-      <div className="space-y-6 max-w-5xl mx-auto py-8">
-        <Skeleton className="h-10 w-64 rounded-xl" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-40 w-full rounded-2xl" />
-            <Skeleton className="h-56 w-full rounded-2xl" />
-          </div>
-          <Skeleton className="h-96 w-full rounded-3xl" />
-        </div>
-      </div>
-    )
-  }
-
-  // ==========================================
-  // MÀN HÌNH 3: THÀNH CÔNG (SUCCESS SCREEN)
-  // ==========================================
-  if (viewMode === "success") {
-    return (
-      <SuccessCelebrationCard
-        requestId={requestId}
-        squad={rec}
-        syncMessage={sheetLogResult?.message}
-        onCreateAnother={() => {
-          setForm({
-            title: "",
-            requester_email: session?.teamsEmail || session?.personalEmail || "",
-            product: "",
-            request_type: "",
-            description: "",
-            business_need: "",
-            user_problem: "",
-            target_user: "",
-            release_date: "",
-            deadline_reason: "",
-            preferred_squad: "",
-            doc_links: [""],
-            leader_report_note: "",
-            expected_output: ["Wireframe", "Prototype tương tác"],
-          })
-          setFiles([])
-          setViewMode("edit")
-          onSuccessChange?.(false)
-          setErrors({})
-        }}
-        onGoToTrack={() => {
-          window.location.hash = "#track"
-          window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: "track", requestId } }))
-          window.dispatchEvent(new HashChangeEvent("hashchange"))
-        }}
-      />
-    )
-  }
-
-  const validLinks = form.doc_links.filter((l) => l.trim().length > 0)
-
-  // ==========================================
-  // MÀN HÌNH 1: FORM NHẬP YÊU CẦU (EDIT SCREEN)
-  // ==========================================
   const hostName = session?.displayName || "Trần Hoàng Long"
 
   return (
-    <form onSubmit={handleProceedToReview} className="space-y-8 pb-16">
+    <AnimatePresence mode="wait">
+      {loadingSelections ? (
+        <motion.div
+          key="form-skeleton"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <FormSkeleton />
+        </motion.div>
+      ) : viewMode === "success" ? (
+        <motion.div
+          key="form-success"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <SuccessCelebrationCard
+            requestId={requestId}
+            squad={rec}
+            syncMessage={sheetLogResult?.message}
+            onCreateAnother={() => {
+              setForm({
+                title: "",
+                requester_email: session?.teamsEmail || session?.personalEmail || "",
+                product: "",
+                request_type: "",
+                description: "",
+                business_need: "",
+                user_problem: "",
+                target_user: "",
+                release_date: "",
+                deadline_reason: "",
+                preferred_squad: "",
+                doc_links: [""],
+                leader_report_note: "",
+                expected_output: ["Wireframe", "Prototype tương tác"],
+              })
+              setFiles([])
+              setViewMode("edit")
+              onSuccessChange?.(false)
+              setErrors({})
+            }}
+            onGoToTrack={() => {
+              window.location.hash = "#track"
+              window.dispatchEvent(new CustomEvent("app_navigate", { detail: { page: "track", requestId } }))
+              window.dispatchEvent(new HashChangeEvent("hashchange"))
+            }}
+          />
+        </motion.div>
+      ) : (
+        <motion.form
+          key="form-edit"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          onSubmit={handleProceedToReview}
+          className="space-y-8 pb-16"
+        >
       {/* 2-Column Responsive Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
@@ -803,6 +847,8 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         recommendedSquad={rec}
         session={session}
       />
-    </form>
+        </motion.form>
+      )}
+    </AnimatePresence>
   )
 }

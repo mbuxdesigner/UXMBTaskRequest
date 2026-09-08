@@ -75,7 +75,19 @@ export function parseDateTimeToMs(ts?: string): number {
  * Normalizes raw object from Google Sheet into a complete UXRequest object
  */
 export function normalizeSheetRequest(data: any): UXRequest {
-  const currentPhase = String(data.current_phase || "Đã gửi yêu cầu")
+  let rawPhase = String(data.current_phase || "").trim()
+  if (
+    !rawPhase ||
+    rawPhase === "Phân loại" ||
+    rawPhase === "Đang phân loại" ||
+    rawPhase === "Chờ tiếp nhận" ||
+    rawPhase === "Đã gửi yêu cầu" ||
+    rawPhase === "Đã gửi" ||
+    rawPhase === "Mới tạo"
+  ) {
+    rawPhase = "Chờ xác nhận"
+  }
+  const currentPhase = rawPhase
   const submittedAt = String(data.submitted_at || data.submitted_at_vn || data.timestamp || "Vừa xong")
   const formattedDate = submittedAt.includes("T")
     ? new Date(submittedAt).toLocaleDateString("vi-VN")
@@ -92,8 +104,8 @@ export function normalizeSheetRequest(data: any): UXRequest {
           updated_by: String(data.assigned_designer || data.ux_owner || "Hệ thống"),
           author_role: (data.author_role as UserRole) || "Designer",
           new_phase: currentPhase,
-          new_progress: typeof data.progress === "number" ? data.progress : 15,
-          note: String(data.latest_update.message || "Yêu cầu đã được tiếp nhận."),
+          new_progress: typeof data.progress === "number" ? data.progress : (currentPhase === "Chờ xác nhận" ? 10 : 15),
+          note: String(data.latest_update.message || "Yêu cầu đã được ghi nhận trên hệ thống và đang chờ xác nhận."),
           deliverable_link: String(data.deliverables?.figma_url || data.doc_link || ""),
         },
       ]
@@ -161,7 +173,18 @@ export function normalizeSheetRequest(data: any): UXRequest {
     attachments: attachments,
     current_phase: currentPhase,
     status: (() => {
-      let currentSt = String(data.status || "Đang phân loại")
+      let currentSt = String(data.status || "").trim()
+      if (
+        !currentSt ||
+        currentSt === "Đang phân loại" ||
+        currentSt === "Phân loại" ||
+        currentSt === "Chờ tiếp nhận" ||
+        currentSt === "Đã gửi yêu cầu" ||
+        currentSt === "Đã gửi" ||
+        currentSt === "Mới tạo"
+      ) {
+        currentSt = "Chờ xác nhận"
+      }
       // CHỈ tự động chuyển sang PO pending nếu:
       // 1. Task đang ở trạng thái "Đã gửi PO"
       // 2. ĐÃ có mốc thời gian sent_to_po_at cụ thể
@@ -177,7 +200,9 @@ export function normalizeSheetRequest(data: any): UXRequest {
       }
       return currentSt
     })(),
-    progress: typeof data.progress === "number" ? data.progress : 15,
+    progress: typeof data.progress === "number"
+      ? (data.progress === 15 && currentPhase === "Chờ xác nhận" ? 10 : data.progress)
+      : (currentPhase === "Chờ xác nhận" ? 10 : 15),
     last_updated: String(data.last_updated || formattedDate),
     phases: Array.isArray(data.phases) && data.phases.length ? data.phases : buildPhases(currentPhase),
     latest_update: data.latest_update || {
@@ -198,6 +223,101 @@ export function normalizeSheetRequest(data: any): UXRequest {
 }
 
 /**
+ * Trích xuất thời điểm khởi tạo của task để phục vụ sắp xếp thứ tự ưu tiên giữ mã gốc
+ */
+function getTaskCreatedTimestamp(t: UXRequest): string {
+  if (t.task_updates && t.task_updates.length > 0) {
+    for (const u of t.task_updates) {
+      if (u.id && u.id.startsWith("LOG-")) {
+        return u.id.replace("LOG-", "")
+      }
+    }
+  }
+  return String(t.submitted_at || "")
+}
+
+/**
+ * Tự động phát hiện và sửa trùng lặp mã Request ID (Self-Healing Deduplication)
+ * Đảm bảo mỗi bài toán đều có mã định danh duy nhất (Unique Primary Key)
+ */
+export function deduplicateTaskIds(requests: UXRequest[]): UXRequest[] {
+  if (!Array.isArray(requests) || requests.length <= 1) return requests
+
+  const items = requests.map((r) => ({ ...r }))
+  const idGroups = new Map<string, { index: number; item: UXRequest }[]>()
+
+  items.forEach((item, index) => {
+    const id = (item.request_id || "").trim()
+    if (!idGroups.has(id)) {
+      idGroups.set(id, [])
+    }
+    idGroups.get(id)!.push({ index, item })
+  })
+
+  const allUsedIds = new Set<string>()
+  idGroups.forEach((group, id) => {
+    if (group.length === 1 && id && id !== "UXMB-PENDING") {
+      allUsedIds.add(id)
+    }
+  })
+
+  idGroups.forEach((group, id) => {
+    if (group.length > 1 || !id || id === "UXMB-PENDING") {
+      // Sắp xếp các task bị trùng ID theo thời gian tạo tăng dần (task tạo trước giữ mã ban đầu)
+      group.sort((a, b) => {
+        const timeA = getTaskCreatedTimestamp(a.item)
+        const timeB = getTaskCreatedTimestamp(b.item)
+        return timeA.localeCompare(timeB)
+      })
+
+      group.forEach((entry, i) => {
+        if (i === 0 && id && id !== "UXMB-PENDING" && !allUsedIds.has(id)) {
+          allUsedIds.add(id)
+          items[entry.index].request_id = id
+        } else {
+          let baseId = id || "UXMB-20260908-001"
+          let candidate = baseId
+          const match = baseId.match(/^(UXMB-\d{8}-)(\d+)$/)
+          const matchYear = baseId.match(/^(UXMB-\d{4}-)(\d+)$/)
+
+          if (match) {
+            const prefix = match[1]
+            const digits = match[2]
+            let seq = parseInt(digits, 10) + 1
+            candidate = prefix + String(seq).padStart(digits.length, "0")
+            while (allUsedIds.has(candidate)) {
+              seq++
+              candidate = prefix + String(seq).padStart(digits.length, "0")
+            }
+          } else if (matchYear) {
+            const prefix = matchYear[1]
+            const digits = matchYear[2]
+            let seq = parseInt(digits, 10) + 1
+            candidate = prefix + String(seq).padStart(digits.length, "0")
+            while (allUsedIds.has(candidate)) {
+              seq++
+              candidate = prefix + String(seq).padStart(digits.length, "0")
+            }
+          } else {
+            let s = 1
+            candidate = `${baseId}-${s}`
+            while (allUsedIds.has(candidate)) {
+              s++
+              candidate = `${baseId}-${s}`
+            }
+          }
+
+          allUsedIds.add(candidate)
+          items[entry.index].request_id = candidate
+        }
+      })
+    }
+  })
+
+  return items
+}
+
+/**
  * Fetch real requests list from Google Sheet Web App with SWR (Stale-While-Revalidate)
  */
 export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRequest[]> {
@@ -213,7 +333,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       if (localCached) {
         const parsed = JSON.parse(localCached)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          cachedRequestsMemory = parsed.map(normalizeSheetRequest)
+          cachedRequestsMemory = deduplicateTaskIds(parsed.map(normalizeSheetRequest))
           // Trigger background fetch without blocking UI
           backgroundSyncRequests()
           return cachedRequestsMemory
@@ -253,7 +373,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
         if (res.ok) {
           const data = await res.json()
           if (data.status === "success" && Array.isArray(data.requests)) {
-            const normalized = data.requests.map(normalizeSheetRequest)
+            const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
             cachedRequestsMemory = normalized
             try {
               localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
@@ -275,7 +395,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       if (cached) {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed)) {
-          const normalized = parsed.map(normalizeSheetRequest)
+          const normalized = deduplicateTaskIds(parsed.map(normalizeSheetRequest))
           cachedRequestsMemory = normalized
           return normalized
         }
@@ -285,7 +405,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
     }
 
     // Return starter mock requests if cache/sheet is empty
-    const fallback = mockRequests.map(normalizeSheetRequest)
+    const fallback = deduplicateTaskIds(mockRequests.map(normalizeSheetRequest))
     cachedRequestsMemory = fallback
     return fallback
   })().finally(() => {
@@ -312,7 +432,7 @@ async function backgroundSyncRequests() {
     if (res.ok) {
       const data = await res.json()
       if (data.status === "success" && Array.isArray(data.requests)) {
-        const normalized = data.requests.map(normalizeSheetRequest)
+        const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
         cachedRequestsMemory = normalized
         localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
         broadcastTaskEvent("GLOBAL_REFRESH")

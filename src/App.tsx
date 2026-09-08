@@ -2,12 +2,15 @@ import { useState, lazy, Suspense, useEffect } from "react"
 import type { Page } from "./components/Sidebar"
 import LoginGate from "./components/auth/LoginGate"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageSkeleton } from "@/components/common/ReuiSkeletons"
+import { motion, AnimatePresence } from "framer-motion"
 import { Frame } from "@/components/reui/frame"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, ArrowLeft, LogOut } from "lucide-react"
 import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
+import AppHeader from "@/components/common/AppHeader"
 import { getStoredSession, logoutTeamsSession, getUserInitials, UserSession, syncSessionRoleFromSheet } from "./services/otpAuthService"
 
 // Code-splitting non-critical entry chunks via React.lazy
@@ -45,28 +48,7 @@ export const preloadPage = (page: Page) => {
 }
 
 function PageLoadingSkeleton() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-in fade-in-50 duration-200">
-      <Frame className="p-6 space-y-3 bg-white">
-        <Skeleton className="h-4 w-32 rounded-lg" />
-        <Skeleton className="h-8 w-72 rounded-xl" />
-        <Skeleton className="h-4 w-96 rounded-lg" />
-      </Frame>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <Frame key={i} className="p-5 space-y-3 bg-white">
-            <Skeleton className="h-9 w-9 rounded-xl" />
-            <Skeleton className="h-6 w-20 rounded-lg" />
-            <Skeleton className="h-3 w-32 rounded-md" />
-          </Frame>
-        ))}
-      </div>
-      <Frame className="p-6 space-y-4 bg-white">
-        <Skeleton className="h-6 w-48 rounded-lg" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
-      </Frame>
-    </div>
-  )
+  return <PageSkeleton />
 }
 
 export default function App() {
@@ -262,17 +244,44 @@ export default function App() {
       </Suspense>
 
       {/* Container chính: Offset theo sidebar w-60 (240px) */}
-      <div className="md:ml-60 pt-14 md:pt-0 min-h-screen bg-[#FCFCFD]">
-        <Suspense fallback={<PageLoadingSkeleton />}>
-          {page === "overview" && <TongQuanPage />}
-          {page === "create" && (
-            <CreateRequestPage onBack={() => handleNavigate("track")} />
-          )}
-          {page === "track" && <TrackRequestPage onNavigateToCreate={() => handleNavigate("create")} />}
-          {page === "manage" && <QuanLyPage />}
-          {page === "test" && <TestAssessmentPage />}
-          {page === "compressor" && <ImageCompressorPage />}
-        </Suspense>
+      <div className="md:ml-60 min-h-screen bg-[#FCFCFD] flex flex-col">
+        {/* ReUI App Shell 12 Global Sticky Header */}
+        <AppHeader
+          currentPage={page}
+          onNavigate={handleNavigate}
+          session={session}
+          onToggleMobileMenu={() => window.dispatchEvent(new Event("toggle_mobile_sidebar"))}
+        />
+
+        {/* Main Content View */}
+        <div className="flex-1 w-full px-6 py-6 lg:px-8 lg:py-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={page}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
+              className="w-full"
+            >
+              <Suspense fallback={<PageLoadingSkeleton />}>
+                {page === "overview" && <TongQuanPage />}
+                {page === "create" && (
+                  <CreateRequestPage onBack={() => handleNavigate("track")} />
+                )}
+                {page === "track" && <TrackRequestPage onNavigateToCreate={() => handleNavigate("create")} />}
+                {page === "manage" && <QuanLyPage />}
+                {page === "test" && <TestAssessmentPage />}
+                {page === "compressor" && <ImageCompressorPage />}
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* ReUI App Shell 12 Footer */}
+        <footer className="w-full border-t border-slate-200/80 px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
+          <div>2026 © MBBank UX Platform</div>
+        </footer>
       </div>
 
       {/* Global Toast Provider */}

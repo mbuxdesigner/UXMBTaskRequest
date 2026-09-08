@@ -291,6 +291,131 @@ function getDesignerAvatar(name?: string) {
   return ""
 }
 
+/**
+ * Renders inline text with automatic conversion of '->', '-->', '=>' to stylized arrow '→'
+ * and supports bolding with '**text**'
+ */
+function renderInlineFormatted(text: string): React.ReactNode {
+  const arrowRegex = /(\s*(?:->|-->|=>|==>|→)\s*)/g
+  const parts = text.split(arrowRegex)
+
+  return parts.map((part, idx) => {
+    if (/^\s*(?:->|-->|=>|==>|→)\s*$/.test(part)) {
+      return (
+        <span
+          key={`arrow-${idx}`}
+          className="inline-flex items-center justify-center mx-1.5 text-blue-600 font-bold select-none text-[13px] align-baseline"
+          title="Luồng tiếp theo"
+        >
+          →
+        </span>
+      )
+    }
+
+    if (part.includes("**")) {
+      const boldParts = part.split(/(\*\*[^*]+\*\*)/g)
+      return (
+        <span key={`text-${idx}`}>
+          {boldParts.map((bp, bIdx) => {
+            if (bp.startsWith("**") && bp.endsWith("**") && bp.length > 4) {
+              return (
+                <strong key={`b-${bIdx}`} className="font-bold text-slate-900">
+                  {bp.slice(2, -2)}
+                </strong>
+              )
+            }
+            return bp
+          })}
+        </span>
+      )
+    }
+
+    return <span key={`text-${idx}`}>{part}</span>
+  })
+}
+
+/**
+ * Formats rich article paragraphs with bullets, numbers, flow arrows, and clean spacing
+ */
+function renderRichArticleContent(content?: string, emptyFallback = "Chưa có nội dung chi tiết."): React.ReactNode {
+  if (!content || !content.trim()) {
+    return <span className="text-slate-400 italic">{emptyFallback}</span>
+  }
+
+  const lines = content.split("\n")
+  const elements: React.ReactNode[] = []
+  let currentListItems: React.ReactNode[] = []
+
+  const flushList = (keyPrefix: number | string) => {
+    if (currentListItems.length > 0) {
+      elements.push(
+        <ul key={`list-${keyPrefix}`} className="space-y-2.5 my-1.5 pl-0.5">
+          {currentListItems}
+        </ul>
+      )
+      currentListItems = []
+    }
+  }
+
+  lines.forEach((line, lineIdx) => {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      flushList(`flush-${lineIdx}`)
+      return
+    }
+
+    // Bullet point detection: -, *, +, •
+    const bulletMatch = line.match(/^\s*([-*+•])\s+(.*)$/)
+    if (bulletMatch) {
+      const bulletText = bulletMatch[2]
+      currentListItems.push(
+        <li key={`item-${lineIdx}`} className="flex items-start gap-2.5 text-slate-800">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-2 shrink-0" />
+          <div className="flex-1 leading-relaxed">
+            {renderInlineFormatted(bulletText)}
+          </div>
+        </li>
+      )
+      return
+    }
+
+    // Numbered list detection: 1. or 1)
+    const numberMatch = line.match(/^\s*(\d+)[\.\)]\s+(.*)$/)
+    if (numberMatch) {
+      const num = numberMatch[1]
+      const numText = numberMatch[2]
+      currentListItems.push(
+        <li key={`num-${lineIdx}`} className="flex items-start gap-2 text-slate-800">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] font-bold shrink-0 mt-0.5">
+            {num}
+          </span>
+          <div className="flex-1 leading-relaxed">
+            {renderInlineFormatted(numText)}
+          </div>
+        </li>
+      )
+      return
+    }
+
+    // Regular line / paragraph: flush pending list first
+    flushList(`p-flush-${lineIdx}`)
+
+    const isIntroHeading = trimmed.endsWith(":") && trimmed.length < 150
+    elements.push(
+      <p
+        key={`p-${lineIdx}`}
+        className={`leading-relaxed text-slate-800 ${isIntroHeading ? "font-medium text-slate-900" : "font-normal"}`}
+      >
+        {renderInlineFormatted(line)}
+      </p>
+    )
+  })
+
+  flushList("end")
+
+  return <div className="space-y-2.5">{elements}</div>
+}
+
 // Helper to parse dates into epoch milliseconds
 function parseDateToMs(ts?: string): number {
   if (!ts) return 0
@@ -1291,15 +1416,18 @@ export default function RequestDetail({
       let nextPhase = request.current_phase
       let nextProgress = request.progress
 
-      if (newStatus === "Đang phân loại" || newStatus === "Phân loại") {
-        nextPhase = "Phân loại"
-        nextProgress = Math.max(15, request.progress || 15)
-      } else if (newStatus === "Hoàn thành") {
-        nextPhase = "Bàn giao"
-        nextProgress = 100
-      } else if (newStatus === "Chờ tiếp nhận") {
-        nextPhase = "Phân loại"
+      if (
+        newStatus === "Chờ xác nhận" ||
+        newStatus === "1. Chờ xác nhận" ||
+        newStatus === "Đang phân loại" ||
+        newStatus === "Phân loại" ||
+        newStatus === "Chờ tiếp nhận"
+      ) {
+        nextPhase = "Chờ xác nhận"
         nextProgress = 10
+      } else if (newStatus === "Hoàn thành") {
+        nextPhase = "Hoàn thành"
+        nextProgress = 100
       }
 
       const res = await updateTaskProgress(request.request_id, {
@@ -1441,7 +1569,9 @@ export default function RequestDetail({
     setOpenDropdown(null)
     const toastId = toast.loading(`Đang chuyển sang khâu [${newPhase}]...`)
     try {
-      const nextStatus = progressVal >= 100 ? "Hoàn thành" : "Đang thực hiện"
+      const nextStatus = progressVal >= 100
+        ? "Hoàn thành"
+        : (newPhase === "Chờ xác nhận" || progressVal <= 10 ? "Chờ xác nhận" : "Đang thực hiện")
       const res = await updateTaskProgress(request.request_id, {
         new_phase: newPhase,
         new_status: nextStatus,
@@ -1774,31 +1904,7 @@ export default function RequestDetail({
     if (!request) return []
     const events: ActivityEvent[] = []
 
-    // 1. Task Creation Event
-    events.push({
-      id: "EVT-CREATE",
-      type: "create",
-      timestamp: request.submitted_at || "19/08/2026 09:15",
-      author: request.requester_email || "PO (Product Owner)",
-      authorRole: "PO",
-      title: "Đã khởi tạo yêu cầu UX",
-      content: `Yêu cầu [${request.title}] được tạo cho Sản phẩm ${request.product || "App MBBank"}${request.squad_name ? ` (Squad: ${request.squad_name})` : ""}.`,
-    })
-
-    // 2. Assignment Event
-    if (request.assigned_designer || request.ux_owner) {
-      events.push({
-        id: "EVT-ASSIGN",
-        type: "assignment",
-        timestamp: request.submitted_at || "19/08/2026 10:30",
-        author: "Nguyễn Văn Cường (Design Owner)",
-        authorRole: "Design Owner",
-        title: "Phân công Designer phụ trách",
-        toValue: displayName,
-      })
-    }
-
-    // 3. Task Update Records / Changelog & Comments (Gộp cả server updates và optimistic updates ngay tức thì)
+    // 1. Task Update Records / Changelog & Comments (Gộp cả server updates và optimistic updates ngay tức thì)
     const serverUpdates = request.task_updates || []
     const pendingOptimistic = optimisticUpdates.filter((opt) => {
       // Đã có trên server nếu: cùng id HOẶC cùng note và thời gian gửi gần nhau trong vòng 2 phút
@@ -1816,7 +1922,29 @@ export default function RequestDetail({
     })
     const allUpdates = [...serverUpdates, ...pendingOptimistic]
 
-    // 4. Deliverable Links Attached (CHỈ tạo sự kiện nếu link chưa từng xuất hiện trong bất kỳ trao đổi/cập nhật nào)
+    // 2. Task Creation Event (Sử dụng thông tin từ initial log nếu có để đồng bộ thời gian chuẩn)
+    const initialCreateUpdate = allUpdates.find((u) => {
+      const note = (u.note || "").toLowerCase().trim()
+      return (
+        note.startsWith("khởi tạo yêu cầu") ||
+        note.startsWith("ghi nhận yêu cầu") ||
+        note.startsWith("đã tạo yêu cầu")
+      )
+    })
+
+    events.push({
+      id: "EVT-CREATE",
+      type: "create",
+      timestamp: initialCreateUpdate?.timestamp || request.submitted_at || "19/08/2026 09:15",
+      author: initialCreateUpdate?.updated_by
+        ? formatDesignerDisplayName(initialCreateUpdate.updated_by)
+        : (request.requester_name || request.requester_email || "PO (Product Owner)"),
+      authorRole: (initialCreateUpdate?.author_role as any) || "PO",
+      title: "Đã khởi tạo yêu cầu UX",
+      content: `Yêu cầu [${request.title}] được tạo cho Sản phẩm ${request.product || "App MBBank"}${request.squad_name ? ` (Squad: ${request.squad_name})` : ""}.`,
+    })
+
+    // 3. Deliverable Links Attached (CHỈ tạo sự kiện nếu link chưa từng xuất hiện trong bất kỳ trao đổi/cập nhật nào)
     const figmaLinkNorm = (customDeliverables?.figma_url || "").trim().toLowerCase().replace(/\/$/, "")
     const isFigmaAlreadyInUpdates = figmaLinkNorm && allUpdates.some((u) => {
       const uLink = (u.deliverable_link || "").toLowerCase().trim().replace(/\/$/, "")
@@ -1830,7 +1958,7 @@ export default function RequestDetail({
         id: "EVT-FIGMA",
         type: "deliverable",
         timestamp: request.submitted_at || request.last_updated || "19/08/2026 14:20",
-        author: displayName,
+        author: isAssigned ? displayName : (formatDesignerDisplayName(request.ux_owner) || "Designer"),
         authorRole: "Designer",
         title: customDeliverables.figma_url.toLowerCase().includes("figma.com") 
           ? "Đã đính kèm liên kết Figma Canvas" 
@@ -1852,7 +1980,7 @@ export default function RequestDetail({
         id: "EVT-PROTO",
         type: "deliverable",
         timestamp: request.submitted_at || request.last_updated || "19/08/2026 16:45",
-        author: displayName,
+        author: isAssigned ? displayName : (formatDesignerDisplayName(request.ux_owner) || "Designer"),
         authorRole: "Designer",
         title: "Đã đính kèm Interactive Prototype",
         link: customDeliverables.prototype_url,
@@ -1862,6 +1990,40 @@ export default function RequestDetail({
     if (allUpdates.length > 0) {
       allUpdates.forEach((u, idx) => {
         const noteRaw = (u.note || "").trim()
+        const noteLower = noteRaw.toLowerCase()
+
+        // Bỏ qua log khởi tạo dạng thô vì đã được EVT-CREATE hiển thị ở đầu dòng thời gian
+        if (
+          noteLower.startsWith("khởi tạo yêu cầu") ||
+          noteLower.startsWith("ghi nhận yêu cầu") ||
+          noteLower.startsWith("đã tạo yêu cầu")
+        ) {
+          return
+        }
+
+        // Tự động nhận diện sự kiện phân công thực tế từ log hệ thống
+        const isAssignmentNote =
+          noteLower.startsWith("phân công công việc cho:") ||
+          noteLower.startsWith("phân công designer:") ||
+          noteLower.startsWith("phân công nhân sự:") ||
+          noteLower.startsWith("phân công:")
+
+        if (isAssignmentNote) {
+          const assignedTarget = noteRaw.replace(/^[^:]+:\s*/i, "").trim()
+          if (assignedTarget && assignedTarget !== "Chưa phân công" && assignedTarget !== "Đang phân công") {
+            events.push({
+              id: `EVT-ASSIGN-${u.id || idx}`,
+              type: "assignment",
+              timestamp: u.timestamp,
+              author: formatDesignerDisplayName(u.updated_by),
+              authorRole: u.author_role || "Design Owner",
+              title: "Phân công Designer phụ trách",
+              toValue: assignedTarget,
+            })
+            return
+          }
+        }
+
         const isExplicitComment = (u as any).is_comment === true
         const isExplicitSystem = (u as any).is_comment === false || (u as any).source === "system"
         const isSysNote = isExplicitSystem || (!isExplicitComment && isSystemActivityNote(noteRaw))
@@ -2113,7 +2275,13 @@ export default function RequestDetail({
     PRIORITY_OPTIONS[2]
 
   // Dynamic UX Phases from Admin Settings
-  const adminPhases = useMemo(() => getAdminPhases(), [request])
+  const [phaseVersion, setPhaseVersion] = useState(0)
+  useEffect(() => {
+    const handleStorage = () => setPhaseVersion((v) => v + 1)
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
+  }, [])
+  const adminPhases = useMemo(() => getAdminPhases(), [request, phaseVersion])
 
   // Calculate current phase index for the dynamic progression bar
   const currentPhaseIndex = useMemo(() => {
@@ -2539,7 +2707,7 @@ export default function RequestDetail({
                           onClick={() => {
                             if (isAuthor) setIsEditingTitle(true)
                           }}
-                          className={`text-lg sm:text-xl lg:text-[21px] font-bold text-slate-900 tracking-tight leading-snug transition-colors break-words [overflow-wrap:break-word] max-w-full ${
+                          className={`text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug transition-colors break-words [overflow-wrap:break-word] max-w-full ${
                             isAuthor ? "hover:text-[#1057FB] cursor-pointer" : "cursor-default"
                           }`}
                           title={isAuthor ? "Tác giả đề bài: Bấm để sửa tiêu đề" : "Tiêu đề bài toán"}
@@ -2565,13 +2733,23 @@ export default function RequestDetail({
                     
                     {/* 1. Status (Chính là Khâu UX: Phân loại, Discovery, User Flow, UI Design, Prototype, Bàn giao) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Target className="w-4 h-4 text-slate-400" />
                         <span>Status</span>
                       </div>
                       <div className="flex-1 relative">
                         {(() => {
-                          const displayPhase = request.current_phase || (adminPhases[0]?.key || "Chờ xác nhận")
+                          const rawPhase = request.current_phase || (adminPhases[0]?.key || "Chờ xác nhận")
+                          const displayPhase = (
+                            rawPhase === "Phân loại" ||
+                            rawPhase === "Đang phân loại" ||
+                            rawPhase === "Chờ tiếp nhận" ||
+                            rawPhase === "Đã gửi yêu cầu" ||
+                            rawPhase === "Đã gửi" ||
+                            rawPhase === "Mới tạo"
+                          )
+                            ? "Chờ xác nhận"
+                            : rawPhase
                           const cfg = getStatusConfig(displayPhase)
                           return (
                             <>
@@ -2610,7 +2788,10 @@ export default function RequestDetail({
                                       <span className="text-[9px] font-semibold text-slate-400">Đồng bộ SLA</span>
                                     </div>
                                     {adminPhases.map((phase, pIdx) => {
-                                      const isCurrent = request.current_phase === phase.key || (!request.current_phase && pIdx === 0)
+                                      const isCurrent =
+                                        displayPhase === phase.key ||
+                                        request.current_phase === phase.key ||
+                                        (!request.current_phase && pIdx === 0)
                                       const phaseCfg = getStatusConfig(phase.key)
                                       return (
                                         <button
@@ -2647,7 +2828,7 @@ export default function RequestDetail({
 
                     {/* 2. Assignees (Click to select - Support Multi-Assignees) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <UserCheck className="w-4 h-4 text-slate-400" />
                         <span>Assignees</span>
                       </div>
@@ -2662,7 +2843,7 @@ export default function RequestDetail({
                               {localAssignees.length === 1 ? (
                                 <>
                                   <UserAvatar name={localAssignees[0]} avatarUrl={getDesignerAvatar(localAssignees[0])} size="xs" />
-                                  <span className="font-bold text-slate-900 truncate text-xs">{localAssignees[0]}</span>
+                                  <span className="font-medium text-slate-900 truncate text-xs">{localAssignees[0]}</span>
                                 </>
                               ) : (
                                 <>
@@ -2673,10 +2854,10 @@ export default function RequestDetail({
                                       </div>
                                     ))}
                                   </div>
-                                  <span className="font-bold text-slate-900 truncate text-xs" title={localAssignees.join(", ")}>
+                                  <span className="font-medium text-slate-900 truncate text-xs" title={localAssignees.join(", ")}>
                                     {localAssignees.join(", ")}
                                   </span>
-                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
                                     {localAssignees.length}
                                   </span>
                                 </>
@@ -2746,22 +2927,6 @@ export default function RequestDetail({
 
                               {/* Designer List with Unassign Option & 2 Categorized Sections */}
                               <div className="flex-1 overflow-y-auto py-1 divide-y divide-slate-50">
-                                {/* Gợi ý thông minh: Nếu task chưa gán đúng nhân sự phụ trách squad */}
-                                {squadDesigners.length > 0 && !localAssignees.some((name) => squadDesigners.some((sd) => matchesPerson(name, sd))) && (
-                                  <div className="p-2.5 mx-2.5 my-1.5 bg-blue-50/90 border border-blue-200/90 rounded-xl text-[11px] text-blue-900 flex items-center justify-between gap-2 shadow-2xs">
-                                    <div className="min-w-0 flex-1">
-                                      <span className="font-bold text-blue-950">Phụ trách {taskSquadName}:</span>{" "}
-                                      <span className="font-semibold text-blue-800">{squadDesigners.map((d) => d.name).join(", ")}</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveAssignees([squadDesigners[0].name])}
-                                      className="px-2 py-1 bg-[#1057FB] hover:bg-blue-700 text-white rounded-lg font-bold text-[10.5px] shrink-0 cursor-pointer transition-colors shadow-2xs"
-                                    >
-                                      Gán {squadDesigners[0].name}
-                                    </button>
-                                  </div>
-                                )}
 
                                 {/* Option 0: Unassign / Chưa phân công */}
                                 <button
@@ -2919,19 +3084,19 @@ export default function RequestDetail({
 
                     {/* 3. Dates (Lịch trình thiết kế UX: Bắt đầu -> Hạn hoàn thành thiết kế) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0" title="Lịch trình thiết kế UX của Designer">
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0" title="Lịch trình thiết kế UX của Designer">
                         <Calendar className="w-4 h-4 text-slate-400" />
                         <span>Hạn UX</span>
                       </div>
-                      <div className="flex-1 relative flex items-center gap-2 font-medium text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
+                      <div className="flex-1 relative flex items-center gap-2 font-normal text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
                         <span className="text-slate-500 flex items-center gap-1 shrink-0 whitespace-nowrap" title="Thời gian Design bắt đầu nhận task">
                           <span>{request.submitted_at || "Bắt đầu"}</span>
                         </span>
-                        <span className="text-slate-300 font-bold">→</span>
+                        <span className="text-slate-300 font-medium">→</span>
                         <button
                           type="button"
                           onClick={() => setOpenDropdown(openDropdown === "date" ? null : "date")}
-                          className="text-[#1057FB] font-bold flex items-center gap-1 bg-blue-50/80 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                          className="text-[#1057FB] font-medium flex items-center gap-1 bg-blue-50/80 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
                           title="Hạn hoàn thành thiết kế UX (Design End Date - Bấm để đổi hạn)"
                         >
                           <Calendar className="w-3.5 h-3.5 text-[#1057FB] shrink-0" />
@@ -2950,8 +3115,8 @@ export default function RequestDetail({
                               {/* Header Month/Year Selector */}
                               <div className="flex items-center justify-between mb-3 px-1">
                                 <div>
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hạn thiết kế UX</span>
-                                  <span className="text-xs font-extrabold text-slate-900">
+                                  <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Hạn thiết kế UX</span>
+                                  <span className="text-xs font-semibold text-slate-900">
                                     {monthNamesVi[calMonth]} {calYear}
                                   </span>
                                 </div>
@@ -2976,7 +3141,7 @@ export default function RequestDetail({
                               {/* Weekday headers */}
                               <div className="grid grid-cols-7 gap-1 mb-1 text-center">
                                 {dayHeadersVi.map((dh) => (
-                                  <span key={dh} className="text-[10px] font-bold text-slate-400">
+                                  <span key={dh} className="text-[10px] font-medium text-slate-400">
                                     {dh}
                                   </span>
                                 ))}
@@ -3005,11 +3170,11 @@ export default function RequestDetail({
                                       key={`day-${d}`}
                                       type="button"
                                       onClick={() => handleSelectCalDay(d)}
-                                      className={`h-7 w-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
+                                      className={`h-7 w-7 rounded-lg text-xs font-medium flex items-center justify-center transition-all cursor-pointer ${
                                         isSelected
-                                          ? "bg-[#1E5AF6] text-white font-bold shadow-xs"
+                                          ? "bg-[#1E5AF6] text-white font-semibold shadow-xs"
                                           : isToday
-                                          ? "border border-[#1E5AF6] text-[#1E5AF6] font-bold"
+                                          ? "border border-[#1E5AF6] text-[#1E5AF6] font-semibold"
                                           : "text-slate-700 hover:bg-slate-100"
                                       }`}
                                     >
@@ -3024,7 +3189,7 @@ export default function RequestDetail({
                                 <button
                                   type="button"
                                   onClick={() => handleSaveDeadline("")}
-                                  className="text-slate-400 hover:text-rose-500 font-semibold cursor-pointer"
+                                  className="text-slate-400 hover:text-rose-500 font-normal cursor-pointer"
                                 >
                                   Xóa chọn
                                 </button>
@@ -3035,7 +3200,7 @@ export default function RequestDetail({
                                     const formatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
                                     handleSaveDeadline(formatted)
                                   }}
-                                  className="text-[#1E5AF6] hover:underline font-bold cursor-pointer"
+                                  className="text-[#1E5AF6] hover:underline font-medium cursor-pointer"
                                 >
                                   Hôm nay
                                 </button>
@@ -3048,7 +3213,7 @@ export default function RequestDetail({
 
                     {/* 4. Priority (Click to select) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-medium shrink-0">
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Flag className="w-4 h-4 text-amber-500" />
                         <span>Priority</span>
                       </div>
@@ -3056,7 +3221,7 @@ export default function RequestDetail({
                         <button
                           type="button"
                           onClick={() => setOpenDropdown(openDropdown === "priority" ? null : "priority")}
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-bold text-xs cursor-pointer hover:opacity-90 transition-all ${activePriorityObj.color}`}
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-medium text-xs cursor-pointer hover:opacity-90 transition-all ${activePriorityObj.color}`}
                         >
                           <Flag className={`w-3.5 h-3.5 ${activePriorityObj.flagFill}`} />
                           <span>{activePriorityObj.label}</span>
@@ -3072,7 +3237,7 @@ export default function RequestDetail({
                               className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-48 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
                             >
                               <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                Độ ưu tiên
+                                Ưu tiên
                               </div>
                               {PRIORITY_OPTIONS.map((pr) => {
                                 const isSelected = (currentPriority || "").toLowerCase() === pr.value.toLowerCase()
@@ -3099,250 +3264,269 @@ export default function RequestDetail({
 
                   </div>
 
-                  {/* 📋 ĐẦU BÀI TỪ PRODUCT OWNER (CLEAN & MINIMALIST CANVAS LAYOUT - KHÔNG NHIỀU KHỐI HỘP) */}
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 space-y-5 shadow-2xs">
-                    {/* Header: Title + Subline metadata + Actions */}
-                    <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                            Đầu bài từ Product Owner
-                          </h2>
-                          {(() => {
-                            const rawSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
-                            const hasSq = Boolean(rawSq && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad" && rawSq !== "Chưa phân squad")
-                            const squadLabel = hasSq ? rawSq : "Chưa phân squad"
-                            return (
-                              <span className="text-xs sm:text-[13px] font-medium text-slate-600 flex items-center gap-1.5 flex-wrap">
-                                <span>• {localProduct || request.product || "App MBBank"}</span>
-                                <span>•</span>
-                                {canEditBrief ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
-                                      setPoFormSquad(curSq)
-                                      setPoFormProduct(localProduct || request.product || "")
-                                      setPoFormTitle(request.title || "")
-                                      setPoFormReqType(request.request_type || "")
-                                      setPoFormDesc(request.description || "")
-                                      setPoFormBizNeed(request.business_need || "")
-                                      setPoFormUserProb(request.user_problem || "")
-                                      setPoFormTargetUser(request.target_user || "")
-                                      setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
-                                      setPoFormDeadlineReason(request.deadline_reason || "")
-                                      setPoFormDocLinks(request.doc_links || [])
-                                      setShowPoEditModal(true)
-                                    }}
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                                      hasSq
-                                        ? "text-indigo-600 font-semibold hover:bg-indigo-50 hover:underline decoration-dotted underline-offset-2"
-                                        : "text-slate-400 italic font-normal hover:text-indigo-600 hover:bg-slate-100"
-                                    }`}
-                                    title="Bấm để chỉnh sửa đầu bài & phân Squad"
-                                  >
-                                    <span>{squadLabel}</span>
-                                    <Edit3 className="w-3 h-3 opacity-60 hover:opacity-100" />
-                                  </button>
-                                ) : (
-                                  <span className={hasSq ? "text-indigo-600 font-semibold" : "text-slate-400 italic font-normal"}>
-                                    {squadLabel}
-                                  </span>
-                                )}
-                                <span>• {request.request_type || "Yêu cầu UX"}</span>
-                              </span>
-                            )
-                          })()}
-                        </div>
-                        <p className="text-xs sm:text-[13.5px] text-slate-600 flex items-center gap-2 flex-wrap">
-                          <span>
-                            Người tạo: <strong className="text-slate-900 font-semibold">{request.requester_name || "PO"}</strong>
-                            {request.requester_email && (
-                              <span className="text-slate-500 font-mono font-normal"> ({request.requester_email})</span>
+                  {/* 📋 ĐẦU BÀI TỪ PRODUCT OWNER (PULSE HELPDESK REUI KNOWLEDGE-BASE DESIGN) */}
+                  <div className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 space-y-5 shadow-xs">
+                    {/* Header: Badges + Subline metadata with Edit Button */}
+                    <div className="flex flex-col gap-2.5 pb-4 border-b border-slate-100">
+                      {/* Row 1: Pulse Badges Row */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Sản phẩm */}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100/90 text-slate-700 text-xs font-semibold border border-slate-200/90">
+                          <Building className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{localProduct || request.product || "App MBBank"}</span>
+                        </span>
+
+                        {/* Squad (Chung màu với cụm thông tin) */}
+                        {(() => {
+                          const rawSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                          const hasSq = Boolean(rawSq && rawSq !== "Chưa phân công" && rawSq !== "Triage Squad" && rawSq !== "Chưa phân squad")
+                          const squadLabel = hasSq ? rawSq : "Chưa phân squad"
+                          return canEditBrief ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                                setPoFormSquad(curSq)
+                                setPoFormProduct(localProduct || request.product || "")
+                                setPoFormTitle(request.title || "")
+                                setPoFormReqType(request.request_type || "")
+                                setPoFormDesc(request.description || "")
+                                setPoFormBizNeed(request.business_need || "")
+                                setPoFormUserProb(request.user_problem || "")
+                                setPoFormTargetUser(request.target_user || "")
+                                setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                                setPoFormDeadlineReason(request.deadline_reason || "")
+                                setPoFormDocLinks(request.doc_links || [])
+                                setShowPoEditModal(true)
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/90 bg-slate-100/90 text-slate-700 hover:bg-slate-200/80 transition-all cursor-pointer"
+                              title="Bấm để chỉnh sửa phân Squad"
+                            >
+                              <Layers className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{squadLabel}</span>
+                              <Edit3 className="w-2.5 h-2.5 text-slate-400" />
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/90 bg-slate-100/90 text-slate-700">
+                              <Layers className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{squadLabel}</span>
+                            </span>
+                          )
+                        })()}
+
+                        {/* Loại yêu cầu */}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100/90 text-slate-700 text-xs font-semibold border border-slate-200/90">
+                          <Tag className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{request.request_type || "Yêu cầu UX"}</span>
+                        </span>
+
+                        {/* Ngày Release (Màu tím chuyển từ lending) */}
+                        {request.expected_deadline && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200" title="Hạn Release">
+                            <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                            <strong className="font-bold text-purple-900">{request.expected_deadline}</strong>
+                            {request.deadline_reason && (
+                              <span className="text-purple-600/80 font-normal text-[11px]">({request.deadline_reason})</span>
                             )}
                           </span>
-                          {request.expected_deadline && (
+                        )}
+                      </div>
+
+                      {/* Row 2: Author and Created Metadata aligned with Edit Button */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+                        <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                          <UserAvatar name={request.requester_name || "PO"} size="xs" className="w-5 h-5 text-[10px]" />
+                          <strong className="font-semibold text-slate-800">{request.requester_name || "PO"}</strong>
+                          {request.requester_email && (
+                            <span className="text-slate-400 font-mono text-[11.5px]">({request.requester_email})</span>
+                          )}
+                          {request.submitted_at && (
                             <>
-                              <span className="text-slate-300">•</span>
-                              <span>
-                                Release dự kiến: <strong className="text-rose-600 font-mono font-bold">{request.expected_deadline}</strong>
-                                {request.deadline_reason && (
-                                  <span className="text-slate-500 font-normal"> ({request.deadline_reason})</span>
-                                )}
-                              </span>
+                              <span className="text-slate-300">·</span>
+                              <span className="text-slate-400">Gửi lúc {request.submitted_at}</span>
                             </>
                           )}
+                        </div>
+
+                        {canEditBrief ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                              setPoFormSquad(curSq)
+                              setPoFormProduct(localProduct || request.product || "")
+                              setPoFormTitle(request.title || "")
+                              setPoFormReqType(request.request_type || "")
+                              setPoFormDesc(request.description || "")
+                              setPoFormBizNeed(request.business_need || "")
+                              setPoFormUserProb(request.user_problem || "")
+                              setPoFormTargetUser(request.target_user || "")
+                              setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                              setPoFormDeadlineReason(request.deadline_reason || "")
+                              setPoFormDocLinks(request.doc_links || [])
+                              setShowPoEditModal(true)
+                            }}
+                            className="h-7.5 px-2.5 text-xs font-semibold rounded-lg border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Sửa đầu bài</span>
+                          </Button>
+                        ) : (
+                          <span 
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80 shrink-0" 
+                            title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) hoặc Admin mới có quyền sửa nội dung đầu bài.`}
+                          >
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Chỉ tác giả được sửa</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Article Body - Clean Typography (Pulse Helpdesk Article Style) */}
+                    <div className="space-y-6 pt-1">
+                      {/* 1. Mô tả nhu cầu UX & Luồng nghiệp vụ */}
+                      <div className="space-y-2.5">
+                        <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 tracking-tight">
+                          Mô tả nhu cầu UX & Luồng nghiệp vụ
+                        </h3>
+                        <div className="bg-slate-100/90 border border-slate-200/70 rounded-2xl p-4 sm:p-5 text-sm sm:text-[14.5px] leading-relaxed text-slate-800 font-normal">
+                          {renderRichArticleContent(request.description, "Chưa có mô tả chi tiết bài toán từ PO.")}
+                        </div>
+                      </div>
+
+                      {/* 2. Vấn đề người dùng */}
+                      <div className="space-y-2">
+                        <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 tracking-tight">
+                          Vấn đề người dùng
+                        </h3>
+                        <div className={`text-sm sm:text-[14.5px] leading-relaxed ${
+                          request.user_problem ? "text-slate-800" : "text-slate-400 italic"
+                        }`}>
+                          {renderRichArticleContent(request.user_problem, "Chưa cung cấp vấn đề người dùng.")}
+                        </div>
+                      </div>
+
+                      {/* 3. Lý do cần thiết & Mục tiêu kinh doanh */}
+                      <div className="space-y-2">
+                        <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 tracking-tight">
+                          Lý do cần thiết & Mục tiêu kinh doanh
+                        </h3>
+                        <div className={`text-sm sm:text-[14.5px] leading-relaxed ${
+                          request.business_need ? "text-slate-800" : "text-slate-400 italic"
+                        }`}>
+                          {renderRichArticleContent(request.business_need, "Chưa cung cấp lý do kinh doanh.")}
+                        </div>
+                      </div>
+
+                      {/* 4. Đối tượng mục tiêu */}
+                      <div className="space-y-2">
+                        <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 tracking-tight">
+                          Đối tượng mục tiêu
+                        </h3>
+                        <p className={`text-sm sm:text-[14.5px] leading-relaxed ${
+                          request.target_user ? "text-slate-800 font-medium" : "text-slate-400 italic"
+                        }`}>
+                          {request.target_user || "Người dùng chung"}
                         </p>
                       </div>
 
-                      {canEditBrief ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
-                            setPoFormSquad(curSq)
-                            setPoFormProduct(localProduct || request.product || "")
-                            setPoFormTitle(request.title || "")
-                            setPoFormReqType(request.request_type || "")
-                            setPoFormDesc(request.description || "")
-                            setPoFormBizNeed(request.business_need || "")
-                            setPoFormUserProb(request.user_problem || "")
-                            setPoFormTargetUser(request.target_user || "")
-                            setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
-                            setPoFormDeadlineReason(request.deadline_reason || "")
-                            setPoFormDocLinks(request.doc_links || [])
-                            setShowPoEditModal(true)
-                          }}
-                          className="h-9 px-3.5 text-xs sm:text-[13px] font-semibold rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Chỉnh sửa đầu bài</span>
-                        </Button>
-                      ) : (
-                        <span 
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 shrink-0" 
-                          title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) hoặc Admin mới có quyền sửa nội dung đầu bài.`}
-                        >
-                          <Lock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Chỉ tác giả được sửa</span>
-                        </span>
-                      )}
-                    </div>
+                      {/* 5. Tài liệu & Tệp đính kèm */}
+                      {(() => {
+                        const allDocs: { title: string; url: string }[] = []
+                        let docCounter = 1
 
-                    {/* 1. Mô tả nhu cầu UX & Luồng nghiệp vụ */}
-                    <div className="space-y-1.5">
-                      <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide block">
-                        Mô tả nhu cầu UX & Luồng nghiệp vụ
-                      </span>
-                      <p className="text-sm sm:text-base text-slate-900 leading-relaxed whitespace-pre-wrap font-normal">
-                        {request.description || "Chưa có mô tả chi tiết bài toán từ PO."}
-                      </p>
-                    </div>
+                        if (Array.isArray(request.attachments)) {
+                          request.attachments.forEach((att) => {
+                            if (att && att.url) {
+                              allDocs.push({
+                                title: att.name || `Tài liệu ${docCounter++}`,
+                                url: att.url,
+                              })
+                            }
+                          })
+                        }
 
-                    {/* 2. Tiêu chuẩn nghiệp vụ (Key-Value dạng danh sách sạch sẽ, chữ to rõ ràng) */}
-                    <div className="pt-3.5 border-t border-slate-100 space-y-2.5 text-sm sm:text-[14.5px]">
-                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
-                        <span className="text-slate-700 font-semibold shrink-0">Lý do cần thiết:</span>
-                        <span className={`leading-relaxed ${request.business_need ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
-                          {request.business_need || "Chưa cung cấp lý do kinh doanh"}
-                        </span>
-                      </div>
+                        if (Array.isArray(request.doc_links)) {
+                          request.doc_links.forEach((link) => {
+                            if (link && typeof link === "string" && link.trim() && !allDocs.some((d) => d.url === link.trim())) {
+                              allDocs.push({
+                                title: `Tài liệu ${docCounter++}`,
+                                url: link.trim(),
+                              })
+                            }
+                          })
+                        }
 
-                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
-                        <span className="text-slate-700 font-semibold shrink-0">Vấn đề người dùng:</span>
-                        <span className={`leading-relaxed ${request.user_problem ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
-                          {request.user_problem || "Chưa cung cấp vấn đề người dùng"}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1 sm:gap-4 items-baseline">
-                        <span className="text-slate-700 font-semibold shrink-0">Đối tượng mục tiêu:</span>
-                        <span className={`leading-relaxed ${request.target_user ? "text-slate-900 font-medium" : "text-slate-400 italic font-normal"}`}>
-                          {request.target_user || "Người dùng chung"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 3. Tài liệu & Tệp đính kèm (gọn gàng, chữ to rõ ràng) */}
-                    {/* 3. Tài liệu & Tệp đính kèm (chỉ cần title Tài liệu 1, Tài liệu 2, bấm vào mở link) */}
-                    {(() => {
-                      const allDocs: { title: string; url: string }[] = []
-                      let docCounter = 1
-
-                      if (Array.isArray(request.attachments)) {
-                        request.attachments.forEach((att) => {
-                          if (att && att.url) {
-                            allDocs.push({
-                              title: `Tài liệu ${docCounter++}`,
-                              url: att.url,
-                            })
-                          }
-                        })
-                      }
-
-                      if (Array.isArray(request.doc_links)) {
-                        request.doc_links.forEach((link) => {
-                          if (link && typeof link === "string" && link.trim() && !allDocs.some((d) => d.url === link.trim())) {
-                            allDocs.push({
-                              title: `Tài liệu ${docCounter++}`,
-                              url: link.trim(),
-                            })
-                          }
-                        })
-                      }
-
-                      return (
-                        <div className="pt-3.5 border-t border-slate-100 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                              <Paperclip className="w-4 h-4 text-slate-500" />
-                              <span>Tài liệu & Tệp đính kèm ({allDocs.length})</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => taskFileInputRef.current?.click()}
-                              disabled={isUploadingTaskAttachment}
-                              className="text-xs sm:text-sm font-semibold text-[#1057FB] hover:text-blue-700 flex items-center gap-1 cursor-pointer hover:underline"
-                            >
-                              <UploadCloud className="w-4 h-4" />
-                              <span>{isUploadingTaskAttachment ? "Đang tải..." : "+ Tải thêm tệp"}</span>
-                            </button>
-                            <input
-                              ref={taskFileInputRef}
-                              type="file"
-                              multiple
-                              onChange={handleUploadTaskFile}
-                              className="hidden"
-                            />
-                          </div>
-
-                          {/* Attachments List */}
-                          {allDocs.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              {allDocs.map((doc, idx) => (
-                                <a
-                                  key={`doc-link-${idx}`}
-                                  href={doc.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-blue-50/50 hover:border-[#1057FB]/50 transition-all group cursor-pointer shadow-2xs"
-                                  title={`Mở ${doc.title}`}
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200/60 text-[#1057FB] flex items-center justify-center shrink-0 group-hover:bg-[#1057FB] group-hover:text-white transition-colors">
-                                      <FileText className="w-4 h-4" />
-                                    </div>
-                                    <span className="font-semibold text-slate-800 text-sm group-hover:text-[#1057FB] transition-colors truncate">
-                                      {doc.title}
-                                    </span>
-                                  </div>
-                                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#1057FB] transition-colors shrink-0" />
-                                </a>
-                              ))}
+                        return (
+                          <div className="space-y-2 pt-2 border-t border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 flex items-center gap-2 tracking-tight">
+                                <span>Tài liệu & Tệp đính kèm</span>
+                                <span className="text-xs font-normal text-slate-400">({allDocs.length})</span>
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => taskFileInputRef.current?.click()}
+                                disabled={isUploadingTaskAttachment}
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1057FB] hover:text-blue-700 cursor-pointer"
+                              >
+                                <UploadCloud className="w-3.5 h-3.5" />
+                                <span>{isUploadingTaskAttachment ? "Đang tải..." : "Tải thêm tệp"}</span>
+                              </button>
+                              <input
+                                ref={taskFileInputRef}
+                                type="file"
+                                multiple
+                                onChange={handleUploadTaskFile}
+                                className="hidden"
+                              />
                             </div>
-                          ) : (
-                            <p className="text-sm text-slate-500 italic">
-                              Chưa có tài liệu hoặc tệp đính kèm.
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })()}
+
+                            {allDocs.length > 0 ? (
+                              <div className="space-y-1 pt-1">
+                                {allDocs.map((doc, idx) => (
+                                  <a
+                                    key={`doc-link-${idx}`}
+                                    href={doc.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between py-1.5 px-2.5 rounded-lg text-sm text-slate-800 hover:text-[#1057FB] hover:bg-slate-50 transition-colors group"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileText className="w-4 h-4 text-slate-500 group-hover:text-[#1057FB] shrink-0" />
+                                      <span className="truncate font-medium underline decoration-slate-300 underline-offset-2 group-hover:decoration-[#1057FB]">
+                                        {doc.title}
+                                      </span>
+                                    </div>
+                                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#1057FB] shrink-0 ml-2" />
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-400 italic pt-1">
+                                Chưa có tài liệu hoặc tệp đính kèm nào từ Product Owner.
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
 
 
                     {/* Deliverables Sub-cards (ClickUp Linked Items Hub) */}
                     <div className="space-y-2.5 pt-2">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-xs sm:text-[13px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+                        <h3 className="text-xs sm:text-[13px] font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-2">
                           <span>DELIVERABLES & TÀI LIỆU BÀN GIAO</span>
                         </h3>
                         <button
                           type="button"
                           onClick={() => setShowAddDeliverableModal(true)}
-                          className="text-xs sm:text-sm font-bold text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer"
+                          className="text-xs sm:text-sm font-medium text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Thêm link</span>
@@ -3362,8 +3546,8 @@ export default function RequestDetail({
                             </svg>
                           </div>
                           <div>
-                            <p className="text-sm sm:text-[14.5px] font-bold text-slate-900">Figma Design Canvas</p>
-                            <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md">
+                            <p className="text-sm sm:text-[14.5px] font-semibold text-slate-900">Figma Design Canvas</p>
+                            <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md font-normal">
                               {customDeliverables?.figma_url || "Chưa đính kèm liên kết Figma"}
                             </p>
                           </div>
@@ -3386,7 +3570,7 @@ export default function RequestDetail({
                               setNewDeliverableType("figma")
                               setShowAddDeliverableModal(true)
                             }}
-                            className="text-[11px] text-[#1057FB] font-bold hover:underline cursor-pointer"
+                            className="text-[11px] text-[#1057FB] font-medium hover:underline cursor-pointer"
                           >
                             + Đính kèm
                           </button>
@@ -3408,8 +3592,8 @@ export default function RequestDetail({
                   <div className="p-4 bg-white border-b border-slate-100 space-y-2.5 shrink-0 relative">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900">Activity</span>
-                        <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                        <span className="text-xs font-semibold text-slate-900">Activity</span>
+                        <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
                           {displayedActivities.length}
                         </span>
                       </div>
@@ -3638,9 +3822,9 @@ export default function RequestDetail({
                                   <div className="min-w-0 flex-1 space-y-1.5">
                                     <div className="flex items-center justify-between gap-2 flex-wrap">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold text-slate-900">{event.author}</span>
+                                        <span className="text-sm font-medium text-slate-900">{event.author}</span>
                                         {event.authorRole && (
-                                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                                             event.authorRole === "PO" 
                                               ? "bg-purple-50 text-purple-700 border-purple-200/80"
                                               : event.authorRole === "Admin" || event.authorRole === "Design Owner"
@@ -3651,7 +3835,7 @@ export default function RequestDetail({
                                           </span>
                                         )}
                                       </div>
-                                      <span className="text-xs text-slate-400 font-medium whitespace-nowrap">{event.timestamp}</span>
+                                      <span className="text-xs text-slate-400 font-normal whitespace-nowrap">{event.timestamp}</span>
                                     </div>
 
                                     <div className="text-[13.5px] sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-normal">
@@ -3678,7 +3862,7 @@ export default function RequestDetail({
                                             href={event.link}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-[#1057FB] text-xs font-semibold border border-blue-200/80 transition-colors group"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-[#1057FB] text-xs font-medium border border-blue-200/80 transition-colors group"
                                           >
                                             <Paperclip className="w-3.5 h-3.5 shrink-0" />
                                             <span className="truncate max-w-[260px]">{event.link}</span>
@@ -3711,34 +3895,34 @@ export default function RequestDetail({
                             <div key={eventKey} className="flex items-start justify-between gap-2 py-1.5 px-2 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors">
                               <div className="flex items-start gap-2 min-w-0 flex-1">
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${getDotColor()}`} />
-                                <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-medium">
+                                <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-normal">
                                   {event.type === "create" && (
                                     <>
-                                      <span className="font-bold text-slate-800">{event.author || "PO"}</span>
+                                      <span className="font-medium text-slate-800">{event.author || "PO"}</span>
                                       <span>đã khởi tạo yêu cầu cho</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200/90">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-200/90">
                                         {localProduct || request.product || "App MBBank"}
                                       </span>
                                     </>
                                   )}
                                   {event.type === "assignment" && (
                                     <>
-                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                      {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
                                       <span>đã phân công Designer</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-bold border border-blue-200/80">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
                                         {event.toValue}
                                       </span>
                                     </>
                                   )}
                                   {event.type === "phase_change" && (
                                     <>
-                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                      {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
                                       <span>đã chuyển khâu từ</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-semibold border border-blue-200/80">
-                                        {event.fromValue || "Phân loại"}
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                        {event.fromValue || "Chờ xác nhận"}
                                       </span>
                                       <span>sang</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-200/80">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-200/80">
                                         {event.toValue}
                                       </span>
                                     </>
@@ -3780,9 +3964,9 @@ export default function RequestDetail({
                                             return (
                                               <>
                                                 {event.author && !hasAuthor && (
-                                                  <span className="font-bold text-slate-800">{event.author}:</span>
+                                                  <span className="font-medium text-slate-800">{event.author}:</span>
                                                 )}
-                                                <span className="text-slate-700 font-medium">{val}</span>
+                                                <span className="text-slate-700 font-normal">{val}</span>
                                               </>
                                             )
                                           })()}
