@@ -1,62 +1,49 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { UXRequest } from "../../data/mockData"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
+import { getSquadColorDef } from "@/lib/colorUtils"
 import { 
   ChevronLeft, 
   ChevronRight, 
   ChevronDown, 
   ListTree, 
   MoreHorizontal, 
-  Lock, 
   Search, 
-  CheckCircle2, 
-  AlertTriangle,
-  Filter,
-  Check,
-  Clock
+  Filter, 
+  Check, 
+  Plus, 
+  Minus, 
+  Users, 
+  Flag,
+  Folder
 } from "lucide-react"
 
 interface ReUIGanttChartProps {
   requests: UXRequest[]
   onSelectRequest?: (req: UXRequest) => void
+  borderless?: boolean
+  className?: string
 }
 
-export type ViewScale = "Month" | "Week" | "Day" | "Year"
-
-interface TimelinePhaseBlock {
-  id: string
-  phaseKey: string
-  phaseName: string
-  label: string
-  timeBadge?: string
-  startRatio: number // 0 to 1
-  widthRatio: number // 0 to 1
-  colorClass: string
-  icon?: "lock" | "check" | "alert" | "clock"
-  startDateStr: string
-  endDateStr: string
-  slaDays: number
-  deliverable: string
-}
+export type ViewScale = "Day" | "Week" | "Month" | "Quarter" | "Year"
 
 interface HoveredBlockInfo {
-  block: TimelinePhaseBlock
   request: UXRequest
   clientX: number
   clientY: number
 }
 
-// 7 Official UX Stages & Review from statusConfig.ts
-export const UX_STAGES = [
-  { key: "1_phan_loai", label: "1. Phân loại", fullTitle: "1. Phân loại đề bài", color: "bg-amber-100 text-amber-900 border border-amber-300", dot: "bg-amber-500", sla: 1, deliverable: "Phân loại & tiếp nhận yêu cầu" },
-  { key: "2_discovery", label: "2. Discovery", fullTitle: "2. Khảo sát & Discovery", color: "bg-purple-100 text-purple-900 border border-purple-300", dot: "bg-purple-500", sla: 2, deliverable: "Nghiên cứu & PRD Specs" },
-  { key: "3_user_flow", label: "3. User Flow", fullTitle: "3. Kiến trúc User Flow", color: "bg-indigo-100 text-indigo-900 border border-indigo-300", dot: "bg-indigo-500", sla: 2, deliverable: "User Flow & Wireframe Diagrams" },
-  { key: "4_ui_design", label: "4. UI Design", fullTitle: "4. Thiết kế UI Design", color: "bg-blue-100 text-blue-900 border border-blue-300", dot: "bg-blue-600", sla: 3, deliverable: "Figma High-Fidelity UI Layouts" },
-  { key: "5_prototype", label: "5. Prototype", fullTitle: "5. Interactive Prototype", color: "bg-teal-100 text-teal-900 border border-teal-300", dot: "bg-teal-500", sla: 2, deliverable: "Prototype tương tác & Review" },
-  { key: "6_ban_giao", label: "6. Bàn giao", fullTitle: "6. Nghiệm thu & Bàn giao Tech", color: "bg-emerald-100 text-emerald-900 border border-emerald-300", dot: "bg-emerald-500", sla: 1, deliverable: "Dev Handoff & Assets Export" },
-  { key: "7_po_pending", label: "7. PO Pending", fullTitle: "7. PO Pending (Chờ PO duyệt nghiệm thu)", color: "bg-slate-100 text-slate-700 border border-slate-300", dot: "bg-slate-400", sla: 2, deliverable: "PO rà soát & Phê duyệt nghiệm thu" },
-]
+interface OffscreenChip {
+  id: string
+  title: string
+  dateLabel: string
+  side: "start" | "end"
+  top: number
+  color: string
+  targetScrollLeft: number
+}
 
 // Date helpers
 function parseDate(dateStr?: string): Date {
@@ -76,116 +63,193 @@ function parseDate(dateStr?: string): Date {
   return isNaN(d.getTime()) ? new Date() : d
 }
 
+const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const MONTH_NAMES_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
 function formatDueDate(dateStr?: string): string {
-  if (!dateStr) return "-"
+  if (!dateStr) return ""
   const d = parseDate(dateStr)
-  const day = String(d.getDate()).padStart(2, "0")
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  return `${day}/${month}`
+  if (isNaN(d.getTime())) return ""
+  return `${MONTH_NAMES_SHORT[d.getMonth()]} ${d.getDate()}`
 }
 
-function getStatusBadgeConfig(status?: string, phase?: string, isOverdue?: boolean) {
-  const s = (status || "").toLowerCase().trim()
-  const isPendingPO = s.includes("pending") || s.includes("đã gửi po") || s.includes("chờ duyệt")
+export interface TaskStageStatusInfo {
+  isPending: boolean
+  text: string
+  title: string
+  dot: string
+  badgeClass: string
+  theme: {
+    bg: string
+    fill: string
+    dot: string
+    colorHex: string
+  }
+}
 
-  if (isPendingPO) {
+export function getTaskStageStatusInfo(req: UXRequest, index: number = 0): TaskStageStatusInfo {
+  // 1. Phân loại Pending chính xác từ hệ thống
+  const pendingClassification = getRequestPendingClassification(req)
+  const isPending = Boolean(pendingClassification.isPending)
+
+  if (isPending) {
+    const pLabel = pendingClassification.label || "Pending"
+    const pReason = pendingClassification.type === "po_pending"
+      ? "PO Pending: Quá hạn 24h PO chưa phản hồi duyệt"
+      : (pendingClassification.reason ? `Pending: ${pendingClassification.reason}` : "Pending")
+    const pDot = pendingClassification.badgeClasses?.dot || "bg-amber-500"
+    const pBadge = `${pendingClassification.badgeClasses?.bg || "bg-amber-50"} ${pendingClassification.badgeClasses?.text || "text-amber-800"} border ${pendingClassification.badgeClasses?.border || "border-amber-300"}`
+
     return {
-      dot: "bg-slate-400",
-      text: "PO Pending",
-      badgeClass: "bg-slate-100 text-slate-700 border border-slate-200",
+      isPending: true,
+      text: pLabel,
+      title: pReason,
+      dot: pDot,
+      badgeClass: pBadge,
+      theme: {
+        bg: "bg-amber-500/20 text-amber-800",
+        fill: "bg-amber-500/45",
+        dot: "bg-amber-500",
+        colorHex: "#f59e0b",
+      },
     }
   }
 
-  if (isOverdue) {
-    return {
-      dot: "bg-rose-500",
-      text: "Overdue",
-      badgeClass: "bg-rose-50 text-rose-700 border border-rose-200",
-    }
+  // 2. Trạng thái bình thường đi theo nội dung khâu UX của task
+  const rawPhase = (req.current_phase || req.status || "Chờ xác nhận").trim()
+  const cleaned = rawPhase.replace(/^(khâu|step|bước)?\s*\d+[\.\:\-\s]+/i, "").trim()
+  const displayPhase = (
+    cleaned === "Đang phân loại" ||
+    cleaned === "Tiếp nhận" ||
+    cleaned === "Đã gửi yêu cầu" ||
+    cleaned === "Đã gửi" ||
+    cleaned === "Mới tạo"
+  )
+    ? "Chờ xác nhận"
+    : (cleaned || "Chờ xác nhận")
+
+  const cfg = getStatusConfig(displayPhase)
+
+  // Bảng màu 7 khâu chính thức MB Bank đồng bộ SLA:
+  // 1. Chờ xác nhận (Hổ phách)
+  // 2. Define đầu bài (Tím)
+  // 3. Wireframe (Chàm / Navy)
+  // 4. UI Design (Xanh dương)
+  // 5. Ready to dev (Xanh mòng két / Cyan)
+  // 6. Nghiệm thu UI (Hồng cánh sen)
+  // 7. Hoàn thành (Xanh ngọc lục bảo)
+  const lower = displayPhase.toLowerCase()
+  let theme = {
+    bg: "bg-[#38bdf8]/25 text-[#0369a1]",
+    fill: "bg-[#38bdf8]/50",
+    dot: "bg-[#0284c7]",
+    colorHex: "#0284c7"
   }
-  if (status === "Hoàn thành" || status === "Hoành thành" || status === "Done") {
-    return {
-      dot: "bg-emerald-500",
-      text: "Done",
-      badgeClass: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
-    }
+
+  if (lower.includes("hoàn thành") || lower.includes("done")) {
+    theme = { bg: "bg-[#10b981]/25 text-[#047857]", fill: "bg-[#10b981]/50", dot: "bg-[#10b981]", colorHex: "#10b981" }
+  } else if (lower.includes("xác nhận") || lower.includes("tiếp nhận")) {
+    theme = { bg: "bg-[#f59e0b]/25 text-[#b45309]", fill: "bg-[#f59e0b]/50", dot: "bg-[#f59e0b]", colorHex: "#f59e0b" }
+  } else if (lower.includes("define") || lower.includes("đầu bài")) {
+    theme = { bg: "bg-[#9333ea]/25 text-[#7e22ce]", fill: "bg-[#9333ea]/50", dot: "bg-[#9333ea]", colorHex: "#9333ea" }
+  } else if (lower.includes("wireframe") || lower.includes("flow")) {
+    theme = { bg: "bg-[#4f46e5]/25 text-[#4338ca]", fill: "bg-[#4f46e5]/50", dot: "bg-[#4f46e5]", colorHex: "#4f46e5" }
+  } else if (lower.includes("ui") || lower.includes("design")) {
+    theme = { bg: "bg-[#2563eb]/25 text-[#1d4ed8]", fill: "bg-[#2563eb]/50", dot: "bg-[#2563eb]", colorHex: "#2563eb" }
+  } else if (lower.includes("ready") || lower.includes("dev")) {
+    theme = { bg: "bg-[#0891b2]/25 text-[#0e7490]", fill: "bg-[#0891b2]/50", dot: "bg-[#0891b2]", colorHex: "#0891b2" }
+  } else if (lower.includes("nghiệm thu") || lower.includes("review")) {
+    theme = { bg: "bg-[#db2777]/25 text-[#be185d]", fill: "bg-[#db2777]/50", dot: "bg-[#db2777]", colorHex: "#db2777" }
   }
-  if (status === "Đang thực hiện" || s.includes("thực hiện")) {
-    return {
-      dot: "bg-blue-500",
-      text: "In Progress",
-      badgeClass: "bg-blue-50 text-blue-700 border border-blue-200/80",
-    }
-  }
-  if (status === "Bị chặn" || s.includes("chặn") || s.includes("block")) {
-    return {
-      dot: "bg-rose-500",
-      text: "Blocked",
-      badgeClass: "bg-rose-50 text-rose-800 border border-rose-200/80",
-    }
-  }
+
   return {
-    dot: "border-2 border-slate-400 bg-white",
-    text: "To Do",
-    badgeClass: "bg-slate-100 text-slate-700 border border-slate-200",
+    isPending: false,
+    text: displayPhase,
+    title: displayPhase,
+    dot: cfg.inlineClasses?.dot || cfg.dotColor || "bg-blue-600",
+    badgeClass: `${cfg.inlineClasses?.bg || "bg-slate-50"} ${cfg.inlineClasses?.text || "text-slate-700"} border ${cfg.inlineClasses?.border || "border-slate-200"}`,
+    theme,
   }
 }
 
-// Map task's status or current_phase to one of the 7 stages index (0 to 6)
-function getTaskStageIndex(req: UXRequest): number {
-  const s = (req.status || "").toLowerCase().trim()
-  const p = (req.current_phase || "").toLowerCase().trim()
-  const text = `${p} ${s}`
-
-  if (s === "hoàn thành" || s === "done") return 5
-
-  if (
-    s === "pending" ||
-    s === "po pending" ||
-    s === "pending po" ||
-    s === "đã gửi po" ||
-    s === "chờ duyệt" ||
-    s.includes("po pending") ||
-    s.includes("pending po") ||
-    s.includes("đã gửi po") ||
-    text.includes("po pending") ||
-    text.includes("pending po")
-  ) {
-    return 6 // 7. PO Pending stage
+function getPriorityConfig(priority?: string) {
+  const p = (priority || "").toLowerCase().trim()
+  if (p.includes("khẩn cấp") || p.includes("urgent") || p.includes("p0")) {
+    return { label: "Urgent", flag: "text-rose-500" }
   }
-
-  if (text.includes("bàn giao") || text.includes("handoff")) return 5
-  if (text.includes("prototype") || text.includes("review")) return 4
-  if (text.includes("ui") || text.includes("design")) return 3
-  if (text.includes("flow") || text.includes("wireframe")) return 2
-  if (text.includes("discovery") || text.includes("khảo sát") || text.includes("khám phá")) return 1
-  if (text.includes("phân loại") || text.includes("tiếp nhận") || text.includes("mới")) return 0
-
-  // Fallback by progress
-  const prog = req.progress ?? 50
-  if (prog >= 100) return 5
-  if (prog >= 85) return 4
-  if (prog >= 70) return 3
-  if (prog >= 50) return 2
-  if (prog >= 30) return 1
-  return 0
+  if (p.includes("cao") || p.includes("high") || p.includes("p1")) {
+    return { label: "High", flag: "text-amber-500" }
+  }
+  if (p.includes("thấp") || p.includes("low") || p.includes("p3")) {
+    return { label: "Low", flag: "text-slate-400" }
+  }
+  return { label: "Medium", flag: "text-blue-500" }
 }
 
-export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttChartProps) {
+export default function ReUIGanttChart({ 
+  requests, 
+  onSelectRequest, 
+  borderless = false, 
+  className: customClassName = "" 
+}: ReUIGanttChartProps) {
   const [viewScale, setViewScale] = useState<ViewScale>("Month")
   const [showScaleDropdown, setShowScaleDropdown] = useState(false)
   const [showSquadFilterPopover, setShowSquadFilterPopover] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [showUserFilterPopover, setShowUserFilterPopover] = useState(false)
+  const [showColumnsPopover, setShowColumnsPopover] = useState(false)
+  const [showCreateMenu, setShowCreateMenu] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState("")
+
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+
+  // Columns visibility toggle (Priority hidden by default as requested!)
+  const [visibleColumns, setVisibleColumns] = useState({
+    status: true,
+    assignee: true,
+    due: true,
+    priority: false, // DEFAULT HIDDEN
+  })
+
+  // Tree pane width & resizing (tempo-tasks splitter)
+  const [treeWidth, setTreeWidth] = useState(500)
+  const isResizingRef = useRef(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(500)
+
+  // Timeline zoom
+  const [zoomLevel, setZoomLevel] = useState(1.0)
+
+  // Infinite Scroll buffer (Number of months before & after currentDate)
+  const [bufferMonthsBefore, setBufferMonthsBefore] = useState(3)
+  const [bufferMonthsAfter, setBufferMonthsAfter] = useState(12)
+
   const [currentDate, setCurrentDate] = useState<Date>(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
     return d
   })
+
+  // Real-time viewport center date for toolbar header synchronization
+  const [viewportDate, setViewportDate] = useState<Date>(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  })
+  const viewportDateRef = useRef<Date>(viewportDate)
+  viewportDateRef.current = viewportDate
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
   // Tooltip State
   const [hoveredTooltip, setHoveredTooltip] = useState<HoveredBlockInfo | null>(null)
+
+  // Scroll Container Refs
+  const timelineScrollRef = useRef<HTMLDivElement>(null)
+  const isInitialScrollDoneRef = useRef(false)
+
+  // Offscreen chips state
+  const [offscreenChips, setOffscreenChips] = useState<OffscreenChip[]>([])
 
   // Today Date
   const today = useMemo(() => {
@@ -198,321 +262,628 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
   const allSquadOptions = useMemo(() => {
     const set = new Set<string>()
     requests.forEach((r) => {
-      if (r.preferred_squad) set.add(r.preferred_squad)
-      else if (r.product) set.add(r.product)
+      const sq = (r.preferred_squad || r.product || "").trim()
+      if (sq) set.add(sq)
     })
     return Array.from(set)
   }, [requests])
 
-  // Navigation handlers
-  const handlePrev = () => {
-    setCurrentDate((prev) => {
-      const d = new Date(prev)
-      if (viewScale === "Day") d.setDate(d.getDate() - 1)
-      else if (viewScale === "Week") d.setDate(d.getDate() - 7)
-      else if (viewScale === "Month") d.setMonth(d.getMonth() - 1)
-      else if (viewScale === "Year") d.setFullYear(d.getFullYear() - 1)
-      return d
+  // Assignee user list from requests
+  const allUserOptions = useMemo(() => {
+    const userMap = new Map<string, { name: string; count: number }>()
+    requests.forEach((r) => {
+      const u = (r.assigned_designer || "").trim()
+      if (u && u !== "Chưa phân công") {
+        const existing = userMap.get(u)
+        if (existing) {
+          existing.count++
+        } else {
+          userMap.set(u, { name: u, count: 1 })
+        }
+      }
     })
+    return Array.from(userMap.values()).sort((a, b) => b.count - a.count)
+  }, [requests])
+
+  // Filtered users in popover
+  const filteredUserOptions = useMemo(() => {
+    if (!userSearchQuery.trim()) return allUserOptions
+    const q = userSearchQuery.toLowerCase().trim()
+    return allUserOptions.filter(u => u.name.toLowerCase().includes(q))
+  }, [allUserOptions, userSearchQuery])
+
+  // Navigation handlers (smoothly scrolls the timeline pane & updates viewport date)
+  const handlePrev = () => {
+    const container = timelineScrollRef.current
+    if (!container) return
+    const stepPx = Math.max(200, Math.round(container.clientWidth * 0.6))
+    container.scrollBy({ left: -stepPx, behavior: "smooth" })
   }
 
   const handleNext = () => {
-    setCurrentDate((prev) => {
-      const d = new Date(prev)
-      if (viewScale === "Day") d.setDate(d.getDate() + 1)
-      else if (viewScale === "Week") d.setDate(d.getDate() + 7)
-      else if (viewScale === "Month") d.setMonth(d.getMonth() + 1)
-      else if (viewScale === "Year") d.setFullYear(d.getFullYear() + 1)
-      return d
-    })
+    const container = timelineScrollRef.current
+    if (!container) return
+    const stepPx = Math.max(200, Math.round(container.clientWidth * 0.6))
+    container.scrollBy({ left: stepPx, behavior: "smooth" })
   }
 
-  const handleResetToday = () => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    setCurrentDate(d)
+
+  // Zoom handlers (step 0.25 matching ReUI Tempo Tasks)
+  const isZoomingRef = useRef(false)
+  const preZoomCenterMsRef = useRef<number | null>(null)
+
+  const handleZoomIn = () => {
+    if (zoomLevel >= 2.0) return
+    preZoomCenterMsRef.current = viewportDateRef.current.getTime()
+    isZoomingRef.current = true
+    setZoomLevel(prev => Math.min(2.0, +(prev + 0.25).toFixed(2)))
   }
 
-  // Header Title
-  const headerTitle = useMemo(() => {
-    const months = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ]
-    if (viewScale === "Day") {
-      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-      return `${daysOfWeek[currentDate.getDay()]}, ${months[currentDate.getMonth()]} ${currentDate.getDate()}, ${currentDate.getFullYear()}`
-    }
-    if (viewScale === "Week") {
-      const d = new Date(currentDate)
-      const day = d.getDay()
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-      const monday = new Date(d.setDate(diff))
-      const sunday = new Date(monday)
-      sunday.setDate(monday.getDate() + 6)
-      return `${monday.getDate()} ${months[monday.getMonth()].slice(0, 3)} - ${sunday.getDate()} ${months[sunday.getMonth()].slice(0, 3)}, ${sunday.getFullYear()}`
-    }
-    if (viewScale === "Year") {
-      return `${currentDate.getFullYear()}`
-    }
-    return `${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`
-  }, [currentDate, viewScale])
+  const handleZoomOut = () => {
+    if (zoomLevel <= 0.5) return
+    preZoomCenterMsRef.current = viewportDateRef.current.getTime()
+    isZoomingRef.current = true
+    setZoomLevel(prev => Math.max(0.5, +(prev - 0.25).toFixed(2)))
+  }
 
-  // Columns & scale setup
-  const { timelineStart, timelineEnd, columns, todayPositionPercent } = useMemo(() => {
-    const cols: Array<{ id: string; label: string; subLabel?: string; isWeekend?: boolean; isToday?: boolean }> = []
-    let start = new Date(currentDate)
-    let end = new Date(currentDate)
+  // Filter handlers
+  const handleToggleSquadFilter = (sq: string) => {
+    setSelectedSquads(prev => prev.includes(sq) ? prev.filter(x => x !== sq) : [...prev, sq])
+  }
 
-    if (viewScale === "Day") {
-      start.setHours(8, 0, 0, 0)
-      end.setHours(18, 0, 0, 0)
-      for (let h = 8; h <= 18; h++) {
-        cols.push({
-          id: `h-${h}`,
-          label: `${h}:00`,
-          subLabel: h >= 12 ? "PM" : "AM",
-        })
-      }
-    } else if (viewScale === "Week") {
-      const d = new Date(currentDate)
-      const day = d.getDay()
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-      start = new Date(d.setDate(diff))
-      start.setHours(0, 0, 0, 0)
+  const handleToggleUserFilter = (userName: string) => {
+    setSelectedUsers(prev => prev.includes(userName) ? prev.filter(x => x !== userName) : [...prev, userName])
+  }
 
-      for (let i = 0; i < 7; i++) {
-        const cur = new Date(start)
-        cur.setDate(start.getDate() + i)
-        const isSun = cur.getDay() === 0
-        const isSat = cur.getDay() === 6
-        cols.push({
-          id: `w-${i}`,
-          label: cur.toLocaleDateString("vi-VN", { weekday: "short" }),
-          subLabel: `${cur.getDate()}/${cur.getMonth() + 1}`,
-          isWeekend: isSun || isSat,
-          isToday: cur.toDateString() === today.toDateString(),
-        })
-      }
-      end = new Date(start)
-      end.setDate(start.getDate() + 7)
-    } else if (viewScale === "Year") {
-      const y = currentDate.getFullYear()
-      start = new Date(y, 0, 1)
-      end = new Date(y, 11, 31, 23, 59, 59)
-      const monthNames = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"]
-      monthNames.forEach((m, idx) => {
-        cols.push({
-          id: `m-${idx}`,
-          label: m,
-          isToday: today.getFullYear() === y && today.getMonth() === idx,
-        })
-      })
-    } else {
-      const y = currentDate.getFullYear()
-      const m = currentDate.getMonth()
-      start = new Date(y, m, 1)
-      const daysCount = new Date(y, m + 1, 0).getDate()
-      end = new Date(y, m, daysCount, 23, 59, 59)
+  const toggleGroup = (groupName: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }))
+  }
 
-      for (let i = 1; i <= daysCount; i++) {
-        const cur = new Date(y, m, i)
-        const dayOfWeek = cur.getDay()
-        cols.push({
-          id: `d-${i}`,
-          label: cur.toLocaleDateString("vi-VN", { weekday: "narrow" }),
-          subLabel: `${i}`,
-          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-          isToday: cur.toDateString() === today.toDateString(),
-        })
-      }
+  // Splitter mouse drag logic
+  const handleSplitterPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    isResizingRef.current = true
+    startXRef.current = e.clientX
+    startWidthRef.current = treeWidth
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      if (!isResizingRef.current) return
+      const delta = moveEv.clientX - startXRef.current
+      const newW = Math.min(760, Math.max(340, startWidthRef.current + delta))
+      setTreeWidth(newW)
     }
 
-    // Accurate Today Marker Center Position
-    let todayPct: number | null = null
-
-    if (viewScale === "Month") {
-      const y = currentDate.getFullYear()
-      const m = currentDate.getMonth()
-      if (today.getFullYear() === y && today.getMonth() === m) {
-        const daysCount = new Date(y, m + 1, 0).getDate()
-        todayPct = ((today.getDate() - 0.5) / daysCount) * 100
-      }
-    } else if (viewScale === "Week") {
-      const dIdx = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-      if (dIdx >= 0 && dIdx < 7) {
-        todayPct = ((dIdx + 0.5) / 7) * 100
-      }
-    } else if (viewScale === "Day") {
-      if (today.toDateString() === currentDate.toDateString()) {
-        const now = new Date()
-        const curHour = now.getHours() + now.getMinutes() / 60
-        const clampedHour = Math.max(8, Math.min(18, curHour))
-        todayPct = ((clampedHour - 8) / 10) * 100
-      }
-    } else if (viewScale === "Year") {
-      if (today.getFullYear() === currentDate.getFullYear()) {
-        todayPct = ((today.getMonth() + 0.5) / 12) * 100
-      }
+    const onPointerUp = () => {
+      isResizingRef.current = false
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("pointermove", onPointerMove)
+      window.removeEventListener("pointerup", onPointerUp)
     }
 
-    return {
-      timelineStart: start,
-      timelineEnd: end,
-      columns: cols,
-      todayPositionPercent: todayPct,
-    }
-  }, [currentDate, viewScale, today])
+    window.addEventListener("pointermove", onPointerMove)
+    window.addEventListener("pointerup", onPointerUp)
+  }
 
   // Filter requests
   const filteredRequests = useMemo(() => {
     return requests.filter((r) => {
-      const squadName = r.preferred_squad || r.product || "Core"
-      if (selectedSquads.length > 0 && !selectedSquads.includes(squadName)) {
-        return false
+      if (selectedSquads.length > 0) {
+        const sq = r.preferred_squad || r.product || ""
+        if (!selectedSquads.includes(sq)) return false
       }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        if (!r.title.toLowerCase().includes(q) && !(r.assigned_designer || "").toLowerCase().includes(q)) {
-          return false
-        }
+      if (selectedUsers.length > 0) {
+        const u = (r.assigned_designer || "").trim()
+        if (!selectedUsers.includes(u)) return false
       }
       return true
     })
-  }, [requests, selectedSquads, searchQuery])
+  }, [requests, selectedSquads, selectedUsers])
 
-  // Group filtered requests
-  const groupedTasks = useMemo(() => {
-    const groups: Record<string, UXRequest[]> = {}
-    filteredRequests.forEach((r) => {
-      const gName = r.preferred_squad || r.product || "Core"
-      if (!groups[gName]) groups[gName] = []
-      groups[gName].push(r)
+  // 2-level Grouping: Product -> Squad -> Tasks
+  const productGroups = useMemo(() => {
+    const prodMap = new Map<string, Map<string, UXRequest[]>>()
+
+    filteredRequests.forEach((req) => {
+      const prod = (req.product || req.preferred_squad || "Khác").trim() || "Khác"
+      const squad = (req.preferred_squad || req.squad_name || req.squad || "Squad Chung").trim() || "Squad Chung"
+
+      if (!prodMap.has(prod)) {
+        prodMap.set(prod, new Map())
+      }
+      const squadMap = prodMap.get(prod)!
+      if (!squadMap.has(squad)) {
+        squadMap.set(squad, [])
+      }
+      squadMap.get(squad)!.push(req)
     })
-    return groups
+
+    const result: Array<{
+      productName: string
+      productKey: string
+      squads: Array<{
+        squadName: string
+        squadKey: string
+        tasks: UXRequest[]
+      }>
+      allTasks: UXRequest[]
+    }> = []
+
+    prodMap.forEach((squadMap, prodName) => {
+      const allTasks: UXRequest[] = []
+      const squads: Array<{ squadName: string; squadKey: string; tasks: UXRequest[] }> = []
+
+      squadMap.forEach((tasks, squadName) => {
+        allTasks.push(...tasks)
+        squads.push({
+          squadName,
+          squadKey: `squad:${prodName}:${squadName}`,
+          tasks,
+        })
+      })
+
+      result.push({
+        productName: prodName,
+        productKey: `prod:${prodName}`,
+        squads,
+        allTasks,
+      })
+    })
+
+    return result
   }, [filteredRequests])
 
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }))
-  }
+  // Column Width based on zoomLevel
+  const columnWidth = useMemo(() => {
+    let base = 54
+    if (viewScale === "Day") base = 38
+    else if (viewScale === "Week") base = 80
+    else if (viewScale === "Quarter") base = 96
+    else if (viewScale === "Year") base = 120
+    return Math.round(base * zoomLevel)
+  }, [viewScale, zoomLevel])
 
-  const handleToggleSquadFilter = (sq: string) => {
-    setSelectedSquads((prev) =>
-      prev.includes(sq) ? prev.filter((s) => s !== sq) : [...prev, sq]
-    )
-  }
+  // Header Title dynamically synced with the month/period in the viewport center
+  const headerTitle = useMemo(() => {
+    const year = viewportDate.getFullYear()
+    const month = MONTH_NAMES_FULL[viewportDate.getMonth()]
+    if (viewScale === "Quarter") {
+      const q = Math.floor(viewportDate.getMonth() / 3) + 1
+      return `Q${q} ${year}`
+    }
+    if (viewScale === "Year") {
+      return `${year}`
+    }
+    return `${month} ${year}`
+  }, [viewportDate, viewScale])
 
-  // Calculate sequential timeline blocks strictly mapped to the 6 UX Stages (Phân loại -> Discovery -> User Flow -> UI Design -> Prototype -> Bàn giao)
-  const calculateTaskTimelineBlocks = (req: UXRequest, taskIndex: number): TimelinePhaseBlock[] => {
-    const deadline = parseDate(req.expected_deadline)
-    const isOverdue = deadline.getTime() < today.getTime() && req.status !== "Hoàn thành"
+  // Build Continuous Infinite Calendar Timeline Columns & Week Spans
+  const { columns, weekSpans, timelineStart, timelineEnd, todayPositionPercent } = useMemo(() => {
+    const baseYear = currentDate.getFullYear()
+    const baseMonth = currentDate.getMonth()
 
-    const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime()
-    const msPerDay = 1000 * 60 * 60 * 24
+    // Start date is bufferMonthsBefore in the past, aligned to Sunday
+    const start = new Date(baseYear, baseMonth - bufferMonthsBefore, 1)
+    const startDayOfWeek = start.getDay()
+    start.setDate(start.getDate() - startDayOfWeek) // Align to Sunday
 
-    const toRatio = (ms: number) => Math.max(0.005, Math.min(0.995, (ms - timelineStart.getTime()) / totalTimelineMs))
+    // End date is bufferMonthsAfter in the future, aligned to Saturday
+    const end = new Date(baseYear, baseMonth + bufferMonthsAfter + 1, 0)
+    const endDayOfWeek = end.getDay()
+    end.setDate(end.getDate() + (6 - endDayOfWeek)) // Align to Saturday
 
-    const blocks: TimelinePhaseBlock[] = []
-    // Full day of Today: includes all 24 hours of the current day up to midnight
-    const nowMs = today.getTime() + msPerDay
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
 
-    // Determine current active stage index (0 to 6)
-    const activeStageIdx = getTaskStageIndex(req)
-    const isPendingPO = activeStageIdx === 6
-    const isCompleted = req.status === "Hoàn thành" || req.status === "Hoành thành" || (activeStageIdx === 5 && !isPendingPO && req.status !== "Done")
+    const cols: Array<{
+      id: string
+      date: Date
+      dayNumber: number
+      dayName: string
+      label: string
+      isWeekend: boolean
+      isToday: boolean
+      isCurrentMonth: boolean
+    }> = []
 
-    // Total days to distribute across completed & active stages
-    const stageCount = activeStageIdx + 1
-    const daysPerStage = 2
-    const totalDaysSpan = stageCount * daysPerStage
-    const startMs = nowMs - totalDaysSpan * msPerDay
+    const cur = new Date(start)
+    while (cur <= end) {
+      const isWeekend = cur.getDay() === 0 || cur.getDay() === 6
+      const isTd = cur.toDateString() === today.toDateString()
+      const dNum = cur.getDate()
+      const dName = DAY_NAMES_SHORT[cur.getDay()]
+      const isCurMonth = cur.getMonth() === baseMonth
 
-    for (let i = 0; i <= activeStageIdx; i++) {
-      const stage = UX_STAGES[i]
-      const isCurrentActive = i === activeStageIdx && !isCompleted
+      cols.push({
+        id: cur.toISOString().split("T")[0],
+        date: new Date(cur),
+        dayNumber: dNum,
+        dayName: dName,
+        label: `${dName} ${dNum}`,
+        isWeekend,
+        isToday: isTd,
+        isCurrentMonth: isCurMonth,
+      })
 
-      const pStartMs = startMs + i * daysPerStage * msPerDay
-      const pEndMs = (i === activeStageIdx) ? nowMs : pStartMs + daysPerStage * msPerDay
+      cur.setDate(cur.getDate() + 1)
+    }
 
-      const startRatio = toRatio(pStartMs)
-      const endRatio = toRatio(pEndMs)
-      const widthRatio = Math.max(0.038, endRatio - startRatio)
+    // Tier 1 Week Spans (e.g. W40 Oct 5 - 11)
+    const spans: Array<{
+      weekKey: string
+      label: string
+      colSpan: number
+    }> = []
 
-      const isAlert = isOverdue && isCurrentActive && !isPendingPO
-      const colorClass = isAlert
-        ? "bg-rose-100 text-rose-950 border border-rose-300 font-bold shadow-xs"
-        : isCurrentActive
-        ? `${stage.color} font-bold shadow-2xs`
-        : `${stage.color} opacity-90 font-medium`
+    let currentWeekKey = ""
+    let currentWeekSpan = 0
+    let weekStartCol: (typeof cols)[0] | null = null
 
-      const iconType = isAlert
-        ? "alert"
-        : isCurrentActive
-        ? isPendingPO
-          ? "clock"
-          : undefined
-        : "check"
+    cols.forEach((col, idx) => {
+      const d = col.date
+      const firstDayOfYear = new Date(d.getFullYear(), 0, 1)
+      const pastDays = (d.getTime() - firstDayOfYear.getTime()) / 86400000
+      const weekNum = Math.ceil((pastDays + firstDayOfYear.getDay() + 1) / 7)
+      const wKey = `${d.getFullYear()}-W${weekNum}`
 
-      blocks.push({
-        id: `stg-${req.request_id}-${stage.key}`,
-        phaseKey: stage.key,
-        phaseName: isAlert ? `Cảnh báo Quá hạn (${stage.fullTitle})` : stage.fullTitle,
-        label: stage.label,
-        timeBadge: isAlert
-          ? "Overdue"
-          : isCurrentActive
-          ? isPendingPO
-            ? "Chờ PO duyệt"
-            : "Hôm nay"
-          : "Done",
-        startRatio,
-        widthRatio,
-        colorClass,
-        icon: iconType,
-        startDateStr: new Date(pStartMs).toLocaleDateString("vi-VN"),
-        endDateStr: isCurrentActive
-          ? isPendingPO
-            ? "Chờ PO duyệt nghiệm thu"
-            : "Hôm nay (Đang thực hiện)"
-          : new Date(pEndMs).toLocaleDateString("vi-VN"),
-        slaDays: stage.sla,
-        deliverable: stage.deliverable,
+      if (wKey !== currentWeekKey) {
+        if (currentWeekKey && weekStartCol) {
+          const prevCol = cols[idx - 1]
+          const mStart = MONTH_NAMES_SHORT[weekStartCol.date.getMonth()]
+          const mEnd = weekStartCol.date.getMonth() !== prevCol.date.getMonth() ? ` ${MONTH_NAMES_SHORT[prevCol.date.getMonth()]}` : ""
+          spans.push({
+            weekKey: currentWeekKey,
+            label: `W${currentWeekKey.split("-W")[1]} ${mStart} ${weekStartCol.dayNumber} -${mEnd} ${prevCol.dayNumber}`,
+            colSpan: currentWeekSpan,
+          })
+        }
+        currentWeekKey = wKey
+        currentWeekSpan = 1
+        weekStartCol = col
+      } else {
+        currentWeekSpan++
+      }
+    })
+
+    if (currentWeekKey && weekStartCol) {
+      const startCol = weekStartCol as (typeof cols)[0]
+      const prevCol = cols[cols.length - 1]
+      const mStart = MONTH_NAMES_SHORT[startCol.date.getMonth()]
+      const mEnd = startCol.date.getMonth() !== prevCol.date.getMonth() ? ` ${MONTH_NAMES_SHORT[prevCol.date.getMonth()]}` : ""
+      spans.push({
+        weekKey: currentWeekKey,
+        label: `W${currentWeekKey.split("-W")[1]} ${mStart} ${startCol.dayNumber} -${mEnd} ${prevCol.dayNumber}`,
+        colSpan: currentWeekSpan,
       })
     }
 
-    return blocks
+    // Continuous Today Line Position
+    const totalMs = end.getTime() - start.getTime()
+    const todayMs = today.getTime() + 12 * 3600 * 1000
+    let todayPct: number | null = null
+    if (todayMs >= start.getTime() && todayMs <= end.getTime()) {
+      todayPct = ((todayMs - start.getTime()) / totalMs) * 100
+    }
+
+    return {
+      columns: cols,
+      weekSpans: spans,
+      timelineStart: start,
+      timelineEnd: end,
+      todayPositionPercent: todayPct,
+    }
+  }, [currentDate, bufferMonthsBefore, bufferMonthsAfter, today])
+
+  // Focus directly on Today (positions Today right near the beginning of the visible timeline)
+  const scrollToToday = useCallback((smooth = false) => {
+    const container = timelineScrollRef.current
+    if (!container || columns.length === 0) return
+
+    const todayIdx = columns.findIndex(col => col.isToday)
+    let targetLeft = 0
+    if (todayIdx !== -1) {
+      // 1 column before Today as buffer so Today is clearly visible right at the start
+      targetLeft = Math.max(0, (todayIdx - 1) * columnWidth)
+    } else {
+      const todayEl = container.querySelector("[data-today='true']") as HTMLElement
+      if (todayEl) {
+        targetLeft = Math.max(0, todayEl.offsetLeft - columnWidth)
+      } else {
+        const totalMs = timelineEnd.getTime() - timelineStart.getTime()
+        const todayMs = today.getTime()
+        if (totalMs > 0 && container.scrollWidth > 0) {
+          const ratio = (todayMs - timelineStart.getTime()) / totalMs
+          targetLeft = Math.max(0, ratio * container.scrollWidth - columnWidth)
+        }
+      }
+    }
+
+    if (smooth) {
+      container.scrollTo({
+        left: targetLeft,
+        behavior: "smooth"
+      })
+    } else {
+      container.scrollLeft = targetLeft
+    }
+    setViewportDate(new Date(today))
+  }, [columns, columnWidth, timelineStart, timelineEnd, today])
+
+  const handleResetToday = () => {
+    scrollToToday(true)
   }
 
+  // Calculate task timeline bar positioning
+  const calculateTaskTimelineBar = useCallback((req: UXRequest, index: number = 0) => {
+    const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime()
+    const msPerDay = 1000 * 60 * 60 * 24
+
+    const toRatio = (ms: number) => {
+      const r = (ms - timelineStart.getTime()) / totalTimelineMs
+      return Math.max(0.0005, Math.min(0.9995, r))
+    }
+
+    const dueDate = parseDate(req.release_date || req.expected_deadline)
+    let endMs = dueDate.getTime()
+    let startMs = req.submitted_at ? parseDate(req.submitted_at).getTime() : endMs - 5 * msPerDay
+
+    const isOverdue = dueDate.getTime() < today.getTime() && req.status !== "Hoàn thành" && req.status !== "Done"
+
+    if (endMs <= startMs) {
+      endMs = startMs + 3 * msPerDay
+    }
+
+    const startRatio = toRatio(startMs)
+    const endRatio = toRatio(endMs)
+    const widthRatio = Math.max(0.015, endRatio - startRatio)
+
+    const prog = Math.max(0, Math.min(100, req.progress ?? 50))
+    const isDone = req.status === "Hoàn thành" || req.status === "Hoành thành" || req.status === "Done" || prog === 100
+    const stageInfo = getTaskStageStatusInfo(req, index)
+
+    return {
+      startRatio,
+      widthRatio,
+      startMs,
+      endMs,
+      progressPercent: isDone ? 100 : prog,
+      isDone,
+      isOverdue,
+      isPending: stageInfo.isPending,
+      stageInfo,
+      theme: stageInfo.theme,
+      startDateFormatted: new Date(startMs).toLocaleDateString("vi-VN"),
+      endDateFormatted: new Date(endMs).toLocaleDateString("vi-VN"),
+    }
+  }, [timelineStart, timelineEnd, today])
+
+  // Calculate group span (thin gray progress line with % at end)
+  const calculateGroupTimelineBar = (tasks: UXRequest[]) => {
+    if (!tasks || tasks.length === 0) return null
+    const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime()
+    const msPerDay = 1000 * 60 * 60 * 24
+
+    const toRatio = (ms: number) => Math.max(0.0005, Math.min(0.9995, (ms - timelineStart.getTime()) / totalTimelineMs))
+
+    let minStartMs = Infinity
+    let maxEndMs = -Infinity
+    let totalProg = 0
+
+    tasks.forEach((t) => {
+      const d = parseDate(t.release_date || t.expected_deadline)
+      const endMs = d.getTime()
+      const startMs = t.submitted_at ? parseDate(t.submitted_at).getTime() : endMs - 5 * msPerDay
+      if (startMs < minStartMs) minStartMs = startMs
+      if (endMs > maxEndMs) maxEndMs = endMs
+      totalProg += (t.status === "Hoàn thành" || t.status === "Done") ? 100 : (t.progress ?? 40)
+    })
+
+    if (minStartMs === Infinity) return null
+    if (maxEndMs <= minStartMs) maxEndMs = minStartMs + 4 * msPerDay
+
+    const startRatio = toRatio(minStartMs)
+    const endRatio = toRatio(maxEndMs)
+    const widthRatio = Math.max(0.02, endRatio - startRatio)
+    const avgProg = Math.round(totalProg / tasks.length)
+
+    return {
+      startRatio,
+      widthRatio,
+      avgProgress: avgProg,
+    }
+  }
+
+  // Infinite Scroll Handler: Automatically extends date window when scrolling near edges & syncs header date
+  const handleTimelineScroll = useCallback(() => {
+    const container = timelineScrollRef.current
+    if (!container) return
+
+    const { scrollLeft, scrollWidth, clientWidth } = container
+
+    // 1. Calculate the real-time date in the center of the visible viewport (Tempo Tasks sync)
+    const totalMs = timelineEnd.getTime() - timelineStart.getTime()
+    if (totalMs > 0 && scrollWidth > 0) {
+      const centerPx = scrollLeft + clientWidth / 2
+      const centerMs = timelineStart.getTime() + (centerPx / scrollWidth) * totalMs
+      const centerDate = new Date(centerMs)
+
+      const prev = viewportDateRef.current
+      const isDiff =
+        viewScale === "Day"
+          ? centerDate.toDateString() !== prev.toDateString()
+          : viewScale === "Quarter"
+          ? Math.floor(centerDate.getMonth() / 3) !== Math.floor(prev.getMonth() / 3) || centerDate.getFullYear() !== prev.getFullYear()
+          : viewScale === "Year"
+          ? centerDate.getFullYear() !== prev.getFullYear()
+          : centerDate.getMonth() !== prev.getMonth() || centerDate.getFullYear() !== prev.getFullYear()
+
+      if (isDiff) {
+        viewportDateRef.current = centerDate
+        setViewportDate(new Date(centerDate))
+      }
+    }
+
+    // 2. Infinite scroll buffer extension near edges (Only when initial scroll to Today is complete)
+    if (isInitialScrollDoneRef.current && scrollLeft > 50 && scrollLeft < 200) {
+      const prevScrollWidth = scrollWidth
+      setBufferMonthsBefore(prev => prev + 3)
+      // Compensate scrollLeft so user experiences zero visual jump
+      requestAnimationFrame(() => {
+        if (timelineScrollRef.current) {
+          const newScrollWidth = timelineScrollRef.current.scrollWidth
+          timelineScrollRef.current.scrollLeft = scrollLeft + (newScrollWidth - prevScrollWidth)
+        }
+      })
+    } else if (isInitialScrollDoneRef.current && scrollWidth > clientWidth && scrollLeft + clientWidth > scrollWidth - 200) {
+      setBufferMonthsAfter(prev => prev + 3)
+    }
+
+    // 3. Calculate dynamic offscreen chips on scroll (2-level: Product -> Squad -> Tasks)
+    const chips: OffscreenChip[] = []
+    let currentRowTop = 40 // header height
+    let taskIdx = 0
+
+    productGroups.forEach((prod) => {
+      currentRowTop += 36 // Product row height
+      if (!collapsedGroups[prod.productKey]) {
+        prod.squads.forEach((squad) => {
+          currentRowTop += 36 // Squad row height
+          if (!collapsedGroups[squad.squadKey]) {
+            squad.tasks.forEach((req) => {
+              const bar = calculateTaskTimelineBar(req, taskIdx++)
+              const barStartPx = bar.startRatio * scrollWidth
+              const barEndPx = (bar.startRatio + bar.widthRatio) * scrollWidth
+
+              if (barEndPx < scrollLeft - 8) {
+                chips.push({
+                  id: req.request_id || req.title,
+                  title: req.title,
+                  dateLabel: formatDueDate(req.release_date || req.expected_deadline),
+                  side: "start",
+                  top: currentRowTop + 18,
+                  color: bar.theme.colorHex,
+                  targetScrollLeft: Math.max(0, barStartPx - 40)
+                })
+              } else if (barStartPx > scrollLeft + clientWidth + 8) {
+                chips.push({
+                  id: req.request_id || req.title,
+                  title: req.title,
+                  dateLabel: formatDueDate(req.release_date || req.expected_deadline),
+                  side: "end",
+                  top: currentRowTop + 18,
+                  color: bar.theme.colorHex,
+                  targetScrollLeft: Math.max(0, barStartPx - clientWidth / 2)
+                })
+              }
+              currentRowTop += 36 // task row height
+            })
+          }
+        })
+      }
+    })
+
+    setOffscreenChips(chips)
+  }, [productGroups, collapsedGroups, calculateTaskTimelineBar, timelineStart, timelineEnd, viewScale])
+
+  // Attach scroll listener to timeline container
+  useEffect(() => {
+    const container = timelineScrollRef.current
+    if (!container) return
+    container.addEventListener("scroll", handleTimelineScroll, { passive: true })
+    return () => container.removeEventListener("scroll", handleTimelineScroll)
+  }, [handleTimelineScroll])
+
+  // Focus directly on Today on initial mount and ensure it positions on Today
+  useEffect(() => {
+    if (columns.length === 0 || !timelineScrollRef.current) return
+
+    const performScroll = () => {
+      if (!timelineScrollRef.current) return
+      scrollToToday(false)
+      if (timelineScrollRef.current.scrollLeft > 0) {
+        isInitialScrollDoneRef.current = true
+      }
+    }
+
+    // Scroll immediately
+    performScroll()
+
+    // Re-apply on next animation frame and after transition delays (for tab animation)
+    const raf = requestAnimationFrame(performScroll)
+    const t1 = setTimeout(performScroll, 50)
+    const t2 = setTimeout(performScroll, 150)
+    const t3 = setTimeout(() => {
+      performScroll()
+      isInitialScrollDoneRef.current = true
+    }, 300)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
+  }, [columns, scrollToToday])
+
+  const handleJumpToChip = (chip: OffscreenChip) => {
+    if (timelineScrollRef.current) {
+      timelineScrollRef.current.scrollTo({
+        left: chip.targetScrollLeft,
+        behavior: "smooth"
+      })
+    }
+  }
+
+  // Preserve the center date position when zooming in or out (matching ReUI)
+  useEffect(() => {
+    if (isZoomingRef.current && preZoomCenterMsRef.current && timelineScrollRef.current) {
+      const container = timelineScrollRef.current
+      const totalMs = timelineEnd.getTime() - timelineStart.getTime()
+      if (totalMs > 0 && container.scrollWidth > 0) {
+        const ratio = (preZoomCenterMsRef.current - timelineStart.getTime()) / totalMs
+        const targetLeft = Math.max(0, ratio * container.scrollWidth - container.clientWidth / 2)
+        container.scrollLeft = targetLeft
+      }
+      isZoomingRef.current = false
+      preZoomCenterMsRef.current = null
+    }
+  }, [columnWidth, timelineStart, timelineEnd])
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col font-sans select-none relative">
+    <div className={`bg-white overflow-hidden flex flex-col font-sans select-none relative w-full ${
+      borderless ? "rounded-b-2xl border-0 shadow-none" : "rounded-2xl border border-slate-200/90 shadow-sm"
+    } ${customClassName}`}>
       {/* =========================================================================
-          TOP TOOLBAR (reUI Style: Today | Month ⌵ | < > | Title)
+          TOP TOOLBAR (Exact ReUI Style: Today | Month ⌵ | < > | Title | Assignee Filter | Split Button)
           ========================================================================= */}
-      <div className="h-14 px-4 sm:px-6 border-b border-slate-200/80 bg-white flex items-center justify-between gap-4">
+      <div className="h-14 px-4 sm:px-5 border-b border-slate-200/80 bg-white flex items-center justify-between gap-4">
         {/* Left Navigation Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={handleResetToday}
-            className="text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer"
+            className="text-xs font-semibold text-slate-700 hover:text-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200/90 hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
           >
             Today
           </button>
 
-          {/* Scale Dropdown Selector */}
+          {/* Scale Dropdown Selector (Day, Week, Month, Quarter, Year) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowScaleDropdown(!showScaleDropdown)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200/90 hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
             >
               <span>{viewScale}</span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </button>
 
             {showScaleDropdown && (
-              <div className="absolute left-0 top-full mt-1 w-28 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-40 animate-in fade-in-50">
-                {(["Day", "Week", "Month", "Year"] as ViewScale[]).map((scale) => (
+              <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-50 animate-in fade-in-50">
+                {(["Day", "Week", "Month", "Quarter", "Year"] as ViewScale[]).map((scale) => (
                   <button
                     key={scale}
                     type="button"
@@ -520,11 +891,12 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
                       setViewScale(scale)
                       setShowScaleDropdown(false)
                     }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 cursor-pointer ${
+                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-slate-50 cursor-pointer flex items-center justify-between ${
                       viewScale === scale ? "text-[#1057FB] font-bold bg-blue-50/50" : "text-slate-700"
                     }`}
                   >
-                    {scale}
+                    <span>{scale}</span>
+                    {viewScale === scale && <Check className="w-3 h-3 text-[#1057FB]" />}
                   </button>
                 ))}
               </div>
@@ -532,82 +904,167 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
           </div>
 
           {/* Steppers < > */}
-          <div className="flex items-center gap-0.5 text-slate-700">
+          <div className="flex items-center rounded-lg border border-slate-200/90 p-0.5 shadow-2xs">
             <button
               type="button"
               onClick={handlePrev}
-              className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+              className="p-1 rounded-md hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               title="Lùi thời gian"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handleNext}
-              className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+              className="p-1 rounded-md hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               title="Tiến thời gian"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Title */}
-          <span className="text-sm font-bold text-slate-900 ml-1">
+          <span className="text-sm font-bold text-slate-900 ml-1 truncate max-w-[200px] sm:max-w-none">
             {headerTitle}
           </span>
         </div>
 
-        {/* Right Search & Squad Filter Popover */}
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm task..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 pr-3 text-xs bg-slate-50 hover:bg-white focus:bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#1057FB] focus:border-[#1057FB] text-slate-800 placeholder-slate-400 w-36 sm:w-48 transition-all"
-            />
-          </div>
-
-          {/* Squad Filter Popover Button */}
+        {/* Right Controls: User Filter Capsule + Squad Filter + Split Button */}
+        <div className="flex items-center gap-2">
+          {/* User Filter Avatar Capsule (Exact Tempo Tasks aa Component) */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowSquadFilterPopover(!showSquadFilterPopover)}
-              className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                selectedSquads.length > 0
-                  ? "bg-blue-50 border-[#1057FB] text-[#1057FB]"
-                  : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+              onClick={() => setShowUserFilterPopover(!showUserFilterPopover)}
+              className={`h-8 px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                selectedUsers.length > 0
+                  ? "bg-blue-50/80 border-[#1057FB]"
+                  : "bg-white hover:bg-slate-50 border-slate-200"
               }`}
+              title="Filter by assignee"
             >
-              <Filter className="w-3.5 h-3.5" />
-              <span>
-                {selectedSquads.length === 0
-                  ? "Tất cả Squads"
-                  : `${selectedSquads.length} Squads`}
-              </span>
-              <ChevronDown className="w-3 h-3 opacity-60" />
+              {selectedUsers.length === 0 ? (
+                <>
+                  <Users className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs font-medium text-slate-500">All Assignees</span>
+                </>
+              ) : (
+                <div className="flex items-center -space-x-1.5">
+                  {selectedUsers.slice(0, 4).map((uName) => (
+                    <UserAvatar
+                      key={`sel-${uName}`}
+                      name={uName}
+                      size="xs"
+                      className="w-5 h-5 text-[9px] ring-2 ring-white"
+                    />
+                  ))}
+                  {selectedUsers.length > 4 && (
+                    <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-600 flex items-center justify-center ring-2 ring-white">
+                      +{selectedUsers.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
             </button>
 
-            {/* Squad Filter Popover Modal */}
-            {showSquadFilterPopover && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-900">Lọc theo Squad</span>
-                  {selectedSquads.length > 0 && (
+            {/* User Filter Popover */}
+            {showUserFilterPopover && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-800">Lọc theo nhân sự</span>
+                  {selectedUsers.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setSelectedSquads([])}
-                      className="text-[11px] text-[#1057FB] hover:underline font-semibold cursor-pointer"
+                      onClick={() => setSelectedUsers([])}
+                      className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
                     >
                       Bỏ chọn tất cả
                     </button>
                   )}
                 </div>
 
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Tìm nhân sự..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
                 <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                  {allSquadOptions.map((sq) => {
+                  {filteredUserOptions.map((u) => {
+                    const isChecked = selectedUsers.includes(u.name)
+                    return (
+                      <div
+                        key={`user-opt-${u.name}`}
+                        onClick={() => handleToggleUserFilter(u.name)}
+                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar name={u.name} size="xs" className="w-5 h-5 text-[9px] shrink-0" />
+                          <span className="truncate">{u.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">{u.count}</span>
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
+                            {isChecked && <Check className="w-2.5 h-2.5" />}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowUserFilterPopover(false)}
+                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
+                  >
+                    Xong
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Squad Filter */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSquadFilterPopover(!showSquadFilterPopover)}
+              className={`h-8 px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                selectedSquads.length > 0
+                  ? "bg-blue-50 text-[#1057FB] border-[#1057FB]"
+                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Squad {selectedSquads.length > 0 && `(${selectedSquads.length})`}</span>
+            </button>
+
+            {showSquadFilterPopover && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-800">Lọc theo Squad / Dự án</span>
+                  {selectedSquads.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSquads([])}
+                      className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                    >
+                      Bỏ lọc
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                  {allSquadOptions.map((sq, sIdx) => {
                     const isChecked = selectedSquads.includes(sq)
                     const count = requests.filter(
                       (r) => r.preferred_squad === sq || r.product === sq
@@ -615,44 +1072,72 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
 
                     return (
                       <div
-                        key={sq}
+                        key={`sq-opt-${sq}-${sIdx}`}
                         onClick={() => handleToggleSquadFilter(sq)}
-                        className={`flex items-center justify-between p-2 rounded-xl text-xs font-medium cursor-pointer transition-colors ${
+                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                              isChecked
-                                ? "bg-[#1057FB] border-[#1057FB] text-white"
-                                : "border-slate-300 bg-white"
-                            }`}
-                          >
-                            {isChecked && <Check className="w-3 h-3" />}
+                        <span className="truncate">{sq}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">{count}</span>
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
+                            {isChecked && <Check className="w-2.5 h-2.5" />}
                           </div>
-                          <span>{sq}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-slate-400 font-bold">
-                          {count}
-                        </span>
                       </div>
                     )
                   })}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">
-                    {filteredRequests.length} tasks hiển thị
-                  </span>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
                   <button
                     type="button"
                     onClick={() => setShowSquadFilterPopover(false)}
-                    className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
+                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
                   >
                     Đóng
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Split Button: + Add Task / New List */}
+          <div className="relative flex items-center rounded-lg shadow-2xs">
+            <button
+              type="button"
+              className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-l-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Task</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreateMenu(!showCreateMenu)}
+              className="h-8 px-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-r-lg border-l border-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {showCreateMenu && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-50 animate-in fade-in-50">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-500" />
+                  <span>New Task</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                >
+                  <ListTree className="w-3.5 h-3.5 text-slate-500" />
+                  <span>New List</span>
+                </button>
               </div>
             )}
           </div>
@@ -661,229 +1146,642 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
 
       {/* =========================================================================
           SPLIT VIEW: EXACT 1-TO-1 ALIGNMENT BETWEEN LEFT TABLE & RIGHT TIMELINE
+          With Resizable Splitter (tempo-tasks splitter)
           ========================================================================= */}
-      <div className="flex overflow-x-auto divide-x divide-slate-200">
+      <div className="flex overflow-hidden relative">
         {/* =========================================================================
-            LEFT COLUMN (GANTT-1): NAME | STATUS | ASSIGNEE | DUE DATE | +
+            LEFT COLUMN (TREE PANE): NAME | STATUS | ASSIGNEE | DUE DATE | +
+            NO CHECKBOXES, NO DRAG GRIP ICONS (Exactly matching Tempo Tasks screenshot)
             ========================================================================= */}
-        <div className="w-[540px] sm:w-[580px] shrink-0 bg-white flex flex-col">
+        <div 
+          style={{ width: `${treeWidth}px`, minWidth: `${treeWidth}px`, maxWidth: `${treeWidth}px` }} 
+          className="shrink-0 bg-white flex flex-col select-none overflow-hidden border-r border-slate-200"
+        >
           {/* Header Row (Height: 40px) */}
-          <div className="h-10 px-4 bg-white border-b border-slate-200 flex items-center text-sm font-bold text-slate-500">
-            <div className="flex-1 pl-6">Name</div>
-            <div className="w-24 text-center">Assignee</div>
-            <div className="w-24 text-left pl-3">Due date</div>
-            <div className="w-8 text-center text-slate-400 hover:text-slate-600 cursor-pointer font-bold text-base">+</div>
+          <div className="h-10 px-3 bg-white border-b border-slate-200 flex items-center text-[12px] font-normal text-slate-500 select-none">
+            {/* Name Column */}
+            <div className="flex-1 pl-3 min-w-[140px] truncate font-medium text-slate-500">
+              Name
+            </div>
+
+            {/* Optional Columns */}
+            {visibleColumns.status && (
+              <div className="w-28 text-left pl-1 shrink-0 font-medium text-slate-500">
+                Status
+              </div>
+            )}
+
+            {visibleColumns.assignee && (
+              <div className="w-20 text-center shrink-0 font-medium text-slate-500">
+                Assignee
+              </div>
+            )}
+
+            {visibleColumns.due && (
+              <div className="w-20 text-left pl-2 shrink-0 font-medium text-slate-500">
+                Due date
+              </div>
+            )}
+
+            {visibleColumns.priority && (
+              <div className="w-20 text-left pl-2 shrink-0 font-medium text-slate-500">
+                Priority
+              </div>
+            )}
+
+            {/* + Columns Menu Dropdown Button */}
+            <div className="relative w-7 flex items-center justify-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowColumnsPopover(!showColumnsPopover)}
+                className="w-5 h-5 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
+                title="Add or remove columns"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+
+              {showColumnsPopover && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in-50 space-y-1">
+                  <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Columns
+                  </div>
+                  {[
+                    { key: "status", label: "Status" },
+                    { key: "assignee", label: "Assignee" },
+                    { key: "due", label: "Due date" },
+                    { key: "priority", label: "Priority" },
+                  ].map((col) => (
+                    <label
+                      key={col.key}
+                      className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700"
+                    >
+                      <span>{col.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[col.key as keyof typeof visibleColumns]}
+                        onChange={() => setVisibleColumns(prev => ({ ...prev, [col.key]: !prev[col.key as keyof typeof visibleColumns] }))}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Table Body (Each row exact h-12: 48px) */}
-          <div className="divide-y divide-slate-100 flex-1">
-            {Object.entries(groupedTasks).map(([groupName, tasks], gIdx) => {
-              const isCollapsed = Boolean(collapsedGroups[groupName])
+          {/* Table Body (Each row exact h-9: 36px - 2 Level Tree: Product -> Squad -> Tasks) */}
+          <div className="flex-1">
+            {productGroups.map((prod, pIdx) => {
+              const isProdCollapsed = Boolean(collapsedGroups[prod.productKey])
 
               return (
-                <div key={`left-grp-${groupName}-${gIdx}`} className="flex flex-col">
-                  {/* Group Header Row */}
+                <div key={`left-prod-${prod.productKey}-${pIdx}`} className="flex flex-col">
+                  {/* Level 1: Product Header Row (h-9: 36px) */}
                   <div
-                    onClick={() => toggleGroup(groupName)}
-                    className="h-12 px-4 bg-white hover:bg-slate-50/70 border-b border-slate-100 flex items-center cursor-pointer transition-colors group"
+                    onClick={() => toggleGroup(prod.productKey)}
+                    className="h-9 px-3 bg-slate-50/90 hover:bg-slate-100/80 border-b border-slate-200/90 flex items-center cursor-pointer transition-colors group select-none"
                   >
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {/* Chevron */}
                       <ChevronDown
-                        className={`w-4 h-4 text-slate-400 transition-transform ${
-                          isCollapsed ? "-rotate-90" : ""
+                        className={`w-3.5 h-3.5 text-slate-500 transition-transform ${
+                          isProdCollapsed ? "-rotate-90" : ""
                         }`}
                       />
-                      <ListTree className="w-4 h-4 text-slate-600" />
-                      <span className="text-sm sm:text-[15px] font-bold text-slate-900 truncate">
-                        {groupName}
+
+                      {/* Product Icon */}
+                      <Folder className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+
+                      {/* Product Name */}
+                      <span className="text-[13px] font-bold text-slate-900 truncate">
+                        {prod.productName}
                       </span>
-                      <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-700 inline-block shrink-0" />
+
+                      {/* Task Count Badge */}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-mono font-semibold">
+                        {prod.allTasks.length}
+                      </span>
+
+                      {/* Circular Progress Wheel */}
+                      <span className="w-3 h-3 rounded-full border border-slate-300 border-t-slate-700 inline-block shrink-0" />
                     </div>
 
-                    <div className="w-8 flex justify-end text-slate-300 group-hover:text-slate-600">
-                      <MoreHorizontal className="w-4 h-4" />
+                    {/* 3-dots actions menu */}
+                    <div className="w-7 flex justify-end text-slate-300 group-hover:text-slate-500">
+                      <MoreHorizontal className="w-3.5 h-3.5" />
                     </div>
                   </div>
 
-                  {/* Task Rows */}
-                  {!isCollapsed &&
-                    tasks.map((req, rIdx) => {
-                      const isOverdue = (() => {
-                        if (!req.expected_deadline || req.status === "Hoàn thành") return false
-                        const d = parseDate(req.expected_deadline)
-                        return d.getTime() < today.getTime()
-                      })()
-
-                      const badge = getStatusBadgeConfig(req.status, req.current_phase, isOverdue)
-                      const dueDateFormatted = formatDueDate(req.expected_deadline)
+                  {/* Level 2: Squad Rows (Only if Product is not collapsed) */}
+                  {!isProdCollapsed &&
+                    prod.squads.map((squad, sIdx) => {
+                      const isSquadCollapsed = Boolean(collapsedGroups[squad.squadKey])
+                      const squadColorDef = getSquadColorDef(squad.squadName, prod.productName)
 
                       return (
-                        <div
-                          key={req.request_id || `left-task-${rIdx}`}
-                          onClick={() => onSelectRequest?.(req)}
-                          className="h-12 px-4 bg-white hover:bg-slate-50/80 flex items-center cursor-pointer transition-colors group border-b border-slate-100/60"
-                        >
-                          {/* Name Column with dot */}
-                          <div className="flex-1 flex items-center gap-2.5 pl-6 min-w-0 pr-2">
-                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${badge.dot}`} />
-                            <span className="text-sm font-semibold text-slate-800 truncate group-hover:text-[#1057FB] transition-colors">
-                              {req.title}
-                            </span>
+                        <div key={`left-squad-${squad.squadKey}-${sIdx}`} className="flex flex-col">
+                          {/* Squad Header Row (h-9: 36px) indented */}
+                          <div
+                            onClick={() => toggleGroup(squad.squadKey)}
+                            className="h-9 px-3 pl-6 bg-white hover:bg-slate-50 border-b border-slate-100 flex items-center cursor-pointer transition-colors group select-none"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              {/* Chevron */}
+                              <ChevronDown
+                                className={`w-3 h-3 text-slate-400 transition-transform ${
+                                  isSquadCollapsed ? "-rotate-90" : ""
+                                }`}
+                              />
+
+                              {/* Squad Color Dot (follows squad setting) */}
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${squadColorDef.dotClass || "bg-blue-600"}`}
+                                style={squadColorDef.hex ? { backgroundColor: squadColorDef.hex } : undefined}
+                              />
+
+                              {/* Squad Name */}
+                              <span className="text-[12.5px] font-medium text-slate-700 truncate">
+                                {squad.squadName}
+                              </span>
+
+                              {/* Task count pill */}
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-mono font-medium">
+                                {squad.tasks.length}
+                              </span>
+                            </div>
+
+                            {/* 3-dots actions menu */}
+                            <div className="w-7 flex justify-end text-slate-300 group-hover:text-slate-500">
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </div>
                           </div>
 
-                          {/* Assignee Avatar (Single User) */}
-                          <div className="w-24 flex justify-center shrink-0">
-                            {req.assigned_designer && req.assigned_designer.trim() && req.assigned_designer !== "Chưa phân công" ? (
-                              <UserAvatar name={req.assigned_designer} size="sm" />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full border border-dashed border-slate-300" title="Chưa phân công" />
-                            )}
-                          </div>
+                          {/* Level 3: Task Rows (Only if Squad is not collapsed) */}
+                          {!isSquadCollapsed &&
+                            squad.tasks.map((req, rIdx) => {
+                              const stageInfo = getTaskStageStatusInfo(req, rIdx)
+                              const isOverdue = (() => {
+                                if (!req.expected_deadline || req.status === "Hoàn thành") return false
+                                const d = parseDate(req.expected_deadline)
+                                return d.getTime() < today.getTime()
+                              })()
 
-                          {/* Due Date */}
-                          <div className={`w-24 pl-3 text-sm font-semibold shrink-0 ${isOverdue ? "text-rose-600" : "text-slate-700"}`}>
-                            {dueDateFormatted}
-                          </div>
+                              const releaseDateFormatted = formatDueDate(req.release_date || req.expected_deadline)
+                              const priority = getPriorityConfig(req.priority)
 
-                          {/* Three-dots menu */}
-                          <div className="w-8 flex justify-end text-slate-300 group-hover:text-slate-600 shrink-0">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </div>
+                              return (
+                                <div
+                                  key={req.request_id ? `left-task-${req.request_id}-${pIdx}-${sIdx}-${rIdx}` : `left-task-${pIdx}-${sIdx}-${rIdx}`}
+                                  onClick={() => onSelectRequest?.(req)}
+                                  className={`h-9 px-3 ${stageInfo.isPending ? "opacity-50 bg-amber-50/15" : "bg-white"} hover:bg-blue-50/40 border-b border-slate-100 flex items-center cursor-pointer transition-all group select-none`}
+                                >
+                                  {/* Name column, indented pl-10 */}
+                                  <div className="flex-1 flex items-center min-w-[140px] pl-10">
+                                    {/* Title */}
+                                    <span className={`text-[12.5px] font-normal ${stageInfo.isPending ? "text-slate-500 italic" : "text-slate-800"} truncate group-hover:text-blue-600 transition-colors`}>
+                                      {req.title}
+                                    </span>
+                                  </div>
+
+                                  {/* Status Badge */}
+                                  {visibleColumns.status && (
+                                    <div className="w-28 flex justify-start items-center pl-1 shrink-0">
+                                      <span
+                                        className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 border ${stageInfo.badgeClass}`}
+                                        title={stageInfo.title}
+                                      >
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${stageInfo.dot}`} />
+                                        <span className="truncate max-w-[85px]">{stageInfo.text}</span>
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Assignee Avatar */}
+                                  {visibleColumns.assignee && (
+                                    <div className="w-20 flex justify-center shrink-0">
+                                      {req.assigned_designer && req.assigned_designer !== "Chưa phân công" ? (
+                                        <UserAvatar
+                                          name={req.assigned_designer}
+                                          size="xs"
+                                          className="w-5 h-5 text-[9px] ring-1 ring-white shadow-2xs"
+                                        />
+                                      ) : (
+                                        /* Clean dashed circle for unassigned */
+                                        <span className="w-5 h-5 rounded-full border border-dashed border-slate-300 flex items-center justify-center shrink-0" />
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Due Date */}
+                                  {visibleColumns.due && (
+                                    <div className={`w-20 text-left pl-2 text-[11.5px] shrink-0 font-mono truncate ${
+                                      isOverdue ? "text-rose-600 font-semibold" : "text-slate-500 font-normal"
+                                    }`}>
+                                      {releaseDateFormatted || "—"}
+                                    </div>
+                                  )}
+
+                                  {/* Priority */}
+                                  {visibleColumns.priority && (
+                                    <div className="w-20 text-left pl-2 flex items-center gap-1.5 text-[11px] text-slate-500 shrink-0 truncate">
+                                      <Flag className={`w-3 h-3 ${priority.flag}`} />
+                                      <span>{priority.label}</span>
+                                    </div>
+                                  )}
+
+                                  {/* 3-dots actions menu */}
+                                  <div className="w-7 flex justify-end text-slate-300 group-hover:text-slate-500">
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                  </div>
+                                </div>
+                              )
+                            })}
                         </div>
                       )
                     })}
                 </div>
               )
             })}
+
+            {/* Add Task Button at bottom */}
+            <div className="h-9 px-4 flex items-center gap-1.5 text-[12px] font-normal text-slate-400 hover:text-slate-600 cursor-pointer border-b border-slate-100/70 transition-colors">
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add task</span>
+            </div>
           </div>
         </div>
 
         {/* =========================================================================
-            RIGHT COLUMN (GANTT-2): CALENDAR GRID & SEQUENTIAL 6-STAGE PHASE BLOCKS
+            RESIZABLE SPLITTER (Exact Tempo Tasks Divider)
             ========================================================================= */}
-        <div className="flex-1 min-w-[720px] bg-white flex flex-col overflow-x-auto relative">
-          {/* Header Row (Height: 40px) */}
-          <div className="h-10 bg-white border-b border-slate-200 flex sticky top-0 z-20">
-            {columns.map((col) => (
-              <div
-                key={col.id}
-                className={`flex-1 min-w-[28px] border-r border-slate-100 text-xs flex flex-col items-center justify-center font-mono ${
-                  col.isToday
-                    ? "bg-rose-50/70 text-rose-600 font-bold"
-                    : col.isWeekend
-                    ? "bg-slate-50/70 text-slate-400"
-                    : "text-slate-600"
-                }`}
-              >
-                <span className="leading-none text-[10px] uppercase font-bold font-sans">
-                  {col.label}
-                </span>
-                {col.subLabel && (
-                  <span className="leading-tight text-[11.5px] font-extrabold mt-0.5">{col.subLabel}</span>
-                )}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={handleSplitterPointerDown}
+          onDoubleClick={() => setTreeWidth(500)}
+          className="group/splitter relative z-30 w-px shrink-0 cursor-col-resize touch-none bg-slate-200 hover:bg-blue-500 transition-colors after:absolute after:inset-y-0 after:-start-1 after:-end-1 select-none"
+          title="Kéo để điều chỉnh độ rộng bảng (Double-click để reset)"
+        >
+          {/* Grip Indicator */}
+          <span className="absolute top-1/2 left-1/2 h-6 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500 opacity-0 group-hover/splitter:opacity-100 transition-opacity" />
+        </div>
+
+        {/* =========================================================================
+            RIGHT COLUMN (TIMELINE PANE): Wrapper with Fixed Floating Controls
+            Matching ReUI Tempo Tasks data-slot="gantt-timeline-pane"
+            ========================================================================= */}
+        <div 
+          data-slot="gantt-timeline-pane"
+          className="flex-1 min-w-[500px] bg-white flex flex-col relative overflow-hidden h-full"
+        >
+          {/* FLOATING VERTICAL ZOOM PILL (Exact ReUI gantt-zoom) - ALWAYS VISIBLE AT BOTTOM-RIGHT */}
+          <div 
+            data-slot="gantt-zoom"
+            className="absolute right-3 bottom-5 z-40 flex flex-col rounded-md border border-slate-200/90 bg-white shadow-sm select-none"
+          >
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 2.0}
+              className="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-t-md transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title="Zoom in (+)"
+              aria-label="Zoom in"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 0.5}
+              className="w-5 h-5 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-b-md border-t border-slate-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              title="Zoom out (−)"
+              aria-label="Zoom out"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Scrollable Timeline Viewport */}
+          <div 
+            ref={timelineScrollRef}
+            className="w-full flex-1 overflow-x-auto relative"
+          >
+          {/* Inner content with guaranteed pixel width matching all columns */}
+          <div 
+            style={{ 
+              width: `${Math.max(720, columns.length * columnWidth)}px`, 
+              minWidth: `${Math.max(720, columns.length * columnWidth)}px` 
+            }} 
+            className="flex flex-col relative"
+          >
+            {/* Header Row (Height: 40px - 2 Tiers) */}
+            <div className="h-10 bg-white border-b border-slate-200 flex flex-col sticky top-0 z-20 select-none">
+              {/* Tier 1: Week Ranges */}
+              <div className="h-5 flex border-b border-slate-100 text-[11px] font-normal text-slate-400">
+                {weekSpans.map((ws, idx) => (
+                  <div
+                    key={`ws-${idx}`}
+                    style={{
+                      width: `${ws.colSpan * columnWidth}px`,
+                      minWidth: `${ws.colSpan * columnWidth}px`,
+                    }}
+                    className="shrink-0 border-r border-slate-100/80 px-2 flex items-center overflow-hidden whitespace-nowrap"
+                  >
+                    {ws.label}
+                  </div>
+                ))}
               </div>
+
+              {/* Tier 2: Days */}
+              <div className="h-5 flex text-[11px] font-normal relative">
+                {columns.map((col) => (
+                  <div
+                    key={col.id}
+                    data-today={col.isToday ? "true" : undefined}
+                    style={{
+                      width: `${columnWidth}px`,
+                      minWidth: `${columnWidth}px`,
+                      maxWidth: `${columnWidth}px`,
+                    }}
+                    className={`shrink-0 h-5 border-r border-slate-100/70 flex items-center justify-center whitespace-nowrap select-none overflow-hidden relative ${
+                      col.isToday
+                        ? "bg-blue-50/50 text-[#1057FB] font-semibold"
+                        : col.isWeekend
+                        ? "bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(0,0,0,0.025)_5px,rgba(0,0,0,0.025)_6px)] bg-slate-50/60 text-slate-400 font-normal"
+                        : "text-slate-500 font-normal"
+                    }`}
+                  >
+                    <span className={`whitespace-nowrap leading-none ${col.isToday ? "rounded-full bg-blue-100/80 px-1.5 py-0.5 text-[#1057FB]" : ""}`}>
+                      {col.label}
+                    </span>
+
+                    {/* Today Dot in Header (Kr component) */}
+                    {col.isToday && (
+                      <span className="absolute -bottom-0.5 z-20 w-1.5 h-1.5 rounded-full bg-rose-500 left-1/2 -translate-x-1/2" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Timeline Body Rows with CONTINUOUS VERTICAL RED TODAY LINE */}
+            <div className="flex-1 relative divide-y divide-slate-100 bg-[repeating-linear-gradient(45deg,#fafafa_0,#fafafa_1px,transparent_0,transparent_50%)] bg-[size:12px_12px]">
+              {/* CONTINUOUS VERTICAL RED TODAY LINE (Gr component) */}
+              {todayPositionPercent !== null && (
+                <div
+                  className="absolute top-0 bottom-0 z-20 pointer-events-none w-px bg-gradient-to-b from-rose-500/80 via-rose-500/40 to-rose-500/10"
+                  style={{ left: `${todayPositionPercent}%` }}
+                />
+              )}
+
+              {productGroups.map((prod, pIdx) => {
+                const isProdCollapsed = Boolean(collapsedGroups[prod.productKey])
+                const prodBar = calculateGroupTimelineBar(prod.allTasks)
+
+                return (
+                  <React.Fragment key={`right-prod-${prod.productKey}-${pIdx}`}>
+                    {/* Level 1: Product Spacer Row (h-9: 36px) */}
+                    <div className="h-9 bg-slate-50/70 border-b border-slate-200/90 relative flex items-center">
+                      <div className="absolute inset-0 flex pointer-events-none">
+                        {columns.map((col) => (
+                          <div
+                            key={`pcol-bg-${col.id}`}
+                            style={{
+                              width: `${columnWidth}px`,
+                              minWidth: `${columnWidth}px`,
+                              maxWidth: `${columnWidth}px`,
+                            }}
+                            className={`shrink-0 border-r border-slate-100/70 ${
+                              col.isWeekend
+                                ? "bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(0,0,0,0.025)_5px,rgba(0,0,0,0.025)_6px)] bg-slate-50/60"
+                                : ""
+                            } ${col.isToday ? "bg-blue-50/15" : ""}`}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Product Summary Progress Bar */}
+                      {prodBar && (
+                        <div
+                          style={{
+                            left: `${prodBar.startRatio * 100}%`,
+                            width: `${prodBar.widthRatio * 100}%`,
+                          }}
+                          className="absolute h-[3px] rounded-full bg-slate-300 flex items-center z-10 select-none"
+                        >
+                          <div
+                            style={{ width: `${prodBar.avgProgress}%` }}
+                            className="h-full rounded-full bg-slate-800 transition-all"
+                          />
+                          <span className="absolute left-[calc(100%+8px)] text-[11px] font-semibold font-mono text-slate-700 whitespace-nowrap">
+                            {prodBar.avgProgress}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Level 2: Squad Rows (Only if Product is not collapsed) */}
+                    {!isProdCollapsed &&
+                      prod.squads.map((squad, sIdx) => {
+                        const isSquadCollapsed = Boolean(collapsedGroups[squad.squadKey])
+                        const squadBar = calculateGroupTimelineBar(squad.tasks)
+
+                        return (
+                          <React.Fragment key={`right-squad-${squad.squadKey}-${sIdx}`}>
+                            {/* Squad Spacer Row (h-9: 36px) with Squad Summary Line */}
+                            <div className="h-9 bg-white border-b border-slate-100 relative flex items-center">
+                              <div className="absolute inset-0 flex pointer-events-none">
+                                {columns.map((col) => (
+                                  <div
+                                    key={`scol-bg-${col.id}`}
+                                    style={{
+                                      width: `${columnWidth}px`,
+                                      minWidth: `${columnWidth}px`,
+                                      maxWidth: `${columnWidth}px`,
+                                    }}
+                                    className={`shrink-0 border-r border-slate-100/70 ${
+                                      col.isWeekend
+                                        ? "bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(0,0,0,0.025)_5px,rgba(0,0,0,0.025)_6px)] bg-slate-50/60"
+                                        : ""
+                                    } ${col.isToday ? "bg-blue-50/15" : ""}`}
+                                  />
+                                ))}
+                              </div>
+
+                              {squadBar && (
+                                <div
+                                  style={{
+                                    left: `${squadBar.startRatio * 100}%`,
+                                    width: `${squadBar.widthRatio * 100}%`,
+                                  }}
+                                  className="absolute h-[2px] rounded-full bg-slate-200 flex items-center z-10 select-none"
+                                >
+                                  <div
+                                    style={{ width: `${squadBar.avgProgress}%` }}
+                                    className="h-full rounded-full bg-blue-500 transition-all"
+                                  />
+                                  <span className="absolute left-[calc(100%+8px)] text-[10.5px] font-normal font-mono text-slate-500 whitespace-nowrap">
+                                    {squadBar.avgProgress}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Level 3: Task Rows (Only if Squad is not collapsed) */}
+                            {!isSquadCollapsed &&
+                              squad.tasks.map((req, rIdx) => {
+                                const taskBar = calculateTaskTimelineBar(req, rIdx)
+                                const leftPct = taskBar.startRatio * 100
+                                const widthPct = taskBar.widthRatio * 100
+
+                                return (
+                                  <div
+                                    key={`right-row-${pIdx}-${sIdx}-${rIdx}`}
+                                    className="h-9 relative flex items-center hover:bg-blue-50/20 transition-colors group select-none"
+                                  >
+                                    {/* Background Column Dividers */}
+                                    <div className="absolute inset-0 flex pointer-events-none">
+                                      {columns.map((col) => (
+                                        <div
+                                          key={`tcol-bg-${col.id}`}
+                                          style={{
+                                            width: `${columnWidth}px`,
+                                            minWidth: `${columnWidth}px`,
+                                            maxWidth: `${columnWidth}px`,
+                                          }}
+                                          className={`shrink-0 border-r border-slate-100/70 ${
+                                            col.isWeekend
+                                              ? "bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(0,0,0,0.025)_5px,rgba(0,0,0,0.025)_6px)] bg-slate-50/60"
+                                              : ""
+                                          } ${col.isToday ? "bg-blue-50/15" : ""}`}
+                                        />
+                                      ))}
+                                    </div>
+
+                                    {/* Task Capsule Bar */}
+                                    <div
+                                      onClick={() => onSelectRequest?.(req)}
+                                      onMouseEnter={(e) => {
+                                        setHoveredTooltip({
+                                          request: req,
+                                          clientX: e.clientX,
+                                          clientY: e.clientY,
+                                        })
+                                      }}
+                                      onMouseMove={(e) => {
+                                        setHoveredTooltip({
+                                          request: req,
+                                          clientX: e.clientX,
+                                          clientY: e.clientY,
+                                        })
+                                      }}
+                                      onMouseLeave={() => setHoveredTooltip(null)}
+                                      style={{
+                                        left: `${leftPct}%`,
+                                        width: `${Math.max(1.5, widthPct)}%`,
+                                      }}
+                                      className={`group/bar absolute h-[20px] rounded-[5px] ${taskBar.theme.bg} ${taskBar.isPending ? "opacity-50" : ""} flex items-center overflow-hidden border-0 ring-0 outline-none transition-all cursor-pointer z-10 select-none`}
+                                    >
+                                      {/* Left Resize Handle */}
+                                      <span className="absolute inset-y-0 start-0.5 flex w-2 cursor-ew-resize items-center justify-start opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                                        <span className="h-2.5 w-0.5 rounded-full bg-slate-500/40" />
+                                      </span>
+
+                                      {/* Progress Fill Overlay */}
+                                      <div
+                                        style={{ width: `${taskBar.progressPercent}%` }}
+                                        className={`h-full ${taskBar.theme.fill} rounded-l-[5px] flex items-center justify-start pl-1.5 transition-all`}
+                                      >
+                                        {taskBar.isDone && (
+                                          <Check className="w-2.5 h-2.5 text-current stroke-[2.5]" />
+                                        )}
+                                      </div>
+
+                                      {/* Right Resize Handle */}
+                                      <span className="absolute inset-y-0 end-0.5 flex w-2 cursor-ew-resize items-center justify-end opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                                        <span className="h-2.5 w-0.5 rounded-full bg-slate-500/40" />
+                                      </span>
+                                    </div>
+
+                                    {/* Title Label Placed to the Right of Capsule Bar */}
+                                    <span
+                                      onClick={() => onSelectRequest?.(req)}
+                                      style={{
+                                        left: `calc(${leftPct + Math.max(1.5, widthPct)}% + 8px)`,
+                                      }}
+                                      className={`absolute text-[11.5px] font-normal ${taskBar.isPending ? "text-slate-400 italic" : "text-slate-700"} hover:text-blue-600 truncate max-w-[280px] cursor-pointer z-10 transition-colors pointer-events-auto select-none whitespace-nowrap`}
+                                      title={req.title}
+                                    >
+                                      {req.title}
+                                      {taskBar.isPending && (
+                                        <span className="ml-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 not-italic">
+                                          {taskBar.stageInfo.text}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                          </React.Fragment>
+                        )
+                      })}
+                  </React.Fragment>
+                )
+              })}
+
+              {/* Bottom Spacer Row */}
+              <div className="h-9 relative border-b border-slate-100/70">
+                <div className="absolute inset-0 flex pointer-events-none">
+                  {columns.map((col) => (
+                    <div
+                      key={`add-col-bg-${col.id}`}
+                      style={{
+                        width: `${columnWidth}px`,
+                        minWidth: `${columnWidth}px`,
+                        maxWidth: `${columnWidth}px`,
+                      }}
+                      className={`shrink-0 border-r border-slate-100/70 ${
+                        col.isWeekend
+                          ? "bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,rgba(0,0,0,0.025)_5px,rgba(0,0,0,0.025)_6px)] bg-slate-50/60"
+                          : ""
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              OFFSCREEN CHIPS (Exact Tempo Tasks gantt-offscreen-chip Component)
+              ========================================================================= */}
+          <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+            {offscreenChips.map((chip) => (
+              <button
+                key={`chip-${chip.id}-${chip.side}`}
+                type="button"
+                onClick={() => handleJumpToChip(chip)}
+                style={{
+                  top: `${chip.top}px`,
+                  ...(chip.side === "start" ? { left: "0.5rem" } : { right: "1rem" })
+                }}
+                className="pointer-events-auto absolute flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-xs hover:text-slate-800 hover:shadow-sm transition-all group"
+                title={`Nhảy tới: ${chip.title} (${chip.dateLabel})`}
+              >
+                {chip.side === "start" ? (
+                  <ChevronLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                ) : (
+                  <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                )}
+                {/* Colored task dot indicator */}
+                <span 
+                  className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full ring-1 ring-white" 
+                  style={{ backgroundColor: chip.color }}
+                />
+              </button>
             ))}
           </div>
 
-          {/* Timeline Body Rows with CONTINUOUS RED TODAY LINE */}
-          <div className="flex-1 relative divide-y divide-slate-100 bg-[repeating-linear-gradient(45deg,#fafafa_0,#fafafa_1px,transparent_0,transparent_50%)] bg-[size:12px_12px]">
-            {/* CONTINUOUS VERTICAL RED TODAY LINE */}
-            {todayPositionPercent !== null && (
-              <div
-                className="absolute top-0 bottom-0 z-30 pointer-events-none flex flex-col items-center"
-                style={{ left: `${todayPositionPercent}%`, transform: "translateX(-50%)" }}
-              >
-                <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm -mt-3.5 z-40 whitespace-nowrap">
-                  Today
-                </span>
-                <div className="w-[2px] bg-rose-500 flex-1 shadow-sm" />
-              </div>
-            )}
-
-            {Object.entries(groupedTasks).map(([groupName, tasks], gIdx) => {
-              const isCollapsed = Boolean(collapsedGroups[groupName])
-
-              return (
-                <React.Fragment key={`right-grp-${groupName}-${gIdx}`}>
-                  {/* Group Spacer Row (h-12) */}
-                  <div className="h-12 bg-slate-50/40 border-b border-slate-100 relative">
-                    <div className="absolute inset-0 flex pointer-events-none">
-                      {columns.map((col) => (
-                        <div key={`gcol-bg-${col.id}`} className="flex-1 min-w-[28px] border-r border-slate-100/60" />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Task Timeline Rows (h-12) */}
-                  {!isCollapsed &&
-                    tasks.map((req, rIdx) => {
-                      const blocks = calculateTaskTimelineBlocks(req, rIdx)
-
-                      return (
-                        <div
-                          key={`right-row-${gIdx}-${rIdx}`}
-                          className="h-12 relative flex items-center hover:bg-slate-50/40 transition-colors border-b border-slate-100/60"
-                        >
-                          {/* Background Grid Lines & Weekend Shading */}
-                          <div className="absolute inset-0 flex pointer-events-none">
-                            {columns.map((col) => (
-                              <div
-                                key={`tcol-bg-${col.id}`}
-                                className={`flex-1 min-w-[28px] border-r border-slate-200/50 ${
-                                  col.isWeekend ? "bg-slate-50/60" : ""
-                                } ${col.isToday ? "bg-rose-50/20" : ""}`}
-                              />
-                            ))}
-                          </div>
-
-                          {/* Multi-Status Phase Blocks with SMOOTH CURSOR-TRACKING TOOLTIP */}
-                          {blocks.map((block) => {
-                            const leftPct = block.startRatio * 100
-                            const widthPct = block.widthRatio * 100
-
-                            return (
-                              <div
-                                key={block.id}
-                                onClick={() => onSelectRequest?.(req)}
-                                onMouseEnter={(e) => {
-                                  setHoveredTooltip({
-                                    block,
-                                    request: req,
-                                    clientX: e.clientX,
-                                    clientY: e.clientY,
-                                  })
-                                }}
-                                onMouseMove={(e) => {
-                                  setHoveredTooltip({
-                                    block,
-                                    request: req,
-                                    clientX: e.clientX,
-                                    clientY: e.clientY,
-                                  })
-                                }}
-                                onMouseLeave={() => setHoveredTooltip(null)}
-                                style={{
-                                  left: `${leftPct}%`,
-                                  width: `${Math.max(5.2, widthPct)}%`,
-                                }}
-                                className={`absolute h-8 rounded-lg ${block.colorClass} flex items-center justify-center px-2.5 text-xs sm:text-[12.5px] font-bold shadow-2xs hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group z-10`}
-                              >
-                                <div className="flex items-center gap-1.5 truncate">
-                                  {block.icon === "lock" && <Lock className="w-3.5 h-3.5 shrink-0 opacity-80" />}
-                                  {block.icon === "check" && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 opacity-80" />}
-                                  {block.icon === "alert" && <AlertTriangle className="w-3.5 h-3.5 shrink-0 opacity-80" />}
-                                  {block.icon === "clock" && <Clock className="w-3.5 h-3.5 shrink-0 opacity-80" />}
-                                  <span className="truncate drop-shadow-2xs">{block.label}</span>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                </React.Fragment>
-              )
-            })}
           </div>
         </div>
       </div>
@@ -925,9 +1823,14 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
               <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-mono font-bold">
                 {hoveredTooltip.request.preferred_squad || hoveredTooltip.request.product || "MBBank"}
               </span>
-              <span className="text-[11px] font-bold text-amber-400">
-                {hoveredTooltip.block.phaseName}
-              </span>
+              {(() => {
+                const sInfo = getTaskStageStatusInfo(hoveredTooltip.request)
+                return (
+                  <span className={`text-[11px] font-bold ${sInfo.isPending ? "text-amber-400" : "text-blue-400"}`}>
+                    {sInfo.text}
+                  </span>
+                )
+              })()}
             </div>
 
             {/* Full Task Title */}
@@ -945,29 +1848,30 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Hạn bàn giao:</span>
+                <span className="text-slate-400">Release / Hạn:</span>
                 <span className="font-mono text-emerald-400 font-bold">
-                  {hoveredTooltip.request.expected_deadline || "Chưa hạn"}
+                  {hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline || "Chưa hạn"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Thời gian xử lý:</span>
-                <span className="font-mono text-white font-medium">
-                  {hoveredTooltip.block.slaDays} ngày làm việc
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Tiến độ khâu:</span>
+                <span className="text-slate-400">Tiến độ tổng:</span>
                 <span className="font-mono text-white font-bold">
                   {hoveredTooltip.request.progress || 0}%
                 </span>
               </div>
 
-              <div className="pt-1.5 border-t border-slate-800/80 text-[10.5px] text-slate-400">
-                📎 Bàn giao: <span className="text-slate-300">{hoveredTooltip.block.deliverable}</span>
-              </div>
+              {(() => {
+                const sInfo = getTaskStageStatusInfo(hoveredTooltip.request)
+                return sInfo.isPending ? (
+                  <div className="flex items-center justify-between text-amber-300 pt-1 border-t border-slate-800">
+                    <span className="text-slate-400">Lý do Pending:</span>
+                    <span className="font-medium text-amber-300 truncate max-w-[150px]" title={sInfo.title}>
+                      {sInfo.title}
+                    </span>
+                  </div>
+                ) : null
+              })()}
             </div>
 
             {/* Hint */}
@@ -979,22 +1883,21 @@ export default function ReUIGanttChart({ requests, onSelectRequest }: ReUIGanttC
       </AnimatePresence>
 
       {/* =========================================================================
-          FOOTER LEGEND (6 Official UX Stages from Dropdown Menu)
+          FOOTER LEGEND
           ========================================================================= */}
-      <div className="px-4 py-3 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-sm text-slate-600">
+      <div className="px-4 py-2.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
         <div className="flex items-center gap-3.5 flex-wrap">
-          <span className="font-bold text-slate-800">Khâu UX (Status):</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-amber-500" /> 1. Phân loại</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-purple-500" /> 2. Discovery</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-indigo-500" /> 3. User Flow</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-blue-600" /> 4. UI Design</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-teal-500" /> 5. Prototype</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-emerald-500" /> 6. Bàn giao</span>
-          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-3 h-3 rounded-full bg-slate-400 ring-2 ring-slate-400/25" /> 7. PO Pending</span>
+          <span className="font-bold text-slate-800 text-[11.5px]">Khâu UX:</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-amber-500" /> 1. Phân loại</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-purple-500" /> 2. Discovery</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-indigo-500" /> 3. User Flow</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-blue-600" /> 4. UI Design</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-teal-500" /> 5. Prototype</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><span className="w-2 h-2 rounded-full bg-emerald-500" /> 6. Bàn giao</span>
         </div>
 
-        <div className="text-xs text-slate-500 font-medium">
-          💡 Rê chuột vào thanh để xem Tooltip • Click để mở chi tiết đề bài
+        <div className="text-[11px] text-slate-400 font-medium">
+          💡 Rê chuột vào thanh để xem chi tiết • Vuốt ngang timeline vô cực
         </div>
       </div>
     </div>

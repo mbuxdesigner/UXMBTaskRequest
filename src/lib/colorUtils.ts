@@ -121,6 +121,21 @@ export function resolveColorKey(colorOrClass?: string): ProductColorDef | null {
     return PRODUCT_COLORS[str]
   }
 
+  // Hỗ trợ mã màu HEX trực tiếp (#2563EB, ...)
+  if (str.startsWith("#")) {
+    const found = Object.values(PRODUCT_COLORS).find(c => c.hex.toLowerCase() === str)
+    if (found) return found
+    return {
+      key: "custom",
+      label: "Custom",
+      dotClass: "",
+      badgeClass: "bg-slate-50 text-slate-700 border-slate-200",
+      borderClass: "border-slate-300",
+      bgSoft: "bg-slate-50/60",
+      hex: colorOrClass,
+    }
+  }
+
   // Nếu là chuỗi class tailwind (ví dụ: "bg-emerald-50 text-emerald-700 border-emerald-200")
   if (str.includes("emerald") || str.includes("green")) return PRODUCT_COLORS.emerald
   if (str.includes("amber") || str.includes("yellow") || str.includes("orange")) return PRODUCT_COLORS.amber
@@ -212,9 +227,15 @@ export function getSquadColorDef(squadName?: string, productName?: string): Prod
     if (savedSquads) {
       const parsed = JSON.parse(savedSquads)
       if (Array.isArray(parsed)) {
-        const matched = parsed.find(
-          (s: any) => s.name && s.name.trim().toLowerCase() === rawSq.toLowerCase()
-        )
+        const sqLower = rawSq.toLowerCase()
+        const matched = parsed.find((s: any) => {
+          const sName = String(s.name || s.squad_name || "").trim().toLowerCase()
+          return sName === sqLower
+        }) || parsed.find((s: any) => {
+          const sName = String(s.name || s.squad_name || "").trim().toLowerCase()
+          return sName && (sName.includes(sqLower) || sqLower.includes(sName))
+        })
+
         if (matched) {
           // Nếu squad có màu riêng được cấu hình
           if (matched.color) {
@@ -222,8 +243,8 @@ export function getSquadColorDef(squadName?: string, productName?: string): Prod
             if (resolved) return resolved
           }
           // Nếu không có màu riêng, kế thừa màu từ Sản phẩm trực thuộc
-          if (matched.productName) {
-            return getProductColorDef(matched.productName)
+          if (matched.productName || matched.product_name) {
+            return getProductColorDef(matched.productName || matched.product_name)
           }
         }
       }
@@ -241,11 +262,12 @@ export function getSquadColorDef(squadName?: string, productName?: string): Prod
   if (name.includes("cards") || name.includes("thẻ")) return PRODUCT_COLORS.purple
   if (name.includes("lending") || name.includes("vay")) return PRODUCT_COLORS.blue
   if (name.includes("core") || name.includes("tài khoản")) return PRODUCT_COLORS.indigo
-  if (name.includes("wealth") || name.includes("đầu tư")) return PRODUCT_COLORS.amber
+  if (name.includes("wealth") || name.includes("đầu tư") || name.includes("trái phiếu") || name.includes("chứng chỉ") || name.includes("beerich") || name.includes("gold")) return PRODUCT_COLORS.amber
   if (name.includes("transfer") || name.includes("chuyển tiền")) return PRODUCT_COLORS.sky
-  if (name.includes("gateway") || name.includes("baas")) return PRODUCT_COLORS.cyan
+  if (name.includes("gateway") || name.includes("baas") || name.includes("api")) return PRODUCT_COLORS.cyan
   if (name.includes("partner") || name.includes("tích hợp")) return PRODUCT_COLORS.teal
   if (name.includes("payroll") || name.includes("lương")) return PRODUCT_COLORS.violet
+  if (name.includes("design") || name.includes("nền tảng") || name.includes("ux")) return PRODUCT_COLORS.slate
 
   // 4. Deterministic hash theo tên squad
   const colorsList = [

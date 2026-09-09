@@ -11,6 +11,7 @@ export type NotificationType =
   | 'squad_changed'
   | 'deadline_changed'
   | 'comment_added'
+  | 'comment_mention'
   | 'viewer_added'
   | 'system';
 

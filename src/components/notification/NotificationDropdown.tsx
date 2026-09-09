@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Filter,
   Users,
+  AtSign,
 } from "lucide-react"
 import { useNotifications } from "../../services/notificationService"
 import { NotificationItem, NotificationType } from "../../types/notification"
@@ -130,6 +131,13 @@ function getNotificationTypeConfig(type: NotificationType) {
         iconBg: "bg-slate-100 text-slate-700 border border-slate-200",
         badgeBg: "bg-slate-100 text-slate-700 border-slate-200",
         label: customLabel || "Bình luận",
+      }
+    case "comment_mention":
+      return {
+        icon: AtSign,
+        iconBg: "bg-blue-50 text-[#1057fb] border border-blue-200/80",
+        badgeBg: "bg-blue-50 text-[#1057fb] border-blue-200",
+        label: customLabel || "Nhắc đến",
       }
     case "task_created":
       return {

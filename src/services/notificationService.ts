@@ -136,6 +136,7 @@ function mapNotificationTypeToToast(type: NotificationType): "success" | "info" 
     case "status_changed":
     case "squad_changed":
     case "comment_added":
+    case "comment_mention":
     case "viewer_added":
     case "system":
     default:

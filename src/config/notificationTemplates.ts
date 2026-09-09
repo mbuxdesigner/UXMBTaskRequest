@@ -172,6 +172,18 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     toastType: "info",
   },
 
+  // ─── 12b. Nhắc đến trong trao đổi (@mention) ──────────────────────────────
+  comment_mention: {
+    type: "comment_mention",
+    eventName: "Được nhắc đến trong trao đổi",
+    sender: "Người gửi bình luận",
+    recipients: "Thành viên được nhắc tên hoặc toàn bộ bài toán",
+    titleTemplate: "Bạn được nhắc đến: {requestId}",
+    messageTemplate: "{actorName} đã nhắc đến bạn trong [{taskTitle}]: \"{note}\"",
+    badgeLabel: "Nhắc đến",
+    toastType: "info",
+  },
+
   // ─── 13. Thông báo hệ thống ────────────────────────────────────────────────
   system: {
     type: "system",

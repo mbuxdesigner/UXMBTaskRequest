@@ -44,8 +44,10 @@ import {
   LayoutGrid,
   ListFilter,
   Flag,
-  X
+  X,
+  CalendarRange
 } from "lucide-react"
+import ReUIGanttChart from "@/components/reui/gantt-chart"
 
 interface TrackRequestPageProps {
   onNavigateToCreate?: () => void
@@ -136,7 +138,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("Tất cả")
   const [productFilter, setProductFilter] = useState<string>("all")
-  const [viewMode, setViewMode] = useState<"table" | "kanban" | "grid">("table")
+  const [viewMode, setViewMode] = useState<"table" | "kanban" | "grid" | "gantt">("table")
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
   const selectedRequestRef = useRef<UXRequest | null>(null)
   useEffect(() => {
@@ -861,6 +863,18 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 <LayoutGrid className="size-3.5" />
                 <span>Lưới</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("gantt")}
+                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "gantt"
+                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <CalendarRange className="size-3.5" />
+                <span>Gantt</span>
+              </button>
             </div>
 
             {/* Filter Button */}
@@ -875,19 +889,6 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               onClearAll={handleClearAllFilters}
             />
 
-            {/* Collapse Groups Button (in table mode) */}
-            {viewMode === "table" && (
-              <button
-                type="button"
-                onClick={() => {
-                  const ev = new CustomEvent("toggle-all-table-groups")
-                  window.dispatchEvent(ev)
-                }}
-                className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>Thu gọn nhóm</span>
-              </button>
-            )}
 
             {/* Tạo task mới */}
             <button
@@ -992,6 +993,21 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          ) : viewMode === "gantt" ? (
+            <motion.div
+              key="gantt"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="p-0 w-full flex-1 flex flex-col overflow-hidden"
+            >
+              <ReUIGanttChart
+                requests={filteredRequests}
+                onSelectRequest={setSelectedRequest}
+                borderless
+              />
             </motion.div>
           ) : (
             /* ReUI Solution Agents 2 Table View */

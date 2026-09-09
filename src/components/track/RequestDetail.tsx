@@ -28,7 +28,7 @@ import { canUserAccessRequest, isUserInViewers, normalizeVietnameseString } from
 import { capitalizeFirstLetter } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
-import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
+import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
 import { 
   X, 
   ArrowLeft, 
@@ -82,6 +82,7 @@ import {
   ChevronLeft, 
   Bell, 
   Users,
+  AtSign,
   UserPlus,
   UploadCloud,
   Download,
@@ -290,17 +291,38 @@ function formatDesignerDisplayName(rawName?: string): string {
 
 function getDesignerAvatar(name?: string) {
   if (!name || name === "Chưa phân công") return ""
+  const clean = name.replace(/\(.*?\)/g, "").trim()
+  const cleanLower = clean.toLowerCase()
+
   try {
-    const cached = localStorage.getItem("mbbank_team_members")
-    if (cached) {
-      const members: any[] = JSON.parse(cached)
-      const found = members.find((m) => m.name === name || (name && m.name && (name.includes(m.name) || m.name.includes(name))))
-      if (found && found.avatarUrl) return found.avatarUrl
+    const storageKeys = ["mbbank_team_members", "mbbank_admin_team"]
+    for (const key of storageKeys) {
+      const cached = localStorage.getItem(key)
+      if (cached) {
+        const members: any[] = JSON.parse(cached)
+        if (Array.isArray(members)) {
+          const found = members.find((m: any) => {
+            const mName = String(m.name || m.displayName || "").trim().toLowerCase()
+            const mEmail = String(m.email || m.teamsEmail || "").trim().toLowerCase()
+            if (mName && (mName === cleanLower || cleanLower.includes(mName) || mName.includes(cleanLower))) {
+              return true
+            }
+            if (mEmail && (cleanLower === mEmail || cleanLower.includes(mEmail) || (mEmail.includes("@") && cleanLower.includes(mEmail.split("@")[0])))) {
+              return true
+            }
+            return false
+          })
+          if (found && (found.avatarUrl || found.avatar || found.avatar_url)) {
+            return found.avatarUrl || found.avatar || found.avatar_url
+          }
+        }
+      }
     }
   } catch {}
-  if (name.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
-  if (name.includes("Cường")) return "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
-  if (name.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
+
+  // Fallback defaults nếu không có trong team members
+  if (clean.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
+  if (clean.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
   return ""
 }
 
@@ -1550,6 +1572,56 @@ export default function RequestDetail({
       supportingViewers: supportList,
     }
   }, [availableViewerMembers, request, localSquad, matchesPerson])
+
+  // Danh sách gợi ý @mention thành viên trao đổi (Bao gồm Assignees, Requester, Viewers, Squad & Toàn bộ nhân sự)
+  const mentionUserList = useMemo<MentionUser[]>(() => {
+    if (!request) return []
+    const list: MentionUser[] = []
+    const seen = new Set<string>()
+
+    const addPerson = (
+      rawName?: string,
+      flags?: { isAssignee?: boolean; isViewer?: boolean; isRequester?: boolean; role?: string }
+    ) => {
+      if (!rawName) return
+      const names = rawName.split(",").map((s) => s.trim()).filter(Boolean)
+      names.forEach((name) => {
+        const key = name.toLowerCase()
+        if (!key || seen.has(key) || key === "chưa phân công" || key === "đang phân công") return
+        seen.add(key)
+
+        const matched = availableViewerMembers.find((m) => isMemberMatchViewer(m, name))
+
+        list.push({
+          id: matched?.email || name,
+          name: matched?.name || name,
+          displayName: matched?.name || name,
+          role: flags?.role || matched?.role || (flags?.isAssignee ? "Designer phụ trách" : flags?.isRequester ? "PO (Requester)" : flags?.isViewer ? "Viewer" : "Thành viên"),
+          email: matched?.email || "",
+          avatar: matched?.avatar || getDesignerAvatar(matched?.name || name),
+          isAssignee: flags?.isAssignee,
+          isViewer: flags?.isViewer,
+          isRequester: flags?.isRequester,
+          squad: matched?.squad || request.squad_name || "",
+        })
+      })
+    }
+
+    // 1. Assignees (Ưu tiên đầu bảng)
+    addPerson(localAssignee || request.assigned_designer, { isAssignee: true, role: "Designer phụ trách" })
+
+    // 2. Requester (PO)
+    addPerson(request.requester_name || request.requester_email, { isRequester: true, role: "PO (Người yêu cầu)" })
+
+    // 3. Viewers
+    localViewers.forEach((v) => addPerson(v, { isViewer: true, role: "Người theo dõi" }))
+
+    // 4. Squad Viewers & Supporting Members
+    squadViewers.forEach((m) => addPerson(m.name, { role: m.role || "Nhân sự Squad" }))
+    supportingViewers.forEach((m) => addPerson(m.name, { role: m.role || "Nhân sự UX" }))
+
+    return list
+  }, [request, localAssignee, localViewers, squadViewers, supportingViewers, availableViewerMembers])
 
   const renderViewerPopoverContent = (onClose: () => void) => {
     const filterByQuery = (m: (typeof availableViewerMembers)[0]) => {
@@ -2851,8 +2923,8 @@ export default function RequestDetail({
       ? urlMatches.find((u) => u.toLowerCase().includes("figma.com")) || urlMatches[0]
       : undefined
 
-    // 1. Cú pháp @SenToPO: hoặc @SendToPO: hoặc @SeToPO: -> chuyển sang Đã gửi PO & tự động gán link Figma nếu có
-    if (/(?:^|\s)@se(?:n)?(?:d)?(?:_)?to(?:_)?po:/i.test(rawText)) {
+    // 1. Cú pháp /sentopo hoặc legacy @SenToPO: -> chuyển sang Đã gửi PO & tự động gán link Figma nếu có
+    if (/(?:^|\s)(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po(?::|\s)?/i.test(rawText)) {
       newStatus = "Đã gửi PO"
       sentToPoAt = new Date().toISOString()
       request.status = "Đã gửi PO"
@@ -2865,10 +2937,10 @@ export default function RequestDetail({
         toastMessage = "Đã đổi trạng thái sang Đã gửi PO thành công! (Bắt đầu đếm hạn phản hồi 24h)"
       }
     } 
-    // 2. Cú pháp @Pending: -> chuyển sang Pending với lý do cụ thể
-    else if (/(?:^|\s)@(po_)?pending:/i.test(rawText)) {
-      const match = rawText.match(/@(po_)?pending:\s*([^.\n]*)/i)
-      const reasonText = match && match[2] ? match[2].trim() : ""
+    // 2. Cú pháp /pending hoặc legacy @Pending: -> chuyển sang Pending với lý do cụ thể
+    else if (/(?:^|\s)(?:\/|@)(?:po_)?pending(?::|\s)?/i.test(rawText)) {
+      const match = rawText.match(/(?:\/|@)(?:po_)?pending(?::|\s)?\s*([^.\n]*)/i)
+      const reasonText = match && match[1] ? match[1].trim() : ""
 
       newStatus = "Pending"
       sentToPoAt = "" // Tuyệt đối không gán mốc gửi PO
@@ -2926,16 +2998,58 @@ export default function RequestDetail({
 
     // Thông báo nhanh, biến mất tự động - KHÔNG DÙNG toast.loading xoay vòng chặn người dùng
     toast.success(toastMessage, undefined, { id: "send-comment-toast", duration: 3000 })
-    dispatchNotification({
-      type: "comment_added",
-      title: `Trao đổi mới: ${request.request_id}`,
-      message: rawText.length > 100 ? `${rawText.slice(0, 97)}...` : rawText,
-      requestId: request.request_id,
-      taskTitle: request.title,
-      actorName: session ? (session.displayName || session.teamsEmail) : displayName,
-      actorRole: (session ? session.role : "Designer"),
-      viewers: localViewers,
-    })
+    const actor = session ? (session.displayName || session.teamsEmail) : displayName
+    const actorRole = (session ? session.role : "Designer")
+    const hasAllMention = /(?:^|\s)@(all|everyone|mọi người)\b/i.test(rawText)
+
+    if (hasAllMention) {
+      dispatchNotification({
+        type: "comment_mention",
+        title: `Nhắc đến mọi người: ${request.request_id}`,
+        message: `${actor} đã nhắc đến mọi người: "${rawText.length > 100 ? rawText.slice(0, 97) + "..." : rawText}"`,
+        requestId: request.request_id,
+        taskTitle: request.title,
+        actorName: actor,
+        actorRole: actorRole,
+        recipient: "Mọi người (Toàn bộ thành viên)",
+        viewers: localViewers,
+        link: `#track?requestId=${request.request_id}`,
+      })
+    } else {
+      const mentionedUsers = mentionUserList.filter((m) => {
+        if (m.isAll) return false
+        const tag = `@${m.name.toLowerCase()}`
+        return rawText.toLowerCase().includes(tag)
+      })
+
+      if (mentionedUsers.length > 0) {
+        const targetRecipients = mentionedUsers.map((m) => m.name).join(", ")
+        dispatchNotification({
+          type: "comment_mention",
+          title: `Bạn được nhắc đến: ${request.request_id}`,
+          message: `${actor} đã nhắc đến bạn: "${rawText.length > 100 ? rawText.slice(0, 97) + "..." : rawText}"`,
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: actor,
+          actorRole: actorRole,
+          recipient: targetRecipients,
+          viewers: localViewers,
+          link: `#track?requestId=${request.request_id}`,
+        })
+      } else {
+        dispatchNotification({
+          type: "comment_added",
+          title: `Trao đổi mới: ${request.request_id}`,
+          message: rawText.length > 100 ? `${rawText.slice(0, 97)}...` : rawText,
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: actor,
+          actorRole: actorRole,
+          viewers: localViewers,
+          link: `#track?requestId=${request.request_id}`,
+        })
+      }
+    }
 
     // B. BACKGROUND NON-BLOCKING SYNC: Gửi lên Google Apps Script / Sheet ngầm
     updateTaskProgress(request.request_id, {
@@ -4162,19 +4276,29 @@ export default function RequestDetail({
 
                       {/* Row 2: Author and Created Metadata aligned with Edit Button */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
-                        <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-                          <UserAvatar name={request.requester_name || "PO"} size="xs" className="w-5 h-5 text-[10px]" />
-                          <strong className="font-semibold text-slate-800">{request.requester_name || "PO"}</strong>
-                          {request.requester_email && (
-                            <span className="text-slate-400 font-mono text-[11.5px]">({request.requester_email})</span>
-                          )}
-                          {request.submitted_at && (
-                            <>
-                              <span className="text-slate-300">·</span>
-                              <span className="text-slate-400">Gửi lúc {request.submitted_at}</span>
-                            </>
-                          )}
-                        </div>
+                        {(() => {
+                          const rawCreator = (request.requester_name || request.requester_email || "PO").trim()
+                          const displayCreator = rawCreator.includes("@")
+                            ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                            : rawCreator
+                          const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator) || getDesignerAvatar(request.requester_name) || getDesignerAvatar(request.requester_email)
+
+                          return (
+                            <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                              <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" className="w-5 h-5 text-[10px]" />
+                              <strong className="font-semibold text-slate-800">{displayCreator}</strong>
+                              {request.requester_email && (
+                                <span className="text-slate-400 font-mono text-[11.5px]">({request.requester_email})</span>
+                              )}
+                              {request.submitted_at && (
+                                <>
+                                  <span className="text-slate-300">·</span>
+                                  <span className="text-slate-400">Gửi lúc {request.submitted_at}</span>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })()}
 
                         {canEditBrief ? (
                           <Button
@@ -4580,60 +4704,114 @@ export default function RequestDetail({
                         const renderRichCommentContent = (content?: string) => {
                           if (!content) return null
 
-                          // Tách text theo URL: /(https?:\/\/[^\s]+)/g
-                          const urlRegex = /(https?:\/\/[^\s]+)/g
-                          const parts = content.split(urlRegex)
+                          // Hỗ trợ hiển thị danh sách gạch đầu dòng (-) hoặc (*)
+                          const lines = content.split("\n")
 
-                          return parts.map((part, index) => {
-                            if (/^https?:\/\//i.test(part)) {
-                              return (
-                                <a
-                                  key={`link-${index}`}
-                                  href={part}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-[#1057FB] hover:text-[#0b40bd] hover:underline font-semibold break-all inline-flex items-center gap-1.5 bg-blue-50/90 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition-colors border border-blue-200 text-xs my-0.5 shadow-2xs"
-                                  title={part}
-                                >
-                                  <Paperclip className="w-3 h-3 shrink-0" />
-                                  <span>{part}</span>
-                                  <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-80" />
-                                </a>
-                              )
-                            }
+                          return (
+                            <div className="space-y-1">
+                              {lines.map((line, lIdx) => {
+                                const bulletMatch = line.match(/^(\s*[-*]\s+)(.*)$/)
+                                const isBullet = Boolean(bulletMatch)
+                                const textToRender = isBullet ? bulletMatch![2] : line
 
-                            // Highlight cú pháp @SenToPO:, @SendToPO:, @SeToPO: hoặc @Pending:
-                            const mentionRegex = /(@se(?:n)?(?:d)?(?:_)?to(?:_)?po:|@(po_)?pending:)/gi
-                            if (mentionRegex.test(part)) {
-                              const subParts = part.split(mentionRegex)
-                              return subParts.map((sub, sIdx) => {
-                                if (/^@se(?:n)?(?:d)?(?:_)?to(?:_)?po:$/i.test(sub)) {
+                                const renderLineSegments = (text: string) => {
+                                  // Regex nhận diện URL, lệnh slash /sentopo /pending, mention @all và mention @User
+                                  const tokenRegex = /(https?:\/\/[^\s]+|(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po(?::|\s)?|(?:\/|@)(?:po_)?pending(?::|\s)?|@all\b|@everyone\b|@mọi người\b|@[a-zA-Z0-9_\p{L}]+(?:\s+[a-zA-Z0-9_\p{L}]+)*)/gu
+                                  const parts = text.split(tokenRegex)
+
+                                  return parts.map((part, pIdx) => {
+                                    if (!part) return null
+
+                                    // 1. URL Link
+                                    if (/^https?:\/\//i.test(part)) {
+                                      return (
+                                        <a
+                                          key={`link-${lIdx}-${pIdx}`}
+                                          href={part}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-[#1057FB] hover:text-[#0b40bd] hover:underline font-semibold break-all inline-flex items-center gap-1 bg-blue-50/90 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition-colors border border-blue-200 text-xs my-0.5 shadow-2xs"
+                                          title={part}
+                                        >
+                                          <Paperclip className="w-3 h-3 shrink-0" />
+                                          <span className="truncate max-w-[280px]">{part}</span>
+                                          <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-80" />
+                                        </a>
+                                      )
+                                    }
+
+                                    // 2. Lệnh Sent to PO (/sentopo hoặc @SenToPO:)
+                                    if (/^(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po(?::|\s)?$/i.test(part)) {
+                                      return (
+                                        <span
+                                          key={`cmd-po-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center px-2 py-0.5 mr-1 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200/90 shadow-2xs"
+                                        >
+                                          {part.trim()}
+                                        </span>
+                                      )
+                                    }
+
+                                    // 3. Lệnh Pending (/pending hoặc @Pending:)
+                                    if (/^(?:\/|@)(?:po_)?pending(?::|\s)?$/i.test(part)) {
+                                      return (
+                                        <span
+                                          key={`cmd-pend-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center px-2 py-0.5 mr-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200/90 shadow-2xs"
+                                        >
+                                          {part.trim()}
+                                        </span>
+                                      )
+                                    }
+
+                                    // 4. Mention @all / @everyone / @Mọi người
+                                    if (/^@(all|everyone|mọi người)$/i.test(part)) {
+                                      return (
+                                        <span
+                                          key={`men-all-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.2 mr-1 rounded-md text-xs font-bold bg-blue-100 text-[#1057FB] border border-blue-200 shadow-2xs"
+                                        >
+                                          <Users className="w-3 h-3" />
+                                          {part}
+                                        </span>
+                                      )
+                                    }
+
+                                    // 5. Mention cá nhân: @Tên
+                                    if (/^@[a-zA-Z0-9_\p{L}]+/u.test(part)) {
+                                      return (
+                                        <span
+                                          key={`men-usr-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center gap-0.5 px-1.5 py-0.2 mr-1 rounded-md text-xs font-semibold bg-blue-50 text-[#1057FB] border border-blue-200/80"
+                                        >
+                                          <AtSign className="w-2.5 h-2.5 opacity-80" />
+                                          <span>{part.startsWith("@") ? part.slice(1) : part}</span>
+                                        </span>
+                                      )
+                                    }
+
+                                    return <span key={`txt-${lIdx}-${pIdx}`}>{part}</span>
+                                  })
+                                }
+
+                                if (isBullet) {
                                   return (
-                                    <span
-                                      key={`mention-${index}-${sIdx}`}
-                                      className="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200/90 shadow-2xs"
-                                    >
-                                      {sub}
-                                    </span>
+                                    <div key={`line-${lIdx}`} className="flex items-start gap-2 pl-1 py-0.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-2 shrink-0" />
+                                      <div className="flex-1 min-w-0 leading-relaxed">{renderLineSegments(textToRender)}</div>
+                                    </div>
                                   )
                                 }
-                                if (/^@(po_)?pending:$/i.test(sub)) {
-                                  return (
-                                    <span
-                                      key={`mention-${index}-${sIdx}`}
-                                      className="inline-flex items-center px-2 py-0.5 mr-1.5 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200/90 shadow-2xs"
-                                    >
-                                      {sub}
-                                    </span>
-                                  )
-                                }
-                                return <span key={`sub-${index}-${sIdx}`}>{sub}</span>
-                              })
-                            }
 
-                            return <span key={`txt-${index}`}>{part}</span>
-                          })
+                                return (
+                                  <div key={`line-${lIdx}`} className="min-h-[1.25rem] leading-relaxed">
+                                    {renderLineSegments(textToRender)}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
                         }
 
                         const renderSingleActivity = (event: ActivityEvent, keyPrefix: string | number) => {
@@ -4874,9 +5052,10 @@ export default function RequestDetail({
                       onChange={setNewCommentText}
                       onSubmit={handleSendComment}
                       submitting={submittingComment}
-                      placeholder="Nhập ghi chú hoặc trao đổi tiến độ bài toán (gõ @ để mở menu lệnh)..."
+                      placeholder="Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"
                       onSendToPo={(note) => handleSendToPo(note)}
                       onPending={(note) => handlePending(note)}
+                      mentionUsers={mentionUserList}
                     />
                   </div>
                 </div>
