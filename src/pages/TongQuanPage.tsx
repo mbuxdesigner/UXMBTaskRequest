@@ -240,7 +240,7 @@ export default function TongQuanPage() {
             variant="outline"
             size="sm"
             onClick={() => loadData(true)}
-            loading={refreshing}
+            disabled={refreshing}
             aria-label="Làm mới dữ liệu bảng điều hành"
             className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
           >

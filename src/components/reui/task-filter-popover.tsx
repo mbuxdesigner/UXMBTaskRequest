@@ -121,7 +121,7 @@ export default function TaskFilterPopover({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-8 px-3 rounded-4xl border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
+        className={`h-8 px-3 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
           activeFilterCount > 0
             ? "bg-slate-900 text-white border-slate-900 shadow-xs"
             : isOpen

@@ -2,8 +2,9 @@ import React, { useState, useMemo, useCallback } from "react"
 import { UXRequest } from "@/data/mockData"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
-import { getRequestPendingClassification, getStatusConfig } from "@/config/statusConfig"
+import { getRequestPendingClassification, getStatusConfig, formatPriority } from "@/config/statusConfig"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
+import { capitalizeFirstLetter } from "@/lib/utils"
 import { fetchSingleTaskUpdate } from "@/services/googleSheetService"
 
 function formatDesignerDisplayName(rawName?: string): string {
@@ -79,6 +80,10 @@ interface StatusGroupDef {
   order: number
   dotClass: string
   badgeClass: string
+  headerBg?: string
+  headerBorderLeft?: string
+  labelClass?: string
+  countBadgeClass?: string
   match: (r: UXRequest) => boolean
 }
 
@@ -146,7 +151,11 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     focus: "Cảnh báo",
     order: 1,
     dotClass: "bg-rose-500",
-    badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
+    headerBg: "bg-rose-50/80 hover:bg-rose-100/70 border-rose-200/90",
+    headerBorderLeft: "border-l-4 border-l-rose-500",
+    badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+    labelClass: "text-rose-950 font-bold",
+    countBadgeClass: "bg-rose-100 text-rose-800 border-rose-300 font-bold",
     match: (r) => getTaskGroup(r) === "overload",
   },
   {
@@ -155,8 +164,12 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     summary: "Bài toán mới tiếp nhận đang chờ rà soát hồ sơ & phân bổ UX Designer",
     focus: "Phân công",
     order: 2,
-    dotClass: "bg-purple-500",
-    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    dotClass: "bg-purple-600",
+    headerBg: "bg-purple-50/80 hover:bg-purple-100/70 border-purple-200/90",
+    headerBorderLeft: "border-l-4 border-l-purple-600",
+    badgeClass: "bg-purple-100 text-purple-800 border-purple-200",
+    labelClass: "text-purple-950 font-bold",
+    countBadgeClass: "bg-purple-100 text-purple-800 border-purple-300 font-bold",
     match: (r) => getTaskGroup(r) === "unassigned",
   },
   {
@@ -166,7 +179,11 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     focus: "Tiến độ",
     order: 3,
     dotClass: "bg-[#1057FB]",
-    badgeClass: "bg-blue-50 text-[#1057FB] border-blue-200",
+    headerBg: "bg-blue-50/80 hover:bg-blue-100/70 border-blue-200/90",
+    headerBorderLeft: "border-l-4 border-l-[#1057FB]",
+    badgeClass: "bg-blue-100 text-[#1057FB] border-blue-200",
+    labelClass: "text-blue-950 font-bold",
+    countBadgeClass: "bg-blue-100 text-[#1057FB] border-blue-300 font-bold",
     match: (r) => getTaskGroup(r) === "running",
   },
   {
@@ -175,8 +192,12 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     summary: "Đã gửi phương án thiết kế, đang chờ PO duyệt nghiệm thu hoặc phản hồi",
     focus: "Phê duyệt",
     order: 4,
-    dotClass: "bg-slate-400",
-    badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
+    dotClass: "bg-amber-500",
+    headerBg: "bg-amber-50/80 hover:bg-amber-100/70 border-amber-200/90",
+    headerBorderLeft: "border-l-4 border-l-amber-500",
+    badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
+    labelClass: "text-amber-950 font-bold",
+    countBadgeClass: "bg-amber-100 text-amber-800 border-amber-300 font-bold",
     match: (r) => getTaskGroup(r) === "pending",
   },
   {
@@ -185,8 +206,12 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     summary: "Đã nghiệm thu thiết kế và đóng gói bàn giao thành công cho Squad",
     focus: "Nghiệm thu",
     order: 5,
-    dotClass: "bg-emerald-500",
-    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    dotClass: "bg-emerald-600",
+    headerBg: "bg-emerald-50/80 hover:bg-emerald-100/70 border-emerald-200/90",
+    headerBorderLeft: "border-l-4 border-l-emerald-600",
+    badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    labelClass: "text-emerald-950 font-bold",
+    countBadgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold",
     match: (r) => getTaskGroup(r) === "completed",
   },
 ]
@@ -410,25 +435,25 @@ export default function SolutionAgentsTable({
       <div className="overflow-x-auto w-full">
         <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
           <colgroup>
-            <col className="w-[34%]" />
-            <col className="w-[15%]" />
+            <col className="w-[32%]" />
+            <col className="w-[14%]" />
             <col className="w-[13%]" />
             <col className="w-[13%]" />
+            <col className="w-[12%]" />
             <col className="w-[7.5%]" />
             <col className="w-[8.5%]" />
-            <col className="w-[8%]" />
             <col className="w-[44px]" />
           </colgroup>
           <thead className="bg-slate-50/60 border-b border-slate-200/70 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
             <tr className="h-9">
-              <th className="px-4 py-1 text-left font-medium">Yêu cầu / Task & Luồng nghiệp vụ</th>
-              <th className="px-3 py-1 text-left font-medium">Squad</th>
-              <th className="px-3 py-1 text-left font-medium">Người thực hiện</th>
-              <th className="px-3 py-1 text-left font-medium">Trạng thái</th>
-              <th className="px-3 py-1 text-right font-medium">Ưu tiên</th>
-              <th className="px-3 py-1 text-right font-medium whitespace-nowrap">Design done</th>
-              <th className="px-3 py-1 text-right font-medium whitespace-nowrap">Release</th>
-              <th className="px-2 py-1 text-right font-medium w-[44px]" />
+              <th className="px-4 sm:px-5 py-2 text-left font-medium">Yêu cầu / Task & Luồng nghiệp vụ</th>
+              <th className="px-3 sm:px-4 py-2 text-left font-medium">Squad</th>
+              <th className="px-3 sm:px-4 py-2 text-left font-medium">Created by</th>
+              <th className="px-3 sm:px-4 py-2 text-left font-medium">Designer</th>
+              <th className="px-3 sm:px-4 py-2 text-left font-medium">Trạng thái</th>
+              <th className="px-3 sm:px-4 py-2 text-right font-medium">Priority</th>
+              <th className="px-3 sm:px-4 py-2 text-right font-medium whitespace-nowrap">Release</th>
+              <th className="px-2 sm:px-3 py-2 text-right font-medium w-[44px]" />
             </tr>
           </thead>
           <AnimatePresence mode="wait">
@@ -494,41 +519,41 @@ export default function SolutionAgentsTable({
 
                 return (
                   <React.Fragment key={group.id}>
-                    {/* Collapsible Group Row Header (Flux AgentOps Style) */}
+                    {/* Collapsible Group Row Header (Enhanced Hierarchy) */}
                     <tr
                       data-row-id={group.id}
                       onClick={() => toggleGroup(group.id)}
-                      className="h-10 bg-slate-50/70 hover:bg-slate-100/70 border-y border-slate-200/80 cursor-pointer select-none transition-colors group/run-row"
+                      className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} border-y cursor-pointer select-none transition-all group/run-row shadow-2xs`}
                     >
-                      <td colSpan={8} className="px-4 py-1.5 align-middle">
+                      <td colSpan={8} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
                         <div data-run-row="group" className="flex items-center justify-between">
                           {/* Left: Button + Status Dot + Group Name + Count pill */}
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 toggleGroup(group.id)
                               }}
-                              className="size-6 inline-flex items-center justify-center rounded-full hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
+                              className="size-6 inline-flex items-center justify-center rounded-full hover:bg-black/5 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
                             >
                               <ChevronRight
-                                className={`size-3.5 transition-transform duration-150 ${
-                                  isExpanded ? "rotate-90 text-slate-700" : "text-slate-400"
+                                className={`size-4 transition-transform duration-150 ${
+                                  isExpanded ? "rotate-90 text-slate-800" : "text-slate-500"
                                 }`}
                               />
                             </button>
-                            <span className={`size-2.5 rounded-full shrink-0 ${group.dotClass}`} />
-                            <span className="text-sm font-medium text-slate-900 truncate">
+                            <span className={`size-2.5 rounded-full shrink-0 ring-2 ring-white shadow-xs ${group.dotClass}`} />
+                            <span className={`text-sm ${group.labelClass || "font-bold text-slate-900"} truncate`}>
                               {group.label}
                             </span>
-                            <span className="rounded-4xl border border-slate-200 bg-white px-1.5 py-0.5 text-xs h-5 min-w-5 shrink-0 inline-flex items-center justify-center font-medium text-slate-600 shadow-2xs">
+                            <span className={`rounded-full border px-2 py-0.5 text-xs h-5 min-w-5 shrink-0 inline-flex items-center justify-center shadow-2xs ${group.countBadgeClass || "border-slate-200 bg-white font-bold text-slate-600"}`}>
                               {group.count}
                             </span>
                           </div>
 
                           {/* Right: Group description */}
-                          <span className="text-xs text-slate-400 truncate max-w-sm hidden md:inline-block pr-2 font-normal">
+                          <span className="text-xs text-slate-500 font-medium truncate max-w-sm hidden md:inline-block pr-2">
                             {group.summary}
                           </span>
                         </div>
@@ -549,7 +574,15 @@ export default function SolutionAgentsTable({
                         )
                         const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
                         const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
-                        const priorityStr = (req.priority || "Normal").toLowerCase()
+
+                        // Created by
+                        const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
+                        const displayCreator = rawCreator.includes("@")
+                          ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                          : rawCreator
+                        const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator)
+
+                        const priorityInfo = formatPriority(req.priority)
 
                         // Dates
                         const releaseDate = req.release_date || req.expected_deadline
@@ -565,6 +598,7 @@ export default function SolutionAgentsTable({
                         const isLastRow = rowIdx === group.items.length - 1
                         const isSecondToLast = rowIdx === group.items.length - 2 && group.items.length >= 3
                         const isNearBottom = isLastRow || isSecondToLast
+                        const cellBorderClass = isLastRow ? "border-b-2 border-slate-300" : "border-b border-slate-200"
 
                         const prodName = (req.product || "Khác").trim()
                         const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
@@ -594,17 +628,17 @@ export default function SolutionAgentsTable({
                                 fetchSingleTaskUpdate(req.request_id)
                               }
                             }}
-                            className="min-h-[52px] hover:bg-slate-50/70 transition-colors border-b border-slate-100/80 group/run-row cursor-pointer"
+                            className="hover:bg-slate-50/90 transition-colors group/run-row cursor-pointer bg-white"
                           >
                             {/* 1. Tiêu đề + Subtitle */}
-                            <td className="px-4 py-2.5 align-middle">
+                            <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
                               <div data-run-row="run" className="flex min-w-0 flex-col gap-0.5">
                                 <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
                                   <span
                                     className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
-                                    title={req.title}
+                                    title={capitalizeFirstLetter(req.title)}
                                   >
-                                    {req.title}
+                                    {capitalizeFirstLetter(req.title)}
                                   </span>
                                   {pendingInfo.isPending && group.id !== "pending" && (
                                     <span
@@ -647,7 +681,7 @@ export default function SolutionAgentsTable({
                             </td>
 
                             {/* 2. Squad / Sản phẩm (2 dòng theo UI cột title: chữ to trên squad, chữ bé dưới sản phẩm) */}
-                            <td className="px-3 py-2.5 align-middle">
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
                               <div className="flex min-w-0 flex-col gap-0.5">
                                 {/* Chữ to trên: Squad */}
                                 <div className="min-w-0 text-sm leading-5 font-medium">
@@ -668,8 +702,24 @@ export default function SolutionAgentsTable({
                               </div>
                             </td>
 
-                            {/* 3. Người thực hiện (Assignee) */}
-                            <td className="px-3 py-2 align-middle">
+                            {/* 3. Created by */}
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
+                              {displayCreator ? (
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" />
+                                  <span className="text-xs text-slate-700 font-normal truncate" title={displayCreator}>
+                                    {displayCreator}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic font-normal">
+                                  -
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 4. Designer */}
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
                               {isAssigned ? (
                                 <div className="flex items-center gap-2 min-w-0">
                                   <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
@@ -684,8 +734,8 @@ export default function SolutionAgentsTable({
                               )}
                             </td>
 
-                            {/* 4. Trạng thái (Lifecycle State) */}
-                            <td className="px-3 py-2 align-middle">
+                            {/* 5. Trạng thái (Lifecycle State) */}
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
                               {pendingInfo.isPending ? (
                                 <span
                                   className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-6"
@@ -705,47 +755,15 @@ export default function SolutionAgentsTable({
                               )}
                             </td>
 
-                            {/* 5. Ưu tiên (Priority) */}
-                            <td className="px-3 py-2 align-middle text-right">
-                              {priorityStr === "urgent" || priorityStr === "khẩn cấp" ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-4xl text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs h-6">
-                                  Khẩn cấp
-                                </span>
-                              ) : priorityStr === "high" || priorityStr === "cao" ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-4xl text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs h-6">
-                                  Cao
-                                </span>
-                              ) : priorityStr === "low" || priorityStr === "thấp" ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-4xl text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200 h-6">
-                                  Thấp
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-4xl text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 h-6">
-                                  Normal
-                                </span>
-                              )}
-                            </td>
-
-                            {/* 6. Design done */}
-                            <td className="px-3 py-2 align-middle text-right whitespace-nowrap">
-                              {designDoneDate ? (
-                                <div className="inline-flex items-center justify-end gap-1 text-xs tabular-nums text-slate-600 font-normal">
-                                  <span className={isOverdue && group.id !== "overload" ? "text-rose-600 font-medium" : "text-slate-600"}>
-                                    {formatDisplayDate(designDoneDate)}
-                                  </span>
-                                  {isOverdue && group.id !== "overload" && (
-                                    <span className="px-1 py-0.2 rounded-4xl text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
-                                      Trễ
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-slate-300 text-xs">-</span>
-                              )}
+                            {/* 6. Priority */}
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right ${cellBorderClass}`}>
+                              <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-4xl text-xs font-medium border h-6 whitespace-nowrap ${priorityInfo.badgeClass}`}>
+                                {priorityInfo.label}
+                              </span>
                             </td>
 
                             {/* 7. Release */}
-                            <td className="px-3 py-2 align-middle text-right whitespace-nowrap">
+                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap ${cellBorderClass}`}>
                               {releaseDate ? (
                                 <span className="text-xs tabular-nums font-normal text-rose-600">
                                   {formatDisplayDate(releaseDate)}
@@ -756,7 +774,7 @@ export default function SolutionAgentsTable({
                             </td>
 
                             {/* 8. Action Menu */}
-                            <td className="px-2 py-2 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+                            <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
                               <div className="relative inline-block text-left">
                                 <button
                                   type="button"

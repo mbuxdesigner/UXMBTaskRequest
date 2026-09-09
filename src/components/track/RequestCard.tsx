@@ -1,7 +1,7 @@
 import { UXRequest } from "../../data/mockData"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
+import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { ArrowUpRight, Clock, PauseCircle } from "lucide-react"
@@ -104,17 +104,24 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
                   </span>
                 )
               })()}
-              {request.priority && (
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                    request.priority === "Cao" || request.priority === "Khẩn cấp"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-slate-50 text-slate-600 border-slate-200"
-                  }`}
-                >
-                  {request.priority}
-                </span>
-              )}
+              {request.priority && (() => {
+                const pInfo = formatPriority(request.priority)
+                return (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      pInfo.key === "urgent"
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : pInfo.key === "high"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : pInfo.key === "low"
+                        ? "bg-slate-50 text-slate-600 border-slate-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                    }`}
+                  >
+                    {pInfo.label}
+                  </span>
+                )
+              })()}
             </div>
 
             {/* Task Title */}

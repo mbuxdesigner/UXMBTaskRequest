@@ -26,6 +26,8 @@ import SuccessCelebrationCard from "./SuccessCelebrationCard"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
+import { dispatchNotification } from "@/services/notificationService"
+import { capitalizeFirstLetter, capitalizeSentences } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { motion, AnimatePresence } from "framer-motion"
@@ -263,6 +265,11 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       // 2. Gửi bản ghi Task hoàn chỉnh lên Google Sheet
       const res = await submitRequest({
         ...form,
+        title: capitalizeFirstLetter(form.title),
+        description: capitalizeSentences(form.description),
+        user_problem: capitalizeSentences(form.user_problem),
+        business_need: capitalizeSentences(form.business_need),
+        target_user: capitalizeFirstLetter(form.target_user),
         doc_link: validLinks.join("\n"),
         requester_email: finalEmail,
         requester_name: session?.displayName || "PO",
@@ -278,9 +285,44 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       setViewMode("success")
       onSuccessChange?.(true)
       window.scrollTo({ top: 0, behavior: "smooth" })
+
+      // Tìm Designer Owner phụ trách Squad
+      let ownerName = "Nguyễn Văn Cường"
+      try {
+        const targetSquad = (form.preferred_squad || "").trim()
+        const saved = localStorage.getItem("mbbank_admin_squads")
+        if (saved) {
+          const list: any[] = JSON.parse(saved)
+          const found = list.find((s) => (s.name || s.squad_name || "").toLowerCase() === targetSquad.toLowerCase())
+          if (found && (found.ux_owner || found.owner)) ownerName = found.ux_owner || found.owner
+        }
+        if (ownerName === "Nguyễn Văn Cường") {
+          const foundMock = mockSquads.find((s) => s.squad_name.toLowerCase().includes(targetSquad.toLowerCase()))
+          if (foundMock && foundMock.ux_owner) ownerName = foundMock.ux_owner
+        }
+      } catch {}
+      const cleanOwner = ownerName.replace(/\s*\(.*?\)\s*/g, "").trim()
+
+      toast.success(
+        "Tạo yêu cầu thành công",
+        `Yêu cầu đã được gửi đến Designer Owner (${cleanOwner}) phụ trách Squad.`
+      )
+      dispatchNotification({
+        type: "task_created",
+        requestId: res.requestId,
+        taskTitle: form.title,
+        actorName: session?.displayName || "PO",
+        actorRole: session?.role || "PO",
+        squadName: form.preferred_squad || "Chung",
+        ownerName: cleanOwner,
+        recipient: `${cleanOwner} (Designer Owner)`,
+        targetRole: "Designer Owner",
+        showToast: false,
+      })
     } catch {
       setViewMode("edit")
       onSuccessChange?.(false)
+      toast.error("Lỗi khi gửi yêu cầu", "Không thể gửi yêu cầu lên hệ thống. Vui lòng thử lại sau.")
     } finally {
       setSubmitLoading(false)
     }

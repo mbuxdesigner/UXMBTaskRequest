@@ -738,3 +738,42 @@ export function getCapacityStatusConfig(status: string) {
     }
   )
 }
+
+// ─── Task Priority Helper (English Standard) ────────────
+
+export interface PriorityInfo {
+  label: "Urgent" | "High" | "Medium" | "Low"
+  key: "urgent" | "high" | "normal" | "low"
+  badgeClass: string
+}
+
+export function formatPriority(priority?: string): PriorityInfo {
+  const p = (priority || "normal").toLowerCase().trim()
+  if (p.includes("urgent") || p.includes("khẩn")) {
+    return {
+      label: "Urgent",
+      key: "urgent",
+      badgeClass: "bg-rose-50 text-rose-700 border-rose-200 shadow-2xs whitespace-nowrap",
+    }
+  }
+  if (p.includes("high") || p.includes("cao")) {
+    return {
+      label: "High",
+      key: "high",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200 shadow-2xs whitespace-nowrap",
+    }
+  }
+  if (p.includes("low") || p.includes("thấp")) {
+    return {
+      label: "Low",
+      key: "low",
+      badgeClass: "bg-slate-50 text-slate-600 border-slate-200 whitespace-nowrap",
+    }
+  }
+  return {
+    label: "Medium",
+    key: "normal",
+    badgeClass: "bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap",
+  }
+}
+

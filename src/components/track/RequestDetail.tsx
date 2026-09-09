@@ -22,8 +22,10 @@ import { Button } from "@/components/ui/button"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
+import { dispatchNotification } from "@/services/notificationService"
 import { updateTaskProgress } from "../../api/api"
 import { canUserAccessRequest } from "@/lib/accessControl"
+import { capitalizeFirstLetter } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
 import { 
@@ -203,10 +205,10 @@ const STATUS_OPTIONS = [
 ]
 
 const PRIORITY_OPTIONS = [
-  { value: "Urgent", label: "Khẩn cấp", color: "text-rose-600 bg-rose-50 border-rose-200", flagFill: "fill-rose-500 text-rose-500" },
-  { value: "High", label: "High (Cao)", color: "text-amber-600 bg-amber-50 border-amber-200", flagFill: "fill-amber-500 text-amber-500" },
-  { value: "Normal", label: "Normal (Vừa)", color: "text-blue-600 bg-blue-50 border-blue-200", flagFill: "fill-blue-500 text-blue-500" },
-  { value: "Low", label: "Low (Thấp)", color: "text-slate-600 bg-slate-50 border-slate-200", flagFill: "fill-slate-400 text-slate-400" },
+  { value: "Urgent", label: "Urgent", color: "text-rose-600 bg-rose-50 border-rose-200", flagFill: "fill-rose-500 text-rose-500" },
+  { value: "High", label: "High", color: "text-amber-600 bg-amber-50 border-amber-200", flagFill: "fill-amber-500 text-amber-500" },
+  { value: "Normal", label: "Medium", color: "text-blue-600 bg-blue-50 border-blue-200", flagFill: "fill-blue-500 text-blue-500" },
+  { value: "Low", label: "Low", color: "text-slate-600 bg-slate-50 border-slate-200", flagFill: "fill-slate-400 text-slate-400" },
 ]
 
 export function getAdminPhases() {
@@ -372,7 +374,7 @@ function renderRichArticleContent(content?: string, emptyFallback = "Chưa có n
         <li key={`item-${lineIdx}`} className="flex items-start gap-2.5 text-slate-800">
           <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-2 shrink-0" />
           <div className="flex-1 leading-relaxed">
-            {renderInlineFormatted(bulletText)}
+            {renderInlineFormatted(capitalizeFirstLetter(bulletText))}
           </div>
         </li>
       )
@@ -390,7 +392,7 @@ function renderRichArticleContent(content?: string, emptyFallback = "Chưa có n
             {num}
           </span>
           <div className="flex-1 leading-relaxed">
-            {renderInlineFormatted(numText)}
+            {renderInlineFormatted(capitalizeFirstLetter(numText))}
           </div>
         </li>
       )
@@ -406,7 +408,7 @@ function renderRichArticleContent(content?: string, emptyFallback = "Chưa có n
         key={`p-${lineIdx}`}
         className={`leading-relaxed text-slate-800 ${isIntroHeading ? "font-medium text-slate-900" : "font-normal"}`}
       >
-        {renderInlineFormatted(line)}
+        {renderInlineFormatted(capitalizeFirstLetter(line))}
       </p>
     )
   })
@@ -1438,6 +1440,15 @@ export default function RequestDetail({
       })
       if (res.success) {
         toast.success(`Đã chuyển trạng thái sang: ${newStatus}`, undefined, { id: toastId })
+        dispatchNotification({
+          type: "status_changed",
+          title: `Cập nhật trạng thái: ${request.request_id}`,
+          message: `Bài toán đã chuyển trạng thái sang: ${newStatus}`,
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || "Thành viên",
+          actorRole: session?.role || "Designer",
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể đổi trạng thái", res.message, { id: toastId })
@@ -1487,6 +1498,16 @@ export default function RequestDetail({
       setRequirementUpdateTick((c) => c + 1)
       if (res.success) {
         toast.success(`Đã cập nhật phân công: ${targetLabel}!`, undefined, { id: toastId })
+        dispatchNotification({
+          type: "task_assigned",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: targetName || "Chưa phân công",
+          actorRole: "Designer",
+          recipient: targetName ? `${targetName} & ${request.requester_name || "PO"}` : undefined,
+          targetRole: "Designer",
+          showToast: false,
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.warning(res.message || "Đã lưu phân công trên giao diện máy bạn!", undefined, { id: toastId })
@@ -1585,6 +1606,15 @@ export default function RequestDetail({
         request.progress = progressVal
         setRequirementUpdateTick((c) => c + 1)
         toast.success(`Đã chuyển sang khâu [${newPhase}]!`, "Hệ thống đã tự động gỡ trạng thái chờ PO.", { id: toastId })
+        dispatchNotification({
+          type: "phase_changed",
+          title: `Chuyển khâu: ${request.request_id}`,
+          message: `Đã chuyển sang khâu [${newPhase}] (${progressVal}%)`,
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || "Designer",
+          actorRole: session?.role || "Designer",
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể chuyển khâu", res.message, { id: toastId })
@@ -1662,6 +1692,14 @@ export default function RequestDetail({
         request.pending_reason = undefined
         request.status = "Đang thực hiện"
         toast.success("Đã gỡ trạng thái Pending thành công!", "Bài toán đã quay lại trạng thái Đang thực hiện.", { id: toastId })
+        dispatchNotification({
+          type: "task_resumed",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || displayName || "Designer",
+          actorRole: (session?.role as any) || "Designer",
+          showToast: false,
+        })
         if (onUpdated) await onUpdated()
       } else {
         toast.error("Không thể gỡ trạng thái", res.message, { id: toastId })
@@ -1720,6 +1758,16 @@ export default function RequestDetail({
             : "Hệ thống sẽ theo dõi thời hạn phản hồi 24h. Sau 1 ngày sẽ tự động chuyển sang trạng thái PO pending.", 
           { id: toastId }
         )
+        dispatchNotification({
+          type: "task_sent_to_po",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || displayName || "Designer",
+          actorRole: (session?.role as any) || "Designer",
+          recipient: `${request.requester_name || "PO"} (Requester)`,
+          targetRole: "PO",
+          showToast: false,
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể gửi PO", res.message, { id: toastId })
@@ -1761,6 +1809,15 @@ export default function RequestDetail({
         setCommentLink("")
         setShowLinkInput(false)
         toast.success(rawReason ? `Đã chuyển sang Pending (Lý do: ${rawReason})` : "Đã chuyển trạng thái Pending!", undefined, { id: toastId })
+        dispatchNotification({
+          type: "task_pending",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || displayName || "Designer",
+          actorRole: (session?.role as any) || "Designer",
+          note: rawReason || "Tạm dừng theo yêu cầu",
+          showToast: false,
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể chuyển trạng thái", res.message, { id: toastId })
@@ -1822,6 +1879,16 @@ export default function RequestDetail({
           ? `Bài toán hoàn thành ở khâu [${nextPhaseName}].`
           : `Bài toán đã chuyển tiếp sang khâu: [${nextPhaseName}].`
         toast.success("PO đã xác nhận thành công!", successDetail, { id: toastId })
+        dispatchNotification({
+          type: "task_approved",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || "PO",
+          actorRole: session?.role || "PO",
+          recipient: `${request.assigned_designer || "Designer"} & Designer Owner`,
+          targetRole: "Designer",
+          showToast: false,
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể duyệt", res.message, { id: toastId })
@@ -1842,13 +1909,24 @@ export default function RequestDetail({
         new_phase: request.current_phase,
         new_status: "Đang thực hiện",
         new_progress: Math.max(10, (request.progress || 50) - 10),
-        note: `PO (${session?.displayName || "PO"}) yêu cầu chỉnh sửa: ${feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX."}`,
+        note: `PO (${session?.displayName || "PO"}) feedback: ${feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX."}`,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO
         is_comment: false,
       })
       if (res.success) {
-        toast.success("Đã gửi yêu cầu chỉnh sửa cho Designer!", undefined, { id: toastId })
+        toast.success("Đã gửi feedback cho Designer!", undefined, { id: toastId })
+        dispatchNotification({
+          type: "task_changes_requested",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || "PO",
+          actorRole: session?.role || "PO",
+          note: feedbackNote || "Cần điều chỉnh thêm trải nghiệm UI/UX.",
+          recipient: `${request.assigned_designer || "Designer"}`,
+          targetRole: "Designer",
+          showToast: false,
+        })
         if (onUpdated) onUpdated()
       } else {
         toast.error("Không thể gửi yêu cầu", res.message, { id: toastId })
@@ -2239,6 +2317,15 @@ export default function RequestDetail({
 
     // Thông báo nhanh, biến mất tự động - KHÔNG DÙNG toast.loading xoay vòng chặn người dùng
     toast.success(toastMessage, undefined, { id: "send-comment-toast", duration: 3000 })
+    dispatchNotification({
+      type: "comment_added",
+      title: `Trao đổi mới: ${request.request_id}`,
+      message: rawText.length > 100 ? `${rawText.slice(0, 97)}...` : rawText,
+      requestId: request.request_id,
+      taskTitle: request.title,
+      actorName: session ? (session.displayName || session.teamsEmail) : displayName,
+      actorRole: (session ? session.role : "Designer"),
+    })
 
     // B. BACKGROUND NON-BLOCKING SYNC: Gửi lên Google Apps Script / Sheet ngầm
     updateTaskProgress(request.request_id, {
@@ -2694,7 +2781,7 @@ export default function RequestDetail({
                       className="text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug break-words [overflow-wrap:break-word] max-w-full cursor-default"
                       title="Tiêu đề bài toán"
                     >
-                      {titleValue || "Chưa đặt tiêu đề bài toán"}
+                      {capitalizeFirstLetter(titleValue) || "Chưa đặt tiêu đề bài toán"}
                     </h1>
                   </div>
 
@@ -3207,7 +3294,7 @@ export default function RequestDetail({
                               className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-48 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
                             >
                               <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                Ưu tiên
+                                Priority
                               </div>
                               {PRIORITY_OPTIONS.map((pr) => {
                                 const isSelected = (currentPriority || "").toLowerCase() === pr.value.toLowerCase()
@@ -3399,7 +3486,7 @@ export default function RequestDetail({
                         <p className={`text-sm sm:text-[14.5px] leading-relaxed ${
                           request.target_user ? "text-slate-800 font-medium" : "text-slate-400 italic"
                         }`}>
-                          {request.target_user || "Người dùng chung"}
+                          {capitalizeFirstLetter(request.target_user) || "Người dùng chung"}
                         </p>
                       </div>
 

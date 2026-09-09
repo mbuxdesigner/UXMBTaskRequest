@@ -29,6 +29,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import PageHeader from "@/components/common/PageHeader"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
+import { dispatchNotification } from "@/services/notificationService"
 import {
   Search,
   Plus,
@@ -305,6 +306,16 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}] (${newProgress}%).`,
           { id: toastId }
         )
+        dispatchNotification({
+          type: "phase_changed",
+          requestId,
+          taskTitle: targetReq?.title,
+          actorName: currentSession ? (currentSession.displayName || currentSession.teamsEmail) : "Lê Hoàng Nam",
+          actorRole: currentSession ? currentSession.role : "Designer",
+          phaseName: newPhase,
+          note: `Tiến độ ${newProgress}%`,
+          showToast: false,
+        })
       } else {
         toast.error(
           "Cập nhật không thành công",
@@ -383,6 +394,15 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           `Yêu cầu ${requestId} đã chuyển sang [${newStatus}].`,
           { id: toastId }
         )
+        dispatchNotification({
+          type: "status_changed",
+          requestId,
+          taskTitle: targetReq?.title,
+          actorName: currentSession ? (currentSession.displayName || currentSession.teamsEmail) : "Lê Hoàng Nam",
+          actorRole: currentSession ? currentSession.role : "Designer",
+          statusName: newStatus,
+          showToast: false,
+        })
       } else {
         toast.error(
           "Cập nhật không thành công",
@@ -501,32 +521,32 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     const p = (priority || "Normal").toLowerCase()
     if (p.includes("urgent") || p.includes("khẩn")) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs whitespace-nowrap">
           <Flag className="w-3 h-3 fill-rose-500 text-rose-500" />
-          <span>Khẩn cấp</span>
+          <span>Urgent</span>
         </span>
       )
     }
     if (p.includes("high") || p.includes("cao")) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs whitespace-nowrap">
           <Flag className="w-3 h-3 fill-amber-500 text-amber-500" />
-          <span>High (Cao)</span>
+          <span>High</span>
         </span>
       )
     }
     if (p.includes("low") || p.includes("thấp")) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200 shadow-2xs">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200 shadow-2xs whitespace-nowrap">
           <Flag className="w-3 h-3 text-slate-400" />
-          <span>Thấp</span>
+          <span>Low</span>
         </span>
       )
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs whitespace-nowrap">
         <Flag className="w-3 h-3 fill-blue-500 text-blue-500" />
-        <span>Bình thường</span>
+        <span>Medium</span>
       </span>
     )
   }
@@ -661,7 +681,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               variant="outline"
               size="sm"
               onClick={() => loadData(true, true)}
-              loading={loading}
+              disabled={loading}
               aria-label="Làm mới dữ liệu bài toán"
               className="h-10 px-4 text-xs font-medium rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5 shrink-0"
             >
@@ -677,7 +697,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         {/* Frame Panel Header / Toolbar - Flux AgentOps Style */}
         <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between rounded-t-2xl relative z-20">
           {/* Left: Search input */}
-          <div className="group/input-group relative flex items-center rounded-4xl border border-transparent bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-900/5 h-8 w-full min-w-0 sm:max-w-xs transition-all">
+          <div className="group/input-group relative flex items-center rounded-lg border border-transparent bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-900/5 h-8 w-full min-w-0 sm:max-w-xs transition-all">
             <div className="flex items-center justify-center pl-3 text-slate-400">
               <Search className="size-3.5" />
             </div>
@@ -703,11 +723,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           {/* Right: Controls (Segmented view toggle, Filter, Collapse, Refresh, New Task) */}
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
             {/* View Mode Switcher: Bảng | Kanban | Lưới */}
-            <div className="flex items-center rounded-4xl bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs">
+            <div className="flex items-center rounded-lg bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs">
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === "table"
                     ? "bg-white text-slate-900 shadow-2xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -719,7 +739,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <button
                 type="button"
                 onClick={() => setViewMode("kanban")}
-                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === "kanban"
                     ? "bg-white text-slate-900 shadow-2xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -731,7 +751,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`h-7 px-2.5 rounded-4xl font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === "grid"
                     ? "bg-white text-slate-900 shadow-2xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -762,7 +782,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                   const ev = new CustomEvent("toggle-all-table-groups")
                   window.dispatchEvent(ev)
                 }}
-                className="h-8 px-3 rounded-4xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Thu gọn nhóm</span>
               </button>
@@ -775,7 +795,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 if (onNavigateToCreate) onNavigateToCreate()
                 else window.location.hash = "#create"
               }}
-              className="h-8 px-3.5 rounded-4xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
+              className="h-8 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="size-3.5" />
               <span>Tạo task</span>

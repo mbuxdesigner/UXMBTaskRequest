@@ -14,3 +14,5 @@ logs/
 lighthouse-*.json
 lh-*.json
 scratch/
+.agents/
+ORIGINAL_REQUEST.md

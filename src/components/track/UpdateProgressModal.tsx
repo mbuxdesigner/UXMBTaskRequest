@@ -16,6 +16,8 @@ import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { UXRequest, ALL_PHASES, UserRole } from "../../data/mockData"
 import { updateTaskProgress } from "../../api/api"
 import { UserSession } from "../../services/otpAuthService"
+import { toast } from "@/components/ui/toast"
+import { dispatchNotification } from "@/services/notificationService"
 import {
   Edit3,
   X,
@@ -91,12 +93,28 @@ export default function UpdateProgressModal({
       })
 
       if (res.success) {
+        toast.success(
+          "Cập nhật tiến độ thành công!",
+          `Yêu cầu ${request.request_id} đã cập nhật sang khâu [${phase}] (${progress}%).`
+        )
+        dispatchNotification({
+          type: "phase_changed",
+          requestId: request.request_id,
+          taskTitle: request.title,
+          actorName: session?.displayName || "Designer",
+          actorRole: session?.role || "Designer",
+          phaseName: phase,
+          note: `Tiến độ ${progress}% - ${note.trim().slice(0, 80)}`,
+          showToast: false,
+        })
         onUpdated()
         onClose()
       } else {
+        toast.error("Cập nhật thất bại", res.message)
         setErrorMsg(res.message)
       }
     } catch {
+      toast.error("Lỗi khi lưu cập nhật", "Vui lòng kiểm tra lại kết nối mạng.")
       setErrorMsg("Lỗi khi lưu cập nhật. Vui lòng thử lại.")
     } finally {
       setLoading(false)

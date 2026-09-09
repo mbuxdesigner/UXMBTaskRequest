@@ -31,6 +31,9 @@ import { UserSession, logoutTeamsSession, startRolePreview, stopRolePreview, get
 import { uploadAvatarToDrive } from "@/services/googleSheetService"
 import { UserAvatar } from "./UserAvatar"
 import { toast } from "@/components/ui/toast"
+import { AnimatePresence } from "framer-motion"
+import NotificationDropdown from "../notification/NotificationDropdown"
+import { useNotifications } from "@/services/notificationService"
 
 interface AppHeaderProps {
   currentPage: Page
@@ -56,6 +59,7 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const [appsOpen, setAppsOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+  const { unreadCount } = useNotifications()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -336,37 +340,22 @@ export default function AppHeader({
               title="Thông báo"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-slate-900" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-in zoom-in">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* Notifications Popover */}
-            {notifOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl border border-slate-200/90 shadow-2xl p-4 z-50 animate-in fade-in-50 zoom-in-95 origin-top-right">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-semibold text-slate-900 uppercase tracking-wider">Thông báo</h4>
-                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-medium text-emerald-700">
-                      Live
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-400 font-normal">Đồng bộ tự động</span>
-                </div>
-                <div className="py-3 space-y-2.5 max-h-64 overflow-y-auto">
-                  <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 space-y-1">
-                    <p className="text-xs font-semibold text-slate-800">Hệ thống MB UX Request Portal</p>
-                    <p className="text-[11px] text-slate-500 leading-relaxed font-normal">
-                      Dữ liệu tiến độ bài toán và hoạt động thiết kế được đồng bộ tự động theo thời gian thực.
-                    </p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-100 space-y-1">
-                    <p className="text-xs font-semibold text-blue-900">Sẵn sàng nhận đề bài</p>
-                    <p className="text-[11px] text-blue-700 leading-relaxed font-normal">
-                      Tạo yêu cầu thiết kế UX mới với phân loại Khâu (Phase) và gắn trực tiếp vào Squad tương ứng.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <AnimatePresence>
+              {notifOpen && (
+                <NotificationDropdown
+                  isOpen={notifOpen}
+                  onClose={() => setNotifOpen(false)}
+                />
+              )}
+            </AnimatePresence>
           </div>
 
           {/* 3. Apps Grid Switcher (ReUI App Shell 12 style) */}

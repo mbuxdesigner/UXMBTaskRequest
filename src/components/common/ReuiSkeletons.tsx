@@ -147,7 +147,15 @@ export function TableRowsSkeleton({ rowCount = 6 }: { rowCount?: number }) {
             <Skeleton className="h-6 w-24 rounded-full" />
           </td>
 
-          {/* Designer phụ trách */}
+          {/* Created by */}
+          <td className="px-3 py-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-6 rounded-full shrink-0" />
+              <Skeleton className="h-3.5 w-20 rounded-md" />
+            </div>
+          </td>
+
+          {/* Designer */}
           <td className="px-3 py-3">
             <div className="flex items-center gap-2">
               <Skeleton className="size-6 rounded-full shrink-0" />
@@ -165,22 +173,9 @@ export function TableRowsSkeleton({ rowCount = 6 }: { rowCount?: number }) {
             <Skeleton className="h-5 w-14 rounded-full ml-auto" />
           </td>
 
-          {/* SLA / Deadline */}
+          {/* Release Date */}
           <td className="px-3 py-3 text-right">
-            <div className="space-y-1 ml-auto w-fit">
-              <Skeleton className="h-3.5 w-16 rounded-md ml-auto" />
-              <Skeleton className="h-2.5 w-10 rounded-md ml-auto" />
-            </div>
-          </td>
-
-          {/* Tiến độ % */}
-          <td className="px-3 py-3 text-right">
-            <div className="space-y-1.5 ml-auto w-24">
-              <div className="flex justify-end">
-                <Skeleton className="h-3 w-8 rounded-md" />
-              </div>
-              <Skeleton className="h-1.5 w-full rounded-full" />
-            </div>
+            <Skeleton className="h-3.5 w-16 rounded-md ml-auto" />
           </td>
 
           {/* Action */}

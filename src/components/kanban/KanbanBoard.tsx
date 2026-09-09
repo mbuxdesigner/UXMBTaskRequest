@@ -6,6 +6,7 @@ import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { getRequestPendingClassification } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
+import { capitalizeFirstLetter } from "@/lib/utils"
 import { 
   Calendar, 
   ChevronLeft,
@@ -620,7 +621,7 @@ export default function KanbanBoard({
 
                           {/* Title */}
                           <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:break-word] max-w-full">
-                            {req.title}
+                            {capitalizeFirstLetter(req.title)}
                           </h4>
 
                         {/* Bottom Row: Assignee Avatar | Date Pill | Circular Progress */}
