@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
@@ -8,6 +8,7 @@ import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
 import TaskFilterPopover from "@/components/reui/task-filter-popover"
 import SolutionAgentsTable, { getTaskGroup } from "@/components/track/SolutionAgentsTable"
+import { useRealtimeTasksSync } from "@/hooks/useRealtimeTasksSync"
 import { GridCardsSkeleton } from "@/components/common/ReuiSkeletons"
 import { AnimatedTableRow, tableContainerVariants } from "@/components/jolyui/animated-table"
 import {
@@ -143,6 +144,21 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }, [selectedRequest])
   const [allRequests, setAllRequests] = useState<UXRequest[]>([])
   const [loading, setLoading] = useState(true)
+
+  // R1. Real-time Event Ingestion & Smart Diffing Engine hook
+  const {
+    mutatingTaskIds,
+    highlightedTaskIds,
+    incomingTaskIds,
+    incomingTasks,
+    triggerMutationHighlight,
+  } = useRealtimeTasksSync({
+    allRequests,
+    setAllRequests,
+    selectedRequest,
+    setSelectedRequest,
+    enabled: !loading,
+  })
 
   // Pagination state: Trên màn hình lớn (chiều cao >= 850px), mặc định hiển thị 15 dòng
   const [currentPage, setCurrentPage] = useState(1)
@@ -347,6 +363,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       })
 
       if (res.success) {
+        triggerMutationHighlight(requestId)
         toast.success(
           "Cập nhật trạng thái thành công!",
           `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}] (${newProgress}%).`,
@@ -436,6 +453,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       })
 
       if (res.success) {
+        triggerMutationHighlight(requestId)
         toast.success(
           "Cập nhật trạng thái thành công!",
           `Yêu cầu ${requestId} đã chuyển sang [${newStatus}].`,
@@ -527,6 +545,41 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
     return list
   }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, query])
+
+  // Filter predicate for incoming new tasks to determine if skeleton placeholder should render (R3)
+  const filterPredicate = useCallback(
+    (req: UXRequest) => {
+      if (!canUserAccessRequest(req, session)) return false
+
+      if (selectedPhases.length > 0 && !selectedPhases.includes(getRequestKanbanPhase(req))) {
+        return false
+      }
+
+      if (selectedProducts.length > 0 && !selectedProducts.includes((req.product && req.product.trim()) || "Khác")) {
+        return false
+      }
+
+      if (selectedSquads.length > 0 && !selectedSquads.includes(req.squad_name || req.preferred_squad || "Khác")) {
+        return false
+      }
+
+      if (query.trim()) {
+        const q = query.toLowerCase().trim()
+        const match =
+          (req.title && req.title.toLowerCase().includes(q)) ||
+          (req.request_id && req.request_id.toLowerCase().includes(q)) ||
+          (req.product && req.product.toLowerCase().includes(q)) ||
+          (req.assigned_designer && req.assigned_designer.toLowerCase().includes(q)) ||
+          (req.current_phase && req.current_phase.toLowerCase().includes(q)) ||
+          (req.squad_name && req.squad_name.toLowerCase().includes(q)) ||
+          (req.preferred_squad && req.preferred_squad.toLowerCase().includes(q))
+        if (!match) return false
+      }
+
+      return true
+    },
+    [session, selectedPhases, selectedProducts, selectedSquads, query]
+  )
 
   const handleClearAllFilters = () => {
     setQuery("")
@@ -958,6 +1011,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 onResetFilters={handleClearAllFilters}
                 hasActiveFilters={Boolean(query || selectedPhases.length > 0 || selectedSquads.length > 0)}
                 hideHeader={true}
+                mutatingTaskIds={mutatingTaskIds}
+                highlightedTaskIds={highlightedTaskIds}
+                incomingTaskIds={incomingTaskIds}
+                incomingTasks={incomingTasks}
+                filterPredicate={filterPredicate}
               />
             </motion.div>
           )}

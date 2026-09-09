@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { getRequestPendingClassification, getStatusConfig, formatPriority } from "@/config/statusConfig"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
-import { capitalizeFirstLetter } from "@/lib/utils"
+import { capitalizeFirstLetter, cn } from "@/lib/utils"
 import { fetchSingleTaskUpdate } from "@/services/googleSheetService"
 
 function formatDesignerDisplayName(rawName?: string): string {
@@ -33,7 +33,8 @@ function getDesignerAvatar(name?: string) {
 }
 
 import { motion, AnimatePresence } from "framer-motion"
-import { TableRowsSkeleton } from "@/components/common/ReuiSkeletons"
+import { Skeleton } from "@/components/ui/skeleton"
+import { TableRowsSkeleton, TableRowSkeletonPlaceholder } from "@/components/common/ReuiSkeletons"
 import { EmptyState } from "@/components/reui/empty-state"
 import {
   ChevronRight,
@@ -60,6 +61,11 @@ export interface SolutionAgentsTableProps {
   hideHeader?: boolean
   onResetFilters?: () => void
   hasActiveFilters?: boolean
+  mutatingTaskIds?: Set<string>
+  highlightedTaskIds?: Set<string>
+  incomingTaskIds?: Set<string>
+  incomingTasks?: Map<string, UXRequest>
+  filterPredicate?: (req: UXRequest) => boolean
 }
 
 interface StatusGroupDef {
@@ -268,6 +274,11 @@ export default function SolutionAgentsTable({
   hideHeader = false,
   onResetFilters,
   hasActiveFilters,
+  mutatingTaskIds,
+  highlightedTaskIds,
+  incomingTaskIds,
+  incomingTasks,
+  filterPredicate,
 }: SolutionAgentsTableProps) {
   const showContext = true // Latest step line
   const density: "comfortable" | "compact" = "comfortable" // Auto bảng thoáng theo yêu cầu người dùng
@@ -282,17 +293,87 @@ export default function SolutionAgentsTable({
     return initial
   })
 
+  // Group incoming tasks by status group for TableRowSkeletonPlaceholder insertion (R3)
+  const incomingTasksByGroup = useMemo(() => {
+    const map: Record<TaskGroupId, UXRequest[]> = {
+      overload: [],
+      unassigned: [],
+      running: [],
+      pending: [],
+      completed: [],
+    }
+    if (!incomingTasks || incomingTasks.size === 0) return map
+
+    incomingTasks.forEach((req) => {
+      if (filterPredicate && !filterPredicate(req)) return
+      const group = getTaskGroup(req)
+      if (map[group]) {
+        map[group].push(req)
+      }
+    })
+    return map
+  }, [incomingTasks, filterPredicate])
+
+  // Auto-expand group if an incoming task arrives in that group
+  React.useEffect(() => {
+    if (incomingTasks && incomingTasks.size > 0) {
+      incomingTasks.forEach((req) => {
+        if (filterPredicate && !filterPredicate(req)) return
+        const g = getTaskGroup(req)
+        setExpandedGroups((prev) => (prev[g] === false ? { ...prev, [g]: true } : prev))
+      })
+    }
+    if (incomingTaskIds && incomingTaskIds.size > 0) {
+      requests.forEach((req) => {
+        if (req.request_id && incomingTaskIds.has(req.request_id)) {
+          const g = getTaskGroup(req)
+          setExpandedGroups((prev) => (prev[g] === false ? { ...prev, [g]: true } : prev))
+        }
+      })
+    }
+  }, [incomingTasks, incomingTaskIds, requests, filterPredicate])
+
+  // Grace period tracking for groups whose count just dropped to 0,
+  // allowing Framer Motion row exit animations to complete smoothly without abrupt unmounting
+  const prevGroupCountsRef = React.useRef<Record<string, number>>({})
+  const [graceGroupIds, setGraceGroupIds] = useState<Set<string>>(new Set())
+
+  React.useEffect(() => {
+    STATUS_GROUPS.forEach((g) => {
+      const currentCount = requests.filter((r) => g.match(r)).length
+      const prevCount = prevGroupCountsRef.current[g.id] ?? currentCount
+      if (prevCount > 0 && currentCount === 0) {
+        setGraceGroupIds((prev) => new Set(prev).add(g.id))
+        const timer = setTimeout(() => {
+          setGraceGroupIds((prev) => {
+            const next = new Set(prev)
+            next.delete(g.id)
+            return next
+          })
+        }, 350)
+        return () => clearTimeout(timer)
+      }
+      prevGroupCountsRef.current[g.id] = currentCount
+    })
+  }, [requests])
+
   // Group requests by status group
   const groupedData = useMemo(() => {
     return STATUS_GROUPS.map((group) => {
       const items = requests.filter((r) => group.match(r))
+      const incomingExternal =
+        incomingTasksByGroup[group.id as TaskGroupId]?.filter(
+          (inc) => !items.some((it) => it.request_id === inc.request_id)
+        ) || []
       return {
         ...group,
         items,
         count: items.length,
+        incomingExternal,
+        hasVisibleItems: items.length > 0 || incomingExternal.length > 0 || graceGroupIds.has(group.id),
       }
     })
-  }, [requests])
+  }, [requests, incomingTasksByGroup, graceGroupIds])
 
   // Stat counters for footer
   const totalVisible = requests.length
@@ -422,7 +503,7 @@ export default function SolutionAgentsTable({
 
   return (
     <div data-slot="data-grid" className="w-full select-none rounded-b-2xl">
-      <div className="overflow-x-auto w-full">
+      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x" style={{ WebkitOverflowScrolling: "touch" }}>
         <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
           <colgroup>
             <col className="w-[32%]" />
@@ -458,7 +539,7 @@ export default function SolutionAgentsTable({
               >
                 <TableRowsSkeleton rowCount={6} />
               </motion.tbody>
-            ) : requests.length === 0 ? (
+            ) : requests.length === 0 && (!incomingTasks || incomingTasks.size === 0) && (!incomingTaskIds || incomingTaskIds.size === 0) ? (
               <motion.tbody
                 key="table-empty-state"
                 initial={{ opacity: 0 }}
@@ -504,7 +585,7 @@ export default function SolutionAgentsTable({
                 data-slot="data-grid-table-body"
               >
                 {groupedData.map((group) => {
-                if (group.count === 0) return null
+                if (!group.hasVisibleItems) return null
                 const isExpanded = expandedGroups[group.id] !== false
 
                 return (
@@ -538,7 +619,7 @@ export default function SolutionAgentsTable({
                               {group.label}
                             </span>
                             <span className={`rounded-full border px-2 py-0.5 text-xs h-5 min-w-5 shrink-0 inline-flex items-center justify-center shadow-2xs ${group.countBadgeClass || "border-slate-200 bg-white font-bold text-slate-600"}`}>
-                              {group.count}
+                              {group.count + group.incomingExternal.length}
                             </span>
                           </div>
 
@@ -551,274 +632,411 @@ export default function SolutionAgentsTable({
                     </tr>
 
                     {/* Group Item Rows (When expanded) */}
-                    {isExpanded &&
-                      group.items.map((req, rowIdx) => {
-                        const rawDesigner =
-                          req.assigned_designer ||
-                          (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
-                            ? req.ux_owner
-                            : "") ||
-                          ""
-                        const isAssigned = Boolean(
-                          rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
-                        )
-                        const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
-                        const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
+                    {isExpanded && (
+                      <AnimatePresence initial={false}>
+                        {/* 1. Incoming TableRowSkeletonPlaceholder for newly created external tasks (R3) */}
+                        {group.incomingExternal.map((incomingReq) => (
+                          <TableRowSkeletonPlaceholder
+                            key={`incoming-skel-${group.id}-${incomingReq.request_id}`}
+                          />
+                        ))}
 
-                        // Created by
-                        const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
-                        const displayCreator = rawCreator.includes("@")
-                          ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
-                          : rawCreator
-                        const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator)
+                        {/* 2. Group items with layout & cross-group animation (R2, R4) */}
+                        {group.items.map((req, rowIdx) => {
+                          const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
+                          const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
+                          const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
 
-                        const priorityInfo = formatPriority(req.priority)
+                          const rawDesigner =
+                            req.assigned_designer ||
+                            (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
+                              ? req.ux_owner
+                              : "") ||
+                            ""
+                          const isAssigned = Boolean(
+                            rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
+                          )
+                          const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
+                          const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
 
-                        // Dates
-                        const releaseDate = req.release_date || req.expected_deadline
-                        const designDoneDate = req.design_deadline || req.expected_deadline
-                        const isOverdue = Boolean(
-                          designDoneDate &&
-                          new Date(designDoneDate).getTime() < Date.now() &&
-                          req.status !== "Hoàn thành" &&
-                          req.status !== "Done"
-                        )
+                          // Created by
+                          const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
+                          const displayCreator = rawCreator.includes("@")
+                            ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                            : rawCreator
+                          const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator)
 
-                        const pendingInfo = getRequestPendingClassification(req)
-                        const isLastRow = rowIdx === group.items.length - 1
-                        const isSecondToLast = rowIdx === group.items.length - 2 && group.items.length >= 3
-                        const isNearBottom = isLastRow || isSecondToLast
-                        const cellBorderClass = isLastRow ? "border-b-2 border-slate-300" : "border-b border-slate-200"
+                          const priorityInfo = formatPriority(req.priority)
 
-                        const prodName = (req.product || "Khác").trim()
-                        const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
-                        const hasSquad = Boolean(
-                          rawSquad &&
-                          rawSquad !== "Chưa phân công" &&
-                          rawSquad !== "Chưa có squad" &&
-                          rawSquad !== "Chưa phân squad" &&
-                          rawSquad !== "Triage Squad" &&
-                          rawSquad !== ""
-                        )
-                        const projectDisplay = hasSquad
-                          ? (rawSquad.toLowerCase() === prodName.toLowerCase() ? prodName : `${prodName} · ${rawSquad}`)
-                          : prodName
+                          // Dates
+                          const releaseDate = req.release_date || req.expected_deadline
+                          const designDoneDate = req.design_deadline || req.expected_deadline
+                          const isOverdue = Boolean(
+                            designDoneDate &&
+                            new Date(designDoneDate).getTime() < Date.now() &&
+                            req.status !== "Hoàn thành" &&
+                            req.status !== "Done"
+                          )
 
-                        const phaseInfo = getTaskPhaseStatus(req)
-                        const cfg = getStatusConfig(phaseInfo.name)
+                          const pendingInfo = getRequestPendingClassification(req)
+                          const isLastRow = rowIdx === group.items.length - 1
+                          const isSecondToLast = rowIdx === group.items.length - 2 && group.items.length >= 3
+                          const isNearBottom = isLastRow || isSecondToLast
+                          const cellBorderClass = isHighlighted
+                            ? "border-b border-blue-200"
+                            : isLastRow
+                            ? "border-b-2 border-slate-300"
+                            : "border-b border-slate-200"
 
-                        return (
-                          <tr
-                            key={req.request_id || `req-${rowIdx}`}
-                            data-row-id={req.request_id}
-                            data-depth="1"
-                            onClick={() => onSelectRequest(req)}
-                            onMouseEnter={() => {
-                              if (req.request_id) {
-                                fetchSingleTaskUpdate(req.request_id)
-                              }
-                            }}
-                            className="hover:bg-slate-50/90 transition-colors group/run-row cursor-pointer bg-white"
-                          >
-                            {/* 1. Tiêu đề + Subtitle */}
-                            <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
-                              <div data-run-row="run" className="flex min-w-0 flex-col gap-0.5">
-                                <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
-                                  <span
-                                    className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
-                                    title={capitalizeFirstLetter(req.title)}
-                                  >
-                                    {capitalizeFirstLetter(req.title)}
-                                  </span>
-                                  {pendingInfo.isPending && group.id !== "pending" && (
-                                    <span
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
-                                        pendingInfo.type === "po_pending"
-                                          ? "bg-amber-50 text-amber-800 border-amber-300"
-                                          : "bg-slate-100 text-slate-700 border-slate-300"
-                                      }`}
-                                      title={pendingInfo.type === "po_pending" ? "PO Pending: Quá hạn 24h PO chưa duyệt" : `Pending: ${pendingInfo.reason}`}
-                                    >
-                                      <span className={`size-1.5 rounded-full shrink-0 ${pendingInfo.type === "po_pending" ? "bg-amber-500" : "bg-slate-500"}`} />
-                                      <span>{pendingInfo.label}</span>
-                                    </span>
-                                  )}
-                                  <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
-                                </div>
+                          const prodName = (req.product || "Khác").trim()
+                          const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
+                          const hasSquad = Boolean(
+                            rawSquad &&
+                            rawSquad !== "Chưa phân công" &&
+                            rawSquad !== "Chưa có squad" &&
+                            rawSquad !== "Chưa phân squad" &&
+                            rawSquad !== "Triage Squad" &&
+                            rawSquad !== ""
+                          )
+                          const projectDisplay = hasSquad
+                            ? (rawSquad.toLowerCase() === prodName.toLowerCase() ? prodName : `${prodName} · ${rawSquad}`)
+                            : prodName
 
-                                {/* Dòng lý do Pending */}
-                                {pendingInfo.isPending && Boolean(pendingInfo.reason || req.pending_reason) && (
-                                  <div className="flex items-center gap-1.5 text-xs min-w-0 my-0.5">
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0 leading-none">
-                                      Lí do
-                                    </span>
-                                    <span 
-                                      className="text-[#1057FB] text-xs font-normal truncate max-w-sm sm:max-w-md lg:max-w-lg" 
-                                      title={pendingInfo.reason || req.pending_reason}
-                                    >
-                                      {pendingInfo.reason || req.pending_reason}
-                                    </span>
-                                  </div>
-                                )}
+                          const phaseInfo = getTaskPhaseStatus(req)
+                          const cfg = getStatusConfig(phaseInfo.name)
 
-                                {/* Subtitle / Step / Context */}
-                                <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
-                                  <span className="font-normal text-slate-500">{req.request_id}</span>
-                                  <span>·</span>
-                                  <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
-                                </p>
-                              </div>
-                            </td>
-
-                            {/* 2. Squad / Sản phẩm (2 dòng theo UI cột title: chữ to trên squad, chữ bé dưới sản phẩm) */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
-                              <div className="flex min-w-0 flex-col gap-0.5">
-                                {/* Chữ to trên: Squad */}
-                                <div className="min-w-0 text-sm leading-5 font-medium">
-                                  <span
-                                    className={`truncate block text-sm font-medium ${
-                                      hasSquad ? "text-slate-800" : "text-slate-400 italic"
-                                    }`}
-                                    title={hasSquad ? rawSquad : "Chưa phân squad"}
-                                  >
-                                    {hasSquad ? rawSquad : "Chưa phân squad"}
-                                  </span>
-                                </div>
-
-                                {/* Chữ bé dưới: Sản phẩm */}
-                                <p className="text-slate-400 truncate text-xs leading-4 font-normal" title={prodName}>
-                                  <span className="truncate">{prodName}</span>
-                                </p>
-                              </div>
-                            </td>
-
-                            {/* 3. Created by */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
-                              {displayCreator ? (
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" />
-                                  <span className="text-xs text-slate-700 font-normal truncate" title={displayCreator}>
-                                    {displayCreator}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-slate-400 italic font-normal">
-                                  -
-                                </span>
+                          return (
+                            <motion.tr
+                              layout="position"
+                              key={`${group.id}-${req.request_id || rowIdx}`}
+                              data-row-id={req.request_id}
+                              data-depth="1"
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: isMutating ? 0.4 : 1, y: 0 }}
+                              exit={{ opacity: 0, scaleY: 0.85, transition: { duration: 0.2 } }}
+                              transition={{
+                                layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+                                opacity: { duration: 0.25 },
+                              }}
+                              onClick={() => !isIncoming && onSelectRequest(req)}
+                              onMouseEnter={() => {
+                                if (req.request_id && !isIncoming) {
+                                  fetchSingleTaskUpdate(req.request_id)
+                                }
+                              }}
+                              className={cn(
+                                "transition-colors duration-500 group/run-row cursor-pointer relative",
+                                isHighlighted
+                                  ? "bg-blue-50/80 ring-1 ring-blue-300/80 ring-inset shadow-2xs"
+                                  : isIncoming
+                                  ? "bg-blue-50/20"
+                                  : isMutating
+                                  ? "bg-slate-50/40 opacity-40"
+                                  : "bg-white hover:bg-slate-50/90"
                               )}
-                            </td>
+                            >
+                              {isIncoming ? (
+                                <>
+                                  {/* 1. Yêu cầu / Task */}
+                                  <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <div className="flex flex-col gap-1.5 min-w-0">
+                                      <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
+                                      <div className="flex items-center gap-2">
+                                        <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+                                        <Skeleton className="h-3 w-24 rounded-md bg-slate-200/60 animate-pulse" />
+                                      </div>
+                                    </div>
+                                  </td>
 
-                            {/* 4. Designer */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
-                              {isAssigned ? (
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
-                                  <span className="text-xs text-slate-700 font-normal truncate" title={displayName}>
-                                    {displayName}
-                                  </span>
-                                </div>
+                                  {/* 2. Squad / Sản phẩm */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <div className="flex flex-col gap-1.5 min-w-0">
+                                      <Skeleton className="h-4 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+                                      <Skeleton className="h-3 w-14 rounded-md bg-slate-200/50 animate-pulse" />
+                                    </div>
+                                  </td>
+
+                                  {/* 3. Created by */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+                                      <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+                                    </div>
+                                  </td>
+
+                                  {/* 4. Designer */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+                                      <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+                                    </div>
+                                  </td>
+
+                                  {/* 5. Trạng thái */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
+                                  </td>
+
+                                  {/* 6. Priority */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
+                                  </td>
+
+                                  {/* 7. Release */}
+                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
+                                  </td>
+
+                                  {/* 8. Action */}
+                                  <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                    <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
+                                  </td>
+                                </>
                               ) : (
-                                <span className="text-xs text-slate-400 italic font-normal">
-                                  Chưa phân công
-                                </span>
-                              )}
-                            </td>
-
-                            {/* 5. Trạng thái (Lifecycle State) */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle ${cellBorderClass}`}>
-                              {pendingInfo.isPending ? (
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-6"
-                                  title={`Pending: ${pendingInfo.reason || pendingInfo.label}`}
-                                >
-                                  <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
-                                  <span className="truncate">{pendingInfo.label || phaseInfo.name}</span>
-                                </span>
-                              ) : (
-                                <span
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
-                                  title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
-                                >
-                                  <span className={`size-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
-                                  <span className="truncate">{phaseInfo.name}</span>
-                                </span>
-                              )}
-                            </td>
-
-                            {/* 6. Priority */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right ${cellBorderClass}`}>
-                              <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-4xl text-xs font-medium border h-6 whitespace-nowrap ${priorityInfo.badgeClass}`}>
-                                {priorityInfo.label}
-                              </span>
-                            </td>
-
-                            {/* 7. Release */}
-                            <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap ${cellBorderClass}`}>
-                              {releaseDate ? (
-                                <span className="text-xs tabular-nums font-normal text-rose-600">
-                                  {formatDisplayDate(releaseDate)}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-xs">-</span>
-                              )}
-                            </td>
-
-                            {/* 8. Action Menu */}
-                            <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
-                              <div className="relative inline-block text-left">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setActiveActionMenuId(activeActionMenuId === req.request_id ? null : req.request_id)
-                                  }}
-                                  className="size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                                  title="Thao tác nhanh"
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </button>
-
-                                {/* Action Popover */}
-                                {activeActionMenuId === req.request_id && (
+                                <>
+                              {/* 1. Tiêu đề + Subtitle */}
+                              <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
                                   <div
-                                    className={`absolute right-0 ${
-                                      isNearBottom ? "bottom-full mb-1.5 origin-bottom-right" : "top-full mt-1.5 origin-top-right"
-                                    } z-30 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 text-left animate-in fade-in-50 zoom-in-95`}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onSelectRequest(req)
-                                        setActiveActionMenuId(null)
-                                      }}
-                                      className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-slate-500" />
-                                      <span>Mở chi tiết</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleCopyId(e, req.request_id)}
-                                      className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                    >
-                                      <Copy className="w-3.5 h-3.5 text-slate-500" />
-                                      <span>Sao chép mã ID</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleCopyLink(e, req.request_id)}
-                                      className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                    >
-                                      <Share2 className="w-3.5 h-3.5 text-slate-500" />
-                                      <span>Sao chép liên kết</span>
-                                    </button>
-                                  </div>
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
                                 )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                                <div data-run-row="run" className="flex min-w-0 flex-col gap-0.5">
+                                  <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
+                                    <span
+                                      className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
+                                      title={capitalizeFirstLetter(req.title)}
+                                    >
+                                      {capitalizeFirstLetter(req.title)}
+                                    </span>
+                                    {pendingInfo.isPending && group.id !== "pending" && (
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
+                                          pendingInfo.type === "po_pending"
+                                            ? "bg-amber-50 text-amber-800 border-amber-300"
+                                            : "bg-slate-100 text-slate-700 border-slate-300"
+                                        }`}
+                                        title={pendingInfo.type === "po_pending" ? "PO Pending: Quá hạn 24h PO chưa duyệt" : `Pending: ${pendingInfo.reason}`}
+                                      >
+                                        <span className={`size-1.5 rounded-full shrink-0 ${pendingInfo.type === "po_pending" ? "bg-amber-500" : "bg-slate-500"}`} />
+                                        <span>{pendingInfo.label}</span>
+                                      </span>
+                                    )}
+                                    <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
+                                  </div>
+
+                                  {/* Dòng lý do Pending */}
+                                  {pendingInfo.isPending && Boolean(pendingInfo.reason || req.pending_reason) && (
+                                    <div className="flex items-center gap-1.5 text-xs min-w-0 my-0.5">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0 leading-none">
+                                        Lí do
+                                      </span>
+                                      <span 
+                                        className="text-[#1057FB] text-xs font-normal truncate max-w-sm sm:max-w-md lg:max-w-lg" 
+                                        title={pendingInfo.reason || req.pending_reason}
+                                      >
+                                        {pendingInfo.reason || req.pending_reason}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Subtitle / Step / Context */}
+                                  <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
+                                    <span className="font-normal text-slate-500">{req.request_id}</span>
+                                    <span>·</span>
+                                    <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
+                                  </p>
+                                </div>
+                              </td>
+
+                              {/* 2. Squad / Sản phẩm (2 dòng theo UI cột title: chữ to trên squad, chữ bé dưới sản phẩm) */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                <div className="flex min-w-0 flex-col gap-0.5">
+                                  {/* Chữ to trên: Squad */}
+                                  <div className="min-w-0 text-sm leading-5 font-medium">
+                                    <span
+                                      className={`truncate block text-sm font-medium ${
+                                        hasSquad ? "text-slate-800" : "text-slate-400 italic"
+                                      }`}
+                                      title={hasSquad ? rawSquad : "Chưa phân squad"}
+                                    >
+                                      {hasSquad ? rawSquad : "Chưa phân squad"}
+                                    </span>
+                                  </div>
+
+                                  {/* Chữ bé dưới: Sản phẩm */}
+                                  <p className="text-slate-400 truncate text-xs leading-4 font-normal" title={prodName}>
+                                    <span className="truncate">{prodName}</span>
+                                  </p>
+                                </div>
+                              </td>
+
+                              {/* 3. Created by */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                {displayCreator ? (
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" />
+                                    <span className="text-xs text-slate-700 font-normal truncate" title={displayCreator}>
+                                      {displayCreator}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic font-normal">
+                                    -
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 4. Designer */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                {isAssigned ? (
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
+                                    <span className="text-xs text-slate-700 font-normal truncate" title={displayName}>
+                                      {displayName}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic font-normal">
+                                    Chưa phân công
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 5. Trạng thái (Lifecycle State) */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                {pendingInfo.isPending ? (
+                                  <span
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-6"
+                                    title={`Pending: ${pendingInfo.reason || pendingInfo.label}`}
+                                  >
+                                    <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
+                                    <span className="truncate">{pendingInfo.label || phaseInfo.name}</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
+                                    title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
+                                  >
+                                    <span className={`size-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                    <span className="truncate">{phaseInfo.name}</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 6. Priority */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-4xl text-xs font-medium border h-6 whitespace-nowrap ${priorityInfo.badgeClass}`}>
+                                  {priorityInfo.label}
+                                </span>
+                              </td>
+
+                              {/* 7. Release */}
+                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                {releaseDate ? (
+                                  <span className="text-xs tabular-nums font-normal text-rose-600">
+                                    {formatDisplayDate(releaseDate)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 text-xs">-</span>
+                                )}
+                              </td>
+
+                              {/* 8. Action Menu */}
+                              <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
+                                {isMutating && (
+                                  <div
+                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                  />
+                                )}
+                                <div className="relative inline-block text-left">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setActiveActionMenuId(activeActionMenuId === req.request_id ? null : req.request_id)
+                                    }}
+                                    className="size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    title="Thao tác nhanh"
+                                  >
+                                    <MoreHorizontal className="size-4" />
+                                  </button>
+
+                                  {/* Action Popover */}
+                                  {activeActionMenuId === req.request_id && (
+                                    <div
+                                      className={`absolute right-0 ${
+                                        isNearBottom ? "bottom-full mb-1.5 origin-bottom-right" : "top-full mt-1.5 origin-top-right"
+                                      } z-30 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 text-left animate-in fade-in-50 zoom-in-95`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onSelectRequest(req)
+                                          setActiveActionMenuId(null)
+                                        }}
+                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-slate-500" />
+                                        <span>Mở chi tiết</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleCopyId(e, req.request_id)}
+                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                                      >
+                                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                                        <span>Sao chép mã ID</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleCopyLink(e, req.request_id)}
+                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                                      >
+                                        <Share2 className="w-3.5 h-3.5 text-slate-500" />
+                                        <span>Sao chép liên kết</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </motion.tr>
+                          )
+                        })}
+                      </AnimatePresence>
+                    )}
                   </React.Fragment>
                 )
               })}

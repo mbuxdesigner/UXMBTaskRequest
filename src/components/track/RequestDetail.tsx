@@ -558,6 +558,9 @@ export default function RequestDetail({
       setLiveSyncTime("Vừa xong")
 
       if (payload.task) {
+        if (payload.task.title) request.title = payload.task.title
+        if (payload.task.description !== undefined) request.description = payload.task.description
+        if (payload.task.deliverables) request.deliverables = payload.task.deliverables
         if (payload.task.status) request.status = payload.task.status
         if (payload.task.current_phase) request.current_phase = payload.task.current_phase
         if (typeof payload.task.progress === "number") request.progress = payload.task.progress
@@ -599,6 +602,9 @@ export default function RequestDetail({
         const fresh = await fetchSingleTaskUpdate(id)
         if (fresh) {
           setLiveSyncTime("Vừa xong")
+          if (fresh.title) request.title = fresh.title
+          if (fresh.description !== undefined) request.description = fresh.description
+          if (fresh.deliverables) request.deliverables = fresh.deliverables
           if (fresh.current_phase) request.current_phase = fresh.current_phase
           if (fresh.status) request.status = fresh.status
           if (typeof fresh.progress === "number") request.progress = fresh.progress
@@ -613,6 +619,17 @@ export default function RequestDetail({
           if (fresh.design_deadline !== undefined) {
             request.design_deadline = fresh.design_deadline
             setCustomDeadline(fresh.design_deadline || "")
+          }
+          if (fresh.product) {
+            request.product = fresh.product
+            setLocalProduct(fresh.product)
+          }
+          if (fresh.squad_name) {
+            request.squad_name = fresh.squad_name
+            setLocalSquad(fresh.squad_name)
+          }
+          if (Array.isArray(fresh.task_updates)) {
+            request.task_updates = fresh.task_updates
           }
           if (Array.isArray(fresh.viewers)) {
             if (fresh.viewers.length > 0) {
@@ -911,11 +928,27 @@ export default function RequestDetail({
     setCurrentPriority(request?.priority || "Normal")
   }, [request?.request_id, request?.priority])
 
+  useEffect(() => {
+    if (!isEditingTitle && request?.title) {
+      setTitleValue(request.title)
+    }
+  }, [request?.request_id, request?.title, isEditingTitle])
+
+  useEffect(() => {
+    if (!isEditingDesc && request?.description !== undefined) {
+      setDescValue(request.description || "")
+    }
+  }, [request?.request_id, request?.description, isEditingDesc])
+
   const [timeEstimate, setTimeEstimate] = useState<string>("40 hrs")
   const [isTrackingTime, setIsTrackingTime] = useState<boolean>(false)
   const [trackedSeconds, setTrackedSeconds] = useState<number>(0)
   const [activeTags, setActiveTags] = useState<string[]>(["Lending", "UX Research"])
   const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || request?.expected_deadline || "")
+
+  useEffect(() => {
+    setCustomDeadline(request?.design_deadline || request?.expected_deadline || "")
+  }, [request?.request_id, request?.design_deadline, request?.expected_deadline])
 
   const getSanitizedDeliverables = useCallback((req?: UXRequest | null) => {
     const d = { ...(req?.deliverables || {}) }

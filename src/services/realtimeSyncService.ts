@@ -16,6 +16,7 @@ export type SyncEventType =
   | "PHASE_CHANGED"
   | "STATUS_CHANGED"
   | "GLOBAL_REFRESH"
+  | "TASK_CREATED"
 
 export interface SyncEventPayload {
   type: SyncEventType

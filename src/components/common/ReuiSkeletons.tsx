@@ -1,5 +1,7 @@
 import React from "react"
+import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 
 /**
  * ReUI-compliant Skeletons matching exact screen dimensions
@@ -494,6 +496,82 @@ export function ManagementSkeleton() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── 9. Table Row Skeleton Placeholder (SolutionAgentsTable Real-time Insertion) ───
+export function TableRowSkeletonPlaceholder({ className }: { className?: string }) {
+  return (
+    <motion.tr
+      layout="position"
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
+      transition={{
+        layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+        opacity: { duration: 0.25 },
+        height: { duration: 0.35 },
+      }}
+      className={cn(
+        "h-14 border-b border-slate-200/80 bg-blue-50/20 relative overflow-hidden select-none",
+        className
+      )}
+    >
+      {/* 1. Yêu cầu / Task & Luồng nghiệp vụ */}
+      <td className="px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+            <Skeleton className="h-3 w-24 rounded-md bg-slate-200/60 animate-pulse" />
+          </div>
+        </div>
+      </td>
+
+      {/* 2. Squad / Sản phẩm */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <Skeleton className="h-4 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+          <Skeleton className="h-3 w-14 rounded-md bg-slate-200/50 animate-pulse" />
+        </div>
+      </td>
+
+      {/* 3. Created by */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
+        <div className="flex items-center gap-2 min-w-0">
+          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+          <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+        </div>
+      </td>
+
+      {/* 4. Designer */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
+        <div className="flex items-center gap-2 min-w-0">
+          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+          <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+        </div>
+      </td>
+
+      {/* 5. Trạng thái */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
+        <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
+      </td>
+
+      {/* 6. Priority */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
+        <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
+      </td>
+
+      {/* 7. Release */}
+      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
+        <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
+      </td>
+
+      {/* 8. Action */}
+      <td className="px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
+        <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
+      </td>
+    </motion.tr>
   )
 }
 

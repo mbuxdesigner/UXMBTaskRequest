@@ -42,6 +42,11 @@ let cachedSelections: SelectionsData | null = null
 let cachedRequestsMemory: UXRequest[] | null = null
 let inflightRequestsPromise: Promise<UXRequest[]> | null = null
 let inflightSelectionsPromise: Promise<SelectionsData> | null = null
+let lastRemoteFetchSucceeded: boolean | null = null
+
+export function isLastRemoteFetchSuccessful(): boolean {
+  return lastRemoteFetchSucceeded !== false
+}
 
 const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
@@ -433,28 +438,34 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 12000)
 
-        const res = await fetch(url.toString(), {
-          method: "GET",
-          headers: { Accept: "application/json" },
-          signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
+        try {
+          const res = await fetch(url.toString(), {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            signal: controller.signal,
+          })
 
-        if (res.ok) {
-          const data = await res.json()
-          if (data.status === "success" && Array.isArray(data.requests)) {
-            const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
-            cachedRequestsMemory = normalized
-            try {
-              localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
-              saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
-            } catch (e) {
-              console.warn("Could not save requests to localStorage:", e)
+          if (res.ok) {
+            const data = await res.json()
+            if (data.status === "success" && Array.isArray(data.requests)) {
+              lastRemoteFetchSucceeded = true
+              const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
+              cachedRequestsMemory = normalized
+              try {
+                localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+                saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
+              } catch (e) {
+                console.warn("Could not save requests to localStorage:", e)
+              }
+              return normalized
             }
-            return normalized
           }
+          lastRemoteFetchSucceeded = false
+        } finally {
+          clearTimeout(timeoutId)
         }
       } catch (err) {
+        lastRemoteFetchSucceeded = false
         console.warn("Could not fetch requests from Google Sheet, falling back to cache:", err)
       }
     }
@@ -494,19 +505,27 @@ async function backgroundSyncRequests() {
     url.searchParams.set("action", "get_requests")
     url.searchParams.set("_t", Date.now().toString())
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 12000)
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.status === "success" && Array.isArray(data.requests)) {
-        const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
-        cachedRequestsMemory = normalized
-        localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
-        broadcastTaskEvent("GLOBAL_REFRESH")
+    try {
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === "success" && Array.isArray(data.requests)) {
+          const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
+          cachedRequestsMemory = normalized
+          localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+          broadcastTaskEvent("GLOBAL_REFRESH")
+        }
       }
+    } finally {
+      clearTimeout(timeoutId)
     }
   } catch {
     // Silently ignore background sync errors
@@ -558,72 +577,75 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 4000)
 
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
+      try {
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          signal: controller.signal,
+        })
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.status === "success" && data.selections) {
-          let fetchedProducts: string[] = data.selections.products?.length
-            ? data.selections.products
-            : FALLBACK_SELECTIONS.products
+        if (res.ok) {
+          const data = await res.json()
+          if (data.status === "success" && data.selections) {
+            let fetchedProducts: string[] = data.selections.products?.length
+              ? data.selections.products
+              : FALLBACK_SELECTIONS.products
 
-          // If fetched products contain legacy dummy data, filter them out
-          fetchedProducts = fetchedProducts.filter(
-            (p: string) => !p.startsWith("App/") && p !== "Digi" && p !== "Internet Banking"
-          )
+            // If fetched products contain legacy dummy data, filter them out
+            fetchedProducts = fetchedProducts.filter(
+              (p: string) => !p.startsWith("App/") && p !== "Digi" && p !== "Internet Banking"
+            )
 
-          // Overlay active products from Admin Settings if available
-          try {
-            const adminRaw = localStorage.getItem("mbbank_admin_products")
-            if (adminRaw) {
-              const parsedAdmin = JSON.parse(adminRaw)
-              if (Array.isArray(parsedAdmin) && parsedAdmin.length > 0) {
-                const activeAdmin = parsedAdmin
-                  .filter((p: any) => p.status !== "Inactive")
-                  .map((p: any) => p.name)
-                if (activeAdmin.length > 0) {
-                  fetchedProducts = activeAdmin
+            // Overlay active products from Admin Settings if available
+            try {
+              const adminRaw = localStorage.getItem("mbbank_admin_products")
+              if (adminRaw) {
+                const parsedAdmin = JSON.parse(adminRaw)
+                if (Array.isArray(parsedAdmin) && parsedAdmin.length > 0) {
+                  const activeAdmin = parsedAdmin
+                    .filter((p: any) => p.status !== "Inactive")
+                    .map((p: any) => p.name)
+                  if (activeAdmin.length > 0) {
+                    fetchedProducts = activeAdmin
+                  }
                 }
               }
+            } catch {}
+
+            if (fetchedProducts.length === 0) {
+              fetchedProducts = FALLBACK_SELECTIONS.products
             }
-          } catch {}
 
-          if (fetchedProducts.length === 0) {
-            fetchedProducts = FALLBACK_SELECTIONS.products
+            const merged: SelectionsData = {
+              products: fetchedProducts,
+              request_types: data.selections.request_types?.length
+                ? data.selections.request_types
+                : FALLBACK_SELECTIONS.request_types,
+              expected_outputs: data.selections.expected_outputs?.length
+                ? data.selections.expected_outputs
+                : FALLBACK_SELECTIONS.expected_outputs,
+              deadline_reasons: data.selections.deadline_reasons?.length
+                ? data.selections.deadline_reasons
+                : FALLBACK_SELECTIONS.deadline_reasons,
+              squads: data.selections.squads?.length
+                ? data.selections.squads
+                : FALLBACK_SELECTIONS.squads,
+              product_squad_map: data.selections.product_squad_map
+                ? data.selections.product_squad_map
+                : FALLBACK_SELECTIONS.product_squad_map,
+            }
+            cachedSelections = merged
+            try {
+              localStorage.setItem(SELECTIONS_CACHE_KEY, JSON.stringify(merged))
+            } catch {}
+            saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
+            return merged
           }
-
-          const merged: SelectionsData = {
-            products: fetchedProducts,
-            request_types: data.selections.request_types?.length
-              ? data.selections.request_types
-              : FALLBACK_SELECTIONS.request_types,
-            expected_outputs: data.selections.expected_outputs?.length
-              ? data.selections.expected_outputs
-              : FALLBACK_SELECTIONS.expected_outputs,
-            deadline_reasons: data.selections.deadline_reasons?.length
-              ? data.selections.deadline_reasons
-              : FALLBACK_SELECTIONS.deadline_reasons,
-            squads: data.selections.squads?.length
-              ? data.selections.squads
-              : FALLBACK_SELECTIONS.squads,
-            product_squad_map: data.selections.product_squad_map
-              ? data.selections.product_squad_map
-              : FALLBACK_SELECTIONS.product_squad_map,
-          }
-          cachedSelections = merged
-          try {
-            localStorage.setItem(SELECTIONS_CACHE_KEY, JSON.stringify(merged))
-          } catch {}
-          saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
-          return merged
         }
+      } finally {
+        clearTimeout(timeoutId)
       }
     } catch (err) {
       console.warn("Could not fetch selections from Google Sheet, using defaults:", err)
@@ -905,56 +927,92 @@ export async function updateTaskProgressInSheet(
   }
 }
 
+const inflightSingleTaskMap = new Map<string, Promise<UXRequest | null>>()
+const lastSingleTaskFetchTimes = new Map<string, number>()
+
 /**
  * Tải và đối chiếu cập nhật của riêng một bài toán (dùng cho Smart Poller khi mở Task Drawer)
  */
 export async function fetchSingleTaskUpdate(requestId: string): Promise<UXRequest | null> {
-  const config = getGoogleSheetConfig()
-  if (!config.scriptUrl || !config.scriptUrl.trim()) {
-    try {
-      const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
-      if (cached) {
-        const list: UXRequest[] = JSON.parse(cached)
-        const found = list.find((r) => r.request_id === requestId)
-        if (found) {
-          const storedV = getStoredTaskViewers(requestId)
-          if ((!found.viewers || found.viewers.length === 0) && storedV.length > 0) {
-            found.viewers = storedV
-          }
-          return found
-        }
-        return null
-      }
-    } catch {}
-    return null
+  if (!requestId) return null
+
+  // Fast throttle: If fetched recently (< 3000ms), return memory or cached copy
+  const now = Date.now()
+  const lastFetched = lastSingleTaskFetchTimes.get(requestId) || 0
+  if (now - lastFetched < 3000 && cachedRequestsMemory) {
+    const memFound = cachedRequestsMemory.find((r) => r.request_id === requestId)
+    if (memFound) return memFound
   }
 
-  try {
-    const url = new URL(config.scriptUrl.trim())
-    url.searchParams.set("action", "get_requests")
-    url.searchParams.set("_t", Date.now().toString())
+  // Deduplicate inflight requests for the same task
+  if (inflightSingleTaskMap.has(requestId)) {
+    return inflightSingleTaskMap.get(requestId)!
+  }
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    })
+  const fetchPromise = (async () => {
+    const config = getGoogleSheetConfig()
+    if (!config.scriptUrl || !config.scriptUrl.trim()) {
+      try {
+        const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
+        if (cached) {
+          const list: UXRequest[] = JSON.parse(cached)
+          const found = list.find((r) => r.request_id === requestId)
+          if (found) {
+            const storedV = getStoredTaskViewers(requestId)
+            if ((!found.viewers || found.viewers.length === 0) && storedV.length > 0) {
+              found.viewers = storedV
+            }
+            return found
+          }
+          return null
+        }
+      } catch {}
+      return null
+    }
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.status === "success" && Array.isArray(data.requests)) {
-        const normalized = data.requests.map(normalizeSheetRequest)
-        cachedRequestsMemory = normalized
-        localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
-        const found = normalized.find((r: UXRequest) => r.request_id === requestId)
-        if (found) {
-          broadcastTaskEvent("TASK_UPDATED", requestId, found)
-          return found
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+    try {
+      const url = new URL(config.scriptUrl.trim())
+      url.searchParams.set("action", "get_requests")
+      url.searchParams.set("_t", Date.now().toString())
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === "success" && Array.isArray(data.requests)) {
+          lastSingleTaskFetchTimes.set(requestId, Date.now())
+          const normalized = data.requests.map(normalizeSheetRequest)
+          cachedRequestsMemory = normalized
+          try {
+            localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+          } catch {}
+          const found = normalized.find((r: UXRequest) => r.request_id === requestId)
+          if (found) {
+            broadcastTaskEvent("TASK_UPDATED", requestId, found)
+            return found
+          }
         }
       }
+    } catch (e) {
+      console.warn("Could not fetch single task update:", e)
+    } finally {
+      clearTimeout(timeoutId)
     }
-  } catch {}
 
-  return null
+    return null
+  })().finally(() => {
+    inflightSingleTaskMap.delete(requestId)
+  })
+
+  inflightSingleTaskMap.set(requestId, fetchPromise)
+  return fetchPromise
 }
 
 /**

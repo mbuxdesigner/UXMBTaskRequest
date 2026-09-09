@@ -12,8 +12,12 @@ import {
   updateTaskProgressInSheet,
   deduplicateTaskIds,
   SelectionsData,
+  isLastRemoteFetchSuccessful,
 } from "../services/googleSheetService"
 import { searchProtectedData } from "../services/otpAuthService"
+import { broadcastTaskEvent } from "../services/realtimeSyncService"
+
+export { isLastRemoteFetchSuccessful }
 
 export async function fetchRequests(forceRefresh = false): Promise<UXRequest[]> {
   return fetchRequestsFromSheet(forceRefresh)
@@ -166,6 +170,8 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
     const existingList: UXRequest[] = cached ? JSON.parse(cached) : []
     const updated = deduplicateTaskIds([newRequest, ...existingList.filter((r) => r.request_id !== finalRequestId)])
     localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+    // Broadcast real-time 0ms task creation event across tabs and listeners
+    broadcastTaskEvent("TASK_CREATED", finalRequestId, newRequest, "Bài toán mới được tạo")
   } catch (e) {
     console.warn("Could not cache new request locally:", e)
   }

@@ -431,6 +431,24 @@ strong, b,
   }
 }
 
+@keyframes row-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-shimmer-sweep {
+  animation: row-shimmer 0.85s infinite linear;
+  will-change: transform;
+}
+
+.contain-paint {
+  contain: paint;
+}
+
 /* BorderBeam v2 — Liquid-metal-inspired animations */
 @keyframes border-beam-spin {
   from {
