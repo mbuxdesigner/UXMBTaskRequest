@@ -19,6 +19,7 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
+  Users,
 } from "lucide-react"
 import { useNotifications } from "../../services/notificationService"
 import { NotificationItem, NotificationType } from "../../types/notification"
@@ -137,6 +138,13 @@ function getNotificationTypeConfig(type: NotificationType) {
         badgeBg: "bg-blue-50 text-[#1057fb] border-blue-200",
         label: customLabel || "PO gửi task",
       }
+    case "viewer_added":
+      return {
+        icon: Users,
+        iconBg: "bg-blue-50 text-[#1057fb] border border-blue-200/80",
+        badgeBg: "bg-blue-50 text-[#1057fb] border border-blue-200",
+        label: customLabel || "Người theo dõi",
+      }
     case "system":
     default:
       return {
@@ -177,11 +185,15 @@ export default function NotificationDropdown({
     }
     onClose?.()
     if (item.requestId) {
-      window.dispatchEvent(
-        new CustomEvent("app_navigate", {
-          detail: { page: "track", requestId: item.requestId },
-        })
-      )
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("ux_pending_open_task", item.requestId)
+        window.location.hash = `#track?requestId=${item.requestId}`
+        window.dispatchEvent(
+          new CustomEvent("app_navigate", {
+            detail: { page: "track", requestId: item.requestId },
+          })
+        )
+      }
     }
   }
 

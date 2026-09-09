@@ -8,6 +8,7 @@ export interface ToastItem {
   title: string
   description?: string
   duration?: number
+  onClick?: () => void
 }
 
 type ToastListener = (toasts: ToastItem[]) => void
@@ -48,7 +49,7 @@ export const toast = {
     return id
   },
 
-  success: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+  success: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
     // Deduplication check
     if (isRecentDuplicate(title, "success")) {
       return lastToastSignature
@@ -57,7 +58,7 @@ export const toast = {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 3500
     const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "success", title, description, duration }
+    const newToast: ToastItem = { id, type: "success", title, description, duration, onClick: options?.onClick }
 
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
@@ -74,7 +75,7 @@ export const toast = {
     return id
   },
 
-  error: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+  error: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
     if (isRecentDuplicate(title, "error")) {
       return lastToastSignature
     }
@@ -82,7 +83,7 @@ export const toast = {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 4500
     const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "error", title, description, duration }
+    const newToast: ToastItem = { id, type: "error", title, description, duration, onClick: options?.onClick }
 
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
@@ -99,11 +100,11 @@ export const toast = {
     return id
   },
 
-  warning: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+  warning: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 4000
     const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "warning", title, description, duration }
+    const newToast: ToastItem = { id, type: "warning", title, description, duration, onClick: options?.onClick }
 
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
@@ -120,11 +121,11 @@ export const toast = {
     return id
   },
 
-  info: (title: string, description?: string, options?: { id?: string; duration?: number }) => {
+  info: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
     const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const duration = options?.duration ?? 3500
     const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "info", title, description, duration }
+    const newToast: ToastItem = { id, type: "info", title, description, duration, onClick: options?.onClick }
 
     if (existingIndex >= 0) {
       toasts[existingIndex] = newToast
@@ -188,7 +189,15 @@ export function Toaster() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.88, y: 12, transition: { duration: 0.18, ease: "easeOut" } }}
               transition={{ type: "spring", stiffness: 420, damping: 28 }}
-              className="pointer-events-auto relative group flex items-start gap-3 p-3.5 bg-[#0F172A]/95 text-slate-100 rounded-2xl border border-slate-700/60 shadow-2xl shadow-slate-950/60 backdrop-blur-xl ring-1 ring-white/10 select-none overflow-hidden"
+              onClick={() => {
+                if (item.onClick) {
+                  item.onClick()
+                  toast.dismiss(item.id)
+                }
+              }}
+              className={`pointer-events-auto relative group flex items-start gap-3 p-3.5 bg-[#0F172A]/95 text-slate-100 rounded-2xl border border-slate-700/60 shadow-2xl shadow-slate-950/60 backdrop-blur-xl ring-1 ring-white/10 select-none overflow-hidden ${
+                item.onClick ? "cursor-pointer hover:border-blue-500/70 hover:bg-slate-900 transition-all" : ""
+              }`}
             >
               {/* Subtle Top Glow Gradient */}
               <div 

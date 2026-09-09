@@ -182,15 +182,69 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   useEffect(() => {
-    loadData(true)
+    // 1. Kiểm tra target requestId từ URL hash hoặc sessionStorage
+    const hash = window.location.hash
+    let urlRequestId = ""
+    if (hash.includes("requestId=")) {
+      urlRequestId = hash.split("requestId=")[1]?.split("&")[0] || ""
+    }
+    const pendingId = (typeof window !== "undefined" ? sessionStorage.getItem("ux_pending_open_task") : null) || urlRequestId
+    if (pendingId && typeof window !== "undefined") {
+      sessionStorage.removeItem("ux_pending_open_task")
+      // Mở ngay từ cache nếu có sẵn
+      try {
+        const cached = localStorage.getItem("ux_portal_real_requests")
+        if (cached) {
+          const list: UXRequest[] = JSON.parse(cached)
+          const found = list.find((r) => r.request_id === pendingId)
+          if (found) {
+            setSelectedRequest(found)
+          }
+        }
+      } catch {}
+    }
+
+    loadData(true).then(() => {
+      if (pendingId) {
+        try {
+          const cached = localStorage.getItem("ux_portal_real_requests")
+          if (cached) {
+            const list: UXRequest[] = JSON.parse(cached)
+            const found = list.find((r) => r.request_id === pendingId)
+            if (found) {
+              setSelectedRequest(found)
+            }
+          }
+        } catch {}
+      }
+    })
   }, [])
 
-  // Lắng nghe sự kiện điều hướng từ màn hình Thành công (Tạo bài toán) -> Tự động mở chi tiết bài toán
+  // Lắng nghe sự kiện điều hướng từ Notification, Toast, hoặc Tạo bài toán thành công -> Tự động mở chi tiết bài toán
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const customEvent = e as CustomEvent
       const targetId = customEvent.detail?.requestId
       if (targetId) {
+        // Mở ngay tức thì nếu đã có trong memory
+        const foundImmediate = allRequests.find((r) => r.request_id === targetId)
+        if (foundImmediate) {
+          setSelectedRequest(foundImmediate)
+          return
+        }
+
+        try {
+          const cached = localStorage.getItem("ux_portal_real_requests")
+          if (cached) {
+            const list: UXRequest[] = JSON.parse(cached)
+            const found = list.find((r) => r.request_id === targetId)
+            if (found) {
+              setSelectedRequest(found)
+              return
+            }
+          }
+        } catch {}
+
         loadData(true).then(() => {
           try {
             const cached = localStorage.getItem("ux_portal_real_requests")

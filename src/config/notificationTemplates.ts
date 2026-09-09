@@ -183,6 +183,18 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     badgeLabel: "Hệ thống",
     toastType: "info",
   },
+
+  // ─── 14. Thêm người theo dõi (Viewer) ──────────────────────────────────────
+  viewer_added: {
+    type: "viewer_added",
+    eventName: "Thêm người theo dõi",
+    sender: "Người cập nhật",
+    recipients: "Thành viên được thêm làm Viewer & các bên liên quan",
+    titleTemplate: "Thêm người theo dõi: {requestId}",
+    messageTemplate: "{actorName} đã thêm {note} vào danh sách theo dõi bài toán [{taskTitle}].",
+    badgeLabel: "Người theo dõi",
+    toastType: "info",
+  },
 }
 
 /**

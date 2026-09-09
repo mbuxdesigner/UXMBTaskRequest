@@ -1333,6 +1333,7 @@ export default function RequestDetail({
 
   const handleSaveViewers = async (nextViewers: string[]) => {
     if (!request) return
+    const prevViewers = [...localViewers]
     const uniqueViewers = Array.from(new Set(nextViewers.map((v) => v.trim()).filter(Boolean)))
     setLocalViewers(uniqueViewers)
     request.viewers = uniqueViewers
@@ -1354,7 +1355,32 @@ export default function RequestDetail({
       console.warn("Could not cache viewers locally:", e)
     }
 
-    // 2. Gửi đồng bộ lên Google Sheet & BroadcastChannel
+    // 2. Tìm danh sách viewer mới được thêm vào và dispatch thông báo
+    const addedViewers = uniqueViewers.filter(
+      (v) => !prevViewers.some((pv) => pv.trim().toLowerCase() === v.trim().toLowerCase())
+    )
+
+    if (addedViewers.length > 0) {
+      const actor = session?.displayName || "Người quản lý bài toán"
+      const actorRole = session?.role || "Thành viên"
+      const addedText = addedViewers.join(", ")
+
+      dispatchNotification({
+        type: "viewer_added",
+        requestId: request.request_id,
+        taskTitle: request.title || request.request_name || "Bài toán UX",
+        actorName: actor,
+        actorRole: actorRole,
+        note: addedText,
+        recipient: `Viewer (${addedText})`,
+        viewers: uniqueViewers,
+        link: `#track?requestId=${request.request_id}`,
+        showToast: true,
+        toastType: "info",
+      })
+    }
+
+    // 3. Gửi đồng bộ lên Google Sheet & BroadcastChannel
     try {
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,

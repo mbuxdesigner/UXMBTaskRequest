@@ -136,6 +136,7 @@ function mapNotificationTypeToToast(type: NotificationType): "success" | "info" 
     case "status_changed":
     case "squad_changed":
     case "comment_added":
+    case "viewer_added":
     case "system":
     default:
       return "info";
@@ -238,14 +239,31 @@ export function dispatchNotification(params: DispatchNotificationParams): Notifi
   persistAndBroadcast(true);
 
   if (params.showToast !== false) {
+    const toastOptions = {
+      duration: 4500,
+      onClick: params.requestId
+        ? () => {
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("ux_pending_open_task", params.requestId!)
+              window.location.hash = `#track?requestId=${params.requestId}`
+              window.dispatchEvent(
+                new CustomEvent("app_navigate", {
+                  detail: { page: "track", requestId: params.requestId },
+                })
+              )
+            }
+          }
+        : undefined,
+    };
+
     if (finalToastType === "success") {
-      toast.success(finalTitle, finalMessage);
+      toast.success(finalTitle, finalMessage, toastOptions);
     } else if (finalToastType === "error") {
-      toast.error(finalTitle, finalMessage);
+      toast.error(finalTitle, finalMessage, toastOptions);
     } else if (finalToastType === "warning") {
-      toast.warning(finalTitle, finalMessage);
+      toast.warning(finalTitle, finalMessage, toastOptions);
     } else {
-      toast.info(finalTitle, finalMessage);
+      toast.info(finalTitle, finalMessage, toastOptions);
     }
   }
 

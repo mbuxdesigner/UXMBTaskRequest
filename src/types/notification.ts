@@ -11,6 +11,7 @@ export type NotificationType =
   | 'squad_changed'
   | 'deadline_changed'
   | 'comment_added'
+  | 'viewer_added'
   | 'system';
 
 export interface NotificationItem {
