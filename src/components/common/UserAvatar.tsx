@@ -33,6 +33,7 @@ interface UserAvatarProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl"
   className?: string
   showBorder?: boolean
+  role?: string
 }
 
 /**

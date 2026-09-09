@@ -4,6 +4,7 @@ import { ChevronDown, Check } from "lucide-react"
 export interface DropdownOption {
   value: string
   label: string
+  description?: React.ReactNode
   icon?: React.ReactNode
   badge?: React.ReactNode
 }

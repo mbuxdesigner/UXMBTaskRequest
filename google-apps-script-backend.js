@@ -886,6 +886,7 @@ function handleLogRequest(data) {
     if (!rawObj.current_phase || rawObj.current_phase === "Phân loại" || rawObj.current_phase === "Chờ tiếp nhận") rawObj.current_phase = "Chờ xác nhận";
     if (!rawObj.status || rawObj.status === "Đang phân loại" || rawObj.status === "Phân loại" || rawObj.status === "Chờ tiếp nhận") rawObj.status = "Chờ xác nhận";
     if (!rawObj.progress || rawObj.progress === 15) rawObj.progress = 10;
+    if (!rawObj.viewers) rawObj.viewers = [];
 
     if (!rawObj.task_updates || rawObj.task_updates.length === 0) {
       rawObj.task_updates = [
@@ -1204,6 +1205,10 @@ function handleUpdateTaskProgress(data) {
           phase: newPhase || item.current_phase,
           message: note
         };
+
+        if (typeof data.viewers !== "undefined") {
+          item.viewers = Array.isArray(data.viewers) ? data.viewers : [];
+        }
 
         if (!item.task_updates) item.task_updates = [];
         item.task_updates.unshift(newLogRecord);

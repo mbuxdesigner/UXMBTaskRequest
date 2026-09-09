@@ -217,8 +217,8 @@ export function formatNotificationFromTemplate(
   }
 
   Object.entries(replaceMap).forEach(([key, val]) => {
-    title = title.replaceAll(key, val)
-    message = message.replaceAll(key, val)
+    title = title.split(key).join(val)
+    message = message.split(key).join(val)
   })
 
   return {

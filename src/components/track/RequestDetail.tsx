@@ -10,7 +10,7 @@ import {
 } from "../../data/mockData"
 import UpdateProgressModal from "./UpdateProgressModal"
 import { getStoredSession, getUserInitials } from "../../services/otpAuthService"
-import { uploadFileToDrive, fetchSingleTaskUpdate, fetchTeamMembersFromSheet } from "../../services/googleSheetService"
+import { uploadFileToDrive, fetchSingleTaskUpdate, fetchTeamMembersFromSheet, getStoredTaskViewers, saveStoredTaskViewers } from "../../services/googleSheetService"
 import {
   subscribeToTask,
   startTaskActivePolling,
@@ -24,9 +24,10 @@ import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { dispatchNotification } from "@/services/notificationService"
 import { updateTaskProgress } from "../../api/api"
-import { canUserAccessRequest } from "@/lib/accessControl"
+import { canUserAccessRequest, isUserInViewers, normalizeVietnameseString } from "@/lib/accessControl"
 import { capitalizeFirstLetter } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
+import { CAvatar29 } from "@/components/reui/c-avatar-29"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
 import { 
   X, 
@@ -81,6 +82,7 @@ import {
   ChevronLeft, 
   Bell, 
   Users,
+  UserPlus,
   UploadCloud,
   Download,
   Image as ImageIcon,
@@ -117,9 +119,6 @@ export interface ActivityEvent {
 
 // Kiểm tra ghi chú có phải là nhật ký thao tác tự động của hệ thống (dạng text ngắn gọn) thay vì tin nhắn người dùng tự chat
 export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean): boolean => {
-  if (isCommentExplicit === true) return false
-  if (isCommentExplicit === false) return true
-
   const raw = (text || "").trim()
   if (!raw) return true
   const lower = raw.toLowerCase()
@@ -128,6 +127,18 @@ export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean):
   if (/^@se(?:n)?(?:d)?(?:_)?to(?:_)?po:|^@(po_)?pending:/i.test(lower)) {
     return false
   }
+
+  // Cập nhật người theo dõi luôn là hành động hệ thống (UI text gọn), không dùng UI box
+  if (
+    lower.includes("người theo dõi") ||
+    lower.includes("danh sách người theo dõi") ||
+    lower.includes("viewer")
+  ) {
+    return true
+  }
+
+  if (isCommentExplicit === true) return false
+  if (isCommentExplicit === false) return true
 
   // Khớp tất cả các câu thông báo hành động hệ thống được tạo tự động khi thao tác trên giao diện:
   if (
@@ -484,13 +495,53 @@ export default function RequestDetail({
   const [localProduct, setLocalProduct] = useState<string>(() => {
     return request?.product || ""
   })
+  // Local state for immediate optimistic update of Viewers
+  const [localViewers, setLocalViewers] = useState<string[]>(() => {
+    if (Array.isArray(request?.viewers) && request.viewers.length > 0) {
+      return request.viewers
+        .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+        .filter(Boolean)
+    }
+    if (typeof (request as any)?.viewers === "string" && (request as any).viewers.trim()) {
+      return (request as any).viewers.split(/[,;\n]+/).map((v: string) => v.trim()).filter(Boolean)
+    }
+    if (request?.request_id) {
+      const stored = getStoredTaskViewers(request.request_id)
+      if (stored.length > 0) return stored
+    }
+    return []
+  })
+  const [viewerSearchQuery, setViewerSearchQuery] = useState<string>("")
   const [, setRequirementUpdateTick] = useState(0)
 
   useEffect(() => {
     setLocalAssignee(request?.assigned_designer || (request?.ux_owner && request.ux_owner !== "Chưa phân công" && request.ux_owner !== "Đang phân công" ? request.ux_owner : "") || "")
     setLocalSquad(request?.squad_name || request?.preferred_squad || "")
     setLocalProduct(request?.product || "")
-  }, [request?.request_id, request?.assigned_designer, request?.ux_owner, request?.squad_name, request?.preferred_squad, request?.product])
+    
+    const incoming = Array.isArray(request?.viewers)
+      ? request.viewers
+          .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+          .filter(Boolean)
+      : typeof (request as any)?.viewers === "string" && (request as any).viewers.trim()
+      ? (request as any).viewers.split(/[,;\n]+/).map((v: string) => v.trim()).filter(Boolean)
+      : []
+
+    if (incoming.length > 0) {
+      setLocalViewers(incoming)
+      if (request?.request_id) saveStoredTaskViewers(request.request_id, incoming)
+    } else if (request?.request_id) {
+      const stored = getStoredTaskViewers(request.request_id)
+      if (stored.length > 0) {
+        request.viewers = stored
+        setLocalViewers(stored)
+      } else {
+        setLocalViewers([])
+      }
+    } else {
+      setLocalViewers([])
+    }
+  }, [request?.request_id, request?.assigned_designer, request?.ux_owner, request?.squad_name, request?.preferred_squad, request?.product, request?.viewers])
 
   // Trạng thái đồng bộ thời gian thực (Live Real-time Sync)
   const [liveSyncTime, setLiveSyncTime] = useState<string>("Vừa xong")
@@ -530,6 +581,10 @@ export default function RequestDetail({
           request.squad_name = payload.task.squad_name
           setLocalSquad(payload.task.squad_name)
         }
+        if (Array.isArray(payload.task.viewers)) {
+          request.viewers = payload.task.viewers
+          setLocalViewers(payload.task.viewers)
+        }
         if (Array.isArray(payload.task.task_updates)) {
           request.task_updates = payload.task.task_updates
         }
@@ -558,6 +613,19 @@ export default function RequestDetail({
           if (fresh.design_deadline !== undefined) {
             request.design_deadline = fresh.design_deadline
             setCustomDeadline(fresh.design_deadline || "")
+          }
+          if (Array.isArray(fresh.viewers)) {
+            if (fresh.viewers.length > 0) {
+              request.viewers = fresh.viewers
+              setLocalViewers(fresh.viewers)
+              saveStoredTaskViewers(request.request_id, fresh.viewers)
+            } else {
+              const stored = getStoredTaskViewers(request.request_id)
+              if (stored.length > 0) {
+                request.viewers = stored
+                setLocalViewers(stored)
+              }
+            }
           }
           setRequirementUpdateTick((c) => c + 1)
         }
@@ -832,7 +900,7 @@ export default function RequestDetail({
   const [descValue, setDescValue] = useState(request?.description || "")
 
   // Interactive Property Edit States
-  const [openDropdown, setOpenDropdown] = useState<"status" | "assignee" | "date" | "priority" | "estimate" | "phase" | "tags" | null>(null)
+  const [openDropdown, setOpenDropdown] = useState<"status" | "assignee" | "date" | "priority" | "estimate" | "phase" | "tags" | "viewers" | null>(null)
   const [currentPriority, setCurrentPriority] = useState<string>(() => {
     return request?.priority || "Normal"
   })
@@ -1120,12 +1188,20 @@ export default function RequestDetail({
     
     if (requesterEmail && userEmail) {
       if (userEmail === requesterEmail) return true
-      const uPrefix = userEmail.split("@")[0]
-      const rPrefix = requesterEmail.split("@")[0]
-      if (uPrefix && rPrefix && (uPrefix === rPrefix || uPrefix.includes(rPrefix) || rPrefix.includes(uPrefix))) return true
+      const uPrefix = userEmail.includes("@") ? userEmail.split("@")[0].trim() : userEmail
+      const rPrefix = requesterEmail.includes("@") ? requesterEmail.split("@")[0].trim() : requesterEmail
+      if (uPrefix && rPrefix && uPrefix === rPrefix) return true
     }
     if (requesterName && userName) {
-      if (userName.includes(requesterName) || requesterName.includes(userName)) return true
+      const normUser = normalizeVietnameseString(userName)
+      const normReq = normalizeVietnameseString(requesterName)
+      if (normUser === normReq) return true
+
+      const userWords = userName.split(/\s+/).filter(Boolean)
+      const reqWords = requesterName.split(/\s+/).filter(Boolean)
+      if (userWords.length >= 2 && reqWords.length >= 2) {
+        if (normUser.includes(normReq) || normReq.includes(normUser)) return true
+      }
     }
     return false
   }, [request, session])
@@ -1135,6 +1211,472 @@ export default function RequestDetail({
     if (session?.role === "Admin" || session?.role === "Design Owner") return true
     return false
   }, [isAuthor, session])
+
+  // Kiểm tra xem người dùng hiện tại có phải là Designer phụ trách bài toán này hay không
+  const isAssignedDesigner = useMemo(() => {
+    if (!request || !session) return false
+    // Chỉ tài khoản có vai trò thiết kế (Designer, Design Owner, Admin) mới có thể là Designer phụ trách
+    if (session.role !== "Designer" && session.role !== "Design Owner" && session.role !== "Admin") {
+      return false
+    }
+
+    const userEmail = (session.teamsEmail || session.personalEmail || "").toLowerCase().trim()
+    const uPrefix = userEmail.includes("@") ? userEmail.split("@")[0].trim() : userEmail
+    const userName = (session.displayName || "").toLowerCase().trim()
+
+    const assigned = `${request.assigned_designer || ""} ${request.ux_owner || ""}`.toLowerCase().trim()
+    if (!assigned) return false
+    if (
+      assigned === "chưa phân công" ||
+      assigned === "đang phân công" ||
+      assigned === "unassigned" ||
+      assigned === "chưa gán"
+    ) {
+      return false
+    }
+
+    if (userEmail && assigned.includes(userEmail)) return true
+    if (uPrefix && uPrefix.length >= 3) {
+      const prefixRegex = new RegExp(`(^|[\\s,;:/])` + uPrefix + `($|[\\s,;:/@])`, "i")
+      if (prefixRegex.test(assigned)) return true
+    }
+    if (userName) {
+      const normAssigned = normalizeVietnameseString(assigned)
+      const normUserName = normalizeVietnameseString(userName)
+      if (normAssigned === normUserName) return true
+
+      const userWords = userName.split(/\s+/).filter(Boolean)
+      if (userWords.length >= 2 && (assigned.includes(userName) || normAssigned.includes(normUserName))) {
+        return true
+      }
+    }
+
+    // Chỉ khi assigned là 1 từ duy nhất (ví dụ ghi tắt: "Nam", "Đăng") mới so khớp tên gọi cuối
+    const assignedWords = assigned.split(/[\s,;]+/).filter(Boolean)
+    if (assignedWords.length === 1 && userName) {
+      const nameParts = userName.split(/\s+/).filter(Boolean)
+      const lastName = nameParts[nameParts.length - 1]
+      if (lastName && lastName.length >= 2 && lastName.toLowerCase() === assignedWords[0].toLowerCase()) {
+        return true
+      }
+    }
+
+    return false
+  }, [request, session])
+
+  // R1 Phân quyền quản lý Viewer: Chỉ PO tạo task, Designer được phân công và Admin/Lead mới có quyền thêm/xóa Viewer
+  const canManageViewers = useMemo(() => {
+    if (!session) return true // Khi chưa đăng nhập / demo view
+    if (session.role === "Admin" || session.role === "Design Owner") return true
+    if (isAuthor) return true
+    if (isAssignedDesigner) return true
+    return false
+  }, [session, isAuthor, isAssignedDesigner])
+
+  // Lấy danh sách toàn bộ nhân sự MB UX để phục vụ chọn Viewer
+  const availableViewerMembers = useMemo(() => {
+    const list: any[] = Array.isArray(teamMemberList) ? teamMemberList : []
+
+    return list
+      .map((m: any) => ({
+        name: String(m.name || m.displayName || "").trim(),
+        role: String(m.role || "Thành viên").trim(),
+        email: String(m.email || m.teamsEmail || "").trim(),
+        avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(m.name || m.displayName || "")),
+        squad: String(m.squad || (Array.isArray(m.squads) ? m.squads[0] : "") || "").trim(),
+      }))
+      .filter((m) => {
+        if (!m.name) return false
+        if (isMockDesigner(m.name, m.email)) return false
+        return true
+      })
+  }, [teamMemberList])
+
+  const isMemberMatchViewer = (member: { name: string; email?: string }, viewerStr: string): boolean => {
+    const rawV = String(viewerStr || "").trim()
+    const cleanV = rawV.toLowerCase()
+    if (!cleanV) return false
+    const cleanName = (member.name || "").toLowerCase().trim()
+    if (cleanV === cleanName) return true
+
+    if (member.email) {
+      const cleanEmail = member.email.toLowerCase().trim()
+      if (cleanV === cleanEmail) return true
+      const emailMatches = cleanV.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)
+      if (emailMatches && emailMatches.some((em) => em.toLowerCase() === cleanEmail)) {
+        return true
+      }
+      const emailPrefix = cleanEmail.includes("@") ? cleanEmail.split("@")[0].trim() : cleanEmail
+      if (emailPrefix.length >= 3) {
+        if (cleanV === emailPrefix) return true
+        const vPrefix = cleanV.includes("@") ? cleanV.split("@")[0].trim() : ""
+        if (vPrefix && vPrefix === emailPrefix) return true
+      }
+    }
+
+    const normV = cleanV.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    const normM = cleanName.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    if (normV === normM) return true
+
+    const nameWords = cleanName.split(/\s+/).filter(Boolean)
+    const vWords = cleanV.split(/\s+/).filter(Boolean)
+
+    if (nameWords.length >= 2 && (cleanV.includes(cleanName) || normV.includes(normM))) {
+      return true
+    }
+    if (vWords.length >= 2 && (cleanName.includes(cleanV) || normM.includes(normV))) {
+      return true
+    }
+
+    return false
+  }
+
+  const handleSaveViewers = async (nextViewers: string[]) => {
+    if (!request) return
+    const uniqueViewers = Array.from(new Set(nextViewers.map((v) => v.trim()).filter(Boolean)))
+    setLocalViewers(uniqueViewers)
+    request.viewers = uniqueViewers
+
+    // 1. Cập nhật persistent task viewers store và cache LocalStorage tức thì
+    saveStoredTaskViewers(request.request_id, uniqueViewers)
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        const updated = list.map((r) =>
+          r.request_id === request.request_id
+            ? { ...r, viewers: uniqueViewers }
+            : r
+        )
+        localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+      }
+    } catch (e) {
+      console.warn("Could not cache viewers locally:", e)
+    }
+
+    // 2. Gửi đồng bộ lên Google Sheet & BroadcastChannel
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: request.status,
+        new_progress: request.progress,
+        note: `Cập nhật danh sách Người theo dõi (${uniqueViewers.length} thành viên)`,
+        assigned_designer: request.assigned_designer,
+        viewers: uniqueViewers,
+        is_comment: false,
+      })
+      setRequirementUpdateTick((c) => c + 1)
+      if (res.success) {
+        toast.success("Đã cập nhật danh sách Người theo dõi!")
+      } else {
+        toast.warning(res.message || "Đã lưu Người theo dõi trên máy bạn!")
+      }
+    } catch (err) {
+      toast.error("Lỗi khi lưu danh sách Người theo dõi", String(err))
+    }
+  }
+
+  const handleToggleViewer = (target: { name: string; email?: string } | string) => {
+    const member = typeof target === "string"
+      ? (availableViewerMembers.find((m) => isMemberMatchViewer(m, target) || m.name === target) || { name: target.trim() })
+      : target
+    const cleanName = member.name.trim()
+    if (!cleanName) return
+
+    const isExisting = localViewers.some((v) => isMemberMatchViewer(member, v) || v.toLowerCase() === cleanName.toLowerCase())
+    const next = isExisting
+      ? localViewers.filter((v) => !isMemberMatchViewer(member, v) && v.toLowerCase() !== cleanName.toLowerCase())
+      : [...localViewers, cleanName]
+    handleSaveViewers(next)
+  }
+
+  const handleRemoveViewer = (viewerIdentifier: string) => {
+    const clean = viewerIdentifier.trim()
+    if (!clean) return
+    const member = availableViewerMembers.find((m) => isMemberMatchViewer(m, clean) || m.name === clean)
+    const next = localViewers.filter((v) => {
+      if (v === clean || v.toLowerCase() === clean.toLowerCase()) return false
+      if (member && isMemberMatchViewer(member, v)) return false
+      if (isMemberMatchViewer({ name: clean }, v)) return false
+      return true
+    })
+    handleSaveViewers(next)
+  }
+
+  const handleClearViewers = () => {
+    handleSaveViewers([])
+  }
+
+  // Tách Viewers thành 2 nhóm: Nhân sự phụ trách Squad và Nhân sự khác (ngoài Squad) ĐỒNG BỘ 100% như Assignees
+  const { squadViewers, supportingViewers } = useMemo(() => {
+    if (!request || availableViewerMembers.length === 0) {
+      return { squadViewers: [], supportingViewers: availableViewerMembers }
+    }
+
+    const rawSquad = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || request.squad || "")).trim()
+    const taskProd = (request.product || "").trim().toLowerCase()
+    const squadLower = rawSquad.toLowerCase()
+
+    let allSquads: any[] = []
+    try {
+      const rawSquads = localStorage.getItem("mbbank_admin_squads")
+      if (rawSquads) {
+        const parsed = JSON.parse(rawSquads)
+        if (Array.isArray(parsed) && parsed.length > 0) allSquads = parsed
+      }
+    } catch {}
+    if (allSquads.length === 0) allSquads = mockSquads
+
+    const matchedSquad = allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      const sqProd = (sq.productName || sq.product_name || "").trim().toLowerCase()
+      const isNameMatch = sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+      if (taskProd && sqProd) {
+        return isNameMatch && (sqProd === taskProd || sqProd.includes(taskProd) || taskProd.includes(sqProd))
+      }
+      return isNameMatch
+    }) || allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      return sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+    })
+
+    const squadMemberNames: string[] = []
+    if (matchedSquad) {
+      if (Array.isArray(matchedSquad.designers)) squadMemberNames.push(...matchedSquad.designers)
+      if (Array.isArray(matchedSquad.pos)) squadMemberNames.push(...matchedSquad.pos)
+      if (Array.isArray(matchedSquad.businesses)) squadMemberNames.push(...matchedSquad.businesses)
+      if (matchedSquad.leadDesigner && matchedSquad.leadDesigner.trim()) squadMemberNames.push(matchedSquad.leadDesigner.trim())
+      if (matchedSquad.leadPo && matchedSquad.leadPo.trim()) squadMemberNames.push(matchedSquad.leadPo.trim())
+      if (matchedSquad.leadBusiness && matchedSquad.leadBusiness.trim()) squadMemberNames.push(matchedSquad.leadBusiness.trim())
+      if (matchedSquad.ux_owner && matchedSquad.ux_owner.trim()) {
+        const cleanUx = matchedSquad.ux_owner.replace(/\(.*?\)/g, "").trim()
+        if (cleanUx && cleanUx !== "Chưa phân công" && cleanUx !== "Đang phân công") {
+          squadMemberNames.push(cleanUx)
+        }
+      }
+    }
+
+    const cleanSquadMemberNames = Array.from(new Set(squadMemberNames.map((s) => s.trim()).filter(Boolean)))
+
+    const squadList: typeof availableViewerMembers = []
+    const supportList: typeof availableViewerMembers = []
+
+    availableViewerMembers.forEach((m) => {
+      const mSquadLower = (m.squad || "").toLowerCase()
+      let isInSquad = false
+
+      if (cleanSquadMemberNames.length > 0) {
+        isInSquad = cleanSquadMemberNames.some((name) => matchesPerson(name, m))
+      } else if (rawSquad && squadLower) {
+        isInSquad = Boolean(
+          !mSquadLower.includes("all") && (
+            mSquadLower === squadLower ||
+            mSquadLower.includes(squadLower) ||
+            squadLower.includes(mSquadLower)
+          )
+        )
+      }
+
+      if (isInSquad) {
+        squadList.push(m)
+      } else {
+        supportList.push(m)
+      }
+    })
+
+    return {
+      squadViewers: squadList,
+      supportingViewers: supportList,
+    }
+  }, [availableViewerMembers, request, localSquad, matchesPerson])
+
+  const renderViewerPopoverContent = (onClose: () => void) => {
+    const filterByQuery = (m: (typeof availableViewerMembers)[0]) => {
+      if (!viewerSearchQuery.trim()) return true
+      const q = viewerSearchQuery.toLowerCase().trim()
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.role.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        Boolean(m.squad && m.squad.toLowerCase().includes(q))
+      )
+    }
+
+    const filteredSquadViewers = squadViewers.filter(filterByQuery)
+    const filteredSupportingViewers = supportingViewers.filter(filterByQuery)
+
+    const renderViewerItem = (m: (typeof availableViewerMembers)[0], isSquadRole: boolean) => {
+      const isSelected = localViewers.some((v) => isMemberMatchViewer(m, v))
+
+      return (
+        <button
+          key={`viewer-item-${m.email || m.name}`}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleToggleViewer(m)
+          }}
+          className={`w-full px-3 py-2 text-left flex items-center gap-2.5 transition-colors cursor-pointer text-xs ${
+            isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
+          }`}
+        >
+          <div
+            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+              isSelected
+                ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                : "border-slate-300 bg-white"
+            }`}
+          >
+            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+          </div>
+          <UserAvatar name={m.name} avatarUrl={m.avatar} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className={`font-bold truncate ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
+                {m.name}
+              </p>
+              {isSquadRole ? (
+                <span className="text-[9.5px] font-semibold text-[#1057FB] bg-blue-50 border border-blue-200/80 px-1.5 py-0.2 rounded shrink-0">
+                  Phụ trách Squad
+                </span>
+              ) : (
+                <span className="text-[9.5px] font-medium text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.2 rounded shrink-0">
+                  Hỗ trợ
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400 truncate">
+              {m.role}{m.squad ? ` • ${m.squad}` : ""}
+            </p>
+          </div>
+        </button>
+      )
+    }
+
+    return (
+      <>
+        {/* Header & Search Input */}
+        <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/70">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                VIEWERS
+              </span>
+              {localViewers.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-[#1057FB] border border-blue-200">
+                  {String(localViewers.length).padStart(2, "0")}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-2.5 py-1 rounded-lg bg-[#1057FB] hover:bg-blue-700 text-white text-[11px] font-semibold transition-all cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95"
+                title="Xác nhận lựa chọn và đóng"
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>Xong</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                title="Đóng"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Tìm tên hoặc vai trò..."
+              value={viewerSearchQuery}
+              onChange={(e) => setViewerSearchQuery(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 focus:border-[#1057FB] rounded-lg outline-none transition-all placeholder:text-slate-400 text-slate-800 shadow-2xs"
+            />
+            {viewerSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setViewerSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Viewers List with Squad Categorization */}
+        <div className="flex-1 overflow-y-auto max-h-[220px] py-1 divide-y divide-slate-50">
+          {filteredSquadViewers.length === 0 && filteredSupportingViewers.length === 0 ? (
+            <div className="px-3 py-5 text-center text-xs text-slate-400 font-medium">
+              Không tìm thấy nhân sự phù hợp
+            </div>
+          ) : (
+            <>
+              {/* Phần 1: Nhân sự phụ trách squad */}
+              {filteredSquadViewers.length > 0 && (
+                <div className="pt-1">
+                  <div className="px-3 py-1 bg-blue-50/70 border-y border-blue-100/80 text-[10px] font-bold uppercase tracking-wider text-[#1057FB] flex items-center justify-between">
+                    <span>Nhân sự phụ trách Squad ({taskSquadName})</span>
+                    <span className="bg-blue-200/80 text-[#1057FB] px-1.5 py-0.2 rounded-full font-bold text-[9.5px]">
+                      {filteredSquadViewers.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {filteredSquadViewers.map((m) => renderViewerItem(m, true))}
+                  </div>
+                </div>
+              )}
+
+              {/* Phần 2: Nhân sự khác (ngoài squad) */}
+              {filteredSupportingViewers.length > 0 && (
+                <div className="pt-1 border-t border-slate-100">
+                  <div className="px-3 py-1 bg-slate-50/90 border-y border-slate-200/70 text-[10px] font-bold uppercase tracking-wider text-slate-600 flex items-center justify-between">
+                    <span>Nhân sự khác (Ngoài Squad)</span>
+                    <span className="bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded-full font-bold text-[9.5px]">
+                      {filteredSupportingViewers.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {filteredSupportingViewers.map((m) => renderViewerItem(m, false))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Sticky Footer Toolbar */}
+        <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/90 flex items-center justify-between gap-2 shrink-0">
+          {localViewers.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleClearViewers}
+              className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+            >
+              Bỏ chọn ({localViewers.length})
+            </button>
+          ) : (
+            <span className="text-[10.5px] text-slate-400 italic">Tự động lưu khi tick chọn</span>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            onClick={onClose}
+            className="h-7 text-xs px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium cursor-pointer shadow-2xs"
+          >
+            Hoàn tất
+          </Button>
+        </div>
+      </>
+    )
+  }
 
   const handleUpdateSquad = async (newSquad: string) => {
     if (!request) return
@@ -1356,8 +1898,14 @@ export default function RequestDetail({
   useEffect(() => {
     if (!isVisible) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !openDropdown && !isUpdateModalOpen && !showAddDeliverableModal) {
-        handleDismiss()
+      if (e.key === "Escape") {
+        if (openDropdown) {
+          setOpenDropdown(null)
+          return
+        }
+        if (!isUpdateModalOpen && !showAddDeliverableModal) {
+          handleDismiss()
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown)
@@ -1448,6 +1996,7 @@ export default function RequestDetail({
           taskTitle: request.title,
           actorName: session?.displayName || "Thành viên",
           actorRole: session?.role || "Designer",
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1507,6 +2056,7 @@ export default function RequestDetail({
           recipient: targetName ? `${targetName} & ${request.requester_name || "PO"}` : undefined,
           targetRole: "Designer",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1614,6 +2164,7 @@ export default function RequestDetail({
           taskTitle: request.title,
           actorName: session?.displayName || "Designer",
           actorRole: session?.role || "Designer",
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1699,6 +2250,7 @@ export default function RequestDetail({
           actorName: session?.displayName || displayName || "Designer",
           actorRole: (session?.role as any) || "Designer",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) await onUpdated()
       } else {
@@ -1767,6 +2319,7 @@ export default function RequestDetail({
           recipient: `${request.requester_name || "PO"} (Requester)`,
           targetRole: "PO",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1817,6 +2370,7 @@ export default function RequestDetail({
           actorRole: (session?.role as any) || "Designer",
           note: rawReason || "Tạm dừng theo yêu cầu",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1888,6 +2442,7 @@ export default function RequestDetail({
           recipient: `${request.assigned_designer || "Designer"} & Designer Owner`,
           targetRole: "Designer",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -1926,6 +2481,7 @@ export default function RequestDetail({
           recipient: `${request.assigned_designer || "Designer"}`,
           targetRole: "Designer",
           showToast: false,
+          viewers: localViewers,
         })
         if (onUpdated) onUpdated()
       } else {
@@ -2099,8 +2655,11 @@ export default function RequestDetail({
           }
         }
 
-        const isExplicitComment = (u as any).is_comment === true
-        const isExplicitSystem = (u as any).is_comment === false || (u as any).source === "system"
+        const isViewerNote =
+          noteLower.includes("người theo dõi") ||
+          noteLower.includes("viewer")
+        const isExplicitComment = (u as any).is_comment === true && !isViewerNote
+        const isExplicitSystem = (u as any).is_comment === false || (u as any).source === "system" || isViewerNote
         const isSysNote = isExplicitSystem || (!isExplicitComment && isSystemActivityNote(noteRaw))
 
         // 1. Phase or Status Log (Dạng text ngắn gọn cho mọi hành động hệ thống)
@@ -2325,6 +2884,7 @@ export default function RequestDetail({
       taskTitle: request.title,
       actorName: session ? (session.displayName || session.teamsEmail) : displayName,
       actorRole: (session ? session.role : "Designer"),
+      viewers: localViewers,
     })
 
     // B. BACKGROUND NON-BLOCKING SYNC: Gửi lên Google Apps Script / Sheet ngầm
@@ -2441,7 +3001,9 @@ export default function RequestDetail({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
           className="fixed inset-0 z-50 overflow-hidden" 
-          onClick={() => setOpenDropdown(null)}
+          onClick={() => {
+            setOpenDropdown(null)
+          }}
         >
           {/* Backdrop Blur Overlay */}
           <motion.div 
@@ -3319,6 +3881,133 @@ export default function RequestDetail({
                       </div>
                     </div>
 
+                    {/* 5. Viewers (Người theo dõi bài toán) */}
+                    <div className="flex items-center relative col-span-1 sm:col-span-2 pt-3 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+                        <Users className="w-4 h-4 text-slate-400" />
+                        <span>Viewers</span>
+                      </div>
+                      <div className="flex-1 relative flex items-center gap-2 min-w-0">
+                        {localViewers.length > 0 ? (
+                          <div className="relative inline-flex items-center gap-2 group">
+                            {/* C-Avatar-29: Avatar xếp chồng + Pill Count Badge + Nút Plus */}
+                            <CAvatar29
+                              count={localViewers.length}
+                              showAddButton={canManageViewers}
+                              onAddClick={(e) => {
+                                e.stopPropagation()
+                                if (canManageViewers) {
+                                  setViewerSearchQuery("")
+                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                }
+                              }}
+                              onClick={() => {
+                                if (canManageViewers) {
+                                  setViewerSearchQuery("")
+                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                }
+                              }}
+                              className={canManageViewers ? "cursor-pointer" : "cursor-default"}
+                            >
+                              {localViewers.slice(0, 3).map((vName, idx) => {
+                                const member = availableViewerMembers.find((m) => isMemberMatchViewer(m, vName))
+                                return (
+                                  <div key={`prop-v-av-${vName}-${idx}`} className="ring-2 ring-white rounded-full shrink-0">
+                                    <UserAvatar name={vName} avatarUrl={member?.avatar || getDesignerAvatar(vName)} size="sm" />
+                                  </div>
+                                )
+                              })}
+                            </CAvatar29>
+
+                            {/* Toast Danh sách người theo dõi khi trỏ chuột (Hover Tooltip Toast) */}
+                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[210px] max-w-[270px] p-2.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl border border-slate-800 pointer-events-none">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-800">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  Người theo dõi
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded-full text-[9.5px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                  {localViewers.length} thành viên
+                                </span>
+                              </div>
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                                {localViewers.map((vName, idx) => {
+                                  const member = availableViewerMembers.find((m) => isMemberMatchViewer(m, vName))
+                                  return (
+                                    <div key={`hov-v-${vName}-${idx}`} className="flex items-center gap-2">
+                                      <UserAvatar name={vName} avatarUrl={member?.avatar || getDesignerAvatar(vName)} size="xs" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-white truncate text-[11px]">{vName}</p>
+                                        <p className="text-[9.5px] text-slate-400 truncate">
+                                          {member?.role || "Thành viên"}{member?.squad ? ` • ${member.squad}` : ""}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Viewers Dropdown Popover */}
+                            <AnimatePresence>
+                              {openDropdown === "viewers" && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                                  className="absolute top-full left-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[350px] text-xs"
+                                >
+                                  {renderViewerPopoverContent(() => {
+                                    setOpenDropdown(null)
+                                    setViewerSearchQuery("")
+                                  })}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        ) : (
+                          /* Khi chưa có người theo dõi -> Chỉ hiển thị button "+ Thêm" */
+                          canManageViewers ? (
+                            <div className="relative inline-block">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewerSearchQuery("")
+                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-[#1057FB] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/80 cursor-pointer transition-colors shadow-2xs"
+                                title="Thêm người theo dõi (Viewer)"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Thêm</span>
+                              </button>
+
+                              {/* Viewers Dropdown Popover */}
+                              <AnimatePresence>
+                                {openDropdown === "viewers" && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                                    className="absolute top-full left-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[350px] text-xs"
+                                  >
+                                    {renderViewerPopoverContent(() => {
+                                      setOpenDropdown(null)
+                                      setViewerSearchQuery("")
+                                    })}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/70">
+                              <Lock className="w-2.5 h-2.5" />
+                              Chỉ xem
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* 📋 ĐẦU BÀI TỪ PRODUCT OWNER (PULSE HELPDESK REUI KNOWLEDGE-BASE DESIGN) */}
@@ -3679,10 +4368,10 @@ export default function RequestDetail({
                           className={`flex items-center gap-1 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer ${
                             isWatchingTask ? "text-[#1057FB]" : "text-slate-400"
                           }`}
-                          title="Theo dõi hoạt động (Watchers)"
+                          title={`Theo dõi hoạt động (${localViewers.length} Viewers)`}
                         >
                           <Bell className="w-4 h-4" />
-                          <span className="text-[11px] font-bold">1</span>
+                          <span className="text-[11px] font-bold">{localViewers.length}</span>
                         </button>
 
                         {/* ClickUp Activity Filter Menu Trigger */}
@@ -3941,6 +4630,7 @@ export default function RequestDetail({
                             if (event.type === "phase_change") return "bg-indigo-500 ring-2 ring-indigo-100"
                             if (event.type === "deliverable") return "bg-purple-500 ring-2 ring-purple-100"
                             const val = (event.toValue || "").toLowerCase()
+                            if (val.includes("người theo dõi") || val.includes("viewer")) return "bg-blue-500 ring-2 ring-blue-100"
                             if (val.includes("hạn thiết kế") || val.includes("design end date")) return "bg-amber-500 ring-2 ring-amber-100"
                             if (val.includes("đầu bài") || val.includes("po")) return "bg-purple-500 ring-2 ring-purple-100"
                             if (val.includes("hoàn thành") || val.includes("duyệt")) return "bg-emerald-500 ring-2 ring-emerald-100"
@@ -4017,6 +4707,24 @@ export default function RequestDetail({
                                         <>
                                           {(() => {
                                             const val = event.toValue || ""
+                                            const valLower = val.toLowerCase()
+                                            if (valLower.includes("người theo dõi") || valLower.includes("viewer")) {
+                                              const countMatch = val.match(/\(([^)]+)\)/)
+                                              return (
+                                                <>
+                                                  {event.author && (
+                                                    <span className="font-medium text-slate-800">{event.author}</span>
+                                                  )}
+                                                  <span>đã cập nhật danh sách</span>
+                                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                                    Người theo dõi
+                                                  </span>
+                                                  {countMatch && (
+                                                    <span className="text-slate-500 font-normal">({countMatch[1]})</span>
+                                                  )}
+                                                </>
+                                              )
+                                            }
                                             const hasAuthor = event.author && val.toLowerCase().includes(event.author.toLowerCase())
                                             return (
                                               <>

@@ -393,20 +393,23 @@ export async function verifyTeamsOtp(
       squad = matchedAccount.squad || squad
       displayName = matchedAccount.displayName
       avatarUrl = matchedAccount.avatarUrl || ""
-    } else if (cleanEmail.includes("admin")) {
-      role = "Admin"
-      displayName = "Quản trị viên Hệ thống"
-    } else if (cleanEmail.includes("lead") || cleanEmail.includes("owner") || cleanEmail.includes("cuong")) {
-      role = "Design Owner"
-      displayName = "Nguyễn Văn Cường (Design Owner)"
-    } else if (cleanEmail.includes("po") || cleanEmail.includes("lan")) {
-      role = "PO"
-      displayName = "Trần Mai Lan (PO)"
-    } else if (cleanEmail.includes("biz") || cleanEmail.includes("business") || cleanEmail.includes("bach")) {
-      role = "Business"
-      displayName = "Phạm Hoàng Bách (Business)"
     } else {
-      displayName = cleanEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      const derivedName = cleanEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      if (cleanEmail.includes("admin")) {
+        role = "Admin"
+        displayName = "Quản trị viên Hệ thống"
+      } else if (cleanEmail.includes("lead") || cleanEmail.includes("owner")) {
+        role = "Design Owner"
+        displayName = `${derivedName} (Design Owner)`
+      } else if (cleanEmail.includes("po")) {
+        role = "PO"
+        displayName = `${derivedName} (PO)`
+      } else if (cleanEmail.includes("biz") || cleanEmail.includes("business")) {
+        role = "Business"
+        displayName = `${derivedName} (Business)`
+      } else {
+        displayName = derivedName
+      }
     }
 
     // Chế độ mô phỏng local

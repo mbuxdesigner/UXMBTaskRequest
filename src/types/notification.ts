@@ -47,5 +47,6 @@ export interface DispatchNotificationParams {
   link?: string;
   showToast?: boolean;
   toastType?: 'success' | 'info' | 'warning' | 'error';
+  viewers?: string[];
 }
 

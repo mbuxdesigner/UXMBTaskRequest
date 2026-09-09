@@ -45,6 +45,40 @@ let inflightSelectionsPromise: Promise<SelectionsData> | null = null
 
 const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
+export const TASK_VIEWERS_STORE_KEY = "ux_task_viewers_map"
+
+export function getStoredTaskViewers(requestId?: string): string[] {
+  if (!requestId) return []
+  try {
+    const raw = localStorage.getItem(TASK_VIEWERS_STORE_KEY)
+    if (raw) {
+      const map = JSON.parse(raw)
+      if (map && Array.isArray(map[requestId])) {
+        return map[requestId]
+          .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+          .filter(Boolean)
+      }
+    }
+  } catch {}
+  return []
+}
+
+export function saveStoredTaskViewers(requestId: string, viewers: string[]) {
+  if (!requestId) return
+  try {
+    const cleanList = Array.from(new Set(
+      viewers
+        .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+        .filter(Boolean)
+    ))
+    const raw = localStorage.getItem(TASK_VIEWERS_STORE_KEY)
+    const map = raw ? JSON.parse(raw) : {}
+    map[requestId] = cleanList
+    localStorage.setItem(TASK_VIEWERS_STORE_KEY, JSON.stringify(map))
+  } catch (e) {
+    console.warn("Could not save task viewers to store:", e)
+  }
+}
 
 /**
  * Helper chuẩn xác chuyển đổi chuỗi ngày giờ (DD/MM/YYYY HH:mm:ss hoặc ISO) sang milliseconds
@@ -219,6 +253,42 @@ export function normalizeSheetRequest(data: any): UXRequest {
     priority: String(data.priority || "Normal"),
     task_updates: taskUpdates,
     sent_to_po_at: effectiveSentToPo,
+    viewers: (() => {
+      const rawViewers = data.viewers ?? data.Viewers ?? data["Người theo dõi"] ?? data.nguoi_theo_doi ?? data.watchers
+      let parsedList: string[] = []
+      if (Array.isArray(rawViewers)) {
+        parsedList = rawViewers
+          .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+          .filter(Boolean)
+      } else if (typeof rawViewers === "string" && rawViewers.trim()) {
+        try {
+          const parsed = JSON.parse(rawViewers)
+          if (Array.isArray(parsed)) {
+            parsedList = parsed
+              .map((v: any) => (typeof v === "object" && v !== null ? String(v.name || v.displayName || v.email || "").trim() : String(v || "").trim()))
+              .filter(Boolean)
+          }
+        } catch {}
+        if (parsedList.length === 0) {
+          parsedList = rawViewers.split(/[,;\n]+/).map((v: string) => v.trim()).filter(Boolean)
+        }
+      }
+
+      const reqId = String(data.request_id || data.id || "").trim()
+      if (parsedList.length > 0) {
+        if (reqId) saveStoredTaskViewers(reqId, parsedList)
+        return parsedList
+      }
+
+      if (reqId) {
+        const stored = getStoredTaskViewers(reqId)
+        if (stored.length > 0) {
+          return stored
+        }
+      }
+
+      return []
+    })(),
   }
 }
 
@@ -669,6 +739,7 @@ export async function updateTaskProgressInSheet(
     doc_links?: string[]
     is_comment?: boolean
     is_po_edit?: boolean
+    viewers?: string[]
   }
 ): Promise<{ success: boolean; message: string; updatedRequest?: UXRequest }> {
   const session = getStoredSession()
@@ -742,6 +813,14 @@ export async function updateTaskProgressInSheet(
           figma_url: params.figma_url || oldReq.deliverables?.figma_url,
         },
         task_updates: [newLogRecord, ...(oldReq.task_updates || [])],
+        viewers: (() => {
+          if (params.viewers !== undefined) {
+            saveStoredTaskViewers(requestId, params.viewers)
+            return params.viewers
+          }
+          const stored = getStoredTaskViewers(requestId)
+          return stored.length > 0 ? stored : (oldReq.viewers || [])
+        })(),
       }
 
       existingList[targetIdx] = updatedReq
@@ -796,6 +875,7 @@ export async function updateTaskProgressInSheet(
         figma_url: params.figma_url || (currentReq?.deliverables?.figma_url || ""),
         assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : (currentReq?.assigned_designer || ""),
         sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : (currentReq?.sent_to_po_at || ""),
+        viewers: params.viewers !== undefined ? params.viewers : (currentReq?.viewers || []),
         timestamp: now.toISOString(),
       }
 
@@ -835,7 +915,15 @@ export async function fetchSingleTaskUpdate(requestId: string): Promise<UXReques
       const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
       if (cached) {
         const list: UXRequest[] = JSON.parse(cached)
-        return list.find((r) => r.request_id === requestId) || null
+        const found = list.find((r) => r.request_id === requestId)
+        if (found) {
+          const storedV = getStoredTaskViewers(requestId)
+          if ((!found.viewers || found.viewers.length === 0) && storedV.length > 0) {
+            found.viewers = storedV
+          }
+          return found
+        }
+        return null
       }
     } catch {}
     return null

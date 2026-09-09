@@ -101,6 +101,7 @@ export interface UXRequest {
   task_updates?: TaskUpdateRecord[]
   sent_to_po_at?: string
   pending_reason?: string
+  viewers?: string[]
 }
 
 export function evaluatePoPendingStatus(request: UXRequest): UXRequest {
@@ -357,6 +358,7 @@ export const mockRequests: UXRequest[] = [
       prototype_url: "https://www.figma.com/proto/sample-card-ekyc",
     },
     submitted_at: "2026-02-10",
+    viewers: [],
   },
   {
     request_id: "UXMB-2026-002",

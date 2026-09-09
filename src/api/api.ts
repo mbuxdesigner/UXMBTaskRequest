@@ -157,7 +157,7 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
       phase: "Chờ xác nhận",
       message: "Yêu cầu đã được ghi nhận trên hệ thống và đang chờ xác nhận xử lý.",
     },
-    deliverables: data.deliverables || (data.figma_url && !data.figma_url.includes("viewpage") ? { figma_url: data.figma_url } : {}),
+    deliverables: data.deliverables || (typeof data.figma_url === "string" && !data.figma_url.includes("viewpage") ? { figma_url: data.figma_url } : {}),
   })
 
   // Prepend to localStorage cache so it shows up in "Tra cứu", "Quản lý", and "Tổng quan" immediately
@@ -202,6 +202,7 @@ export async function updateTaskProgress(
     doc_links?: string[]
     is_comment?: boolean
     is_po_edit?: boolean
+    viewers?: string[]
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

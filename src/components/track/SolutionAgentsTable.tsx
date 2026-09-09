@@ -10,18 +10,11 @@ import { fetchSingleTaskUpdate } from "@/services/googleSheetService"
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
   const clean = rawName.trim()
-  if (clean.toLowerCase().includes("nam.designer") || clean.toLowerCase().includes("nam.")) {
-    return "Lê Hoàng Nam"
-  }
-  if (clean.toLowerCase().includes("cuong") || clean.toLowerCase().includes("owner")) {
-    return "Nguyễn Văn Cường"
-  }
-  if (clean.toLowerCase().includes("lan") || clean.toLowerCase().includes("po")) {
-    return "Trần Mai Lan"
-  }
   if (clean.includes("@")) {
     const prefix = clean.split("@")[0]
-    return prefix.charAt(0).toUpperCase() + prefix.slice(1)
+    return prefix
+      .replace(/[._]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
   }
   return clean
 }
@@ -36,9 +29,6 @@ function getDesignerAvatar(name?: string) {
       if (found && found.avatarUrl) return found.avatarUrl
     }
   } catch {}
-  if (name.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
-  if (name.includes("Cường")) return "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"
-  if (name.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
   return ""
 }
 

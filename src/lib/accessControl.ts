@@ -110,9 +110,104 @@ export function getUserScope(session: UserSession | null): UserScope {
 }
 
 /**
+ * Chuẩn hóa chuỗi tiếng Việt (loại bỏ dấu và khoảng trắng thừa) để so khớp chính xác
+ */
+export function normalizeVietnameseString(str: string): string {
+  return (str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có nằm trong danh sách Viewer của bài toán hay không.
+ * Ngăn chặn tuyệt đối tình trạng so khớp nhầm giữa các tài khoản có cùng tên gọi cuối (như Tuấn, Anh, Nam, Linh...)
+ * Hỗ trợ chính xác:
+ * 1. Email chính xác hoặc trích xuất từ chuỗi dạng "Tên <email@mb...>" / "Tên (email@mb...)"
+ * 2. Username prefix chính xác (ví dụ "tuan.business" === "tuan.business")
+ * 3. Họ tên đầy đủ (kể cả có dấu hoặc không dấu tiếng Việt)
+ * 4. Họ tên đi kèm tiền tố/hậu tố chức danh khi có ít nhất 2 từ
+ */
+export function isUserInViewers(viewers: string[] | string | null | undefined, session: UserSession | null): boolean {
+  if (!viewers || !session) return false
+  const userEmail = (session.teamsEmail || session.personalEmail || "").toLowerCase().trim()
+  const userEmailPrefix = userEmail.includes("@") ? userEmail.split("@")[0].trim() : userEmail
+  const userName = (session.displayName || "").toLowerCase().trim()
+  const normUserName = normalizeVietnameseString(userName)
+
+  const list: any[] = Array.isArray(viewers)
+    ? viewers
+    : typeof viewers === "string" && viewers.trim()
+    ? viewers.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
+    : []
+
+  if (list.length === 0) return false
+
+  return list.some((v) => {
+    if (typeof v === "object" && v !== null) {
+      const objEmail = String((v as any).email || "").toLowerCase().trim()
+      if (objEmail && userEmail && objEmail === userEmail) return true
+    }
+
+    const raw = typeof v === "object" && v !== null
+      ? String((v as any).name || (v as any).displayName || (v as any).email || "").trim()
+      : String(v || "").trim()
+    const clean = raw.toLowerCase()
+    if (!clean) return false
+
+    // 1. So khớp Email chính xác hoặc trích xuất email
+    if (userEmail) {
+      if (clean === userEmail) return true
+      const emailMatches = clean.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)
+      if (emailMatches && emailMatches.some((em) => em.toLowerCase() === userEmail)) {
+        return true
+      }
+    }
+
+    // 2. So khớp Username prefix chính xác
+    if (userEmailPrefix && userEmailPrefix.length >= 3) {
+      if (clean === userEmailPrefix) return true
+      const cleanPrefix = clean.includes("@") ? clean.split("@")[0].trim() : ""
+      if (cleanPrefix && cleanPrefix === userEmailPrefix) return true
+    }
+
+    // 3. So khớp Tên hiển thị đầy đủ
+    if (userName) {
+      if (clean === userName) return true
+      const normClean = normalizeVietnameseString(clean)
+      if (normClean === normUserName) return true
+
+      // Loại bỏ hậu tố chức danh / squad trong ngoặc hoặc dấu gạch nối (ví dụ "Nguyễn Minh Tuấn (Lead Designer)")
+      const baseClean = clean.replace(/\s*[\(\[\-].*$/, "").trim()
+      const baseUser = userName.replace(/\s*[\(\[\-].*$/, "").trim()
+      const normBaseClean = normalizeVietnameseString(baseClean)
+      const normBaseUser = normalizeVietnameseString(baseUser)
+
+      if (normBaseClean && normBaseUser && normBaseClean === normBaseUser) return true
+
+      // Trường hợp viewer lưu "Họ Tên (Role)" hoặc "Họ Tên - Squad"
+      // BẮT BUỘC cả hai chuỗi phải có tối thiểu 2 từ để tránh false-positive
+      const userWords = userName.split(/\s+/).filter(Boolean)
+      const cleanWords = clean.split(/\s+/).filter(Boolean)
+
+      if (userWords.length >= 2 && cleanWords.length >= 2) {
+        if (normClean.includes(normUserName) || normUserName.includes(normClean)) {
+          return true
+        }
+      }
+    }
+
+    return false
+  })
+}
+
+/**
  * Kiểm tra xem người dùng hiện tại có quyền xem bài toán (UXRequest) này hay không
  * theo đúng quy chuẩn Phân quyền theo Vai trò (Role-based Access Control):
  * - Admin: Xem được tất cả các bài toán của toàn team.
+ * - Viewers: Được xem chi tiết bài toán bất kể squad hay tác giả/người được phân công.
  * - PO & Business: Chỉ nhìn thấy các bài toán do chính mình tạo (khớp với email/username người yêu cầu).
  * - Designer: Chỉ nhìn thấy các bài toán được phân công cho mình (khớp với assigned_designer hoặc ux_owner).
  * - Design Owner: Xem được toàn bộ bài toán được apply theo sản phẩm và squad.
@@ -127,6 +222,11 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
     return true
   }
 
+  // 2. Task Viewers (Người theo dõi): Được quyền xem chi tiết bài toán (kể cả ngoài squad, không phải tác giả/người được gán)
+  if (isUserInViewers(r.viewers, session)) {
+    return true
+  }
+
   const userEmail = (session.teamsEmail || session.personalEmail || "").toLowerCase().trim()
   const userEmailPrefix = userEmail.includes("@") ? userEmail.split("@")[0] : userEmail
   const userName = (session.displayName || "").toLowerCase().trim()
@@ -134,26 +234,27 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
   // 2. PO & Business: Chỉ nhìn thấy các bài toán do chính mình tạo (khớp với email/username người yêu cầu)
   if (userRole === "PO" || userRole === "Business") {
     const reqEmail = (r.requester_email || "").toLowerCase().trim()
-    const reqEmailPrefix = reqEmail.includes("@") ? reqEmail.split("@")[0] : reqEmail
+    const reqEmailPrefix = reqEmail.includes("@") ? reqEmail.split("@")[0].trim() : reqEmail
     const reqName = (r.requester_name || "").toLowerCase().trim()
 
-    // Khớp theo email hoặc prefix username
+    // Khớp theo email hoặc prefix username chính xác
     if (userEmail && reqEmail && (userEmail === reqEmail || userEmailPrefix === reqEmailPrefix)) {
-      return true
-    }
-    if (userEmailPrefix && reqEmail.includes(userEmailPrefix)) {
-      return true
-    }
-    if (reqEmailPrefix && userEmail.includes(reqEmailPrefix)) {
       return true
     }
 
     // Khớp theo họ tên người yêu cầu
-    if (userName && reqName && (userName.includes(reqName) || reqName.includes(userName))) {
-      return true
-    }
-    if (userName && reqEmail.includes(userName.replace(/\s+/g, ""))) {
-      return true
+    if (userName && reqName) {
+      const normUserName = normalizeVietnameseString(userName)
+      const normReqName = normalizeVietnameseString(reqName)
+      if (normUserName === normReqName) return true
+
+      const userWords = userName.split(/\s+/).filter(Boolean)
+      const reqWords = reqName.split(/\s+/).filter(Boolean)
+      if (userWords.length >= 2 && reqWords.length >= 2) {
+        if (normUserName.includes(normReqName) || normReqName.includes(normUserName)) {
+          return true
+        }
+      }
     }
 
     return false
@@ -174,16 +275,30 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
       return false
     }
 
-    if (userEmailPrefix && assigned.includes(userEmailPrefix)) return true
     if (userEmail && assigned.includes(userEmail)) return true
-    if (userName && assigned.includes(userName)) return true
+    if (userEmailPrefix && userEmailPrefix.length >= 3) {
+      const prefixRegex = new RegExp(`(^|[\\s,;:/])` + userEmailPrefix + `($|[\\s,;:/@])`, "i")
+      if (prefixRegex.test(assigned)) return true
+    }
+    if (userName) {
+      const normAssigned = normalizeVietnameseString(assigned)
+      const normUserName = normalizeVietnameseString(userName)
+      if (normAssigned === normUserName) return true
 
-    // Khớp theo tên gọi (tên cuối)
-    const nameParts = userName.split(/\s+/).filter(Boolean)
-    const lastName = nameParts[nameParts.length - 1]
-    if (lastName && lastName.length >= 2) {
-      const regex = new RegExp(`\\b${lastName}\\b`, "i")
-      if (regex.test(assigned)) return true
+      const userWords = userName.split(/\s+/).filter(Boolean)
+      if (userWords.length >= 2 && (assigned.includes(userName) || normAssigned.includes(normUserName))) {
+        return true
+      }
+    }
+
+    // Chỉ khi assigned là 1 từ duy nhất (ví dụ ghi tắt: "Nam", "Đăng") mới so khớp tên gọi cuối
+    const assignedWords = assigned.split(/[\s,;]+/).filter(Boolean)
+    if (assignedWords.length === 1 && userName) {
+      const nameParts = userName.split(/\s+/).filter(Boolean)
+      const lastName = nameParts[nameParts.length - 1]
+      if (lastName && lastName.length >= 2 && lastName.toLowerCase() === assignedWords[0].toLowerCase()) {
+        return true
+      }
     }
 
     return false

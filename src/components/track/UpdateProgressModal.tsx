@@ -106,6 +106,7 @@ export default function UpdateProgressModal({
           phaseName: phase,
           note: `Tiến độ ${progress}% - ${note.trim().slice(0, 80)}`,
           showToast: false,
+          viewers: request.viewers,
         })
         onUpdated()
         onClose()

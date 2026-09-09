@@ -42,7 +42,8 @@ import {
   Columns3,
   LayoutGrid,
   ListFilter,
-  Flag
+  Flag,
+  X
 } from "lucide-react"
 
 interface TrackRequestPageProps {
@@ -75,15 +76,6 @@ function getAvatarColorClass(name: string): string {
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
   const clean = rawName.trim()
-  if (clean.toLowerCase().includes("nam.designer") || clean.toLowerCase().includes("nam.")) {
-    return "Lê Hoàng Nam"
-  }
-  if (clean.toLowerCase().includes("cuong") || clean.toLowerCase().includes("owner")) {
-    return "Nguyễn Văn Cường"
-  }
-  if (clean.toLowerCase().includes("lan") || clean.toLowerCase().includes("po")) {
-    return "Trần Mai Lan"
-  }
   if (clean.includes("@")) {
     const userPart = clean.split("@")[0]
     return userPart
@@ -315,6 +307,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           phaseName: newPhase,
           note: `Tiến độ ${newProgress}%`,
           showToast: false,
+          viewers: targetReq?.viewers,
         })
       } else {
         toast.error(
@@ -402,6 +395,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           actorRole: currentSession ? currentSession.role : "Designer",
           statusName: newStatus,
           showToast: false,
+          viewers: targetReq?.viewers,
         })
       } else {
         toast.error(

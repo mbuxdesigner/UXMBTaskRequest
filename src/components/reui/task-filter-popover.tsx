@@ -238,7 +238,7 @@ export default function TaskFilterPopover({
                           {/* Dot indicator */}
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: colorDef.dotColor }}
+                            style={{ backgroundColor: (colorDef as any).dotColor || colorDef.hex }}
                           />
 
                           {/* Label */}
