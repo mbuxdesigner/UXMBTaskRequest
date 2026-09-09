@@ -1338,6 +1338,8 @@ export default function QuanLyPage() {
         ])
         if (!isMounted) return
 
+        let freshSquads = squads
+
         if (masterRes && masterRes.success && masterRes.data) {
           const d = masterRes.data
           if (Array.isArray(d.products) && d.products.length > 0) {
@@ -1345,6 +1347,7 @@ export default function QuanLyPage() {
             localStorage.setItem("mbbank_admin_products", JSON.stringify(d.products))
           }
           if (Array.isArray(d.squads) && d.squads.length > 0) {
+            freshSquads = d.squads
             setSquads(d.squads)
             localStorage.setItem("mbbank_admin_squads", JSON.stringify(d.squads))
           }
@@ -1362,9 +1365,16 @@ export default function QuanLyPage() {
           }
         }
 
-        if (Array.isArray(teamRes) && teamRes.length > 0) {
-          setTeamMembers((prev) => {
-            const synced = syncMembersWithSquads(teamRes, squads)
+        // Lấy danh sách nhân sự mới nhất từ Sheet (ưu tiên teamRes, dự phòng masterRes.data.team_members)
+        const rawMembers = (Array.isArray(teamRes) && teamRes.length > 0)
+          ? teamRes
+          : (Array.isArray(masterRes?.data?.team_members) && masterRes.data.team_members.length > 0)
+          ? masterRes.data.team_members
+          : null
+
+        if (rawMembers && rawMembers.length > 0) {
+          setTeamMembers(() => {
+            const synced = syncMembersWithSquads(rawMembers, freshSquads)
             localStorage.setItem("mbbank_admin_team", JSON.stringify(synced))
             localStorage.setItem("mbbank_team_members", JSON.stringify(synced))
             return synced
@@ -1374,8 +1384,8 @@ export default function QuanLyPage() {
         console.warn("Could not sync master data from sheet on mount:", err)
       } finally {
         const elapsed = Date.now() - startTime
-        if (elapsed < 350) {
-          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        if (elapsed < 600) {
+          await new Promise((r) => setTimeout(r, 600 - elapsed))
         }
         if (isMounted) {
           setLoading(false)
@@ -2507,6 +2517,14 @@ export default function QuanLyPage() {
     return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || squadMatch || prodMatch
   })
 
+  if (loading) {
+    return (
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+        <ManagementSkeleton />
+      </main>
+    )
+  }
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl border border-slate-200 mt-6 shadow-xs">
@@ -2529,14 +2547,6 @@ export default function QuanLyPage() {
           Quay lại trang chủ
         </Button>
       </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
-        <ManagementSkeleton />
-      </main>
     )
   }
 

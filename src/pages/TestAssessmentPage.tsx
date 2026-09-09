@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { getStoredSession, UserSession } from "@/services/otpAuthService"
+import { getStoredSession, UserSession, syncSessionRoleFromSheet } from "@/services/otpAuthService"
+import { fetchMasterDataFromSheet } from "@/services/googleSheetService"
 import { TestExam, TestSubmission } from "@/types/testAssessment"
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
@@ -11,14 +12,36 @@ export default function TestAssessmentPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true
     const handleAuth = () => setSession(getStoredSession())
     window.addEventListener("auth_session_changed", handleAuth)
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 350)
+
+    const loadData = async () => {
+      setLoading(true)
+      const startTime = Date.now()
+      try {
+        await Promise.all([
+          syncSessionRoleFromSheet(),
+          fetchMasterDataFromSheet(),
+        ])
+      } catch (e) {
+        console.warn("Could not sync data for test assessment page:", e)
+      } finally {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 600) {
+          await new Promise((r) => setTimeout(r, 600 - elapsed))
+        }
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadData()
+
     return () => {
+      isMounted = false
       window.removeEventListener("auth_session_changed", handleAuth)
-      clearTimeout(timer)
     }
   }, [])
 

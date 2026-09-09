@@ -25,8 +25,8 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
     fetchSquads(true)
       .then(async (data) => {
         const elapsed = Date.now() - startTime
-        if (elapsed < 350) {
-          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        if (elapsed < 600) {
+          await new Promise((r) => setTimeout(r, 600 - elapsed))
         }
         setSquads(data)
       })

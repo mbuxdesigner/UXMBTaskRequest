@@ -86,8 +86,8 @@ export default function TongQuanPage() {
         fetchRequests(forceRefresh),
       ])
       const elapsed = Date.now() - startTime
-      if (elapsed < 350) {
-        await new Promise((r) => setTimeout(r, 350 - elapsed))
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
       }
       setSquads(squadsData)
       setRequests(requestsData)

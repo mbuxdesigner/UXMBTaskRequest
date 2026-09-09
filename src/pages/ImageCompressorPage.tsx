@@ -12,6 +12,7 @@ import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/toast"
 import PageHeader from "@/components/common/PageHeader"
 import { PageSkeleton } from "@/components/common/ReuiSkeletons"
+import { syncSessionRoleFromSheet } from "@/services/otpAuthService"
 import { cn } from "@/lib/utils"
 import {
   FileImage,
@@ -133,8 +134,28 @@ export default function ImageCompressorPage() {
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 300)
-    return () => clearTimeout(t)
+    let isMounted = true
+    const initPage = async () => {
+      setLoading(true)
+      const startTime = Date.now()
+      try {
+        await syncSessionRoleFromSheet()
+      } catch (e) {
+        console.warn("Could not sync session on image compressor page:", e)
+      } finally {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 600) {
+          await new Promise((r) => setTimeout(r, 600 - elapsed))
+        }
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    initPage()
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   // Danh sách tệp

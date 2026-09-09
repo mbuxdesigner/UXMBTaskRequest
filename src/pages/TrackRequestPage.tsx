@@ -162,10 +162,10 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     const startTime = Date.now()
     try {
       const reqs = await fetchRequests(forceRefresh)
-      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 400ms
+      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 600ms
       const elapsed = Date.now() - startTime
-      if (elapsed < 400) {
-        await new Promise((r) => setTimeout(r, 400 - elapsed))
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
       }
       setAllRequests(reqs)
       if (isUserInitiated) {

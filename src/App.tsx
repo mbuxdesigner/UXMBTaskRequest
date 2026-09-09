@@ -2,7 +2,13 @@ import { useState, lazy, Suspense, useEffect } from "react"
 import type { Page } from "./components/Sidebar"
 import LoginGate from "./components/auth/LoginGate"
 import { Skeleton } from "@/components/ui/skeleton"
-import { PageSkeleton } from "@/components/common/ReuiSkeletons"
+import {
+  PageSkeleton,
+  DashboardSkeleton,
+  GridCardsSkeleton,
+  FormSkeleton,
+  ManagementSkeleton,
+} from "@/components/common/ReuiSkeletons"
 import { motion, AnimatePresence } from "framer-motion"
 import { Frame } from "@/components/reui/frame"
 import { Button } from "@/components/ui/button"
@@ -47,8 +53,19 @@ export const preloadPage = (page: Page) => {
   }
 }
 
-function PageLoadingSkeleton() {
-  return <PageSkeleton />
+function PageLoadingSkeleton({ page }: { page: Page }) {
+  switch (page) {
+    case "overview":
+      return <DashboardSkeleton />
+    case "track":
+      return <GridCardsSkeleton cardCount={6} />
+    case "create":
+      return <FormSkeleton />
+    case "manage":
+      return <ManagementSkeleton />
+    default:
+      return <PageSkeleton />
+  }
 }
 
 export default function App() {
@@ -268,7 +285,7 @@ export default function App() {
               transition={{ duration: 0.22, ease: "easeInOut" }}
               className="w-full"
             >
-              <Suspense fallback={<PageLoadingSkeleton />}>
+              <Suspense fallback={<PageLoadingSkeleton page={page} />}>
                 {page === "overview" && <TongQuanPage />}
                 {page === "create" && (
                   <CreateRequestPage onBack={() => handleNavigate("track")} />

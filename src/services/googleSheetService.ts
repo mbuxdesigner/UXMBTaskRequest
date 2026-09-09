@@ -414,8 +414,8 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
     }
   }
 
-  // 3. Deduplicate concurrent requests
-  if (inflightRequestsPromise) {
+  // 3. Deduplicate concurrent requests (unless forceRefresh is explicitly requested)
+  if (inflightRequestsPromise && !forceRefresh) {
     return inflightRequestsPromise
   }
 
@@ -431,7 +431,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
         }
 
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 4000)
+        const timeoutId = setTimeout(() => controller.abort(), 12000)
 
         const res = await fetch(url.toString(), {
           method: "GET",
