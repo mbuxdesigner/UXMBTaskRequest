@@ -16,7 +16,7 @@ import {
   startTaskActivePolling,
   stopTaskActivePolling,
 } from "../../services/realtimeSyncService"
-import { UserAvatar } from "@/components/common/UserAvatar"
+import { UserAvatar, getAvatarColorClass } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
@@ -27,7 +27,7 @@ import { updateTaskProgress } from "../../api/api"
 import { canUserAccessRequest, isUserInViewers, normalizeVietnameseString } from "@/lib/accessControl"
 import { capitalizeFirstLetter } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
-import { CAvatar29 } from "@/components/reui/c-avatar-29"
+import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
 import { AiPromptBox } from "@/components/jolyui/ai-prompt-box"
 import { 
   X, 
@@ -3890,9 +3890,9 @@ export default function RequestDetail({
                       <div className="flex-1 relative flex items-center gap-2 min-w-0">
                         {localViewers.length > 0 ? (
                           <div className="relative inline-flex items-center gap-2 group">
-                            {/* C-Avatar-29: Avatar xếp chồng + Pill Count Badge + Nút Plus */}
+                            {/* C-Avatar-29: ReUI AvatarGroup xếp chồng + AvatarGroupCount + Circular Plus Button */}
                             <CAvatar29
-                              count={localViewers.length}
+                              totalCount={localViewers.length}
                               showAddButton={canManageViewers}
                               onAddClick={(e) => {
                                 e.stopPropagation()
@@ -3911,10 +3911,16 @@ export default function RequestDetail({
                             >
                               {localViewers.slice(0, 3).map((vName, idx) => {
                                 const member = availableViewerMembers.find((m) => isMemberMatchViewer(m, vName))
+                                const avatarUrl = member?.avatar || getDesignerAvatar(vName)
+                                const initials = getUserInitials(vName)
+                                const colorClass = getAvatarColorClass(vName)
                                 return (
-                                  <div key={`prop-v-av-${vName}-${idx}`} className="ring-2 ring-white rounded-full shrink-0">
-                                    <UserAvatar name={vName} avatarUrl={member?.avatar || getDesignerAvatar(vName)} size="sm" />
-                                  </div>
+                                  <Avatar key={`prop-v-av-${vName}-${idx}`} className="size-7 ring-2 ring-white">
+                                    {avatarUrl && <AvatarImage src={avatarUrl} alt={vName} />}
+                                    <AvatarFallback className={colorClass}>
+                                      {initials}
+                                    </AvatarFallback>
+                                  </Avatar>
                                 )
                               })}
                             </CAvatar29>
