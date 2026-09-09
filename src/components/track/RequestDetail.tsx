@@ -901,6 +901,8 @@ export default function RequestDetail({
 
   // Interactive Property Edit States
   const [openDropdown, setOpenDropdown] = useState<"status" | "assignee" | "date" | "priority" | "estimate" | "phase" | "tags" | "viewers" | null>(null)
+  const [viewerPlacement, setViewerPlacement] = useState<"top" | "bottom">("top")
+  const [assigneePlacement, setAssigneePlacement] = useState<"top" | "bottom">("bottom")
   const [currentPriority, setCurrentPriority] = useState<string>(() => {
     return request?.priority || "Normal"
   })
@@ -1582,7 +1584,7 @@ export default function RequestDetail({
     return (
       <>
         {/* Header & Search Input */}
-        <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/70">
+        <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
@@ -1597,11 +1599,10 @@ export default function RequestDetail({
             <button
               type="button"
               onClick={onClose}
-              className="px-2.5 py-1 rounded-lg bg-[#1057FB] hover:bg-blue-700 text-white text-[11px] font-semibold transition-all cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95"
-              title="Xác nhận và đóng"
+              className="p-1 rounded-md hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              title="Đóng"
             >
-              <Check className="w-3 h-3 stroke-[3]" />
-              <span>Xong</span>
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="relative">
@@ -1628,7 +1629,7 @@ export default function RequestDetail({
         </div>
 
         {/* Viewers List with Squad Categorization */}
-        <div className="flex-1 overflow-y-auto max-h-[220px] py-1 divide-y divide-slate-50">
+        <div className="flex-1 min-h-0 overflow-y-auto py-1 divide-y divide-slate-50">
           {filteredSquadViewers.length === 0 && filteredSupportingViewers.length === 0 ? (
             <div className="px-3 py-5 text-center text-xs text-slate-400 font-medium">
               Không tìm thấy nhân sự phù hợp
@@ -1679,9 +1680,16 @@ export default function RequestDetail({
               Bỏ chọn ({localViewers.length})
             </button>
           ) : (
-            <span />
+            <span className="text-[11px] text-slate-400 italic">Chọn 1 hoặc nhiều người</span>
           )}
-          <span className="text-[10.5px] text-slate-400 italic">Tự động lưu khi tick chọn</span>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onClose}
+            className="h-7 text-xs px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium cursor-pointer shadow-2xs"
+          >
+            Hoàn tất
+          </Button>
         </div>
       </>
     )
@@ -3463,7 +3471,18 @@ export default function RequestDetail({
                       <div className="flex-1 relative min-w-0">
                         <button
                           type="button"
-                          onClick={() => setOpenDropdown(openDropdown === "assignee" ? null : "assignee")}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (openDropdown === "assignee") {
+                              setOpenDropdown(null)
+                              return
+                            }
+                            setAssigneeSearchQuery("")
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                            const spaceBelow = window.innerHeight - rect.bottom
+                            setAssigneePlacement(spaceBelow < 440 ? "top" : "bottom")
+                            setOpenDropdown("assignee")
+                          }}
                           className="flex items-center gap-2 min-w-0 p-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer max-w-full"
                         >
                           {isAssigned ? (
@@ -3503,10 +3522,15 @@ export default function RequestDetail({
                         <AnimatePresence>
                           {openDropdown === "assignee" && (
                             <motion.div
-                              initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                              initial={{ opacity: 0, y: assigneePlacement === "top" ? -6 : 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[460px]"
+                              exit={{ opacity: 0, y: assigneePlacement === "top" ? -4 : 4, scale: 0.96 }}
+                              className={`absolute z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col ${
+                                assigneePlacement === "top"
+                                  ? "bottom-full mb-2 left-0 sm:left-auto sm:right-0"
+                                  : "top-full mt-2 left-0 sm:left-auto sm:right-0"
+                              }`}
+                              style={{ maxHeight: "min(460px, calc(100vh - 160px))" }}
                             >
                               {/* Header & Search Input */}
                               <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/50">
@@ -3554,7 +3578,7 @@ export default function RequestDetail({
                               </div>
 
                               {/* Designer List with Unassign Option & 2 Categorized Sections */}
-                              <div className="flex-1 overflow-y-auto py-1 divide-y divide-slate-50">
+                              <div className="flex-1 min-h-0 overflow-y-auto py-1 divide-y divide-slate-50">
 
                                 {/* Option 0: Unassign / Chưa phân công */}
                                 <button
@@ -3906,14 +3930,28 @@ export default function RequestDetail({
                               onAddClick={(e) => {
                                 e.stopPropagation()
                                 if (canManageViewers) {
+                                  if (openDropdown === "viewers") {
+                                    setOpenDropdown(null)
+                                    return
+                                  }
                                   setViewerSearchQuery("")
-                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                  const spaceBelow = window.innerHeight - rect.bottom
+                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  setOpenDropdown("viewers")
                                 }
                               }}
-                              onClick={() => {
+                              onClick={(e) => {
                                 if (canManageViewers) {
+                                  if (openDropdown === "viewers") {
+                                    setOpenDropdown(null)
+                                    return
+                                  }
                                   setViewerSearchQuery("")
-                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                  const spaceBelow = window.innerHeight - rect.bottom
+                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  setOpenDropdown("viewers")
                                 }
                               }}
                               className={canManageViewers ? "cursor-pointer" : "cursor-default"}
@@ -3961,23 +3999,6 @@ export default function RequestDetail({
                                 })}
                               </div>
                             </div>
-
-                            {/* Viewers Dropdown Popover */}
-                            <AnimatePresence>
-                              {openDropdown === "viewers" && (
-                                <motion.div
-                                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                                  exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                                  className="absolute top-full left-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[350px] text-xs"
-                                >
-                                  {renderViewerPopoverContent(() => {
-                                    setOpenDropdown(null)
-                                    setViewerSearchQuery("")
-                                  })}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
                           </div>
                         ) : (
                           /* Khi chưa có người theo dõi -> Chỉ hiển thị button "+ Thêm" */
@@ -3985,9 +4006,17 @@ export default function RequestDetail({
                             <div className="relative inline-block">
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (openDropdown === "viewers") {
+                                    setOpenDropdown(null)
+                                    return
+                                  }
                                   setViewerSearchQuery("")
-                                  setOpenDropdown(openDropdown === "viewers" ? null : "viewers")
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                  const spaceBelow = window.innerHeight - rect.bottom
+                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  setOpenDropdown("viewers")
                                 }}
                                 className="inline-flex items-center gap-1 text-xs font-semibold text-[#1057FB] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/80 cursor-pointer transition-colors shadow-2xs"
                                 title="Thêm người theo dõi (Viewer)"
@@ -3995,23 +4024,6 @@ export default function RequestDetail({
                                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                                 <span>Thêm</span>
                               </button>
-
-                              {/* Viewers Dropdown Popover */}
-                              <AnimatePresence>
-                                {openDropdown === "viewers" && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                                    className="absolute top-full left-0 mt-1.5 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col max-h-[350px] text-xs"
-                                  >
-                                    {renderViewerPopoverContent(() => {
-                                      setOpenDropdown(null)
-                                      setViewerSearchQuery("")
-                                    })}
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
                             </div>
                           ) : (
                             <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/70">
@@ -4020,6 +4032,28 @@ export default function RequestDetail({
                             </span>
                           )
                         )}
+
+                        {/* Viewers Dropdown Popover */}
+                        <AnimatePresence>
+                          {openDropdown === "viewers" && (
+                            <motion.div
+                              initial={{ opacity: 0, y: viewerPlacement === "top" ? -6 : 6, scale: 0.96 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: viewerPlacement === "top" ? -4 : 4, scale: 0.96 }}
+                              className={`absolute z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col text-xs ${
+                                viewerPlacement === "top"
+                                  ? "bottom-full mb-2 left-0"
+                                  : "top-full mt-2 left-0"
+                              }`}
+                              style={{ maxHeight: "min(420px, calc(100vh - 160px))" }}
+                            >
+                              {renderViewerPopoverContent(() => {
+                                setOpenDropdown(null)
+                                setViewerSearchQuery("")
+                              })}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 
