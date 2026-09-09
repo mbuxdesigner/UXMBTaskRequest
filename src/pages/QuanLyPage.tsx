@@ -22,6 +22,7 @@ import { BlurFade } from "@/components/jolyui/blur-fade"
 import PageHeader from "@/components/common/PageHeader"
 import AddMemberModal from "@/components/common/AddMemberModal"
 import { isMockDesigner } from "@/components/track/RequestDetail"
+import { ManagementSkeleton } from "@/components/common/ReuiSkeletons"
 import {
   Users,
   Eye,
@@ -1323,6 +1324,69 @@ export default function QuanLyPage() {
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(() => getNavOrderConfig())
   const [draggedGroup, setDraggedGroup] = useState<"platform" | "resources" | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    const loadMasterData = async () => {
+      setLoading(true)
+      const startTime = Date.now()
+      try {
+        const [masterRes, teamRes] = await Promise.all([
+          fetchMasterDataFromSheet(),
+          fetchTeamMembersFromSheet(),
+        ])
+        if (!isMounted) return
+
+        if (masterRes && masterRes.success && masterRes.data) {
+          const d = masterRes.data
+          if (Array.isArray(d.products) && d.products.length > 0) {
+            setProducts(d.products)
+            localStorage.setItem("mbbank_admin_products", JSON.stringify(d.products))
+          }
+          if (Array.isArray(d.squads) && d.squads.length > 0) {
+            setSquads(d.squads)
+            localStorage.setItem("mbbank_admin_squads", JSON.stringify(d.squads))
+          }
+          if (Array.isArray(d.phases) && d.phases.length > 0) {
+            setUxPhases(d.phases)
+            localStorage.setItem("mbbank_admin_phases", JSON.stringify(d.phases))
+          }
+          if (Array.isArray(d.status_rules) && d.status_rules.length > 0) {
+            setStatusRules(d.status_rules)
+            localStorage.setItem("mbbank_admin_status_rules", JSON.stringify(d.status_rules))
+          }
+          if (d.nav_items) {
+            setNavConfig(d.nav_items)
+            saveRoleNavConfig(d.nav_items)
+          }
+        }
+
+        if (Array.isArray(teamRes) && teamRes.length > 0) {
+          setTeamMembers((prev) => {
+            const synced = syncMembersWithSquads(teamRes, squads)
+            localStorage.setItem("mbbank_admin_team", JSON.stringify(synced))
+            localStorage.setItem("mbbank_team_members", JSON.stringify(synced))
+            return synced
+          })
+        }
+      } catch (err) {
+        console.warn("Could not sync master data from sheet on mount:", err)
+      } finally {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 350) {
+          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        }
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+    loadMasterData()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const handleToggleNav = (role: UserRole, key: keyof RoleNavVisibility) => {
     const isCurrentlyActive = navConfig[role]?.[key] ?? true
@@ -2465,6 +2529,14 @@ export default function QuanLyPage() {
           Quay lại trang chủ
         </Button>
       </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+        <ManagementSkeleton />
+      </main>
     )
   }
 

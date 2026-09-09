@@ -19,10 +19,10 @@ export async function fetchRequests(forceRefresh = false): Promise<UXRequest[]> 
   return fetchRequestsFromSheet(forceRefresh)
 }
 
-export async function fetchSquads(): Promise<Squad[]> {
+export async function fetchSquads(forceRefresh = false): Promise<Squad[]> {
   const [selections, requests] = await Promise.all([
-    fetchSelectionsFromSheet(),
-    fetchRequestsFromSheet(),
+    fetchSelectionsFromSheet(forceRefresh),
+    fetchRequestsFromSheet(forceRefresh),
   ])
 
   const baseSquads = selections.squads && selections.squads.length > 0

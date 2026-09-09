@@ -11,6 +11,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/toast"
 import PageHeader from "@/components/common/PageHeader"
+import { PageSkeleton } from "@/components/common/ReuiSkeletons"
 import { cn } from "@/lib/utils"
 import {
   FileImage,
@@ -129,6 +130,12 @@ export default function ImageCompressorPage() {
   const [quality, setQuality] = useState<number>(90)
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
   const [activeFilter, setActiveFilter] = useState<"all" | "priority" | "base">("all")
+  const [loading, setLoading] = useState<boolean>(true)
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 300)
+    return () => clearTimeout(t)
+  }, [])
 
   // Danh sách tệp
   const [originalImages, setOriginalImages] = useState<OriginalImageItem[]>([])
@@ -497,6 +504,14 @@ totalOriginalSize > 0 && convertedImages.length > 0
     if (activeFilter === "base") return !item.isPriority
     return true
   })
+
+  if (loading) {
+    return (
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+        <PageSkeleton />
+      </main>
+    )
+  }
 
   return (
     <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">

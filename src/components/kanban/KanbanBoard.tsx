@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
+import { KanbanBoardSkeleton } from "@/components/common/ReuiSkeletons"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
@@ -415,6 +416,10 @@ export default function KanbanBoard({
       }
     }
     setDraggedRequestId(null)
+  }
+
+  if (loading) {
+    return <KanbanBoardSkeleton />
   }
 
   return (

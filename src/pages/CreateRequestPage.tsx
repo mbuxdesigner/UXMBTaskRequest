@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Squad } from "../data/mockData"
 import { fetchSquads } from "../api/api"
 import RequestForm from "../components/form/RequestForm"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, User } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { getStoredSession } from "../services/otpAuthService"
+import { FormSkeleton } from "@/components/common/ReuiSkeletons"
 
 interface CreateRequestPageProps {
   onBack?: () => void
@@ -12,12 +14,28 @@ interface CreateRequestPageProps {
 
 export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   const [squads, setSquads] = useState<Squad[]>([])
+  const [loading, setLoading] = useState(true)
   const [isSuccess, setIsSuccess] = useState(false)
   const session = getStoredSession()
   const isPo = session?.role === "PO"
 
   useEffect(() => {
-    fetchSquads().then(setSquads).catch(() => {})
+    setLoading(true)
+    const startTime = Date.now()
+    fetchSquads(true)
+      .then(async (data) => {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 350) {
+          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        }
+        setSquads(data)
+      })
+      .catch((err) => {
+        console.warn("Could not fetch squads for create request:", err)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [])
 
   return (
@@ -47,7 +65,29 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
           </Button>
         </div>
       )}
-      <RequestForm squads={squads} onSuccessChange={setIsSuccess} />
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="form-skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <FormSkeleton />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="form-content"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <RequestForm squads={squads} onSuccessChange={setIsSuccess} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   )
 }

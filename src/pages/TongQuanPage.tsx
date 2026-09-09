@@ -76,14 +76,19 @@ export default function TongQuanPage() {
   const [dashboardMode, setDashboardMode] = useState<"weekly_checkin" | "roadmap_analytics">("weekly_checkin")
 
   const loadData = async (forceRefresh = false) => {
+    setLoading(true)
     if (forceRefresh) setRefreshing(true)
-    else setLoading(true)
     setError(null)
+    const startTime = Date.now()
     try {
       const [squadsData, requestsData] = await Promise.all([
-        fetchSquads(),
+        fetchSquads(forceRefresh),
         fetchRequests(forceRefresh),
       ])
+      const elapsed = Date.now() - startTime
+      if (elapsed < 350) {
+        await new Promise((r) => setTimeout(r, 350 - elapsed))
+      }
       setSquads(squadsData)
       setRequests(requestsData)
     } catch (err: any) {

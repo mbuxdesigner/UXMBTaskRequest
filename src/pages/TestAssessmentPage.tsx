@@ -3,21 +3,37 @@ import { getStoredSession, UserSession } from "@/services/otpAuthService"
 import { TestExam, TestSubmission } from "@/types/testAssessment"
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
+import { PageSkeleton } from "@/components/common/ReuiSkeletons"
 
 export default function TestAssessmentPage() {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [activeRunningTest, setActiveRunningTest] = useState<TestExam | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const handleAuth = () => setSession(getStoredSession())
     window.addEventListener("auth_session_changed", handleAuth)
-    return () => window.removeEventListener("auth_session_changed", handleAuth)
+    const timer = setTimeout(() => {
+      setLoading(false)
+    }, 350)
+    return () => {
+      window.removeEventListener("auth_session_changed", handleAuth)
+      clearTimeout(timer)
+    }
   }, [])
 
   const currentRole = session?.role || "Designer"
   const currentName = session?.displayName || "Nhân viên UX MB"
   const currentEmail = session?.teamsEmail || session?.personalEmail || "user@mbbank.com.vn"
   const currentSquad = (session as any)?.squad || "UX Core & Design System"
+
+  if (loading) {
+    return (
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+        <PageSkeleton />
+      </main>
+    )
+  }
 
   return (
     <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
