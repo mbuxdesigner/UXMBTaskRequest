@@ -348,33 +348,44 @@ export default function Sidebar({
 
       {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
       <div className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" ref={userMenuRef}>
-        {/* Admin setting - Chỉ hiển thị duy nhất cho vai trò Admin */}
-        {isAdmin && currentRoleVisibility.manage && (
-          <button
-            type="button"
-            onClick={() => onNavigate("manage")}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
-              currentPage === "manage"
-                ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-            }`}
-          >
-            <ShieldCheck className={`w-4 h-4 shrink-0 ${currentPage === "manage" ? "text-slate-900" : "text-slate-500"}`} />
-            <span className="truncate">Admin setting</span>
-          </button>
-        )}
+        {/* Render footer tools (Admin setting & Invite Team) based on navOrder.resources */}
+        {navOrder.resources
+          .filter((k) => k === "manage" || k === "invite")
+          .map((itemKey) => {
+            if (itemKey === "manage" && isAdmin && currentRoleVisibility.manage) {
+              return (
+                <button
+                  key="nav-manage"
+                  type="button"
+                  onClick={() => onNavigate("manage")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                    currentPage === "manage"
+                      ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                  }`}
+                >
+                  <ShieldCheck className={`w-4 h-4 shrink-0 ${currentPage === "manage" ? "text-slate-900" : "text-slate-500"}`} />
+                  <span className="truncate">Admin setting</span>
+                </button>
+              )
+            }
 
-        {/* Invite Team (Chuẩn ReUI App Shell 12 - Kiểm soát bởi RBAC Matrix) */}
-        {canInvite && (
-          <button
-            type="button"
-            onClick={() => setInviteOpen(true)}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-          >
-            <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
-            <span className="truncate">Invite Team</span>
-          </button>
-        )}
+            if (itemKey === "invite" && currentRoleVisibility.invite) {
+              return (
+                <button
+                  key="nav-invite"
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                >
+                  <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
+                  <span className="truncate">Invite Team</span>
+                </button>
+              )
+            }
+
+            return null
+          })}
       </div>
     </nav>
   )
@@ -415,7 +426,7 @@ export default function Sidebar({
       </aside>
 
       {/* Invite Team Modal - Đồng bộ hoàn toàn với Thêm nhân sự */}
-      {canInvite && (
+      {(canInvite || currentRoleVisibility.invite) && (
         <AddMemberModal
           open={inviteOpen}
           onClose={() => setInviteOpen(false)}

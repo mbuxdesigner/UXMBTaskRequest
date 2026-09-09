@@ -3134,6 +3134,7 @@ export default function QuanLyPage() {
                         compressor: { label: "Nén ảnh (Built-in Tool)", icon: <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />, desc: "Công cụ nén ảnh tối ưu dung lượng dưới 500KB" },
                         test: { label: "Bài test & Đánh giá (Khảo sát/Thi chuyên môn)", icon: <BookOpen className="w-3.5 h-3.5" />, desc: "Đánh giá năng lực chuyên môn, bài thi trắc nghiệm & tự luận" },
                         manage: { label: "Admin setting (Quản trị hệ thống)", icon: <ShieldCheck className="w-3.5 h-3.5" />, desc: "Cấu hình nhân sự, SLA, phân bổ Squad, tích hợp Webhook" },
+                        invite: { label: "Invite Team (Mời thành viên)", icon: <UserPlus className="w-3.5 h-3.5" />, desc: "Mời nhân sự mới, phân vai trò & cấp quyền tài khoản trực tiếp" },
                       }[key]
 
                       if (!itemMeta) return null

@@ -7,6 +7,7 @@ export interface RoleNavVisibility {
   test: boolean
   compressor: boolean
   manage: boolean
+  invite: boolean
 }
 
 export type RoleNavConfig = Record<UserRole, RoleNavVisibility>
@@ -21,6 +22,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     test: true,
     compressor: true,
     manage: true,
+    invite: true,
   },
   "Design Owner": {
     overview: true,
@@ -29,6 +31,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     test: true,
     compressor: true,
     manage: false,
+    invite: true,
   },
   Designer: {
     overview: true,
@@ -37,6 +40,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     test: true,
     compressor: true,
     manage: false,
+    invite: false,
   },
   PO: {
     overview: true,
@@ -45,6 +49,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     test: true,
     compressor: true,
     manage: false,
+    invite: false,
   },
   Business: {
     overview: true,
@@ -53,6 +58,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     test: false,
     compressor: true,
     manage: false,
+    invite: false,
   },
 }
 
@@ -61,12 +67,19 @@ export function getRoleNavConfig(): RoleNavConfig {
     const raw = localStorage.getItem(STORAGE_KEY_NAV_VISIBILITY)
     if (!raw) return DEFAULT_ROLE_NAV_CONFIG
     const parsed = JSON.parse(raw)
+    const resolveRole = (role: UserRole) => ({
+      ...DEFAULT_ROLE_NAV_CONFIG[role],
+      ...(parsed[role] || {}),
+      invite: parsed[role]?.invite !== undefined ? parsed[role].invite : DEFAULT_ROLE_NAV_CONFIG[role].invite,
+      manage: role === "Admin" ? (parsed.Admin?.manage ?? true) : false,
+    })
+
     return {
-      Admin: { ...DEFAULT_ROLE_NAV_CONFIG.Admin, ...parsed.Admin },
-      "Design Owner": { ...DEFAULT_ROLE_NAV_CONFIG["Design Owner"], ...parsed["Design Owner"], manage: false },
-      Designer: { ...DEFAULT_ROLE_NAV_CONFIG.Designer, ...parsed.Designer, manage: false },
-      PO: { ...DEFAULT_ROLE_NAV_CONFIG.PO, ...parsed.PO, manage: false },
-      Business: { ...DEFAULT_ROLE_NAV_CONFIG.Business, ...parsed.Business, manage: false },
+      Admin: resolveRole("Admin"),
+      "Design Owner": resolveRole("Design Owner"),
+      Designer: resolveRole("Designer"),
+      PO: resolveRole("PO"),
+      Business: resolveRole("Business"),
     }
   } catch {
     return DEFAULT_ROLE_NAV_CONFIG
@@ -74,7 +87,7 @@ export function getRoleNavConfig(): RoleNavConfig {
 }
 
 export type PlatformNavItemKey = "overview" | "track" | "create"
-export type ResourceNavItemKey = "compressor" | "test" | "manage"
+export type ResourceNavItemKey = "compressor" | "test" | "manage" | "invite"
 export type NavItemKey = PlatformNavItemKey | ResourceNavItemKey
 
 export interface NavOrderConfig {
@@ -84,7 +97,7 @@ export interface NavOrderConfig {
 
 export const DEFAULT_NAV_ORDER: NavOrderConfig = {
   platform: ["overview", "track", "create"],
-  resources: ["compressor", "test", "manage"],
+  resources: ["compressor", "test", "manage", "invite"],
 }
 
 export const STORAGE_KEY_NAV_ORDER = "ux_portal_nav_order"
@@ -94,9 +107,16 @@ export function getNavOrderConfig(): NavOrderConfig {
     const raw = localStorage.getItem(STORAGE_KEY_NAV_ORDER)
     if (!raw) return DEFAULT_NAV_ORDER
     const parsed = JSON.parse(raw)
+    let resources = Array.isArray(parsed.resources) && parsed.resources.length > 0 ? [...parsed.resources] : [...DEFAULT_NAV_ORDER.resources]
+    if (!resources.includes("invite")) {
+      resources.push("invite")
+    }
+    if (!resources.includes("manage")) {
+      resources.push("manage")
+    }
     return {
       platform: Array.isArray(parsed.platform) && parsed.platform.length > 0 ? parsed.platform : DEFAULT_NAV_ORDER.platform,
-      resources: Array.isArray(parsed.resources) && parsed.resources.length > 0 ? parsed.resources : DEFAULT_NAV_ORDER.resources,
+      resources,
     }
   } catch {
     return DEFAULT_NAV_ORDER
