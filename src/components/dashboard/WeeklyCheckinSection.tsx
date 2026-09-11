@@ -98,9 +98,7 @@ export default function WeeklyCheckinSection({
       }, 1000)
     } else if (timeLeft === 0 && isTimerRunning) {
       setIsTimerRunning(false)
-      toast.warning("⏰ Đã hết thời gian họp check-in đầu tuần!", {
-        description: "Vui lòng tổng kết các hành động ưu tiên và chốt biên bản.",
-      })
+      toast.warning("⏰ Đã hết thời gian họp check-in đầu tuần!", "Vui lòng tổng kết các hành động ưu tiên và chốt biên bản.")
     }
     return () => {
       if (interval) clearInterval(interval)
@@ -131,7 +129,10 @@ export default function WeeklyCheckinSection({
 
   const availableSquadNames = useMemo(() => {
     const set = new Set<string>()
-    squads.forEach((s) => s.squad_name && set.add(s.squad_name))
+    squads.forEach((s: any) => {
+      const name = s?.squad_name || s?.name
+      if (name) set.add(name)
+    })
     requests.forEach((r) => {
       if (r.squad_name) set.add(r.squad_name)
       if (r.preferred_squad) set.add(r.preferred_squad)
@@ -304,17 +305,19 @@ export default function WeeklyCheckinSection({
 
   // Khối 5: Ma trận Tải trọng Squads
   const squadCapacityMetrics = useMemo(() => {
-    return squads.map((sq) => {
+    return squads.map((sq: any) => {
+      const sqName = (sq?.squad_name || sq?.name || "").trim()
+      const prodName = (sq?.product_name || sq?.productName || "").trim()
       const matchTasks = requests.filter(
         (r) =>
-          (r.squad_name && r.squad_name.toLowerCase() === sq.squad_name.toLowerCase()) ||
-          (r.preferred_squad && r.preferred_squad.toLowerCase() === sq.squad_name.toLowerCase()) ||
-          (r.product && r.product.toLowerCase() === sq.product_name?.toLowerCase())
+          (sqName && r.squad_name && r.squad_name.toLowerCase() === sqName.toLowerCase()) ||
+          (sqName && r.preferred_squad && r.preferred_squad.toLowerCase() === sqName.toLowerCase()) ||
+          (prodName && r.product && r.product.toLowerCase() === prodName.toLowerCase())
       )
 
       const active = matchTasks.filter((r) => r.status !== "Hoàn thành" && r.status !== "Hoành thành")
       const blocked = matchTasks.filter((r) => r.status === "Bị chặn" || r.status === "PO pending")
-      const threshold = sq.capacity_threshold || 6
+      const threshold = sq?.capacity_threshold || sq?.capacityThreshold || 6
       const loadRatio = Math.min(Math.round((active.length / threshold) * 100), 100)
 
       let statusColor = "text-emerald-600 bg-emerald-50 border-emerald-200"
@@ -330,8 +333,22 @@ export default function WeeklyCheckinSection({
         statusText = "Bình thường"
       }
 
+      const normalizedSquad: Squad = {
+        ...sq,
+        squad_id: sq?.squad_id || sq?.id || `sq-${sqName}`,
+        squad_name: sqName || "Squad",
+        product_name: prodName || "Sản phẩm MB",
+        capacity_threshold: threshold,
+        domain: sq?.domain || "",
+        active_tasks: active.length,
+        queued_tasks: blocked.length,
+        ux_owner: sq?.ux_owner || sq?.leadDesigner || "",
+        active_task_titles: active.map((r) => r.title),
+        queued_task_titles: blocked.map((r) => r.title),
+      }
+
       return {
-        squad: sq,
+        squad: normalizedSquad,
         activeCount: active.length,
         blockedCount: blocked.length,
         threshold,
@@ -382,9 +399,7 @@ export default function WeeklyCheckinSection({
 
     navigator.clipboard.writeText(brief).then(() => {
       setCopiedBrief(true)
-      toast.success("Đã copy tóm tắt cuộc họp vào Clipboard!", {
-        description: "Bạn có thể dán ngay vào kênh Microsoft Teams hoặc email của nhóm.",
-      })
+      toast.success("Đã copy tóm tắt cuộc họp vào Clipboard!", "Bạn có thể dán ngay vào kênh Microsoft Teams hoặc email của nhóm.")
       setTimeout(() => setCopiedBrief(false), 3000)
     })
   }
@@ -503,8 +518,8 @@ export default function WeeklyCheckinSection({
               className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-navy cursor-pointer"
             >
               <option value="ALL">Tất cả Squads ({availableSquadNames.length})</option>
-              {availableSquadNames.map((sq) => (
-                <option key={sq} value={sq}>
+              {availableSquadNames.map((sq, idx) => (
+                <option key={sq || `sq-opt-${idx}`} value={sq}>
                   {sq}
                 </option>
               ))}
@@ -517,8 +532,8 @@ export default function WeeklyCheckinSection({
               className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-navy cursor-pointer"
             >
               <option value="ALL">Tất cả Designers ({availableDesigners.length})</option>
-              {availableDesigners.map((d) => (
-                <option key={d} value={d}>
+              {availableDesigners.map((d, idx) => (
+                <option key={d || `des-opt-${idx}`} value={d}>
                   {d}
                 </option>
               ))}
@@ -579,13 +594,13 @@ export default function WeeklyCheckinSection({
               </div>
             ) : (
               <div className="space-y-2.5 pt-3 max-h-[380px] overflow-y-auto pr-1">
-                {blockersAndRisks.map((task) => {
+                {blockersAndRisks.map((task, idx) => {
                   const isBlocked = task.status === "Bị chặn"
                   const isPoPending = task.status === "PO pending"
 
                   return (
                     <div
-                      key={task.request_id}
+                      key={task.request_id || `blocker-${idx}`}
                       onClick={() => onSelectRequest(task)}
                       className="p-3 rounded-xl border border-rose-200/80 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-300 transition-all cursor-pointer space-y-2 group"
                     >
@@ -604,7 +619,7 @@ export default function WeeklyCheckinSection({
                           </h4>
                         </div>
                         <Badge
-                          variant={isBlocked ? "destructive" : isPoPending ? "amber" : "navy"}
+                          variant={isBlocked ? "destructive" : isPoPending ? "warning" : "navy"}
                           size="xs"
                           className="shrink-0 text-[10px]"
                         >
@@ -667,9 +682,9 @@ export default function WeeklyCheckinSection({
               </div>
             ) : (
               <div className="space-y-2.5 pt-3 max-h-[380px] overflow-y-auto pr-1">
-                {thisWeekCommitments.map((task) => (
+                {thisWeekCommitments.map((task, idx) => (
                   <div
-                    key={task.request_id}
+                    key={task.request_id || `commit-${idx}`}
                     onClick={() => onSelectRequest(task)}
                     className="p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-[#1057FB]/70 hover:shadow-xs transition-all cursor-pointer space-y-2.5 group"
                   >
@@ -755,18 +770,18 @@ export default function WeeklyCheckinSection({
 
         {/* Grid thẻ Designer */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
-          {designerStandupList.map((d) => {
+          {designerStandupList.map((d, dIdx) => {
             const isFocused = focusedDesigner === d.designerName
             const hasBlocked = d.blockedTasks.length > 0
 
-            let capacityBadgeVariant: "success" | "navy" | "amber" | "destructive" = "success"
+            let capacityBadgeVariant: "success" | "navy" | "warning" | "destructive" = "success"
             if (d.capacityStatus === "Quá tải") capacityBadgeVariant = "destructive"
-            else if (d.capacityStatus === "Đang bận") capacityBadgeVariant = "amber"
+            else if (d.capacityStatus === "Đang bận") capacityBadgeVariant = "warning"
             else if (d.capacityStatus === "Vừa vặn") capacityBadgeVariant = "navy"
 
             return (
               <div
-                key={d.designerName}
+                key={d.designerName || `designer-${dIdx}`}
                 className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
                   isFocused
                     ? "border-navy ring-2 ring-navy/20 bg-navy-50/20 shadow-md"
@@ -807,9 +822,9 @@ export default function WeeklyCheckinSection({
                     </div>
                   ) : (
                     <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-0.5">
-                      {d.activeTasks.slice(0, 3).map((t) => (
+                      {d.activeTasks.slice(0, 3).map((t, tIdx) => (
                         <div
-                          key={t.request_id}
+                          key={t.request_id || `active-task-${dIdx}-${tIdx}`}
                           onClick={() => onSelectRequest(t)}
                           className="p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition-colors cursor-pointer text-[11px] space-y-1"
                         >
@@ -883,9 +898,9 @@ export default function WeeklyCheckinSection({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
-              {squadCapacityMetrics.map((item) => (
+              {squadCapacityMetrics.map((item, idx) => (
                 <div
-                  key={item.squad.squad_id || item.squad.squad_name}
+                  key={item.squad.squad_id || item.squad.squad_name || `squad-cap-${idx}`}
                   onClick={() => onSelectSquad && onSelectSquad(item.squad)}
                   className="p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-2xs transition-all cursor-pointer space-y-2.5"
                 >
@@ -969,9 +984,9 @@ export default function WeeklyCheckinSection({
               </div>
             ) : (
               <div className="space-y-2.5 pt-3">
-                {lastWeekWins.map((task) => (
+                {lastWeekWins.map((task, idx) => (
                   <div
-                    key={task.request_id}
+                    key={task.request_id || `win-${idx}`}
                     onClick={() => onSelectRequest(task)}
                     className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50/80 transition-all cursor-pointer space-y-1.5 group"
                   >

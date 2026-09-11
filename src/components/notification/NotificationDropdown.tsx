@@ -324,13 +324,13 @@ export default function NotificationDropdown({
             </p>
           </div>
         ) : (
-          filteredNotifications.map((item) => {
+          filteredNotifications.map((item, idx) => {
             const config = getNotificationTypeConfig(item.type)
             const IconComponent = config.icon
 
             return (
               <div
-                key={item.id}
+                key={item.id || `notif-${idx}`}
                 onClick={() => handleItemClick(item)}
                 className={`group relative px-3.5 py-3 hover:bg-slate-50/90 transition-colors cursor-pointer flex items-start gap-3 ${
                   !item.read ? "bg-blue-50/25" : "bg-white"

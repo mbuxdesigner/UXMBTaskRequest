@@ -396,12 +396,12 @@ export default function AppHeader({
                     <p className="text-[11px] text-slate-400">Chuyển đổi nhanh giữa các module</p>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {appGridItems.map((item) => {
+                    {appGridItems.map((item, aIdx) => {
                       const Icon = item.icon
                       const isActive = currentPage === item.id
                       return (
                         <button
-                          key={item.id}
+                          key={item.id || `app-item-${aIdx}`}
                           type="button"
                           onClick={() => {
                             onNavigate(item.id)
@@ -487,12 +487,12 @@ export default function AppHeader({
                       View theo role
                     </div>
                     <div className="space-y-0.5 px-1.5">
-                      {ROLE_OPTIONS.map((role) => {
+                      {ROLE_OPTIONS.map((role, rIdx) => {
                         const isSelected = userRole === role.id
                         const Icon = role.icon
                         return (
                           <button
-                            key={role.id}
+                            key={role.id || `role-${rIdx}`}
                             type="button"
                             onClick={() => handleSelectRole(role.id, role.label)}
                             className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-colors text-left cursor-pointer group ${

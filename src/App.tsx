@@ -29,6 +29,7 @@ import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
 
 import AppHeader from "@/components/common/AppHeader"
+import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 
 import {
   getStoredSession,
@@ -334,29 +335,31 @@ export default function App() {
 
           {/* Main Content View */}
           <div className="flex-1 w-full px-6 py-6 lg:px-8 lg:py-8">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={page}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.22, ease: "easeInOut" }}
-                className="w-full"
-              >
-                {page === "overview" && <TongQuanPage />}
-                {page === "create" && (
-                  <CreateRequestPage onBack={() => handleNavigate("track")} />
-                )}
-                {page === "track" && (
-                  <TrackRequestPage
-                    onNavigateToCreate={() => handleNavigate("create")}
-                  />
-                )}
-                {page === "manage" && <QuanLyPage />}
-                {page === "test" && <TestAssessmentPage />}
-                {page === "compressor" && <ImageCompressorPage />}
-              </motion.div>
-            </AnimatePresence>
+            <ErrorBoundary>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={page}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  className="w-full"
+                >
+                  {page === "overview" && <TongQuanPage />}
+                  {page === "create" && (
+                    <CreateRequestPage onBack={() => handleNavigate("track")} />
+                  )}
+                  {page === "track" && (
+                    <TrackRequestPage
+                      onNavigateToCreate={() => handleNavigate("create")}
+                    />
+                  )}
+                  {page === "manage" && <QuanLyPage />}
+                  {page === "test" && <TestAssessmentPage />}
+                  {page === "compressor" && <ImageCompressorPage />}
+                </motion.div>
+              </AnimatePresence>
+            </ErrorBoundary>
           </div>
 
           {/* ReUI App Shell 12 Footer */}

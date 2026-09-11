@@ -139,8 +139,8 @@ export default function MemberDetailDrawer({
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Squads & Sản phẩm phụ trách</h4>
               <div className="flex flex-wrap gap-1.5">
-                {member.squads.map((sq) => (
-                  <Badge key={sq} variant="secondary" size="xs" className="font-semibold">
+                {member.squads.map((sq, sqIdx) => (
+                  <Badge key={`${sq}-${sqIdx}`} variant="secondary" size="xs" className="font-semibold">
                     {sq}
                   </Badge>
                 ))}

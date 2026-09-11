@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from "react"
+import React, { useState, useMemo, useCallback, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { UXRequest } from "@/data/mockData"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
@@ -283,7 +284,25 @@ export default function SolutionAgentsTable({
 }: SolutionAgentsTableProps) {
   const showContext = true // Latest step line
   const density: "comfortable" | "compact" = "comfortable" // Auto bảng thoáng theo yêu cầu người dùng
-  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null)
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<{
+    requestId: string
+    rect: DOMRect
+    req: UXRequest
+  } | null>(null)
+
+  // Đóng Action Popover khi click ra ngoài hoặc cuộn trang/bảng
+  React.useEffect(() => {
+    if (!actionMenuAnchor) return
+    const handleClose = () => setActionMenuAnchor(null)
+    window.addEventListener("click", handleClose)
+    window.addEventListener("scroll", handleClose, true)
+    window.addEventListener("resize", handleClose)
+    return () => {
+      window.removeEventListener("click", handleClose)
+      window.removeEventListener("scroll", handleClose, true)
+      window.removeEventListener("resize", handleClose)
+    }
+  }, [actionMenuAnchor])
 
   // Collapsed Groups State (all expanded by default)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
@@ -491,7 +510,7 @@ export default function SolutionAgentsTable({
     e.stopPropagation()
     navigator.clipboard.writeText(reqId)
     toast.success(`Đã sao chép mã: ${reqId}`)
-    setActiveActionMenuId(null)
+    setActionMenuAnchor(null)
   }
 
   const handleCopyLink = (e: React.MouseEvent, reqId: string) => {
@@ -499,12 +518,12 @@ export default function SolutionAgentsTable({
     const url = `${window.location.origin}/#task-${reqId}`
     navigator.clipboard.writeText(url)
     toast.success("Đã sao chép liên kết bài toán!")
-    setActiveActionMenuId(null)
+    setActionMenuAnchor(null)
   }
 
   return (
     <div data-slot="data-grid" className="w-full select-none rounded-b-2xl">
-      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
         <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
           <colgroup>
             <col className="w-[32%]" />
@@ -625,7 +644,10 @@ export default function SolutionAgentsTable({
                           </div>
 
                           {/* Right: Group description */}
-                          <span className="text-xs text-slate-500 font-medium truncate max-w-sm hidden md:inline-block pr-2">
+                          <span
+                            className="text-xs text-slate-500 font-medium truncate max-w-md lg:max-w-xl hidden md:inline-block pr-2"
+                            title={group.summary}
+                          >
                             {group.summary}
                           </span>
                         </div>
@@ -681,8 +703,6 @@ export default function SolutionAgentsTable({
 
                           const pendingInfo = getRequestPendingClassification(req)
                           const isLastRow = rowIdx === group.items.length - 1
-                          const isSecondToLast = rowIdx === group.items.length - 2 && group.items.length >= 3
-                          const isNearBottom = isLastRow || isSecondToLast
                           const cellBorderClass = isHighlighted
                             ? "border-b border-blue-200"
                             : isLastRow
@@ -730,6 +750,7 @@ export default function SolutionAgentsTable({
                               }}
                               className={cn(
                                 "transition-colors duration-500 group/run-row cursor-pointer relative",
+                                actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-0",
                                 isHighlighted
                                   ? "bg-blue-50/80 ring-1 ring-blue-300/80 ring-inset shadow-2xs"
                                   : isIncoming
@@ -977,61 +998,39 @@ export default function SolutionAgentsTable({
                               </td>
 
                               {/* 8. Action Menu */}
-                              <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
+                              <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
                                 {isMutating && (
                                   <div
                                     className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
                                   />
                                 )}
                                 <div className="relative inline-block text-left">
-                                  <button
+                                  <motion.button
                                     type="button"
+                                    whileHover={{ scale: 1.08 }}
+                                    whileTap={{ scale: 0.88 }}
+                                    transition={springs.snappy}
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      setActiveActionMenuId(activeActionMenuId === req.request_id ? null : req.request_id)
+                                      if (actionMenuAnchor?.requestId === req.request_id) {
+                                        setActionMenuAnchor(null)
+                                      } else {
+                                        const rect = e.currentTarget.getBoundingClientRect()
+                                        setActionMenuAnchor({
+                                          requestId: req.request_id,
+                                          rect,
+                                          req,
+                                        })
+                                      }
                                     }}
-                                    className="size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    className={cn(
+                                      "size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer",
+                                      actionMenuAnchor?.requestId === req.request_id && "bg-slate-100 text-slate-800"
+                                    )}
                                     title="Thao tác nhanh"
                                   >
                                     <MoreHorizontal className="size-4" />
-                                  </button>
-
-                                  {/* Action Popover */}
-                                  {activeActionMenuId === req.request_id && (
-                                    <div
-                                      className={`absolute right-0 ${
-                                        isNearBottom ? "bottom-full mb-1.5 origin-bottom-right" : "top-full mt-1.5 origin-top-right"
-                                      } z-30 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 text-left animate-in fade-in-50 zoom-in-95`}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          onSelectRequest(req)
-                                          setActiveActionMenuId(null)
-                                        }}
-                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                      >
-                                        <Eye className="w-3.5 h-3.5 text-slate-500" />
-                                        <span>Mở chi tiết</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleCopyId(e, req.request_id)}
-                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                      >
-                                        <Copy className="w-3.5 h-3.5 text-slate-500" />
-                                        <span>Sao chép mã ID</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleCopyLink(e, req.request_id)}
-                                        className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                                      >
-                                        <Share2 className="w-3.5 h-3.5 text-slate-500" />
-                                        <span>Sao chép liên kết</span>
-                                      </button>
-                                    </div>
-                                  )}
+                                  </motion.button>
                                 </div>
                               </td>
                             </>
@@ -1062,6 +1061,76 @@ export default function SolutionAgentsTable({
           </span>
         </div>
       </div>
+
+      {/* Action Popover via Portal: Mount trực tiếp vào body với Origin-Aware Spring Animation (AnimatePresence) */}
+      {createPortal(
+        <AnimatePresence>
+          {actionMenuAnchor &&
+            (() => {
+              const menuWidth = 176 // w-44 = 176px
+              const menuHeight = 126
+              const spaceBelow = window.innerHeight - actionMenuAnchor.rect.bottom
+              const openUpwards = spaceBelow < menuHeight + 12 && actionMenuAnchor.rect.top > menuHeight
+
+              const top = openUpwards
+                ? Math.max(8, actionMenuAnchor.rect.top - menuHeight - 4)
+                : Math.min(window.innerHeight - menuHeight - 8, actionMenuAnchor.rect.bottom + 4)
+              const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, actionMenuAnchor.rect.right - menuWidth))
+              const transformOrigin = openUpwards ? "bottom right" : "top right"
+
+              return (
+                <motion.div
+                  key="action-popover-portal-menu"
+                  initial={{ opacity: 0, scale: 0.9, y: openUpwards ? 4 : -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{
+                    opacity: 0,
+                    scale: 0.92,
+                    y: openUpwards ? 4 : -4,
+                    transition: { duration: 0.12, ease: "easeIn" },
+                  }}
+                  transition={springs.snappy}
+                  style={{ top: `${top}px`, left: `${left}px`, transformOrigin }}
+                  className="fixed z-[9999] w-44 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1 text-left pointer-events-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectRequest(actionMenuAnchor.req)
+                      setActionMenuAnchor(null)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Mở chi tiết</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      handleCopyId(e, actionMenuAnchor.req.request_id)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Sao chép mã ID</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      handleCopyLink(e, actionMenuAnchor.req.request_id)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer font-medium transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Sao chép liên kết</span>
+                  </button>
+                </motion.div>
+              )
+            })()}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   )
 }

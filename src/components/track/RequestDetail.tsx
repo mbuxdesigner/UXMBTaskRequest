@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
+import { dialogOverlayVariants, dialogContentVariants, drawerVariants, springs, tactileProps } from "@/lib/motion"
 import { 
   UXRequest, 
   TaskUpdateRecord, 
@@ -3155,43 +3157,40 @@ export default function RequestDetail({
     return { showBanner1: false, hoursRemaining: 0, sentTimeStr: "" }
   }, [request?.status, request?.sent_to_po_at, request?.last_updated, request?.progress, request?.current_phase, request?.latest_update])
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isVisible && request && (
-        <motion.div 
+        <div 
           key="request-detail-root"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-50 overflow-hidden" 
+          className="fixed inset-0 z-50 overflow-hidden select-none" 
           onClick={() => {
             setOpenDropdown(null)
           }}
         >
-          {/* Backdrop Blur Overlay */}
+          {/* Backdrop Blur Overlay with motion */}
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            key="request-detail-backdrop"
+            variants={dialogOverlayVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs cursor-pointer"
             onClick={handleDismiss}
           />
 
           {/* Floating Slide-over Sheet / Fullscreen Modal */}
-          <div className={`fixed z-50 pointer-events-none transition-all duration-300 ${
+          <div className={`fixed z-50 pointer-events-none ${
             isFullScreen 
               ? "inset-0 sm:inset-3 md:inset-4 flex items-center justify-center" 
               : "inset-0 sm:inset-y-3 sm:right-3 sm:left-auto flex justify-end"
           }`}>
             <motion.aside 
               key="request-detail-drawer"
-              initial={isFullScreen ? { scale: 0.95, opacity: 0 } : { x: "100%", opacity: 0.5 }}
-              animate={isFullScreen ? { scale: 1, opacity: 1 } : { x: 0, opacity: 1 }}
-              exit={isFullScreen ? { scale: 0.95, opacity: 0 } : { x: "100%", opacity: 0 }}
-              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
-              className={`pointer-events-auto bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transition-all duration-300 transform-gpu will-change-transform ${
+              variants={isFullScreen ? dialogContentVariants : drawerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className={`pointer-events-auto bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transform-gpu will-change-transform ${
                 isFullScreen
                   ? "w-full max-w-none"
                   : "w-full sm:w-[680px] md:w-[780px] lg:w-[1020px] xl:w-[1200px]"
@@ -3234,30 +3233,39 @@ export default function RequestDetail({
                     <span className="text-emerald-600/80 text-[10px] font-normal">• {liveSyncTime}</span>
                   </div>
 
-                  <button
+                  <motion.button
                     type="button"
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={springs.snappy}
                     onClick={handleCopyLink}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                     title="Sao chép link bài toán"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={springs.snappy}
                     onClick={() => setIsFullScreen(!isFullScreen)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer hidden md:inline-flex"
                     title={isFullScreen ? "Thu nhỏ cửa sổ" : "Mở rộng toàn màn hình"}
                   >
                     {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={springs.snappy}
                     onClick={handleDismiss}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                     title="Đóng (Esc)"
                   >
                     <X className="w-4 h-4" />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
 
@@ -5095,7 +5103,7 @@ export default function RequestDetail({
               </div>
             </motion.aside>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Modal Cập nhật Tiến độ */}
@@ -5465,6 +5473,7 @@ export default function RequestDetail({
           </div>
         )}
       </AnimatePresence>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

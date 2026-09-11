@@ -34,11 +34,12 @@ export async function fetchSquads(forceRefresh = false): Promise<Squad[]> {
     : [...mockSquads]
 
   // Compute active & queued tasks dynamically from REAL Google Sheet requests
-  return baseSquads.map((squad) => {
+  return baseSquads.map((squad: any) => {
+    const squadName = (squad?.squad_name || squad?.name || "").trim()
     const matchingRequests = requests.filter(
       (r) =>
-        (r.preferred_squad && r.preferred_squad.toLowerCase() === squad.squad_name.toLowerCase()) ||
-        (r.product && r.product.toLowerCase() === squad.squad_name.toLowerCase())
+        (squadName && r.preferred_squad && r.preferred_squad.toLowerCase() === squadName.toLowerCase()) ||
+        (squadName && r.product && r.product.toLowerCase() === squadName.toLowerCase())
     )
 
     const activeRequests = matchingRequests.filter((r) => r.status === "Đang thực hiện")
@@ -46,8 +47,15 @@ export async function fetchSquads(forceRefresh = false): Promise<Squad[]> {
 
     return {
       ...squad,
+      squad_id: squad.squad_id || squad.id || `sq-${squadName}`,
+      squad_name: squadName || "Squad",
+      product_id: squad.product_id || squad.productId || "",
+      product_name: squad.product_name || squad.productName || "",
+      domain: squad.domain || "",
       active_tasks: activeRequests.length,
       queued_tasks: queuedRequests.length,
+      capacity_threshold: squad.capacity_threshold || squad.capacityThreshold || 6,
+      ux_owner: squad.ux_owner || squad.leadDesigner || "",
       active_task_titles: activeRequests.map((r) => r.title),
       queued_task_titles: queuedRequests.map((r) => r.title),
     }

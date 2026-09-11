@@ -182,11 +182,11 @@ export default function SquadDistributionSection({
               <FrameBody className="space-y-4">
                 {/* Type distribution bars */}
                 <div className="space-y-3">
-                  {Object.entries(currentSquadDetail.typeMap).map(([typeName, count]) => {
+                  {Object.entries(currentSquadDetail.typeMap).map(([typeName, count], tIdx) => {
                     const total = currentSquadDetail.matchingReqs.length || 1
                     const pct = Math.round((count / total) * 100)
                     return (
-                      <div key={typeName} className="space-y-1">
+                      <div key={`type-${typeName || "unknown"}-${tIdx}`} className="space-y-1">
                         <div className="flex justify-between text-xs font-semibold text-slate-700">
                           <span>{typeName}</span>
                           <span className="font-mono text-slate-500">{count} task ({pct}%)</span>

@@ -75,7 +75,7 @@ export default function Sidebar({
     window.addEventListener("auth_session_changed", handleStorage)
     window.addEventListener("nav_visibility_changed", handleStorage)
     window.addEventListener("rbac_permissions_changed", handleStorage)
-    const interval = setInterval(handleStorage, 1000)
+    const interval = setInterval(handleStorage, 10000)
     return () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("auth_session_changed", handleStorage)

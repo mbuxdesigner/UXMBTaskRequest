@@ -65,7 +65,21 @@ export default function TongQuanPage() {
       const cached = localStorage.getItem("mbbank_admin_squads")
       if (cached) {
         const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((s: any) => ({
+            squad_id: s.squad_id || s.id || `sq-${s.name || ""}`,
+            squad_name: s.squad_name || s.name || "Squad",
+            product_id: s.product_id || s.productId || "",
+            product_name: s.product_name || s.productName || "",
+            domain: s.domain || "",
+            active_tasks: s.active_tasks || s.taskCount || 0,
+            queued_tasks: s.queued_tasks || 0,
+            capacity_threshold: s.capacity_threshold || s.capacityThreshold || 6,
+            ux_owner: s.ux_owner || s.leadDesigner || "",
+            active_task_titles: s.active_task_titles || [],
+            queued_task_titles: s.queued_task_titles || [],
+          }))
+        }
       }
     } catch {}
     return []

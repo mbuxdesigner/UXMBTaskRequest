@@ -354,9 +354,9 @@ export default function MemberWorkloadSection({
                   <div className="space-y-1">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Squads phụ trách</p>
                     <div className="flex flex-wrap gap-1">
-                      {member.squads.map((sq) => (
+                      {member.squads.map((sq, sqIdx) => (
                         <span
-                          key={sq}
+                          key={`${sq}-${sqIdx}`}
                           className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 border border-slate-200/60 rounded-md text-slate-600 truncate max-w-[150px]"
                         >
                           {sq}
