@@ -25,6 +25,7 @@ import {
 import { useNotifications } from "../../services/notificationService"
 import { NotificationItem, NotificationType } from "../../types/notification"
 import { NOTIFICATION_TEMPLATES } from "../../config/notificationTemplates"
+import { springs, originPopoverVariants } from "@/lib/motion"
 
 export interface NotificationDropdownProps {
   isOpen?: boolean
@@ -205,14 +206,14 @@ export default function NotificationDropdown({
     }
   }
 
-  if (!isOpen) return null
-
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.96, y: -6 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, y: -6 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
+      variants={originPopoverVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={springs.popover}
+      style={{ transformOrigin: "top right" }}
       className="absolute right-0 top-full mt-2 w-[340px] sm:w-[410px] bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-50 overflow-hidden flex flex-col origin-top-right text-slate-800 select-none"
       onClick={(e) => e.stopPropagation()}
     >

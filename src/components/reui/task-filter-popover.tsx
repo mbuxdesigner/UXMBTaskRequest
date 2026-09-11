@@ -4,6 +4,7 @@ import { Filter, Check, X } from "lucide-react"
 import { getKanbanColumns, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
 import { UXRequest } from "@/data/mockData"
 import { getProductColorDef } from "@/lib/colorUtils"
+import { springs, originPopoverVariants, useAnchorOrigin } from "@/lib/motion"
 
 export interface FilterState {
   phases: string[]
@@ -33,12 +34,21 @@ export default function TaskFilterPopover({
   onClearAll,
 }: TaskFilterPopoverProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const popoverRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverContentRef = useRef<HTMLDivElement>(null)
+
+  const { transformOrigin } = useAnchorOrigin(
+    triggerRef,
+    popoverContentRef,
+    "bottom-right",
+    isOpen
+  )
 
   // Close when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
     }
@@ -116,10 +126,12 @@ export default function TaskFilterPopover({
   const activeFilterCount = selectedPhases.length + selectedProducts.length + selectedSquads.length
 
   return (
-    <div className="relative" ref={popoverRef}>
+    <div className="relative" ref={containerRef}>
       {/* Trigger Button */}
-      <button
+      <motion.button
+        ref={triggerRef}
         type="button"
+        whileTap={{ scale: 0.96 }}
         onClick={() => setIsOpen(!isOpen)}
         className={`h-8 px-3 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
           activeFilterCount > 0
@@ -136,16 +148,19 @@ export default function TaskFilterPopover({
             {activeFilterCount}
           </span>
         )}
-      </button>
+      </motion.button>
 
       {/* Popover Card */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.97, transition: { duration: 0.12 } }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
+            ref={popoverContentRef}
+            variants={originPopoverVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.popover}
+            style={{ transformOrigin }}
             className="absolute right-0 top-full mt-2 w-72 max-h-[min(580px,calc(100vh-140px))] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 z-50 space-y-4"
           >
             {/* Header: Filters + Clear button */}

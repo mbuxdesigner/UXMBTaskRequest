@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { ChevronDown, Check } from "lucide-react"
+import { springs } from "@/lib/motion"
 
 export interface DropdownOption {
   value: string
@@ -58,8 +60,9 @@ export function DropdownMenu({
     <div className={`relative ${className.includes("w-full") ? "w-full" : "inline-block"} ${className}`} ref={dropdownRef}>
       {/* Trigger Button - 2-Line Container matching reference design when label is passed */}
       {label ? (
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.99 }}
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full p-3.5 bg-[#F1F4F9] hover:bg-[#E8EDF5] border border-slate-200/60 rounded-2xl flex items-center justify-between text-left transition-colors cursor-pointer select-none ${
             isOpen ? "ring-2 ring-[#1057FB]/20 border-[#1057FB]" : ""
@@ -88,10 +91,11 @@ export function DropdownMenu({
               isOpen ? "rotate-180 text-slate-700" : ""
             }`}
           />
-        </button>
+        </motion.button>
       ) : (
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.98 }}
           onClick={() => setIsOpen(!isOpen)}
           className={`h-9 px-3.5 w-full bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-semibold text-slate-800 flex items-center justify-between gap-2.5 transition-all shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#1057FB]/15 cursor-pointer ${
             isOpen ? "border-[#1057FB] ring-2 ring-[#1057FB]/10" : ""
@@ -113,51 +117,65 @@ export function DropdownMenu({
               }`}
             />
           </div>
-        </button>
+        </motion.button>
       )}
 
       {/* Floating Menu Popover (Supports position="top" and position="bottom") */}
-      {isOpen && (
-        <div
-          className={`absolute left-0 bg-white border border-slate-200/90 rounded-xl shadow-xl shadow-slate-900/10 p-1.5 z-50 animate-in fade-in-0 zoom-in-95 duration-150 ${
-            position === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5"
-          } ${menuClassName || "w-full min-w-56 max-h-72 overflow-y-auto"}`}
-        >
-          <div className="space-y-0.5">
-            {options.map((opt, idx) => {
-              const isSelected = opt.value === value
-              return (
-                <button
-                  key={opt.value !== "" ? `opt-val-${opt.value}` : `opt-idx-${idx}`}
-                  type="button"
-                  onClick={() => {
-                    onChange(opt.value)
-                    setIsOpen(false)
-                  }}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer group ${
-                    isSelected
-                      ? "bg-blue-50 text-[#1057FB] font-bold"
-                      : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {opt.icon && (
-                      <span className={`${isSelected ? "text-[#1057FB]" : "text-slate-400 group-hover:text-slate-600"}`}>
-                        {opt.icon}
-                      </span>
-                    )}
-                    <span className="truncate">{opt.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    {opt.badge}
-                    {isSelected && <Check className="w-3.5 h-3.5 text-[#1057FB] stroke-[2.5]" />}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: position === "top" ? 4 : -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{
+              opacity: 0,
+              scale: 0.95,
+              y: position === "top" ? 4 : -4,
+              transition: { duration: 0.12, ease: "easeIn" },
+            }}
+            transition={springs.popover}
+            style={{
+              transformOrigin: position === "top" ? "bottom left" : "top left",
+            }}
+            className={`absolute left-0 bg-white border border-slate-200/90 rounded-xl shadow-xl shadow-slate-900/10 p-1.5 z-50 select-none ${
+              position === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+            } ${menuClassName || "w-full min-w-56 max-h-72 overflow-y-auto"}`}
+          >
+            <div className="space-y-0.5">
+              {options.map((opt, idx) => {
+                const isSelected = opt.value === value
+                return (
+                  <button
+                    key={opt.value !== "" ? `opt-val-${opt.value}` : `opt-idx-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.value)
+                      setIsOpen(false)
+                    }}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer group ${
+                      isSelected
+                        ? "bg-blue-50 text-[#1057FB] font-bold"
+                        : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {opt.icon && (
+                        <span className={`${isSelected ? "text-[#1057FB]" : "text-slate-400 group-hover:text-slate-600"}`}>
+                          {opt.icon}
+                        </span>
+                      )}
+                      <span className="truncate">{opt.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                      {opt.badge}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-[#1057FB] stroke-[2.5]" />}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

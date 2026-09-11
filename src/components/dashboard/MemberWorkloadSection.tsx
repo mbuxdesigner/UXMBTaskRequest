@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from "react"
+import { motion } from "framer-motion"
+import { springs } from "@/lib/motion"
 import { UXRequest } from "../../data/mockData"
 import { isMockDesigner } from "@/components/track/RequestDetail"
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FrameBody } from "@/components/reui/frame"
@@ -56,6 +58,7 @@ export default function MemberWorkloadSection({
   onSelectRequest,
 }: MemberWorkloadSectionProps) {
   const [filterRole, setFilterRole] = useState<string>("ALL")
+  const [hoveredRole, setHoveredRole] = useState<string | null>(null)
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
 
   // Compute live metrics per team member based on REAL requests (loại bỏ mock users)
@@ -227,21 +230,43 @@ export default function MemberWorkloadSection({
           </div>
 
           {/* Role Filter Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/60 text-xs">
-            {["ALL", "Designer", "PO", "Owner"].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setFilterRole(r)}
-                className={`px-3 py-1 font-semibold rounded-lg transition-all cursor-pointer ${
-                  filterRole === r
-                    ? "bg-white text-slate-900 shadow-2xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                {r === "ALL" ? "Tất cả vai trò" : r}
-              </button>
-            ))}
+          <div 
+            className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl border border-slate-200/60 text-xs select-none"
+            onMouseLeave={() => setHoveredRole(null)}
+          >
+            {["ALL", "Designer", "PO", "Owner"].map((r) => {
+              const isActive = filterRole === r
+              const isHovered = hoveredRole === r
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setFilterRole(r)}
+                  onMouseEnter={() => setHoveredRole(r)}
+                  className={`relative isolate px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                    isActive
+                      ? "text-slate-900 font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="role-filter-indicator"
+                      className="absolute inset-0 bg-white rounded-lg shadow-2xs -z-10"
+                      transition={springs.floating}
+                    />
+                  )}
+                  {isHovered && !isActive && (
+                    <motion.div
+                      layoutId="role-filter-hover-indicator"
+                      className="absolute inset-0 bg-slate-200/50 rounded-lg -z-10"
+                      transition={springs.snappy}
+                    />
+                  )}
+                  <span className="relative z-10">{r === "ALL" ? "Tất cả vai trò" : r}</span>
+                </button>
+              )
+            })}
           </div>
         </FrameHeader>
 

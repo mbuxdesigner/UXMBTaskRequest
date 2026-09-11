@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { springs, staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
@@ -52,6 +53,13 @@ import ReUIGanttChart from "@/components/reui/gantt-chart"
 interface TrackRequestPageProps {
   onNavigateToCreate?: () => void
 }
+
+const VIEW_MODES = [
+  { id: "table", label: "Bảng", icon: ListFilter },
+  { id: "kanban", label: "Kanban", icon: Columns3 },
+  { id: "grid", label: "Lưới", icon: LayoutGrid },
+  { id: "gantt", label: "Gantt", icon: CalendarRange },
+] as const
 
 const STATUS_FILTERS = ["Tất cả", "Đang phân loại", "Đang thực hiện", "Hoàn thành"]
 
@@ -139,13 +147,32 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [statusFilter, setStatusFilter] = useState<string>("Tất cả")
   const [productFilter, setProductFilter] = useState<string>("all")
   const [viewMode, setViewMode] = useState<"table" | "kanban" | "grid" | "gantt">("table")
+  const [hoveredViewMode, setHoveredViewMode] = useState<string | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
   const selectedRequestRef = useRef<UXRequest | null>(null)
   useEffect(() => {
     selectedRequestRef.current = selectedRequest
   }, [selectedRequest])
-  const [allRequests, setAllRequests] = useState<UXRequest[]>([])
-  const [loading, setLoading] = useState(true)
+  const [allRequests, setAllRequests] = useState<UXRequest[]>(() => {
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return []
+  })
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return false
+      }
+    } catch {}
+    return true
+  })
 
   // R1. Real-time Event Ingestion & Smart Diffing Engine hook
   const {
@@ -176,14 +203,15 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [remainingSeconds, setRemainingSeconds] = useState(getRemainingSessionSeconds())
 
   const loadData = async (forceRefresh = false, isUserInitiated = false) => {
-    setLoading(true)
+    if (allRequests.length === 0) setLoading(true)
     const startTime = Date.now()
     try {
       const reqs = await fetchRequests(forceRefresh)
-      // Đảm bảo skeleton hiển thị mượt mà tối thiểu 600ms
-      const elapsed = Date.now() - startTime
-      if (elapsed < 600) {
-        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      if (loading) {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 350) {
+          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        }
       }
       setAllRequests(reqs)
       if (isUserInitiated) {
@@ -222,7 +250,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       } catch {}
     }
 
-    loadData(true).then(() => {
+    const hasCache = allRequests.length > 0
+    loadData(!hasCache).then(() => {
       if (pendingId) {
         try {
           const cached = localStorage.getItem("ux_portal_real_requests")
@@ -825,56 +854,47 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
           {/* Right: Controls (Segmented view toggle, Filter, Collapse, Refresh, New Task) */}
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
-            {/* View Mode Switcher: Bảng | Kanban | Lưới */}
-            <div className="flex items-center rounded-lg bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "table"
-                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <ListFilter className="size-3.5" />
-                <span>Bảng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("kanban")}
-                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "kanban"
-                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Columns3 className="size-3.5" />
-                <span>Kanban</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <LayoutGrid className="size-3.5" />
-                <span>Lưới</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("gantt")}
-                className={`h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "gantt"
-                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <CalendarRange className="size-3.5" />
-                <span>Gantt</span>
-              </button>
+            {/* View Mode Switcher: Bảng | Kanban | Lưới | Gantt */}
+            <div 
+              className="flex items-center rounded-lg bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs select-none"
+              onMouseLeave={() => setHoveredViewMode(null)}
+            >
+              {VIEW_MODES.map((item) => {
+                const isActive = viewMode === item.id
+                const isHovered = hoveredViewMode === item.id
+                const Icon = item.icon
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setViewMode(item.id)}
+                    onMouseEnter={() => setHoveredViewMode(item.id)}
+                    className={`relative isolate h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      isActive
+                        ? "text-slate-900 font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="view-mode-pill"
+                        className="absolute inset-0 bg-white rounded-md shadow-2xs -z-10"
+                        transition={springs.floating}
+                      />
+                    )}
+                    {isHovered && !isActive && (
+                      <motion.div
+                        layoutId="view-mode-hover-pill"
+                        className="absolute inset-0 bg-slate-200/50 rounded-md -z-10"
+                        transition={springs.snappy}
+                      />
+                    )}
+                    <Icon className="size-3.5 relative z-10" />
+                    <span className="relative z-10">{item.label}</span>
+                  </button>
+                )
+              })}
             </div>
 
             {/* Filter Button */}
@@ -939,7 +959,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                     key="grid-loading"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    exit={{ opacity: 0, transition: { duration: durations.skeletonExit } }}
                     transition={{ duration: 0.2 }}
                   >
                     <GridCardsSkeleton cardCount={6} />
@@ -947,14 +967,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 ) : filteredRequests.length > 0 ? (
                   <motion.div
                     key="grid-list"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
+                    variants={staggerContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
                     className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
                   >
                     {filteredRequests.map((r, idx) => (
-                      <RequestCard key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`} request={r} onClick={setSelectedRequest} />
+                      <motion.div
+                        key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`}
+                        variants={staggerItemVariants}
+                      >
+                        <RequestCard request={r} onClick={setSelectedRequest} />
+                      </motion.div>
                     ))}
                   </motion.div>
                 ) : (

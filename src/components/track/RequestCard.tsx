@@ -6,6 +6,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import { SpotlightCard } from "@/components/jolyui/spotlight-card"
 import { ArrowUpRight, Clock, PauseCircle } from "lucide-react"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
+import { springs } from "@/lib/motion"
 
 interface RequestCardProps {
   request: UXRequest
@@ -72,7 +73,18 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
     <SpotlightCard
       spotlightColor="rgba(16, 87, 251, 0.08)"
       onClick={() => onClick(request)}
-      className="cursor-pointer hover:border-[#1B3A6B]/40 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group bg-white relative overflow-hidden"
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={springs.snappy}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick(request)
+        }
+      }}
+      className="cursor-pointer hover:border-[#1B3A6B]/50 hover:shadow-xl transition-shadow transition-colors duration-200 group bg-white relative overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1057FB]/40"
     >
       {/* Top accent line on hover */}
       <div className="h-1 w-full bg-gradient-to-r from-[#1B3A6B] via-[#0D9B97] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { springs } from "@/lib/motion"
 import { 
   Home,
   CheckSquare,
@@ -50,6 +52,7 @@ export default function Sidebar({
   const [activeTaskCount, setActiveTaskCount] = useState<number>(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null)
   const [canInvite, setCanInvite] = useState<boolean>(() => {
     const currentSession = getStoredSession()
     return canRoleAccessCapability(currentSession?.role, "cap-invite")
@@ -182,213 +185,357 @@ export default function Sidebar({
   const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create
   const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
 
-  const renderSidebarContent = () => (
-    <nav aria-label="Menu điều hướng ứng dụng" className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
-      
-      {/* 1. Header / Workspace Brand */}
-      <div className="px-4 pt-5 pb-3">
-        <button
-          type="button"
-          onClick={() => onNavigate("overview")}
-          aria-label="Về trang chủ MB UXTeam"
-          className="flex items-center gap-2.5 font-bold text-slate-900 text-left cursor-pointer group select-none"
-        >
-          <img
-            src="/favicon.svg"
-            alt="MB UXTeam"
-            width="28"
-            height="28"
-            className="w-7 h-7 object-contain shrink-0 group-hover:scale-105 transition-transform"
-          />
-          <span className="text-[15px] font-bold text-slate-900 tracking-tight">
-            MB UXTeam
-          </span>
-        </button>
-      </div>
+  const renderSidebarContent = (isMobile = false) => {
+    const activeLayoutId = `sidebar-active-indicator${isMobile ? "-mobile" : ""}`
+    const hoverLayoutId = `sidebar-hover-indicator${isMobile ? "-mobile" : ""}`
 
-      {/* 2. Scrollable Navigation Body */}
-      <div className="flex-1 overflow-y-auto px-3 pt-3 pb-2 space-y-6">
+    return (
+      <nav aria-label="Menu điều hướng ứng dụng" className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
         
-        {/* SECTION 1: QUẢN LÝ CÔNG VIỆC (Platform) */}
-        {hasPlatformItems && (
-          <div className="space-y-1.5">
-            <p className="px-3 pt-1 pb-1.5 text-xs font-semibold text-slate-600 tracking-normal">
-              {APP_CONTENT.sidebar.sections.platform}
-            </p>
+        {/* 1. Header / Workspace Brand */}
+        <div className="px-4 pt-5 pb-3">
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate("overview")
+              if (isMobile) setMobileOpen(false)
+            }}
+            aria-label="Về trang chủ MB UXTeam"
+            className="flex items-center gap-2.5 font-bold text-slate-900 text-left cursor-pointer group select-none"
+          >
+            <img
+              src="/favicon.svg"
+              alt="MB UXTeam"
+              width="28"
+              height="28"
+              className="w-7 h-7 object-contain shrink-0 group-hover:scale-105 transition-transform"
+            />
+            <span className="text-[15px] font-bold text-slate-900 tracking-tight">
+              MB UXTeam
+            </span>
+          </button>
+        </div>
 
-            {navOrder.platform.map((itemKey) => {
-              if (itemKey === "overview" && currentRoleVisibility.overview) {
+        {/* 2. Scrollable Navigation Body */}
+        <div 
+          className="flex-1 overflow-y-auto px-3 pt-3 pb-2 space-y-6"
+          onMouseLeave={() => setHoveredNav(null)}
+        >
+          {/* SECTION 1: QUẢN LÝ CÔNG VIỆC (Platform) */}
+          {hasPlatformItems && (
+            <div className="space-y-1.5">
+              <p className="px-3 pt-1 pb-1.5 text-xs font-semibold text-slate-600 tracking-normal">
+                {APP_CONTENT.sidebar.sections.platform}
+              </p>
+
+              {navOrder.platform.map((itemKey) => {
+                if (itemKey === "overview" && currentRoleVisibility.overview) {
+                  const isActive = currentPage === "overview"
+                  const isHovered = hoveredNav === "overview"
+                  return (
+                    <button
+                      key="nav-overview"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("overview")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("overview")
+                        preloadPage("overview")
+                      }}
+                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <Home className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.overview.title}</span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "track" && currentRoleVisibility.track) {
+                  const isActive = currentPage === "track"
+                  const isHovered = hoveredNav === "track"
+                  return (
+                    <button
+                      key="nav-track"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("track")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("track")
+                        preloadPage("track")
+                      }}
+                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                        <CheckSquare className={`w-4 h-4 shrink-0 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                        <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0 relative z-10">
+                        {activeTaskCount}
+                      </span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "create" && currentRoleVisibility.create) {
+                  const isActive = currentPage === "create"
+                  const isHovered = hoveredNav === "create"
+                  return (
+                    <button
+                      key="nav-create"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("create")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("create")
+                        preloadPage("create")
+                      }}
+                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <PlusCircle className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.create.title}</span>
+                    </button>
+                  )
+                }
+
+                return null
+              })}
+            </div>
+          )}
+
+          {/* SECTION 2: TOOLS (Resources) */}
+          {hasResourceItems && (
+            <div className="space-y-1">
+              <p className="px-3 py-1 text-xs font-semibold text-slate-600 tracking-normal">
+                {APP_CONTENT.sidebar.sections.resources}
+              </p>
+
+              {navOrder.resources.map((itemKey) => {
+                if (itemKey === "compressor" && currentRoleVisibility.compressor) {
+                  const isActive = currentPage === "compressor"
+                  const isHovered = hoveredNav === "compressor"
+                  return (
+                    <button
+                      key="nav-compressor"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("compressor")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("compressor")
+                        preloadPage("compressor")
+                      }}
+                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                        <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${isActive ? "ring-2 ring-emerald-200" : ""}`} />
+                        <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
+                      </div>
+                      <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-medium text-slate-600 relative z-10">
+                        Tool
+                      </span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "test" && currentRoleVisibility.test) {
+                  const isActive = currentPage === "test"
+                  const isHovered = hoveredNav === "test"
+                  return (
+                    <button
+                      key="nav-test"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("test")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("test")
+                        preloadPage("test")
+                      }}
+                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                        <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
+                      </div>
+                      <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-medium text-blue-700 relative z-10">
+                        Exam
+                      </span>
+                    </button>
+                  )
+                }
+
+                return null
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
+        <div 
+          className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" 
+          ref={userMenuRef}
+          onMouseLeave={() => setHoveredNav(null)}
+        >
+          {/* Render footer tools (Admin setting & Invite Team) based on navOrder.resources */}
+          {navOrder.resources
+            .filter((k) => k === "manage" || k === "invite")
+            .map((itemKey) => {
+              if (itemKey === "manage" && isAdmin && currentRoleVisibility.manage) {
+                const isActive = currentPage === "manage"
+                const isHovered = hoveredNav === "manage"
                 return (
                   <button
-                    key="nav-overview"
+                    key="nav-manage"
                     type="button"
-                    onClick={() => onNavigate("overview")}
-                    onMouseEnter={() => preloadPage("overview")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm ${
-                      currentPage === "overview"
-                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium"
+                    onClick={() => {
+                      onNavigate("manage")
+                      if (isMobile) setMobileOpen(false)
+                    }}
+                    onMouseEnter={() => setHoveredNav("manage")}
+                    className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    <Home className={`w-4 h-4 shrink-0 ${currentPage === "overview" ? "text-slate-900" : "text-slate-500"}`} />
-                    <span className="truncate">{APP_CONTENT.sidebar.navItems.overview.title}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId={activeLayoutId}
+                        className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                        transition={springs.floating}
+                      />
+                    )}
+                    {isHovered && !isActive && (
+                      <motion.div
+                        layoutId={hoverLayoutId}
+                        className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                        transition={springs.snappy}
+                      />
+                    )}
+                    <ShieldCheck className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                    <span className="truncate relative z-10">Admin setting</span>
                   </button>
                 )
               }
 
-              if (itemKey === "track" && currentRoleVisibility.track) {
+              if (itemKey === "invite" && currentRoleVisibility.invite) {
+                const isHovered = hoveredNav === "invite"
                 return (
                   <button
-                    key="nav-track"
+                    key="nav-invite"
                     type="button"
-                    onClick={() => onNavigate("track")}
-                    onMouseEnter={() => preloadPage("track")}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm ${
-                      currentPage === "track"
-                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium"
-                    }`}
+                    onClick={() => {
+                      setInviteOpen(true)
+                      if (isMobile) setMobileOpen(false)
+                    }}
+                    onMouseEnter={() => setHoveredNav("invite")}
+                    className="relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <CheckSquare className={`w-4 h-4 shrink-0 ${currentPage === "track" ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0">
-                      {activeTaskCount}
-                    </span>
-                  </button>
-                )
-              }
-
-              if (itemKey === "create" && currentRoleVisibility.create) {
-                return (
-                  <button
-                    key="nav-create"
-                    type="button"
-                    onClick={() => onNavigate("create")}
-                    onMouseEnter={() => preloadPage("create")}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm ${
-                      currentPage === "create"
-                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium"
-                    }`}
-                  >
-                    <PlusCircle className={`w-4 h-4 shrink-0 ${currentPage === "create" ? "text-slate-900" : "text-slate-500"}`} />
-                    <span className="truncate">{APP_CONTENT.sidebar.navItems.create.title}</span>
+                    {isHovered && (
+                      <motion.div
+                        layoutId={hoverLayoutId}
+                        className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                        transition={springs.snappy}
+                      />
+                    )}
+                    <UserPlus className="w-4 h-4 shrink-0 text-slate-500 relative z-10" />
+                    <span className="truncate relative z-10">Invite Team</span>
                   </button>
                 )
               }
 
               return null
             })}
-          </div>
-        )}
-
-        {/* SECTION 2: TOOLS (Resources) */}
-        {hasResourceItems && (
-          <div className="space-y-1">
-            <p className="px-3 py-1 text-xs font-semibold text-slate-600 tracking-normal">
-              {APP_CONTENT.sidebar.sections.resources}
-            </p>
-
-            {navOrder.resources.map((itemKey) => {
-              if (itemKey === "compressor" && currentRoleVisibility.compressor) {
-                return (
-                  <button
-                    key="nav-compressor"
-                    type="button"
-                    onClick={() => onNavigate("compressor")}
-                    onMouseEnter={() => preloadPage("compressor")}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
-                      currentPage === "compressor"
-                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${currentPage === "compressor" ? "ring-2 ring-emerald-200" : ""}`} />
-                      <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
-                    </div>
-                    <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-medium text-slate-600">
-                      Tool
-                    </span>
-                  </button>
-                )
-              }
-
-              if (itemKey === "test" && currentRoleVisibility.test) {
-                return (
-                  <button
-                    key="nav-test"
-                    type="button"
-                    onClick={() => onNavigate("test")}
-                    onMouseEnter={() => preloadPage("test")}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
-                      currentPage === "test"
-                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                      <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
-                    </div>
-                    <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-medium text-blue-700">
-                      Exam
-                    </span>
-                  </button>
-                )
-              }
-
-              return null
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
-      <div className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" ref={userMenuRef}>
-        {/* Render footer tools (Admin setting & Invite Team) based on navOrder.resources */}
-        {navOrder.resources
-          .filter((k) => k === "manage" || k === "invite")
-          .map((itemKey) => {
-            if (itemKey === "manage" && isAdmin && currentRoleVisibility.manage) {
-              return (
-                <button
-                  key="nav-manage"
-                  type="button"
-                  onClick={() => onNavigate("manage")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
-                    currentPage === "manage"
-                      ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                  }`}
-                >
-                  <ShieldCheck className={`w-4 h-4 shrink-0 ${currentPage === "manage" ? "text-slate-900" : "text-slate-500"}`} />
-                  <span className="truncate">Admin setting</span>
-                </button>
-              )
-            }
-
-            if (itemKey === "invite" && currentRoleVisibility.invite) {
-              return (
-                <button
-                  key="nav-invite"
-                  type="button"
-                  onClick={() => setInviteOpen(true)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                >
-                  <UserPlus className="w-4 h-4 shrink-0 text-slate-500" />
-                  <span className="truncate">Invite Team</span>
-                </button>
-              )
-            }
-
-            return null
-          })}
-      </div>
-    </nav>
-  )
+        </div>
+      </nav>
+    )
+  }
 
   return (
     <>
@@ -403,26 +550,39 @@ export default function Sidebar({
         onChange={handleUploadMyAvatar}
       />
 
-      {/* Mobile Overlay */}
-      {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-40"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      {/* Mobile Drawer with AnimatePresence */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            {/* Mobile Overlay */}
+            <motion.div
+              key="mobile-sidebar-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-40"
+              onClick={() => setMobileOpen(false)}
+            />
 
-      {/* Mobile Sidebar Drawer */}
-      <aside
-        className={`md:hidden fixed top-0 left-0 h-full w-64 bg-[#F9FAFB] border-r border-slate-200/80 z-50 flex flex-col transition-transform duration-200 shadow-2xl ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        {renderSidebarContent()}
-      </aside>
+            {/* Mobile Sidebar Drawer */}
+            <motion.aside
+              key="mobile-sidebar-drawer"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={springs.gentle}
+              className="md:hidden fixed top-0 left-0 h-full w-64 bg-[#F9FAFB] border-r border-slate-200/80 z-50 flex flex-col shadow-2xl"
+            >
+              {renderSidebarContent(true)}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Desktop Sidebar (ReUI App Shell 1 Exact Style) */}
       <aside className="hidden md:flex fixed top-0 left-0 h-full w-60 bg-[#F9FAFB] border-r border-slate-200/80 z-30 flex-col">
-        {renderSidebarContent()}
+        {renderSidebarContent(false)}
       </aside>
 
       {/* Invite Team Modal - Đồng bộ hoàn toàn với Thêm nhân sự */}

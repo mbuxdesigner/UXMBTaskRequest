@@ -9,15 +9,23 @@ import { PageSkeleton } from "@/components/common/ReuiSkeletons"
 export default function TestAssessmentPage() {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [activeRunningTest, setActiveRunningTest] = useState<TestExam | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+      if (cached) return false
+    } catch {}
+    return true
+  })
 
   useEffect(() => {
     let isMounted = true
-    const handleAuth = () => setSession(getStoredSession())
+    const handleAuth = () => {
+      const s = getStoredSession()
+      setSession(s)
+    }
     window.addEventListener("auth_session_changed", handleAuth)
 
     const loadData = async () => {
-      setLoading(true)
       const startTime = Date.now()
       try {
         await Promise.all([
@@ -27,9 +35,11 @@ export default function TestAssessmentPage() {
       } catch (e) {
         console.warn("Could not sync data for test assessment page:", e)
       } finally {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 600) {
-          await new Promise((r) => setTimeout(r, 600 - elapsed))
+        if (loading) {
+          const elapsed = Date.now() - startTime
+          if (elapsed < 350) {
+            await new Promise((r) => setTimeout(r, 350 - elapsed))
+          }
         }
         if (isMounted) {
           setLoading(false)
@@ -52,14 +62,14 @@ export default function TestAssessmentPage() {
 
   if (loading) {
     return (
-      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 pb-8 outline-none">
         <PageSkeleton />
       </main>
     )
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 pb-8 outline-none">
       {activeRunningTest ? (
         <TestRunnerView
           test={activeRunningTest}

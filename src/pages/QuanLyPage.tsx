@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
 import { Frame } from "@/components/reui/frame"
 import { DropdownMenu, type DropdownOption } from "@/components/reui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -1323,13 +1324,23 @@ export default function QuanLyPage() {
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(() => getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(() => getNavOrderConfig())
   const [draggedGroup, setDraggedGroup] = useState<"platform" | "resources" | null>(null)
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("mbbank_admin_team")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return false
+      }
+    } catch {}
+    return true
+  })
 
   useEffect(() => {
     let isMounted = true
     const loadMasterData = async () => {
-      setLoading(true)
+      if (loading) {
+        setLoading(true)
+      }
       const startTime = Date.now()
       try {
         const [masterRes, teamRes] = await Promise.all([
@@ -1383,9 +1394,11 @@ export default function QuanLyPage() {
       } catch (err) {
         console.warn("Could not sync master data from sheet on mount:", err)
       } finally {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 600) {
-          await new Promise((r) => setTimeout(r, 600 - elapsed))
+        if (loading) {
+          const elapsed = Date.now() - startTime
+          if (elapsed < 350) {
+            await new Promise((r) => setTimeout(r, 350 - elapsed))
+          }
         }
         if (isMounted) {
           setLoading(false)
@@ -2517,15 +2530,7 @@ export default function QuanLyPage() {
     return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || squadMatch || prodMatch
   })
 
-  if (loading) {
-    return (
-      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
-        <ManagementSkeleton />
-      </main>
-    )
-  }
-
-  if (!isAdmin) {
+  if (!loading && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl border border-slate-200 mt-6 shadow-xs">
         <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-3">
@@ -2551,11 +2556,32 @@ export default function QuanLyPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
-      
-      {/* 1. Page Header Đồng Bộ */}
-      <BlurFade delay={0.02}>
-        <PageHeader
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 pb-8 outline-none">
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="management-skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: durations.skeletonExit, ease: "easeInOut" }}
+            className="w-full space-y-6"
+          >
+            <ManagementSkeleton />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="management-content"
+            variants={staggerContainerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="w-full space-y-6"
+          >
+            {/* 1. Page Header Đồng Bộ */}
+            <motion.div variants={staggerItemVariants}>
+              <BlurFade delay={0.02}>
+                <PageHeader
           breadcrumb={{
             parent: "MBBank UX Platform",
             current: "Cài đặt & Quản trị",
@@ -2602,10 +2628,11 @@ export default function QuanLyPage() {
           }
         />
       </BlurFade>
+    </motion.div>
 
       {/* 2. Responsive 2-Column Settings Layout (ReUI Blocks Application/Settings) */}
       {/* Mobile / Tablet Horizontal Navigation Tabs (lg:hidden) */}
-      <div className="lg:hidden">
+      <motion.div variants={staggerItemVariants} className="lg:hidden">
         <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60">
           {ADMIN_NAV_GROUPS.flatMap((g) => g.items).map((item) => {
             const isActive = activeTab === item.id
@@ -2629,10 +2656,10 @@ export default function QuanLyPage() {
             )
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* Main 2-Column Grid (lg: and above) */}
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
+      <motion.div variants={staggerItemVariants} className="flex flex-col lg:flex-row gap-8 items-start">
         {/* CỘT 1: Navigation Rail (Minimalist ReUI Sidebar) */}
         <aside className="hidden lg:block w-60 xl:w-64 shrink-0 lg:sticky lg:top-6">
           <nav className="space-y-6">
@@ -4662,7 +4689,10 @@ export default function QuanLyPage() {
         )}
 
         </div>
-      </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
       {/* ======================================================== */}
       {/* MODAL: SỬA THÀNH VIÊN (EDIT MEMBER MODAL - MULTI SQUADS) */}

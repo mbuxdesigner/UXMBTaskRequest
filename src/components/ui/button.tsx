@@ -2,10 +2,12 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
+import { motion, type HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { springs } from "@/lib/motion"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3A6B]/30 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3A6B]/30 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer",
   {
     variants: {
       variant: {
@@ -51,25 +53,71 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends Omit<HTMLMotionProps<"button">, "ref">,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
   loading?: boolean
+  tactile?: boolean
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, children, disabled, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading = false,
+      tactile = true,
+      disabled,
+      children,
+      whileHover,
+      whileTap,
+      transition,
+      ...props
+    },
+    ref
+  ) => {
+    const isInteractive = !disabled && !loading && tactile
+
+    if (asChild) {
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          {...(props as any)}
+        >
+          {children}
+        </Slot>
+      )
+    }
+
+    const isIconSize = size === "icon" || size === "iconSm"
+    const defaultHover = isInteractive
+      ? isIconSize
+        ? { scale: 1.05 }
+        : { scale: 1.015, y: -0.5 }
+      : undefined
+
+    const defaultTap = isInteractive
+      ? isIconSize
+        ? { scale: 0.92 }
+        : { scale: 0.96 }
+      : undefined
+
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+      <motion.button
         ref={ref}
         disabled={disabled || loading}
+        whileHover={whileHover !== undefined ? whileHover : defaultHover}
+        whileTap={whileTap !== undefined ? whileTap : defaultTap}
+        transition={transition !== undefined ? transition : springs.snappy}
+        className={cn(buttonVariants({ variant, size, className }))}
         {...props}
       >
         {loading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
         {children}
-      </Comp>
+      </motion.button>
     )
   }
 )

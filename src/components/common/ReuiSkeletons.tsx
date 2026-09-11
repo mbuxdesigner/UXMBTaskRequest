@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 // ─── 1. Dashboard Skeleton (TongQuanPage) ────────────────────────
 export function DashboardSkeleton() {
   return (
-    <div className="w-full space-y-6 animate-in fade-in-30 duration-200">
+    <div className="w-full space-y-6">
       {/* Page Header Skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div className="space-y-2">
@@ -193,7 +193,7 @@ export function TableRowsSkeleton({ rowCount = 6 }: { rowCount?: number }) {
 // ─── 3. Kanban Skeleton (KanbanBoard) ─────────────────────────────
 export function KanbanBoardSkeleton({ columnCount = 6 }: { columnCount?: number }) {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 pt-1 w-full animate-in fade-in-30 duration-200">
+    <div className="flex gap-4 overflow-x-auto pb-4 pt-1 w-full">
       {[...Array(columnCount)].map((_, colIdx) => (
         <div
           key={`kanban-col-${colIdx}`}
@@ -520,10 +520,10 @@ export function TableRowSkeletonPlaceholder({ className }: { className?: string 
       {/* 1. Yêu cầu / Task & Luồng nghiệp vụ */}
       <td className="px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
         <div className="flex flex-col gap-1.5 min-w-0">
-          <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
+          <Skeleton className="h-4 w-4/5 rounded-md" />
           <div className="flex items-center gap-2">
-            <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
-            <Skeleton className="h-3 w-24 rounded-md bg-slate-200/60 animate-pulse" />
+            <Skeleton className="h-3 w-16 rounded-md" />
+            <Skeleton className="h-3 w-24 rounded-md" />
           </div>
         </div>
       </td>
@@ -531,45 +531,45 @@ export function TableRowSkeletonPlaceholder({ className }: { className?: string 
       {/* 2. Squad / Sản phẩm */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
         <div className="flex flex-col gap-1.5 min-w-0">
-          <Skeleton className="h-4 w-20 rounded-md bg-slate-200/70 animate-pulse" />
-          <Skeleton className="h-3 w-14 rounded-md bg-slate-200/50 animate-pulse" />
+          <Skeleton className="h-4 w-20 rounded-md" />
+          <Skeleton className="h-3 w-14 rounded-md" />
         </div>
       </td>
 
       {/* 3. Created by */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
         <div className="flex items-center gap-2 min-w-0">
-          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
-          <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+          <Skeleton className="size-6 rounded-full shrink-0" />
+          <Skeleton className="h-3 w-16 rounded-md" />
         </div>
       </td>
 
       {/* 4. Designer */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
         <div className="flex items-center gap-2 min-w-0">
-          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
-          <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+          <Skeleton className="size-6 rounded-full shrink-0" />
+          <Skeleton className="h-3 w-20 rounded-md" />
         </div>
       </td>
 
       {/* 5. Trạng thái */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
-        <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
+        <Skeleton className="h-6 w-24 rounded-4xl" />
       </td>
 
       {/* 6. Priority */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
-        <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
+        <Skeleton className="h-6 w-14 rounded-4xl ml-auto" />
       </td>
 
       {/* 7. Release */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
-        <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
+        <Skeleton className="h-3.5 w-16 rounded-md ml-auto" />
       </td>
 
       {/* 8. Action */}
       <td className="px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
-        <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
+        <Skeleton className="size-7 rounded-4xl ml-auto" />
       </td>
     </motion.tr>
   )

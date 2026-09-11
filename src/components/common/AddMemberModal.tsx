@@ -21,6 +21,7 @@ import { toast } from "@/components/ui/toast"
 import { syncTeamMembersToSheet } from "@/services/googleSheetService"
 import { mockSquads } from "@/data/mockData"
 import type { TeamMember, SquadSetting, ProductSetting } from "@/pages/QuanLyPage"
+import { dialogOverlayVariants, dialogContentVariants, springs } from "@/lib/motion"
 
 export interface AddMemberModalProps {
   open: boolean
@@ -304,21 +305,30 @@ export default function AddMemberModal({
     }
   }
 
-  if (!open) return null
-
   return (
     <AnimatePresence>
-      <div 
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 8 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 8 }}
-          className="bg-white rounded-2xl p-5 sm:p-6 w-full max-w-xl shadow-2xl border border-slate-200/90 space-y-4 max-h-[90vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-        >
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
+          {/* Backdrop with smooth fade */}
+          <motion.div
+            variants={dialogOverlayVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs cursor-pointer"
+            onClick={onClose}
+          />
+
+          {/* Modal Content with Spring Scale & Slide */}
+          <motion.div
+            variants={dialogContentVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.modal}
+            className="relative z-10 bg-white rounded-2xl p-5 sm:p-6 w-full max-w-xl shadow-2xl border border-slate-200/90 space-y-4 max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
           {/* Header */}
           <div className="flex items-start justify-between border-b border-slate-100 pb-3 shrink-0">
             <div className="flex items-center gap-2.5">
@@ -586,8 +596,9 @@ export default function AddMemberModal({
               </div>
             </div>
           </form>
-        </motion.div>
-      </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   )
 }

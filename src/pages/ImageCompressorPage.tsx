@@ -131,25 +131,15 @@ export default function ImageCompressorPage() {
   const [quality, setQuality] = useState<number>(90)
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
   const [activeFilter, setActiveFilter] = useState<"all" | "priority" | "base">("all")
-  const [loading, setLoading] = useState<boolean>(true)
+  const [loading, setLoading] = useState<boolean>(false)
 
   useEffect(() => {
     let isMounted = true
     const initPage = async () => {
-      setLoading(true)
-      const startTime = Date.now()
       try {
         await syncSessionRoleFromSheet()
       } catch (e) {
         console.warn("Could not sync session on image compressor page:", e)
-      } finally {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 600) {
-          await new Promise((r) => setTimeout(r, 600 - elapsed))
-        }
-        if (isMounted) {
-          setLoading(false)
-        }
       }
     }
     initPage()
@@ -528,14 +518,14 @@ totalOriginalSize > 0 && convertedImages.length > 0
 
   if (loading) {
     return (
-      <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+      <main id="main-content" tabIndex={-1} className="w-full space-y-6 pb-8 outline-none">
         <PageSkeleton />
       </main>
     )
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 animate-in fade-in-50 duration-200 pb-8 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 pb-8 outline-none">
       {/* 1. Page Header Chuẩn ReUI */}
       <PageHeader
         breadcrumb={{

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { dialogOverlayVariants, drawerVariants, springs } from "@/lib/motion"
 import { 
   X, 
   User, 
@@ -35,32 +36,33 @@ export default function MemberDetailDrawer({
   onClose,
   onSelectRequest,
 }: MemberDetailDrawerProps) {
-  if (!member) return null
-
-  const utilPct = Math.min(100, Math.round((member.activeTasks / member.capacityLimit) * 100))
+  const utilPct = member ? Math.min(100, Math.round((member.activeTasks / member.capacityLimit) * 100)) : 0
   const isOverloaded = utilPct >= 100
   const isBusy = utilPct >= 75 && utilPct < 100
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
-        />
+      {member && (
+        <div className="fixed inset-0 z-50 flex justify-end select-none">
+          {/* Backdrop with smooth fade */}
+          <motion.div
+            variants={dialogOverlayVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            onClick={onClose}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs cursor-pointer"
+          />
 
-        {/* Drawer Panel */}
-        <motion.div
-          initial={{ x: "100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "100%" }}
-          transition={{ type: "spring", damping: 28, stiffness: 300 }}
-          className="relative w-full max-w-xl bg-white shadow-2xl z-10 flex flex-col h-full overflow-hidden border-l border-slate-200"
-        >
+          {/* Drawer Panel with spring slide */}
+          <motion.div
+            variants={drawerVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springs.gentle}
+            className="relative w-full max-w-xl bg-white shadow-2xl z-10 flex flex-col h-full overflow-hidden border-l border-slate-200"
+          >
           {/* Drawer Header */}
           <div className="p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50/60">
             <div className="flex items-center gap-3.5">
@@ -211,6 +213,7 @@ export default function MemberDetailDrawer({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  )
+    )}
+  </AnimatePresence>
+)
 }

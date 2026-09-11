@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KanbanBoardSkeleton } from "@/components/common/ReuiSkeletons"
 import { UXRequest } from "@/data/mockData"
@@ -418,110 +419,87 @@ export default function KanbanBoard({
     setDraggedRequestId(null)
   }
 
-  if (loading) {
-    return <KanbanBoardSkeleton />
-  }
-
   return (
-    <div className="relative group/kanban w-full">
-      {/* Kanban Horizontal Container */}
-      <div
-        ref={scrollContainerRef}
-        className="flex gap-4 overflow-x-auto pb-5 pt-1 px-1 sm:px-2 items-start scroll-smooth select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
-        style={{ scrollbarGutter: "stable" }}
-      >
-        {kanbanColumns.map((column) => {
-          const columnRequests = requests.filter(
-            (r) => getRequestKanbanPhase(r) === column.phase
-          )
+    <AnimatePresence mode="wait">
+      {loading ? (
+        <motion.div
+          key="kanban-skeleton-root"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: durations.skeletonExit, ease: "easeInOut" }}
+          className="w-full"
+        >
+          <KanbanBoardSkeleton />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="kanban-board-root"
+          variants={staggerContainerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="relative group/kanban w-full"
+        >
+          {/* Kanban Horizontal Container */}
+          <div
+            ref={scrollContainerRef}
+            className="flex gap-4 overflow-x-auto pb-5 pt-1 px-1 sm:px-2 items-start scroll-smooth select-none scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+            style={{ scrollbarGutter: "stable" }}
+          >
+            {kanbanColumns.map((column) => {
+              const columnRequests = requests.filter(
+                (r) => getRequestKanbanPhase(r) === column.phase
+              )
 
-          const isOver = dragOverColumnId === column.id
+              const isOver = dragOverColumnId === column.id
 
-          return (
-            <div
-              key={column.id}
-              onDragOver={(e) => handleDragOver(e, column.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, column)}
-              className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[580px] xl:min-h-[calc(100vh-17.5rem)] 2xl:min-h-[calc(100vh-16.5rem)] ${
-                column.bgClass
-              } ${column.borderClass} ${
-                isOver
-                  ? "border-[#1057FB] ring-2 ring-[#1057FB]/30 scale-[1.01] shadow-md"
-                  : "shadow-2xs"
-              }`}
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between px-1.5 py-1 mb-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-[13px] sm:text-sm text-slate-800 tracking-tight">
-                    {column.step}. {column.title}
-                  </h3>
-                  <span className="px-1.5 py-0.5 min-w-[20px] text-center rounded-md text-[11px] font-bold bg-white text-slate-600 border border-slate-200/90 shadow-2xs">
-                    {columnRequests.length}
-                  </span>
-                </div>
-                <MoreHorizontal className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
-              </div>
+              return (
+                <motion.div
+                  key={column.id}
+                  variants={staggerItemVariants}
+                  onDragOver={(e) => handleDragOver(e, column.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, column)}
+                  className={`w-[290px] min-w-[290px] shrink-0 flex flex-col rounded-2xl p-3 border transition-all duration-200 min-h-[580px] xl:min-h-[calc(100vh-17.5rem)] 2xl:min-h-[calc(100vh-16.5rem)] ${
+                    column.bgClass
+                  } ${column.borderClass} ${
+                    isOver
+                      ? "border-[#1057FB] ring-2 ring-[#1057FB]/30 scale-[1.01] shadow-md"
+                      : "shadow-2xs"
+                  }`}
+                >
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between px-1.5 py-1 mb-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-[13px] sm:text-sm text-slate-800 tracking-tight">
+                        {column.step}. {column.title}
+                      </h3>
+                      <span className="px-1.5 py-0.5 min-w-[20px] text-center rounded-md text-[11px] font-bold bg-white text-slate-600 border border-slate-200/90 shadow-2xs">
+                        {columnRequests.length}
+                      </span>
+                    </div>
+                    <MoreHorizontal className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" />
+                  </div>
 
-              {/* Column Body / Cards */}
-              <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[calc(100vh-23rem)] pr-0.5 scrollbar-thin">
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.div
-                      key={`kskel-col-${column.id}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-2.5"
-                    >
-                      {[1, 2].map((k) => (
-                        <div
-                          key={`kskel-${column.id}-${k}`}
-                          className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3"
-                        >
-                          <div className="flex justify-between items-center">
-                            <Skeleton className="h-4 w-16 rounded-md" />
-                            <Skeleton className="h-4 w-14 rounded-full" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Skeleton className="h-4 w-full rounded-md" />
-                            <Skeleton className="h-3.5 w-3/4 rounded-md" />
-                          </div>
-                          <div className="flex justify-between items-center pt-2.5 border-t border-slate-100">
-                            <div className="flex items-center gap-1.5">
-                              <Skeleton className="size-5 rounded-full" />
-                              <Skeleton className="h-3 w-16 rounded-md" />
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Skeleton className="h-4 w-12 rounded-md" />
-                              <Skeleton className="size-4 rounded-full" />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </motion.div>
-                  ) : columnRequests.length === 0 ? (
-                    <motion.div
-                      key={`kempty-col-${column.id}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="flex flex-col items-center justify-center flex-1 min-h-[220px] rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4"
-                    >
-                      <p className="text-xs font-medium text-slate-400">No cards</p>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key={`kcards-col-${column.id}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="space-y-2.5"
-                    >
+                  {/* Column Body / Cards */}
+                  <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[calc(100vh-23rem)] pr-0.5 scrollbar-thin">
+                    {columnRequests.length === 0 ? (
+                      <div
+                        key={`kempty-col-${column.id}`}
+                        className="flex flex-col items-center justify-center flex-1 min-h-[220px] rounded-2xl border border-dashed border-slate-300/80 bg-white/50 text-center p-4"
+                      >
+                        <p className="text-xs font-medium text-slate-400">No cards</p>
+                      </div>
+                    ) : (
+                      <motion.div
+                        key={`kcards-col-${column.id}`}
+                        variants={staggerContainerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="space-y-2.5"
+                      >
                       {columnRequests.map((req, idx) => {
                     const isDragging = draggedRequestId === req.request_id
                     const rawDesigner = req.assigned_designer || (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công" ? req.ux_owner : "") || ""
@@ -538,8 +516,9 @@ export default function KanbanBoard({
                     const pendingInfo = getRequestPendingInfo(req)
 
                     return (
-                      <div
+                      <motion.div
                         key={req.request_id ? `kcard-${req.request_id}-${idx}` : `kcard-idx-${idx}`}
+                        variants={staggerItemVariants}
                         draggable
                         onDragStart={(e) => handleDragStart(e, req.request_id)}
                         onDragEnd={handleDragEnd}
@@ -675,21 +654,22 @@ export default function KanbanBoard({
                             </div>
                           </div>
                         </div>
-                        </div>
                       </div>
-                    )
-                  })}
+                    </motion.div>
+                  )
+                })}
                 </motion.div>
               )}
-            </AnimatePresence>
-          </div>
             </div>
-          )
-        })}
+          </motion.div>
+        )
+      })}
 
-        {/* Trailing spacer ensures column 6 is never cut off on horizontal scroll */}
-        <div className="w-6 sm:w-10 shrink-0 h-10 pointer-events-none" aria-hidden="true" />
-      </div>
+      {/* Trailing spacer ensures column 6 is never cut off on horizontal scroll */}
+      <div className="w-6 sm:w-10 shrink-0 h-10 pointer-events-none" aria-hidden="true" />
     </div>
+  </motion.div>
+)}
+</AnimatePresence>
   )
 }

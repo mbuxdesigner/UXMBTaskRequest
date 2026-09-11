@@ -11,7 +11,7 @@ function IconStack({ className, children, style, ...props }: IconStackProps) {
     <div
       data-slot="icon-stack"
       className={cn(
-        "text-slate-800 dark:text-slate-200 relative h-20 w-18",
+        "text-slate-400 relative h-20 w-18",
         className
       )}
       style={
@@ -29,25 +29,26 @@ function IconStack({ className, children, style, ...props }: IconStackProps) {
         fill="none"
         className="h-full w-full overflow-visible"
       >
+        {/* Soft, delicate blur shadow beneath stack */}
         <ellipse
           cx="36"
           cy="76"
           rx="30"
           ry="7"
-          fill="currentColor"
-          fillOpacity="0.055"
-          className="blur-[4px]"
+          fill="#64748B"
+          fillOpacity="0.04"
+          className="blur-[3px]"
         />
 
-        <IconStackLayer opacity="0.4" />
-        <IconStackLayer opacity="0.6" x={13.65} y={6.04} />
-        <IconStackLayer opacity="0.8" x={27.32} y={12.08} active />
+        <IconStackLayer opacity="0.5" />
+        <IconStackLayer opacity="0.75" x={13.65} y={6.04} />
+        <IconStackLayer opacity="1" x={27.32} y={12.08} active />
       </svg>
 
       {children ? (
         <div
           data-slot="icon-stack-content"
-          className="text-slate-500 dark:text-slate-400 pointer-events-none absolute top-[var(--icon-stack-content-y)] left-[var(--icon-stack-content-x)] flex -translate-x-1/2 -translate-y-1/2 scale-x-90 -skew-y-26 items-center justify-center"
+          className="text-slate-400 pointer-events-none absolute top-[var(--icon-stack-content-y)] left-[var(--icon-stack-content-x)] flex -translate-x-1/2 -translate-y-1/2 scale-x-90 -skew-y-26 items-center justify-center"
         >
           {children}
         </div>
@@ -69,25 +70,25 @@ function IconStackLayer({
 }) {
   return (
     <g opacity={opacity} transform={`translate(${x} ${y})`}>
+      {/* 3D Depth / Side Edge: Soft subtle slate-50/100 */}
       <path
         data-slot="icon-stack-layer"
         d="M42.2538 2.046C41.4408 1.6325 40.3965 1.6677 39.2612 2.2424L7.9616 18.1934C5.3895 19.5039 3.301 23.1064 3.301 26.2322V64.3226C3.301 66.0677 3.9458 67.2943 4.962 67.8199L1.8363 66.229C0.8201 65.7104 0.1753 64.4771 0.1753 62.732V24.6412C0.1753 21.5085 2.2638 17.913 4.8359 16.6024L36.1355 0.6515C37.2778 0.0698 38.322 0.0416 39.128 0.4551L42.2538 2.046Z"
-        fill="white"
-        className="fill-white dark:fill-slate-900"
-        stroke="currentColor"
-        strokeOpacity={active ? "0.3" : "0.2"}
-        strokeWidth="0.5"
+        fill="#F8FAFC"
+        stroke="#E2E8F0"
+        strokeOpacity={active ? "0.85" : "0.55"}
+        strokeWidth="0.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {/* 3D Top Surface: Pure clean white */}
       <path
         data-slot="icon-stack-layer"
         d="M42.2545 2.0456C43.2707 2.5643 43.9155 3.7979 43.9155 5.543V43.6337C43.9155 46.7665 41.827 50.3616 39.2549 51.6722L7.9554 67.6235C6.813 68.2052 5.7687 68.2331 4.9628 67.8196C3.9465 67.301 3.3018 66.0673 3.3018 64.3222V26.2318C3.3018 23.0991 5.3903 19.5036 7.9624 18.193L39.2619 2.2421C40.4043 1.6604 41.4486 1.6321 42.2545 2.0456Z"
-        fill="white"
-        className="fill-white dark:fill-slate-900"
-        stroke="currentColor"
-        strokeOpacity={active ? "0.3" : "0.2"}
-        strokeWidth="0.5"
+        fill="#FFFFFF"
+        stroke="#E2E8F0"
+        strokeOpacity={active ? "0.95" : "0.65"}
+        strokeWidth="0.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

@@ -1,49 +1,87 @@
-import React, { useRef, useState } from "react"
+import * as React from "react"
+import { motion, type HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { springs } from "@/lib/motion"
 
-interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface SpotlightCardProps extends HTMLMotionProps<"div"> {
   spotlightColor?: string
+  interactive?: boolean
   className?: string
   children?: React.ReactNode
 }
 
-export function SpotlightCard({
-  spotlightColor = "rgba(16, 87, 251, 0.08)",
-  className,
-  children,
-  ...props
-}: SpotlightCardProps) {
-  const divRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [opacity, setOpacity] = useState(0)
+export const SpotlightCard = React.forwardRef<HTMLDivElement, SpotlightCardProps>(
+  (
+    {
+      spotlightColor = "rgba(16, 87, 251, 0.08)",
+      interactive = true,
+      className,
+      children,
+      onMouseMove,
+      whileHover,
+      whileTap,
+      transition,
+      ...props
+    },
+    forwardedRef
+  ) => {
+    const internalRef = React.useRef<HTMLDivElement | null>(null)
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!divRef.current) return
-    const rect = divRef.current.getBoundingClientRect()
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    const setRefs = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        internalRef.current = node
+        if (typeof forwardedRef === "function") {
+          forwardedRef(node)
+        } else if (forwardedRef) {
+          ;(forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+        }
+      },
+      [forwardedRef]
+    )
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+      const card = internalRef.current || (e.currentTarget as HTMLDivElement)
+      if (card) {
+        const rect = card.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        card.style.setProperty("--mouse-x", `${x}px`)
+        card.style.setProperty("--mouse-y", `${y}px`)
+      }
+      onMouseMove?.(e)
+    }
+
+    const defaultWhileHover = interactive ? { y: -3 } : undefined
+    const defaultWhileTap = interactive ? { scale: 0.99 } : undefined
+
+    return (
+      <motion.div
+        ref={setRefs}
+        onMouseMove={handleMouseMove}
+        whileHover={whileHover !== undefined ? whileHover : defaultWhileHover}
+        whileTap={whileTap !== undefined ? whileTap : defaultWhileTap}
+        transition={transition !== undefined ? transition : springs.snappy}
+        className={cn(
+          "group relative rounded-2xl border border-slate-200/90 bg-white overflow-hidden select-none",
+          "transition-shadow duration-200 hover:shadow-xl hover:border-slate-300/90",
+          className
+        )}
+        {...props}
+      >
+        {/* Zero-render CSS variable spotlight beam (60+ FPS) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
+          style={{
+            background: `radial-gradient(600px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), ${spotlightColor}, transparent 40%)`,
+          }}
+        />
+        <div className="relative z-20 rounded-2xl w-full h-full">{children}</div>
+      </motion.div>
+    )
   }
+)
 
-  return (
-    <div
-      ref={divRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setOpacity(1)}
-      onMouseLeave={() => setOpacity(0)}
-      className={cn(
-        "relative rounded-2xl border border-slate-200/90 bg-white transition-all duration-300 hover:border-slate-300 hover:shadow-md overflow-hidden",
-        className
-      )}
-      {...props}
-    >
-      {/* Spotlight highlight */}
-      <div
-        className="pointer-events-none absolute -inset-px rounded-2xl overflow-hidden transition-opacity duration-300 z-10"
-        style={{
-          opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 40%)`,
-        }}
-      />
-      <div className="relative z-20 rounded-2xl w-full h-full">{children}</div>
-    </div>
-  )
-}
+SpotlightCard.displayName = "SpotlightCard"
+
+export default SpotlightCard

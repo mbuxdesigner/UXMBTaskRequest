@@ -1,10 +1,13 @@
 import * as React from "react"
+import { motion } from "framer-motion"
+import { springs } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 
 interface TabsContextValue {
   value: string
   onValueChange: (value: string) => void
   variant?: "default" | "pills" | "line" | "segmented"
+  id?: string
 }
 
 const TabsContext = React.createContext<TabsContextValue | null>(null)
@@ -21,10 +24,14 @@ export function Tabs({
   variant = "default",
   className,
   children,
+  id,
   ...props
 }: TabsProps) {
+  const generatedId = React.useId()
+  const tabsId = id || generatedId
+
   return (
-    <TabsContext.Provider value={{ value, onValueChange, variant }}>
+    <TabsContext.Provider value={{ value, onValueChange, variant, id: tabsId }}>
       <div className={cn("w-full space-y-4", className)} {...props}>
         {children}
       </div>
@@ -80,6 +87,7 @@ export function TabsTrigger({
   const context = React.useContext(TabsContext)
   const isSelected = context?.value === value
   const variant = context?.variant || "default"
+  const layoutId = `tabs-active-indicator-${variant}-${context?.id || "tabs"}`
 
   return (
     <button
@@ -88,41 +96,68 @@ export function TabsTrigger({
       aria-selected={isSelected}
       onClick={() => context?.onValueChange(value)}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-all duration-150 cursor-pointer",
+        "relative isolate inline-flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-colors cursor-pointer",
         variant === "default" && [
           "px-3.5 py-1.5 rounded-lg",
           isSelected
-            ? "bg-white text-slate-900 shadow-xs font-bold"
+            ? "text-slate-900 font-bold"
             : "text-slate-600 hover:text-slate-900 hover:bg-white/50",
         ],
         variant === "segmented" && [
           "py-1.5 px-3 rounded-lg text-center",
           isSelected
-            ? "bg-white text-[#1B3A6B] shadow-xs font-bold"
+            ? "text-[#1B3A6B] font-bold"
             : "text-slate-600 hover:text-slate-900",
         ],
         variant === "line" && [
-          "py-3 border-b-2 -mb-px px-1 font-medium",
+          "py-3 -mb-px px-1 font-medium",
           isSelected
-            ? "border-[#1B3A6B] text-[#1B3A6B] font-bold"
-            : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300",
+            ? "text-[#1B3A6B] font-bold"
+            : "text-slate-500 hover:text-slate-800",
         ],
         variant === "pills" && [
           "px-3.5 py-1.5 rounded-xl border",
           isSelected
-            ? "bg-[#1B3A6B] border-[#1B3A6B] text-white shadow-xs font-bold"
+            ? "text-white font-bold border-transparent"
             : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900",
         ],
         className
       )}
       {...props}
     >
-      {icon && <span className="shrink-0">{icon}</span>}
-      <span>{children}</span>
+      {/* Shared Layout Active Indicator */}
+      {isSelected && (
+        <>
+          {(variant === "default" || variant === "segmented") && (
+            <motion.span
+              layoutId={layoutId}
+              className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10"
+              transition={springs.floating}
+            />
+          )}
+          {variant === "line" && (
+            <motion.span
+              layoutId={layoutId}
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1B3A6B]"
+              transition={springs.floating}
+            />
+          )}
+          {variant === "pills" && (
+            <motion.span
+              layoutId={layoutId}
+              className="absolute inset-0 bg-[#1B3A6B] rounded-xl shadow-xs -z-10"
+              transition={springs.floating}
+            />
+          )}
+        </>
+      )}
+
+      {icon && <span className="shrink-0 relative z-10">{icon}</span>}
+      <span className="relative z-10">{children}</span>
       {badge !== undefined && (
         <span
           className={cn(
-            "ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-bold transition-colors",
+            "ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-bold transition-colors relative z-10",
             isSelected
               ? variant === "pills"
                 ? "bg-white/20 text-white"
@@ -162,3 +197,4 @@ export function TabsContent({
     </div>
   )
 }
+

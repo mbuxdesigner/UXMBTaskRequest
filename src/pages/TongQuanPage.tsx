@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
 import { DashboardSkeleton } from "@/components/common/ReuiSkeletons"
 import { Squad, UXRequest } from "../data/mockData"
 import { fetchSquads, fetchRequests } from "../api/api"
@@ -59,9 +60,39 @@ function getDaysDifference(targetDate: Date): number {
 }
 
 export default function TongQuanPage() {
-  const [squads, setSquads] = useState<Squad[]>([])
-  const [requests, setRequests] = useState<UXRequest[]>([])
-  const [loading, setLoading] = useState(true)
+  const [squads, setSquads] = useState<Squad[]>(() => {
+    try {
+      const cached = localStorage.getItem("mbbank_admin_squads")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return []
+  })
+
+  const [requests, setRequests] = useState<UXRequest[]>(() => {
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return []
+  })
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cachedReqs = localStorage.getItem("ux_portal_real_requests")
+      if (cachedReqs) {
+        const parsed = JSON.parse(cachedReqs)
+        if (Array.isArray(parsed) && parsed.length > 0) return false
+      }
+    } catch {}
+    return true
+  })
+
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -76,7 +107,7 @@ export default function TongQuanPage() {
   const [dashboardMode, setDashboardMode] = useState<"weekly_checkin" | "roadmap_analytics">("weekly_checkin")
 
   const loadData = async (forceRefresh = false) => {
-    setLoading(true)
+    if (requests.length === 0) setLoading(true)
     if (forceRefresh) setRefreshing(true)
     setError(null)
     const startTime = Date.now()
@@ -85,9 +116,11 @@ export default function TongQuanPage() {
         fetchSquads(forceRefresh),
         fetchRequests(forceRefresh),
       ])
-      const elapsed = Date.now() - startTime
-      if (elapsed < 600) {
-        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      if (loading) {
+        const elapsed = Date.now() - startTime
+        if (elapsed < 350) {
+          await new Promise((r) => setTimeout(r, 350 - elapsed))
+        }
       }
       setSquads(squadsData)
       setRequests(requestsData)
@@ -100,7 +133,8 @@ export default function TongQuanPage() {
   }
 
   useEffect(() => {
-    loadData(true)
+    const hasCache = requests.length > 0
+    loadData(!hasCache)
   }, [])
 
   // =========================================================================
@@ -269,7 +303,7 @@ export default function TongQuanPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
+            transition={{ duration: durations.skeletonExit, ease: "easeInOut" }}
             className="w-full"
           >
             <DashboardSkeleton />
@@ -277,16 +311,22 @@ export default function TongQuanPage() {
         ) : (
           <motion.div
             key="dashboard-content"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.28, ease: "easeOut" }}
+            variants={staggerContainerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
             className="space-y-6"
           >
             {/* =========================================================================
                 VIEW MODE SWITCHER: HỌP CHECK-IN ĐẦU TUẦN vs LỘ TRÌNH GANTT & PHÂN TÍCH
                 ========================================================================= */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+            {/* =========================================================================
+                VIEW MODE SWITCHER: HỌP CHECK-IN ĐẦU TUẦN vs LỘ TRÌNH GANTT & PHÂN TÍCH
+                ========================================================================= */}
+            <motion.div
+              variants={staggerItemVariants}
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs"
+            >
               <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl">
                 <button
                   type="button"
@@ -331,14 +371,17 @@ export default function TongQuanPage() {
                   </span>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* =========================================================================
                 ROW 1: 4 HERO KPI BENTO CARDS (reUI Metric Tiles)
                 ========================================================================= */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <motion.div variants={staggerContainerVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Card 1: In Progress */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
+              <motion.div
+                variants={staggerItemVariants}
+                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đang triển khai</span>
                   <span className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/70 flex items-center justify-center text-[#1057FB]">
@@ -350,10 +393,13 @@ export default function TongQuanPage() {
                   <span className="text-xs text-slate-400 font-sans font-normal ml-1">tasks</span>
                 </div>
                 <p className="text-[11.5px] text-slate-500 font-normal">Đang lên UI & Prototype đa Squad</p>
-              </div>
+              </motion.div>
 
               {/* Card 2: SLA On-time */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
+              <motion.div
+                variants={staggerItemVariants}
+                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đúng hạn SLA</span>
                   <span className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/70 flex items-center justify-center text-emerald-600">
@@ -366,10 +412,13 @@ export default function TongQuanPage() {
                 <p className="text-[11.5px] text-slate-500 font-normal">
                   <span className="font-medium text-emerald-600 font-mono">+3.8%</span> so với tháng trước
                 </p>
-              </div>
+              </motion.div>
 
               {/* Card 3: First Time Right */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
+              <motion.div
+                variants={staggerItemVariants}
+                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nghiệm thu tuần</span>
                   <span className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200/70 flex items-center justify-center text-purple-600">
@@ -381,10 +430,13 @@ export default function TongQuanPage() {
                   <span className="text-xs text-slate-400 font-sans font-normal ml-1">đã duyệt</span>
                 </div>
                 <p className="text-[11.5px] text-slate-500 font-normal">Bàn giao Tech thành công</p>
-              </div>
+              </motion.div>
 
               {/* Card 4: Risks & Blockers */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all">
+              <motion.div
+                variants={staggerItemVariants}
+                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-2 hover:border-slate-300 transition-all"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cần hỗ trợ / Gấp</span>
                   <span className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200/70 flex items-center justify-center text-rose-600">
@@ -396,28 +448,30 @@ export default function TongQuanPage() {
                   <span className="text-xs text-slate-400 font-sans font-normal ml-1">rủi ro</span>
                 </div>
                 <p className="text-[11.5px] text-rose-600 font-medium">Cần Leader can thiệp giải tỏa</p>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
 
             {/* =========================================================================
                 CHẾ ĐỘ 1: HỌP CHECK-IN ĐẦU TUẦN (WEEKLY STANDUP & KICKOFF 100 ĐIỂM)
                 ========================================================================= */}
             {dashboardMode === "weekly_checkin" && (
-              <WeeklyCheckinSection
-                requests={requests}
-                squads={squads}
-                onSelectRequest={setSelectedRequest}
-                onSelectSquad={setSelectedSquad}
-              />
+              <motion.div variants={staggerItemVariants}>
+                <WeeklyCheckinSection
+                  requests={requests}
+                  squads={squads}
+                  onSelectRequest={setSelectedRequest}
+                  onSelectSquad={setSelectedSquad}
+                />
+              </motion.div>
             )}
 
             {/* =========================================================================
                 CHẾ ĐỘ 2: LỘ TRÌNH GANTT & PHÂN TÍCH DÀI HẠN (ROADMAP & ANALYTICS)
                 ========================================================================= */}
             {dashboardMode === "roadmap_analytics" && (
-              <div className="space-y-6">
+              <motion.div variants={staggerContainerVariants} className="space-y-6">
                 {/* ROW 2: AI EXECUTIVE BRIEFING + WORKLOAD METERS */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <motion.div variants={staggerItemVariants} className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                   {/* Left: AI Executive Briefing (7 Cols) */}
                   <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs flex flex-col justify-between space-y-4">
                     <div className="space-y-3">
@@ -533,16 +587,18 @@ export default function TongQuanPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* ROW 3: REUI GANTT ROADMAP BLOCK */}
-                <ReUIGanttChart
-                  requests={requests}
-                  onSelectRequest={setSelectedRequest}
-                />
+                <motion.div variants={staggerItemVariants}>
+                  <ReUIGanttChart
+                    requests={requests}
+                    onSelectRequest={setSelectedRequest}
+                  />
+                </motion.div>
 
                 {/* ROW 4: LATEST ACTIVITY STREAM */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
+                <motion.div variants={staggerItemVariants} className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <h2 className="text-sm font-semibold text-slate-900">
@@ -582,8 +638,8 @@ export default function TongQuanPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             )}
           </motion.div>
         )}

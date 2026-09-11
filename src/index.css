@@ -547,7 +547,7 @@ strong, b,
 /* Modern CSS Interoperability & Fluid Sizing */
 html {
   interpolate-size: allow-keywords;
-  color-scheme: light dark;
+  color-scheme: light;
   scrollbar-gutter: stable;
   accent-color: var(--color-primary-500);
 }
@@ -592,16 +592,7 @@ select:focus-visible,
   outline-offset: 0 !important;
 }
 
-/* Native View Transitions API */
-@view-transition {
-  navigation: auto;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.18s;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* View Transitions delegated cleanly to Framer Motion page choreography */
 
 /* Accessibility: Prefers Reduced Motion */
 @media (prefers-reduced-motion: reduce) {

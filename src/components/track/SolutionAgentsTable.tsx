@@ -33,6 +33,7 @@ function getDesignerAvatar(name?: string) {
 }
 
 import { motion, AnimatePresence } from "framer-motion"
+import { durations, springs, staggerContainerVariants } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TableRowsSkeleton, TableRowSkeletonPlaceholder } from "@/components/common/ReuiSkeletons"
 import { EmptyState } from "@/components/reui/empty-state"
@@ -533,7 +534,7 @@ export default function SolutionAgentsTable({
                 key="table-loading-skeleton"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, transition: { duration: durations.skeletonExit } }}
                 transition={{ duration: 0.2 }}
                 data-slot="data-grid-table-body"
               >
@@ -578,10 +579,10 @@ export default function SolutionAgentsTable({
             ) : (
               <motion.tbody
                 key="table-data-content"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
+                variants={staggerContainerVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
                 data-slot="data-grid-table-body"
               >
                 {groupedData.map((group) => {
@@ -705,6 +706,8 @@ export default function SolutionAgentsTable({
                           const phaseInfo = getTaskPhaseStatus(req)
                           const cfg = getStatusConfig(phaseInfo.name)
 
+                          const rowStaggerDelay = Math.min(rowIdx, 12) * 0.035
+
                           return (
                             <motion.tr
                               layout="position"
@@ -716,7 +719,8 @@ export default function SolutionAgentsTable({
                               exit={{ opacity: 0, scaleY: 0.85, transition: { duration: 0.2 } }}
                               transition={{
                                 layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
-                                opacity: { duration: 0.25 },
+                                opacity: { duration: 0.25, delay: rowStaggerDelay },
+                                y: { ...springs.snappy, delay: rowStaggerDelay },
                               }}
                               onClick={() => !isIncoming && onSelectRequest(req)}
                               onMouseEnter={() => {

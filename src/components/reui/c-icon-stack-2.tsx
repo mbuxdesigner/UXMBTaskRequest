@@ -12,7 +12,7 @@ export interface IconStackLargeProps extends React.ComponentProps<"div"> {
 }
 
 export function IconStackLarge({
-  icon = <Layers className="size-6 text-slate-500 group-hover:text-[#1057FB] transition-colors" />,
+  icon = <Layers className="size-6 text-slate-400 group-hover:text-[#1057FB] transition-colors duration-200" />,
   className,
   stackClassName,
   ...props
