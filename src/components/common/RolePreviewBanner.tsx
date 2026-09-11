@@ -36,14 +36,14 @@ export const RolePreviewBanner: React.FC<RolePreviewBannerProps> = ({ session })
     toast.success("Đã thoát chế độ xem trước", `Trở lại quyền hạn quản trị ${originalRole}`)
   }
 
-  // Chế độ thu nhỏ (Minimized) - Chỉ là 1 badge nhỏ ở góc để không che khuất màn hình test
+  // Chế độ thu nhỏ (Minimized) - Nằm gọn ở góc dưới phải màn hình
   if (isMinimized) {
     return (
-      <div className="fixed top-3 right-4 sm:right-6 z-[999]">
+      <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-6 z-[999]">
         <button
           type="button"
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/95 text-white border border-amber-500/40 shadow-xl backdrop-blur-md hover:bg-slate-900 transition-all text-xs font-semibold cursor-pointer group hover:border-amber-400"
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 text-white border border-amber-500/40 shadow-xl backdrop-blur-md hover:bg-slate-900 transition-all text-xs font-semibold cursor-pointer group hover:border-amber-400 select-none hover:scale-105 active:scale-95"
           title="Bấm để mở rộng bảng điều khiển xem trước"
         >
           <span className="relative flex h-2 w-2">
@@ -52,16 +52,16 @@ export const RolePreviewBanner: React.FC<RolePreviewBannerProps> = ({ session })
           </span>
           <Eye className="w-3.5 h-3.5 text-amber-400" />
           <span>Xem trước: <strong className="text-amber-300">{currentRole}</strong></span>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" />
+          <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" />
         </button>
       </div>
     )
   }
 
-  // Chế độ đầy đủ (Expanded)
+  // Chế độ đầy đủ (Expanded) - Nằm ở góc dưới phải màn hình
   return (
-    <div className="fixed top-3 right-4 sm:right-6 z-[999] max-w-[calc(100vw-32px)]">
-      <div className="bg-slate-900/95 text-white border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-md p-3 sm:p-3.5 flex flex-col gap-2.5 min-w-[280px] sm:min-w-[340px] animate-in fade-in-50 slide-in-from-top-2 duration-200">
+    <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-6 z-[999] max-w-[calc(100vw-32px)]">
+      <div className="bg-slate-900/95 text-white border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-md p-3 sm:p-3.5 flex flex-col gap-2.5 min-w-[280px] sm:min-w-[340px] animate-in fade-in-50 slide-in-from-bottom-3 duration-200 select-none">
         {/* Header bar */}
         <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
           <div className="flex items-center gap-2">
@@ -84,9 +84,9 @@ export const RolePreviewBanner: React.FC<RolePreviewBannerProps> = ({ session })
             type="button"
             onClick={() => setIsMinimized(true)}
             className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Thu nhỏ để kiểm thử toàn màn hình"
+            title="Thu nhỏ xuống góc màn hình"
           >
-            <ChevronUp className="w-4 h-4" />
+            <ChevronDown className="w-4 h-4" />
           </button>
         </div>
 
@@ -95,7 +95,7 @@ export const RolePreviewBanner: React.FC<RolePreviewBannerProps> = ({ session })
           <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
             Chuyển nhanh vai trò kiểm thử:
           </p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {PREVIEWABLE_ROLES.map(({ role, label }) => {
               const isActive = currentRole === role
               return (

@@ -520,7 +520,7 @@ export default function KanbanBoard({
                         key={req.request_id ? `kcard-${req.request_id}-${idx}` : `kcard-idx-${idx}`}
                         variants={staggerItemVariants}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, req.request_id)}
+                        onDragStart={(e: any) => handleDragStart(e, req.request_id)}
                         onDragEnd={handleDragEnd}
                         onClick={() => onSelectRequest(req)}
                         className={`group relative rounded-2xl border transition-all duration-200 cursor-grab active:cursor-grabbing select-none overflow-hidden ${

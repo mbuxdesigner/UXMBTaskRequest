@@ -772,7 +772,7 @@ const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
   { id: "log-4", timestamp: "21/08/2026 16:20", actor: "Hệ thống Google Sheet", action: "Đồng bộ Realtime", target: "RAW_SETTINGS", details: "Lưu trữ thành công cấu hình USERS_LIST & SQUADS_LIST", type: "integration" },
 ]
 
-type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "masterdata" | "integrations" | "audit"
+type AdminTab = "rbac" | "evaluation" | "test_bank" | "workflow" | "masterdata" | "integrations" | "audit"
 
 interface AdminNavItem {
   id: AdminTab
@@ -789,7 +789,6 @@ const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     category: "Tổ chức & Phân quyền",
     items: [
-      { id: "team", title: "Nhân sự UX", icon: Users },
       { id: "rbac", title: "Phân quyền (RBAC)", icon: ShieldCheck },
       { id: "evaluation", title: "Đánh giá Hiệu suất", icon: Sparkles },
     ],
@@ -1102,9 +1101,9 @@ export default function QuanLyPage() {
     const hash = window.location.hash
     if (hash.includes("tab=")) {
       const tabParam = hash.split("tab=")[1]?.split("&")[0] as AdminTab
-      if (tabParam) return tabParam
+      if (tabParam && (tabParam as string) !== "team") return tabParam
     }
-    return "team"
+    return "rbac"
   })
 
   useEffect(() => {
@@ -1112,7 +1111,7 @@ export default function QuanLyPage() {
       const hash = window.location.hash
       if (hash.includes("tab=")) {
         const tabParam = hash.split("tab=")[1]?.split("&")[0] as AdminTab
-        if (tabParam) setActiveTab(tabParam)
+        if (tabParam && (tabParam as string) !== "team") setActiveTab(tabParam)
       }
     }
     window.addEventListener("hashchange", handleHashChange)
@@ -1324,6 +1323,7 @@ export default function QuanLyPage() {
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(() => getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(() => getNavOrderConfig())
   const [draggedGroup, setDraggedGroup] = useState<"platform" | "resources" | null>(null)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState<boolean>(() => {
     try {
       const cached = localStorage.getItem("mbbank_admin_team")
@@ -1808,7 +1808,7 @@ export default function QuanLyPage() {
 
       // 1. Cập nhật nhân sự nếu có từ bảng UX_TEAM_MEMBERS hoặc từ res.data.team_members
       if (sheetMembers && Array.isArray(sheetMembers) && sheetMembers.length > 0) {
-        const formatted: TeamMember[] = sheetMembers.map((m, idx) => ({
+        const formatted: TeamMember[] = sheetMembers.map((m: any, idx: number) => ({
           id: m.id || `mem-${idx + 1}-${Date.now()}`,
           name: m.name || m.displayName || "Thành viên UX",
           displayName: m.displayName || m.name || "Thành viên UX",
@@ -1829,6 +1829,13 @@ export default function QuanLyPage() {
           specialties: Array.isArray(m.specialties) ? m.specialties : ["UX Design", "UI Design"],
           joinDate: m.joinDate || "2024-01-01",
           phone: m.phone || "",
+          capacityLimit: m.capacityLimit || m.maxCapacity || 5,
+          permissions: m.permissions || {
+            canAssign: false,
+            canApprovePo: false,
+            canExport: false,
+            canManageSystem: false,
+          },
         }))
         const cleaned = formatted.filter((m) => !isMockDesigner(m.name, m.email))
         setTeamMembers(cleaned)
@@ -2587,7 +2594,7 @@ export default function QuanLyPage() {
             current: "Cài đặt & Quản trị",
           }}
           title="Cài đặt Quản trị"
-          subtitle="Quản trị nhân sự UX, ma trận phân quyền vai trò và quy trình bàn giao"
+          subtitle="Ma trận phân quyền vai trò, quy trình khâu UX và danh mục hệ thống"
           actions={
             <div className="flex items-center gap-2">
               <Button
@@ -2698,264 +2705,6 @@ export default function QuanLyPage() {
 
         {/* CỘT 2: Settings Main Panel */}
         <div className="flex-1 min-w-0 w-full space-y-6">
-
-        {/* TAB 1: DANH SÁCH NHÂN SỰ UX */}
-        {activeTab === "team" && (
-          <div className="space-y-6">
-
-            {/* Quick Metrics (Clean ReUI Stats) */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
-                <span className="text-xs font-medium text-slate-500">Tổng nhân sự</span>
-                <div className="text-2xl font-bold text-slate-900 font-mono">
-                  <NumberTicker value={teamMembers.length} />
-                </div>
-                <span className="text-xs text-slate-400">100% tài khoản active</span>
-              </div>
-
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
-                <span className="text-xs font-medium text-slate-500">Design Owners</span>
-                <div className="text-2xl font-bold text-slate-900 font-mono">
-                  <NumberTicker value={teamMembers.filter(m => m.role === "Design Owner" || m.role === "Admin").length} />
-                </div>
-                <span className="text-xs text-slate-400">Phân công & duyệt</span>
-              </div>
-
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
-                <span className="text-xs font-medium text-slate-500">UX Designers</span>
-                <div className="text-2xl font-bold text-slate-900 font-mono">
-                  <NumberTicker value={teamMembers.filter(m => m.role === "Designer").length} />
-                </div>
-                <span className="text-xs text-slate-400">Đa-Squad thực thi</span>
-              </div>
-
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
-                <span className="text-xs font-medium text-slate-500">Product Owners (PO)</span>
-                <div className="text-2xl font-bold text-slate-900 font-mono">
-                  <NumberTicker value={teamMembers.filter(m => m.role === "PO").length} />
-                </div>
-                <span className="text-xs text-slate-400">Phân hệ sản phẩm</span>
-              </div>
-            </div>
-
-            {/* Team Table Card (Unified ReUI Card) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-              {/* Card Header & Main Actions */}
-              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-base font-semibold text-slate-900">Danh sách Thành viên UX</h3>
-                  <p className="text-xs sm:text-sm text-slate-500">
-                    Quản lý tài khoản nhân sự, phân bổ squad và đồng bộ Google Sheets.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportMembersCSV}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                    title="Tải xuống danh sách nhân sự dạng tệp CSV mở bằng Excel"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Xuất CSV</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setShowAddMemberModal(true)}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Thêm nhân sự</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Search & Filter Toolbar */}
-              <div className="p-4 sm:px-6 bg-slate-50/50 border-b border-slate-200/60 flex flex-col md:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
-                  {/* Search */}
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={memberSearchQuery}
-                      onChange={(e) => setMemberSearchQuery(e.target.value)}
-                      placeholder="Tìm tên, email, squad..."
-                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-400 transition-colors"
-                    />
-                  </div>
-
-                  {/* Role filter pills */}
-                  <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg text-xs font-medium">
-                    {["ALL", "Designer", "Design Owner", "PO", "Business", "Admin"].map((r) => (
-                      <button
-                        key={`rf-${r}`}
-                        type="button"
-                        onClick={() => setRoleFilter(r)}
-                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          roleFilter === r ? "bg-white text-slate-900 shadow-2xs font-semibold" : "text-slate-600 hover:text-slate-900"
-                        }`}
-                      >
-                        {r === "ALL" ? "Tất cả" : r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  Hiển thị <span className="font-semibold text-slate-900">{filteredMembers.length}</span> / {teamMembers.length} nhân sự
-                </div>
-              </div>
-
-              {/* Members Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 text-slate-500 text-xs font-medium border-b border-slate-200">
-                      <th className="py-3 px-4 font-medium">Nhân sự</th>
-                      <th className="py-3 px-4 font-medium">Vai trò (Role)</th>
-                      <th className="py-3 px-4 font-medium">Squads phụ trách</th>
-                      <th className="py-3 px-4 font-medium">Sản phẩm phân bổ (PO/Design)</th>
-                      <th className="py-3 px-4 font-medium text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {filteredMembers.map((member, idx) => (
-                      <tr key={member.id ? `mem-row-${member.id}-${idx}` : `mem-${idx}`} className="hover:bg-slate-50/60 transition-colors group">
-                        {/* Member Info */}
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative group/ava flex-shrink-0 cursor-pointer" title="Bấm để tải ảnh đại diện lên Google Drive">
-                              <UserAvatar
-                                name={member.name}
-                                avatarUrl={member.avatarUrl}
-                                size="md"
-                                className={`transition-opacity ${
-                                  uploadingAvatarMemberId === member.id ? "opacity-30 animate-pulse" : ""
-                                }`}
-                              />
-                              <label className="absolute inset-0 rounded-full bg-slate-900/60 text-white flex items-center justify-center opacity-0 group-hover/ava:opacity-100 transition-opacity cursor-pointer shadow-sm">
-                                <Camera className="w-3 h-3" />
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  disabled={uploadingAvatarMemberId === member.id}
-                                  onChange={(e) => handleAvatarUpload(member.id, member.email, e)}
-                                />
-                              </label>
-                            </div>
-                            <div>
-                              <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs">
-                                <span>{member.name}</span>
-                                {member.status === "On Leave" && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200">Nghỉ phép</span>
-                                )}
-                                {member.status === "Busy" && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200">Bận cao</span>
-                                )}
-                              </div>
-                              <div className="text-[11px] text-slate-400 font-mono">{member.email}</div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Role */}
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded-md font-medium text-xs border ${
-                            member.role === "Admin"
-                              ? "bg-slate-900 text-white border-slate-900"
-                              : member.role === "Design Owner"
-                              ? "bg-slate-100 text-slate-900 border-slate-300 font-semibold"
-                              : member.role === "PO"
-                              ? "bg-purple-50 text-purple-700 border-purple-200 font-semibold"
-                              : member.role === "Business"
-                              ? "bg-amber-50 text-amber-800 border-amber-300 font-semibold"
-                              : "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                          }`}>
-                            {member.role}
-                          </span>
-                        </td>
-
-                        {/* Multi-Squads */}
-                        <td className="py-3 px-4 max-w-[220px]">
-                          <div className="flex flex-wrap gap-1">
-                            {(member.squads && member.squads.length > 0 ? member.squads : [member.squad || "Chưa phân bổ"]).map((sq, sqI) => {
-                              const isAll = sq === "All Squads"
-                              const isUnassigned = sq === "Chưa phân bổ" || sq === "Chưa gán"
-                              return (
-                                <span
-                                  key={`sq-pill-${sq}-${sqI}`}
-                                  className={`px-2 py-0.5 rounded-md text-[11px] border truncate ${
-                                    isAll
-                                      ? "bg-purple-50 text-purple-700 border-purple-200 font-semibold"
-                                      : isUnassigned
-                                      ? "bg-slate-50 text-slate-400 border-slate-200 italic"
-                                      : "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                                  }`}
-                                >
-                                  {sq}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </td>
-
-                        {/* Multi-Products */}
-                        <td className="py-3 px-4 max-w-[220px]">
-                          <div className="flex flex-wrap gap-1">
-                            {(member.products && member.products.length > 0 ? member.products : ["Chưa gán"]).map((pr, prI) => {
-                              const isAll = pr === "Toàn hàng" || pr === "Tất cả"
-                              const isUnassigned = pr === "Chưa gán"
-                              return (
-                                <span
-                                  key={`pr-pill-${pr}-${prI}`}
-                                  className={`px-2 py-0.5 rounded-md text-[11px] border truncate ${
-                                    isAll
-                                      ? "bg-slate-100 text-slate-800 border-slate-300 font-semibold"
-                                      : isUnassigned
-                                      ? "bg-slate-50 text-slate-400 border-slate-200 italic"
-                                      : "bg-emerald-50 text-emerald-700 border-emerald-200 font-medium"
-                                  }`}
-                                >
-                                  {pr}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </td>
-
-                        {/* Actions (Edit & Delete) */}
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditMember(member)}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                              title="Sửa phân bổ & phân quyền"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMember(member.id, member.name)}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                              title="Xóa nhân sự"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* TAB 2: PHÂN QUYỀN (RBAC) */}
         {activeTab === "rbac" && (

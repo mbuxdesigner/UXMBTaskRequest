@@ -52,18 +52,87 @@
     <meta property="twitter:title" content="UX Request Portal - MB Bank UX Team" />
     <meta property="twitter:description" content="Cổng tiếp nhận, quản lý và theo dõi tiến độ các yêu cầu thiết kế trải nghiệm người dùng (UX/UI) cho các sản phẩm số MB Bank." />
     <meta property="twitter:image" content="https://mbuxdesigner.github.io/UXMBTaskRequest/favicon.svg" />
+
+    <!-- Inline Critical Styles for Initial Splash Loading Screen & Accessibility -->
+    <style>
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+      @keyframes mbPulseGlow {
+        0%, 100% {
+          transform: scale(1);
+          opacity: 0.95;
+          filter: drop-shadow(0 4px 14px rgba(16, 87, 251, 0.1));
+        }
+        50% {
+          transform: scale(1.025);
+          opacity: 1;
+          filter: drop-shadow(0 8px 22px rgba(16, 87, 251, 0.22));
+        }
+      }
+      @keyframes mbProgressBar {
+        0% {
+          transform: translateX(-100%);
+        }
+        50% {
+          transform: translateX(65%);
+        }
+        100% {
+          transform: translateX(220%);
+        }
+      }
+      @keyframes mbFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
   </head>
   <body>
     <a href="#main-content" class="sr-only focus:not-sr-only text-white bg-[#032b85] focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-[#1057FB] focus:text-white focus:font-semibold focus:rounded-xl focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1057FB] transition-all">
       Chuyển đến nội dung chính (Skip to content)
     </a>
     <div id="root">
-      <div style="min-height:100vh;width:100%;background:#FAFAFA;display:flex;flex-direction:column;justify-content:center;align-items:center;font-family:system-ui,-apple-system,sans-serif;">
-        <div style="width:100%;max-width:440px;padding:32px;border-radius:24px;background:#ffffff;border:1px solid #E5E7EB;box-shadow:0 10px 25px rgba(0,0,0,0.05);text-align:center;">
-          <img src="/img-logo-UXTeamWith.webp" alt="MB UX Team" width="193" height="32" style="height:32px;width:auto;margin:0 auto 24px auto;display:block;" />
-          <div style="height:24px;background:#F3F4F6;border-radius:8px;margin-bottom:12px;width:60%;margin-left:auto;margin-right:auto;"></div>
-          <div style="height:44px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;margin-bottom:16px;"></div>
-          <div style="height:44px;background:#1057FB;border-radius:12px;opacity:0.9;"></div>
+      <div style="min-height: 100vh; width: 100%; background: #F8FAFC; background-image: radial-gradient(circle at 50% 40%, rgba(16, 87, 251, 0.04) 0%, transparent 65%); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="width: 100%; max-width: 380px; background: #FFFFFF; border-radius: 24px; padding: 36px 32px; border: 1px solid rgba(226, 232, 240, 0.85); box-shadow: 0 16px 40px -8px rgba(15, 23, 42, 0.06), 0 4px 16px -2px rgba(15, 23, 42, 0.03); text-align: center; animation: mbFadeIn 0.4s ease-out; box-sizing: border-box;">
+          
+          <!-- Logo với hiệu ứng Breathing & Ambient Glow -->
+          <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 26px;">
+            <img 
+              src="/img-logo-UXTeamWith.webp" 
+              alt="MB Bank UX Team" 
+              width="196" 
+              height="33" 
+              style="height: 33px; width: auto; display: block; animation: mbPulseGlow 2.8s ease-in-out infinite;" 
+            />
+          </div>
+
+          <!-- Thanh Gradient Progress Bar chạy mượt mà -->
+          <div style="width: 160px; height: 3px; background: #EEF2F6; border-radius: 9999px; overflow: hidden; position: relative; margin: 0 auto 18px auto;">
+            <div style="position: absolute; top: 0; left: 0; width: 60%; height: 100%; background: linear-gradient(90deg, transparent, #1057FB, #002D80, transparent); border-radius: 9999px; animation: mbProgressBar 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;"></div>
+          </div>
+
+          <!-- Thông điệp Loading -->
+          <p style="margin: 0; font-size: 13px; font-weight: 600; color: #334155; letter-spacing: -0.01em;">
+            Đang khởi tạo ứng dụng...
+          </p>
+          <p style="margin: 6px 0 0 0; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em;">
+            Digital Banking Division
+          </p>
+
         </div>
       </div>
     </div>

@@ -53,8 +53,9 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends Omit<HTMLMotionProps<"button">, "ref">,
+  extends Omit<HTMLMotionProps<"button">, "ref" | "children">,
     VariantProps<typeof buttonVariants> {
+  children?: React.ReactNode
   asChild?: boolean
   loading?: boolean
   tactile?: boolean

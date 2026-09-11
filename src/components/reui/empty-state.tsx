@@ -1,6 +1,8 @@
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { IconStack } from "./icon-stack"
+import { Layers } from "lucide-react"
 
 export interface EmptyStateProps {
   title?: string
@@ -16,6 +18,8 @@ export interface EmptyStateProps {
     icon?: React.ReactNode
   }
   className?: string
+  illustration?: "cards" | "icon-stack"
+  icon?: React.ReactNode
 }
 
 export function EmptyState({
@@ -24,28 +28,38 @@ export function EmptyState({
   primaryAction,
   secondaryAction,
   className,
+  illustration = "cards",
+  icon,
 }: EmptyStateProps) {
   return (
     <div className={cn("py-10 sm:py-12 px-4 text-center max-w-lg mx-auto", className)}>
-      {/* 3D Tight Stacked Cards Illustration (reui.io empty-state-1) */}
-      <div className="relative w-56 sm:w-60 h-20 mx-auto mb-5 select-none pointer-events-none">
-        {/* Layer 3: Backmost card (nhô lên 5px) */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[76%] h-9 rounded-[14px] bg-[#FAFAFC] border border-slate-200/60 shadow-2xs" />
+      {illustration === "icon-stack" || icon ? (
+        <div className="mb-5 flex items-center justify-center pointer-events-none select-none">
+          <IconStack className="h-20 w-18">
+            {icon || <Layers className="size-5 text-[#1057FB]" />}
+          </IconStack>
+        </div>
+      ) : (
+        /* 3D Tight Stacked Cards Illustration (reui.io empty-state-1) */
+        <div className="relative w-56 sm:w-60 h-20 mx-auto mb-5 select-none pointer-events-none">
+          {/* Layer 3: Backmost card (nhô lên 5px) */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[76%] h-9 rounded-[14px] bg-[#FAFAFC] border border-slate-200/60 shadow-2xs" />
 
-        {/* Layer 2: Middle card (nhô lên 5px) */}
-        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[88%] h-10 rounded-[14px] bg-[#F4F5F8] border border-slate-200/80 shadow-2xs" />
+          {/* Layer 2: Middle card (nhô lên 5px) */}
+          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[88%] h-10 rounded-[14px] bg-[#F4F5F8] border border-slate-200/80 shadow-2xs" />
 
-        {/* Layer 1: Front Card (nằm đè phía trước) */}
-        <div className="absolute top-5 left-1/2 -translate-x-1/2 w-full h-[54px] bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-2xs flex items-center gap-3 text-left">
-          {/* Square Placeholder Box */}
-          <div className="w-8 h-8 rounded-xl bg-slate-100/90 border border-slate-200/60 shrink-0" />
-          {/* Skeleton Lines */}
-          <div className="space-y-1.5 flex-1 min-w-0">
-            <div className="h-2 bg-slate-200/80 rounded-full w-28" />
-            <div className="h-1.5 bg-slate-100 rounded-full w-16" />
+          {/* Layer 1: Front Card (nằm đè phía trước) */}
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 w-full h-[54px] bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-2xs flex items-center gap-3 text-left">
+            {/* Square Placeholder Box */}
+            <div className="w-8 h-8 rounded-xl bg-slate-100/90 border border-slate-200/60 shrink-0" />
+            {/* Skeleton Lines */}
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <div className="h-2 bg-slate-200/80 rounded-full w-28" />
+              <div className="h-1.5 bg-slate-100 rounded-full w-16" />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Heading Title */}
       <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">

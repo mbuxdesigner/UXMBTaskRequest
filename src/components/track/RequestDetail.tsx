@@ -1427,7 +1427,7 @@ export default function RequestDetail({
       dispatchNotification({
         type: "viewer_added",
         requestId: request.request_id,
-        taskTitle: request.title || request.request_name || "Bài toán UX",
+        taskTitle: request.title || (request as any).request_name || "Bài toán UX",
         actorName: actor,
         actorRole: actorRole,
         note: addedText,

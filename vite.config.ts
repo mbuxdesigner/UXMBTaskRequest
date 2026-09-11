@@ -10,10 +10,10 @@ function compressionMiddlewarePlugin(): Plugin {
   return {
     name: 'compression-middleware-plugin',
     configureServer(server) {
-      server.middlewares.use(compression())
+      server.middlewares.use(compression() as any)
     },
     configurePreviewServer(server) {
-      server.middlewares.use(compression())
+      server.middlewares.use(compression() as any)
     },
   }
 }

@@ -202,16 +202,20 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [remainingSeconds, setRemainingSeconds] = useState(getRemainingSessionSeconds())
 
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
   const loadData = async (forceRefresh = false, isUserInitiated = false) => {
-    if (allRequests.length === 0) setLoading(true)
+    if (isUserInitiated) {
+      setIsRefreshing(true)
+    } else if (allRequests.length === 0) {
+      setLoading(true)
+    }
     const startTime = Date.now()
     try {
       const reqs = await fetchRequests(forceRefresh)
-      if (loading) {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 350) {
-          await new Promise((r) => setTimeout(r, 350 - elapsed))
-        }
+      const elapsed = Date.now() - startTime
+      if (elapsed < 650) {
+        await new Promise((r) => setTimeout(r, 650 - elapsed))
       }
       setAllRequests(reqs)
       if (isUserInitiated) {
@@ -224,6 +228,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       }
     } finally {
       setLoading(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -729,97 +734,108 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           parent: "MBBank UX Platform",
           current: "Track Task",
         }}
-        title="Theo Dõi Tiến Độ Bài Toán UX"
+        title="Track task"
         badge={
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Live Sync
           </span>
         }
-        subtitle="Quản lý và theo dõi tiến độ bài toán thiết kế UX & giải pháp liên phòng ban."
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Metric summary pills */}
-            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-              {/* Runs */}
-              <div className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-xs font-normal text-slate-500">Runs</span>
-                <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {runsCount}
-                </span>
-              </div>
-
-              {/* Overload */}
-              {overloadCount > 0 && (
-                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                  <span className="truncate text-xs font-normal text-slate-500">Overload</span>
-                  <span className="rounded-4xl border border-rose-200 bg-rose-50 text-rose-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                    {overloadCount}
-                  </span>
-                </div>
-              )}
-
-              {/* Chờ phân bổ */}
-              {unassignedCount > 0 && (
-                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                  <span className="truncate text-xs font-normal text-slate-500">Chờ phân bổ</span>
-                  <span className="rounded-4xl border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                    {unassignedCount}
-                  </span>
-                </div>
-              )}
-
-              {/* Đang thực hiện */}
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="truncate text-xs font-normal text-slate-500">Đang thực hiện</span>
-                <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {runningCount}
-                </span>
-              </div>
-
-              {/* PO Pending */}
-              {poPendingCount > 0 && (
-                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
-                  <span className="truncate text-xs font-normal text-slate-500">Needs approval</span>
-                  <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                    {poPendingCount}
-                  </span>
-                </div>
-              )}
-
-              {/* Pending Designer */}
-              {designerPendingCount > 0 && (
-                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="Tạm dừng theo chat @pending">
-                  <span className="truncate text-xs font-normal text-slate-500">Pending</span>
-                  <span className="rounded-4xl border border-slate-300 bg-slate-100 text-slate-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                    {designerPendingCount}
-                  </span>
-                </div>
-              )}
-
-              {/* Hoàn thành */}
-              {completedCount > 0 && (
-                <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                  <span className="truncate text-xs font-normal text-slate-500">Hoàn thành</span>
-                  <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                    {completedCount}
-                  </span>
-                </div>
-              )}
+        subtitle={
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5 pt-0.5">
+            {/* Runs */}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-xs font-normal text-slate-500">Runs</span>
+              <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {runsCount}
+              </span>
             </div>
 
-            {/* Nút Làm mới (thay thế nút Đồng bộ dữ liệu) */}
-            <Button
-              variant="outline"
-              size="sm"
+            {/* Overload */}
+            {overloadCount > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                <span className="truncate text-xs font-normal text-slate-500">Overload</span>
+                <span className="rounded-4xl border border-rose-200 bg-rose-50 text-rose-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {overloadCount}
+                </span>
+              </div>
+            )}
+
+            {/* Chờ phân bổ */}
+            {unassignedCount > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                <span className="truncate text-xs font-normal text-slate-500">Chờ phân bổ</span>
+                <span className="rounded-4xl border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {unassignedCount}
+                </span>
+              </div>
+            )}
+
+            {/* Đang thực hiện */}
+            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+              <span className="truncate text-xs font-normal text-slate-500">Đang thực hiện</span>
+              <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {runningCount}
+              </span>
+            </div>
+
+            {/* PO Pending */}
+            {poPendingCount > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
+                <span className="truncate text-xs font-normal text-slate-500">Needs approval</span>
+                <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {poPendingCount}
+                </span>
+              </div>
+            )}
+
+            {/* Pending Designer */}
+            {designerPendingCount > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="Tạm dừng theo chat @pending">
+                <span className="truncate text-xs font-normal text-slate-500">Pending</span>
+                <span className="rounded-4xl border border-slate-300 bg-slate-100 text-slate-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {designerPendingCount}
+                </span>
+              </div>
+            )}
+
+            {/* Hoàn thành */}
+            {completedCount > 0 && (
+              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                <span className="truncate text-xs font-normal text-slate-500">Hoàn thành</span>
+                <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                  {completedCount}
+                </span>
+              </div>
+            )}
+          </div>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Nút Làm mới với hiệu ứng xoay icon & tap spring */}
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.94 }}
+              transition={springs.snappy}
               onClick={() => loadData(true, true)}
-              disabled={loading}
+              disabled={loading || isRefreshing}
               aria-label="Làm mới dữ liệu bài toán"
-              className="h-10 px-4 text-xs font-medium rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5 shrink-0"
+              className={`h-9 px-3.5 text-xs font-medium rounded-xl border shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 select-none ${
+                isRefreshing
+                  ? "bg-indigo-50/70 border-indigo-200 text-[#1057FB]"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+              }`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span>Làm mới</span>
-            </Button>
+              <RefreshCw
+                className={`w-3.5 h-3.5 transition-transform ${
+                  isRefreshing ? "animate-spin text-[#1057FB]" : "text-slate-500"
+                }`}
+              />
+              <span className={isRefreshing ? "font-semibold text-[#1057FB]" : ""}>
+                {isRefreshing ? "Đang làm mới..." : "Làm mới"}
+              </span>
+            </motion.button>
           </div>
         }
       />
@@ -829,7 +845,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         {/* Frame Panel Header / Toolbar - Flux AgentOps Style */}
         <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between rounded-t-2xl relative z-20">
           {/* Left: Search input */}
-          <div className="group/input-group relative flex items-center rounded-lg border border-transparent bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-900/5 h-8 w-full min-w-0 sm:max-w-xs transition-all">
+          <motion.div 
+            layout
+            transition={springs.snappy}
+            className="group/input-group relative flex items-center rounded-lg border border-transparent bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-900/5 h-8 w-full min-w-0 sm:max-w-xs focus-within:sm:max-w-sm transition-all duration-200"
+          >
             <div className="flex items-center justify-center pl-3 text-slate-400">
               <Search className="size-3.5" />
             </div>
@@ -841,16 +861,25 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               aria-label="Tìm kiếm yêu cầu theo mã, tiêu đề, designer hoặc squad"
               className="h-8 w-full border-0 bg-transparent px-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
             />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="mr-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+            <AnimatePresence>
+              {query && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.7 }}
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.85 }}
+                  transition={springs.snappy}
+                  onClick={() => setQuery("")}
+                  className="mr-2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                  title="Xóa tìm kiếm"
+                >
+                  <X className="size-3.5" />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </motion.div>
 
           {/* Right: Controls (Segmented view toggle, Filter, Collapse, Refresh, New Task) */}
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">

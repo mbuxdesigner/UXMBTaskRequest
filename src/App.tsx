@@ -41,6 +41,8 @@ import {
 
 import Sidebar from "./components/Sidebar"
 import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
+import { getRoleNavConfig, DEFAULT_ROLE_NAV_CONFIG } from "@/config/navVisibilityConfig"
+import type { UserRole } from "./data/mockData"
 import TongQuanPage from "./pages/TongQuanPage"
 import CreateRequestPage from "./pages/CreateRequestPage"
 import TrackRequestPage from "./pages/TrackRequestPage"
@@ -77,49 +79,58 @@ export default function App() {
     return localStorage.getItem("app_sidebar_collapsed") === "true"
   })
 
+  const isPageAllowedForRole = (targetPage: Page, role?: UserRole): boolean => {
+    if (!role) return true
+    const navConfig = getRoleNavConfig()
+    const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
+    if (targetPage === "manage") return Boolean(visibility.manage)
+    return Boolean(visibility[targetPage])
+  }
+
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
+    const rawHash = window.location.hash.replace(/^#/, "").split("?")[0] as Page
+    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage"]
+    const targetPage = validPages.includes(rawHash) ? rawHash : (s?.role === "PO" || s?.role === "Business" ? "track" : "overview")
 
-    const hash = window.location.hash.replace(/^#/, "").split("?")[0]
-
-    if (s?.role === "PO") return "track"
-
-    // Nếu có hash cụ thể hợp lệ (khác manage khi chưa có quyền)
-
-    if (
-      hash === "track" ||
-      hash === "overview" ||
-      hash === "create" ||
-      hash === "test" ||
-      hash === "compressor"
-    ) {
-      return hash as Page
+    if (s?.role && !isPageAllowedForRole(targetPage, s.role)) {
+      return isPageAllowedForRole("track", s.role) ? "track" : "create"
     }
 
-    if (hash === "manage" || hash === "admin") {
-      if (s) return "manage"
-    }
-
-    return "overview"
+    return targetPage
   })
 
   const toggleSidebarCollapse = () => {
     setSidebarCollapsed((prev) => {
       const next = !prev
-
       localStorage.setItem("app_sidebar_collapsed", String(next))
-
       return next
     })
   }
 
   // Chuyển trang mượt mà bằng View Transitions API (Modern Web Guidance)
-
   const handleNavigate = (newPage: Page) => {
+    const userRole = session?.role
+    if (userRole && !isPageAllowedForRole(newPage, userRole)) {
+      const fallback = isPageAllowedForRole("track", userRole) ? "track" : "create"
+      setPage(fallback)
+      window.location.hash = `#${fallback}`
+      return
+    }
     if (page === newPage) return
     setPage(newPage)
     window.location.hash = `#${newPage}`
   }
+
+  // Tự động chuyển về trang hợp lệ nếu vai trò hiện tại không được cấp quyền xem trang đang đứng
+  useEffect(() => {
+    const userRole = session?.role
+    if (userRole && !isPageAllowedForRole(page, userRole)) {
+      const fallback = isPageAllowedForRole("track", userRole) ? "track" : "create"
+      setPage(fallback)
+      window.location.hash = `#${fallback}`
+    }
+  }, [session?.role, page])
 
   // Đồng bộ tiêu đề trang (Document Title) theo từng ngữ cảnh nghiệp vụ
 
