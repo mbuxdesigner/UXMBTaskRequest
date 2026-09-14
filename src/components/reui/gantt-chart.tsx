@@ -175,16 +175,16 @@ export function getTaskStageStatusInfo(req: UXRequest, index: number = 0): TaskS
 
 function getPriorityConfig(priority?: string) {
   const p = (priority || "").toLowerCase().trim()
-  if (p.includes("khẩn cấp") || p.includes("urgent") || p.includes("p0")) {
-    return { label: "Urgent", flag: "text-rose-500" }
+  if (p === "lv1" || p.includes("khẩn") || p.includes("urgent") || p === "1" || p === "p0") {
+    return { label: "Lv1", flag: "text-rose-500" }
   }
-  if (p.includes("cao") || p.includes("high") || p.includes("p1")) {
-    return { label: "High", flag: "text-amber-500" }
+  if (p === "lv2" || p.includes("cao") || p.includes("high") || p === "2") {
+    return { label: "Lv2", flag: "text-amber-500" }
   }
-  if (p.includes("thấp") || p.includes("low") || p.includes("p3")) {
-    return { label: "Low", flag: "text-slate-400" }
+  if (p === "lv4" || p.includes("thấp") || p.includes("low") || p === "4") {
+    return { label: "Lv4", flag: "text-slate-400" }
   }
-  return { label: "Medium", flag: "text-blue-500" }
+  return { label: "Lv3", flag: "text-blue-500" }
 }
 
 export default function ReUIGanttChart({ 

@@ -199,7 +199,8 @@ export default function TongQuanPage() {
         assigneeMap[assignee].open++
       }
 
-      if ((isBlocked || req.priority === "Urgent") && !isDone && !primaryRisk) {
+      const isUrgent = req.priority === "Lv1" || req.priority === "Urgent" || (req.priority || "").toLowerCase().includes("lv1") || (req.priority || "").toLowerCase().includes("urgent")
+      if ((isBlocked || isUrgent) && !isDone && !primaryRisk) {
         primaryRisk = req
       }
     })

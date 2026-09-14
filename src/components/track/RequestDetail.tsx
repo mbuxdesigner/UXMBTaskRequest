@@ -21,7 +21,7 @@ import {
 import { UserAvatar, getAvatarColorClass } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
+import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { dispatchNotification } from "@/services/notificationService"
@@ -218,11 +218,11 @@ const STATUS_OPTIONS = [
   { value: "Bị chặn", label: "Bị chặn", color: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100" },
 ]
 
-const PRIORITY_OPTIONS = [
-  { value: "Urgent", label: "Urgent", color: "text-rose-600 bg-rose-50 border-rose-200", flagFill: "fill-rose-500 text-rose-500" },
-  { value: "High", label: "High", color: "text-amber-600 bg-amber-50 border-amber-200", flagFill: "fill-amber-500 text-amber-500" },
-  { value: "Normal", label: "Medium", color: "text-blue-600 bg-blue-50 border-blue-200", flagFill: "fill-blue-500 text-blue-500" },
-  { value: "Low", label: "Low", color: "text-slate-600 bg-slate-50 border-slate-200", flagFill: "fill-slate-400 text-slate-400" },
+export const PRIORITY_OPTIONS = [
+  { value: "Lv1", label: "Lv1", desc: "Cao nhất", color: "text-rose-600 bg-rose-50 border-rose-200", flagFill: "fill-rose-500 text-rose-500" },
+  { value: "Lv2", label: "Lv2", desc: "Cao", color: "text-amber-600 bg-amber-50 border-amber-200", flagFill: "fill-amber-500 text-amber-500" },
+  { value: "Lv3", label: "Lv3", desc: "Trung bình", color: "text-blue-600 bg-blue-50 border-blue-200", flagFill: "fill-blue-500 text-blue-500" },
+  { value: "Lv4", label: "Lv4", desc: "Thấp nhất", color: "text-slate-600 bg-slate-50 border-slate-200", flagFill: "fill-slate-400 text-slate-400" },
 ]
 
 export function getAdminPhases() {
@@ -945,11 +945,11 @@ export default function RequestDetail({
   const [viewerPlacement, setViewerPlacement] = useState<"top" | "bottom">("top")
   const [assigneePlacement, setAssigneePlacement] = useState<"top" | "bottom">("bottom")
   const [currentPriority, setCurrentPriority] = useState<string>(() => {
-    return request?.priority || "Normal"
+    return request?.priority || "Lv3"
   })
 
   useEffect(() => {
-    setCurrentPriority(request?.priority || "Normal")
+    setCurrentPriority(request?.priority || "Lv3")
   }, [request?.request_id, request?.priority])
 
   useEffect(() => {
@@ -2228,7 +2228,7 @@ export default function RequestDetail({
     request.priority = newPriority
 
     const targetOpt = PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === newPriority.toLowerCase())
-    const targetLabel = targetOpt ? targetOpt.label : newPriority
+    const targetLabel = targetOpt ? `${targetOpt.label} (${targetOpt.desc})` : newPriority
     const toastId = toast.loading(`Đang cập nhật độ ưu tiên sang [${targetLabel}]...`)
 
     try {
@@ -3078,11 +3078,10 @@ export default function RequestDetail({
       })
   }
 
-  const activePriorityObj =
-    PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === (currentPriority || "").toLowerCase()) ||
-    PRIORITY_OPTIONS.find((p) => p.value.toLowerCase() === (request?.priority || "").toLowerCase()) ||
-    PRIORITY_OPTIONS.find((p) => p.value === "Normal") ||
-    PRIORITY_OPTIONS[2]
+  const activePriorityObj = useMemo(() => {
+    const pInfo = formatPriority(currentPriority || request?.priority)
+    return PRIORITY_OPTIONS.find((p) => p.value === pInfo.label) || PRIORITY_OPTIONS[2]
+  }, [currentPriority, request?.priority])
 
   // Dynamic UX Phases from Admin Settings
   const [phaseVersion, setPhaseVersion] = useState(0)
@@ -4041,25 +4040,27 @@ export default function RequestDetail({
                               initial={{ opacity: 0, y: 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-48 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
+                              className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 w-52 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden"
                             >
-                              <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                                Priority
+                              <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between border-b border-slate-100 mb-1">
+                                <span>Priority</span>
+                                <span className="text-[9px] font-medium text-slate-400">Lv1 (Cao) → Lv4 (Thấp)</span>
                               </div>
                               {PRIORITY_OPTIONS.map((pr) => {
-                                const isSelected = (currentPriority || "").toLowerCase() === pr.value.toLowerCase()
+                                const isSelected = activePriorityObj.value === pr.value
                                 return (
                                   <button
                                     key={pr.value}
                                     type="button"
                                     onClick={() => handleUpdatePriority(pr.value)}
-                                    className={`w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 cursor-pointer text-xs font-semibold ${
+                                    className={`w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-slate-50 cursor-pointer text-xs font-semibold transition-colors ${
                                       isSelected ? "text-slate-900 bg-slate-50/80" : "text-slate-700"
                                     }`}
                                   >
-                                    <Flag className={`w-3.5 h-3.5 ${pr.flagFill}`} />
-                                    <span className="flex-1">{pr.label}</span>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${pr.flagFill}`} />
+                                    <span className="font-bold">{pr.label}</span>
+                                    <span className="text-[11px] font-normal text-slate-400">({pr.desc})</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600 ml-auto" />}
                                   </button>
                                 )
                               })}

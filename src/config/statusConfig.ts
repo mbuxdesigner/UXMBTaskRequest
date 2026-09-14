@@ -739,41 +739,56 @@ export function getCapacityStatusConfig(status: string) {
   )
 }
 
-// ─── Task Priority Helper (English Standard) ────────────
+// ─── Task Priority Helper (Lv1 - Lv4 Standard) ────────────
 
 export interface PriorityInfo {
-  label: "Urgent" | "High" | "Medium" | "Low"
-  key: "urgent" | "high" | "normal" | "low"
+  label: "Lv1" | "Lv2" | "Lv3" | "Lv4" | string
+  key: "lv1" | "lv2" | "lv3" | "lv4" | "urgent" | "high" | "normal" | "low"
+  level: 1 | 2 | 3 | 4
+  description: string
   badgeClass: string
+  flagColor: string
 }
 
 export function formatPriority(priority?: string): PriorityInfo {
-  const p = (priority || "normal").toLowerCase().trim()
-  if (p.includes("urgent") || p.includes("khẩn")) {
+  const p = (priority || "lv3").toLowerCase().trim()
+  if (p === "lv1" || p.includes("urgent") || p.includes("khẩn") || p === "1" || p === "p1" || p === "p0") {
     return {
-      label: "Urgent",
-      key: "urgent",
+      label: "Lv1",
+      key: "lv1",
+      level: 1,
+      description: "Cao nhất",
       badgeClass: "bg-rose-50 text-rose-700 border-rose-200 shadow-2xs whitespace-nowrap",
+      flagColor: "fill-rose-500 text-rose-500",
     }
   }
-  if (p.includes("high") || p.includes("cao")) {
+  if (p === "lv2" || p.includes("high") || p.includes("cao") || p === "2" || p === "p2") {
     return {
-      label: "High",
-      key: "high",
+      label: "Lv2",
+      key: "lv2",
+      level: 2,
+      description: "Cao",
       badgeClass: "bg-amber-50 text-amber-700 border-amber-200 shadow-2xs whitespace-nowrap",
+      flagColor: "fill-amber-500 text-amber-500",
     }
   }
-  if (p.includes("low") || p.includes("thấp")) {
+  if (p === "lv4" || p.includes("low") || p.includes("thấp") || p === "4" || p === "p4") {
     return {
-      label: "Low",
-      key: "low",
+      label: "Lv4",
+      key: "lv4",
+      level: 4,
+      description: "Thấp nhất",
       badgeClass: "bg-slate-50 text-slate-600 border-slate-200 whitespace-nowrap",
+      flagColor: "text-slate-400 fill-slate-400",
     }
   }
   return {
-    label: "Medium",
-    key: "normal",
+    label: "Lv3",
+    key: "lv3",
+    level: 3,
+    description: "Trung bình",
     badgeClass: "bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap",
+    flagColor: "fill-blue-500 text-blue-500",
   }
 }
 

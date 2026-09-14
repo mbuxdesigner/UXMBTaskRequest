@@ -255,7 +255,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
       ? { figma_url: data.figma_url }
       : {},
     submitted_at: formattedDate,
-    priority: String(data.priority || "Normal"),
+    priority: String(data.priority || "Lv3"),
     task_updates: taskUpdates,
     sent_to_po_at: effectiveSentToPo,
     viewers: (() => {
@@ -801,7 +801,7 @@ export async function updateTaskProgressInSheet(
         current_phase: params.new_phase,
         status: params.new_status,
         progress: params.new_progress,
-        priority: params.priority !== undefined ? params.priority : (oldReq.priority || "Normal"),
+        priority: params.priority !== undefined ? params.priority : (oldReq.priority || "Lv3"),
         product: params.product !== undefined ? params.product : oldReq.product,
         squad_name: params.squad_name !== undefined ? params.squad_name : oldReq.squad_name,
         preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name !== undefined ? params.squad_name : oldReq.preferred_squad),
@@ -874,7 +874,7 @@ export async function updateTaskProgressInSheet(
         new_phase: params.new_phase,
         new_status: params.new_status,
         new_progress: params.new_progress,
-        priority: params.priority !== undefined ? params.priority : (currentReq?.priority || "Normal"),
+        priority: params.priority !== undefined ? params.priority : (currentReq?.priority || "Lv3"),
         product: params.product !== undefined ? params.product : (currentReq?.product || ""),
         squad_name: params.squad_name !== undefined
           ? params.squad_name

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { springs, staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
-import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
+import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
@@ -674,35 +674,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   const renderPriorityBadge = (priority?: string) => {
-    const p = (priority || "Normal").toLowerCase()
-    if (p.includes("urgent") || p.includes("khẩn")) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs whitespace-nowrap">
-          <Flag className="w-3 h-3 fill-rose-500 text-rose-500" />
-          <span>Urgent</span>
-        </span>
-      )
-    }
-    if (p.includes("high") || p.includes("cao")) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs whitespace-nowrap">
-          <Flag className="w-3 h-3 fill-amber-500 text-amber-500" />
-          <span>High</span>
-        </span>
-      )
-    }
-    if (p.includes("low") || p.includes("thấp")) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200 shadow-2xs whitespace-nowrap">
-          <Flag className="w-3 h-3 text-slate-400" />
-          <span>Low</span>
-        </span>
-      )
-    }
+    const pInfo = formatPriority(priority)
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs whitespace-nowrap">
-        <Flag className="w-3 h-3 fill-blue-500 text-blue-500" />
-        <span>Medium</span>
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border shadow-2xs whitespace-nowrap ${pInfo.badgeClass}`}>
+        <Flag className={`w-3 h-3 ${pInfo.flagColor}`} />
+        <span>{pInfo.label}</span>
       </span>
     )
   }

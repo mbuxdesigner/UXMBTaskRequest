@@ -162,7 +162,7 @@ export default function WeeklyCheckinSection({
         if (!des.includes(selectedDesignerFilter.toLowerCase())) return false
       }
       if (onlyAttention) {
-        const isBlocked = r.status === "Bị chặn" || (r.priority === "Urgent" && r.status !== "Hoàn thành")
+        const isBlocked = r.status === "Bị chặn" || ((r.priority === "Lv1" || r.priority === "Urgent") && r.status !== "Hoàn thành")
         const isPending = r.status === "PO pending" || r.status === "Đã gửi PO"
         if (!isBlocked && !isPending) return false
       }
@@ -182,7 +182,7 @@ export default function WeeklyCheckinSection({
         const isBlocked = r.status === "Bị chặn"
         const isPoPending = r.status === "PO pending"
         const isSentToPo = r.status === "Đã gửi PO"
-        const isUrgent = r.priority === "Urgent"
+        const isUrgent = r.priority === "Lv1" || r.priority === "Urgent"
 
         let isNearOverdue = false
         const targetDate = parseDate(r.design_deadline || r.expected_deadline)
@@ -199,7 +199,7 @@ export default function WeeklyCheckinSection({
         const weight = (r: UXRequest) => {
           if (r.status === "Bị chặn") return 1
           if (r.status === "PO pending") return 2
-          if (r.priority === "Urgent") return 3
+          if (r.priority === "Lv1" || r.priority === "Urgent") return 3
           return 4
         }
         return weight(a) - weight(b)

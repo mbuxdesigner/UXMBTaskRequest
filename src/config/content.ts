@@ -50,9 +50,10 @@ export const APP_CONTENT = {
       pending: "Pending",
     },
     priority: {
-      high: "Lv1",
-      medium: "Lv2",
-      low: "Lv3",
+      lv1: "Lv1",
+      lv2: "Lv2",
+      lv3: "Lv3",
+      lv4: "Lv4",
     },
   },
 
