@@ -323,7 +323,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   useEffect(() => {
     const timer = setInterval(() => {
       const currentSession = getStoredSession()
-      setSession(currentSession)
+      setSession((prev) => {
+        if (!prev && !currentSession) return prev
+        if (
+          prev?.sessionToken === currentSession?.sessionToken &&
+          prev?.role === currentSession?.role &&
+          prev?.teamsEmail === currentSession?.teamsEmail &&
+          prev?.squad === currentSession?.squad &&
+          prev?.displayName === currentSession?.displayName
+        ) {
+          return prev
+        }
+        return currentSession
+      })
       setRemainingSeconds(getRemainingSessionSeconds())
     }, 1000)
     return () => clearInterval(timer)
@@ -544,6 +556,13 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [selectedPhases, setSelectedPhases] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
+
+  const hasActiveFilters = Boolean(
+    query.trim() ||
+    selectedPhases.length > 0 ||
+    selectedProducts.length > 0 ||
+    selectedSquads.length > 0
+  )
 
   // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
   const filteredRequests = useMemo(() => {
@@ -1024,7 +1043,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                       title="Không tìm thấy bài toán nào"
                       description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
                       secondaryAction={
-                        query || selectedPhases.length > 0 || selectedSquads.length > 0
+                        hasActiveFilters
                           ? {
                               label: "Đặt lại bộ lọc",
                               onClick: handleClearAllFilters,
@@ -1079,7 +1098,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 onSelectRequest={setSelectedRequest}
                 onNavigateToCreate={onNavigateToCreate}
                 onResetFilters={handleClearAllFilters}
-                hasActiveFilters={Boolean(query || selectedPhases.length > 0 || selectedSquads.length > 0)}
+                hasActiveFilters={hasActiveFilters}
                 hideHeader={true}
                 mutatingTaskIds={mutatingTaskIds}
                 highlightedTaskIds={highlightedTaskIds}

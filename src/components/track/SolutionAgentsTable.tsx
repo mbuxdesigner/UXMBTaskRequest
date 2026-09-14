@@ -357,25 +357,57 @@ export default function SolutionAgentsTable({
   // allowing Framer Motion row exit animations to complete smoothly without abrupt unmounting
   const prevGroupCountsRef = React.useRef<Record<string, number>>({})
   const [graceGroupIds, setGraceGroupIds] = useState<Set<string>>(new Set())
+  const graceTimersRef = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Clean up any pending grace timers on unmount
+  React.useEffect(() => {
+    return () => {
+      graceTimersRef.current.forEach((timer) => clearTimeout(timer))
+      graceTimersRef.current.clear()
+    }
+  }, [])
 
   React.useEffect(() => {
+    // When active filters are engaged, immediately clear all grace periods and timers
+    // so empty groups (0) never appear or trigger bouncing layout shifts during filtering
+    if (hasActiveFilters) {
+      if (graceGroupIds.size > 0) {
+        setGraceGroupIds(new Set())
+      }
+      graceTimersRef.current.forEach((timer) => clearTimeout(timer))
+      graceTimersRef.current.clear()
+      STATUS_GROUPS.forEach((g) => {
+        prevGroupCountsRef.current[g.id] = requests.filter((r) => g.match(r)).length
+      })
+      return
+    }
+
     STATUS_GROUPS.forEach((g) => {
       const currentCount = requests.filter((r) => g.match(r)).length
       const prevCount = prevGroupCountsRef.current[g.id] ?? currentCount
+
       if (prevCount > 0 && currentCount === 0) {
+        // Clear existing timer if any for this group
+        const existingTimer = graceTimersRef.current.get(g.id)
+        if (existingTimer) clearTimeout(existingTimer)
+
         setGraceGroupIds((prev) => new Set(prev).add(g.id))
         const timer = setTimeout(() => {
           setGraceGroupIds((prev) => {
+            if (!prev.has(g.id)) return prev
             const next = new Set(prev)
             next.delete(g.id)
             return next
           })
+          graceTimersRef.current.delete(g.id)
         }, 350)
-        return () => clearTimeout(timer)
+        graceTimersRef.current.set(g.id, timer)
       }
+
+      // CRITICAL: Always update prevGroupCountsRef to prevent infinite re-trigger loop
       prevGroupCountsRef.current[g.id] = currentCount
     })
-  }, [requests])
+  }, [requests, hasActiveFilters])
 
   // Group requests by status group
   const groupedData = useMemo(() => {
@@ -385,15 +417,16 @@ export default function SolutionAgentsTable({
         incomingTasksByGroup[group.id as TaskGroupId]?.filter(
           (inc) => !items.some((it) => it.request_id === inc.request_id)
         ) || []
+      const isGraceActive = !hasActiveFilters && graceGroupIds.has(group.id)
       return {
         ...group,
         items,
         count: items.length,
         incomingExternal,
-        hasVisibleItems: items.length > 0 || incomingExternal.length > 0 || graceGroupIds.has(group.id),
+        hasVisibleItems: items.length > 0 || incomingExternal.length > 0 || isGraceActive,
       }
     })
-  }, [requests, incomingTasksByGroup, graceGroupIds])
+  }, [requests, incomingTasksByGroup, graceGroupIds, hasActiveFilters])
 
   // Stat counters for footer
   const totalVisible = requests.length
