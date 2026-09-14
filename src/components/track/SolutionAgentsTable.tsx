@@ -409,14 +409,30 @@ export default function SolutionAgentsTable({
     })
   }, [requests, hasActiveFilters])
 
-  // Group requests by status group
+  // Group requests by status group (sorted by Lv priority from 1 to 4)
   const groupedData = useMemo(() => {
     return STATUS_GROUPS.map((group) => {
-      const items = requests.filter((r) => group.match(r))
-      const incomingExternal =
+      const items = requests
+        .filter((r) => group.match(r))
+        .slice()
+        .sort((a, b) => {
+          const pA = formatPriority(a.priority).level
+          const pB = formatPriority(b.priority).level
+          return pA - pB
+        })
+
+      const incomingExternal = (
         incomingTasksByGroup[group.id as TaskGroupId]?.filter(
           (inc) => !items.some((it) => it.request_id === inc.request_id)
         ) || []
+      )
+        .slice()
+        .sort((a, b) => {
+          const pA = formatPriority(a.priority).level
+          const pB = formatPriority(b.priority).level
+          return pA - pB
+        })
+
       const isGraceActive = !hasActiveFilters && graceGroupIds.has(group.id)
       return {
         ...group,

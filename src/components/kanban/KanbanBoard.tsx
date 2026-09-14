@@ -6,7 +6,7 @@ import { KanbanBoardSkeleton } from "@/components/common/ReuiSkeletons"
 import { UXRequest } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
-import { getRequestPendingClassification } from "@/config/statusConfig"
+import { getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
 import { capitalizeFirstLetter } from "@/lib/utils"
 import { 
@@ -448,9 +448,14 @@ export default function KanbanBoard({
             style={{ scrollbarGutter: "stable" }}
           >
             {kanbanColumns.map((column) => {
-              const columnRequests = requests.filter(
-                (r) => getRequestKanbanPhase(r) === column.phase
-              )
+              const columnRequests = requests
+                .filter((r) => getRequestKanbanPhase(r) === column.phase)
+                .slice()
+                .sort((a, b) => {
+                  const pA = formatPriority(a.priority).level
+                  const pB = formatPriority(b.priority).level
+                  return pA - pB
+                })
 
               const isOver = dragOverColumnId === column.id
 
