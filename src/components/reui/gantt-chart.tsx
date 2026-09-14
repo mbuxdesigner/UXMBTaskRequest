@@ -8,7 +8,6 @@ import {
   ChevronLeft, 
   ChevronRight, 
   ChevronDown, 
-  ListTree, 
   MoreHorizontal, 
   Search, 
   Filter, 
@@ -198,7 +197,6 @@ export default function ReUIGanttChart({
   const [showSquadFilterPopover, setShowSquadFilterPopover] = useState(false)
   const [showUserFilterPopover, setShowUserFilterPopover] = useState(false)
   const [showColumnsPopover, setShowColumnsPopover] = useState(false)
-  const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [userSearchQuery, setUserSearchQuery] = useState("")
 
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
@@ -1102,45 +1100,6 @@ export default function ReUIGanttChart({
               </div>
             )}
           </div>
-
-          {/* Split Button: + Add Task / New List */}
-          <div className="relative flex items-center rounded-lg shadow-2xs">
-            <button
-              type="button"
-              className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-l-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Task</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreateMenu(!showCreateMenu)}
-              className="h-8 px-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-r-lg border-l border-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-
-            {showCreateMenu && (
-              <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-50 animate-in fade-in-50">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateMenu(false)}
-                  className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 text-slate-500" />
-                  <span>New Task</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateMenu(false)}
-                  className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <ListTree className="w-3.5 h-3.5 text-slate-500" />
-                  <span>New List</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -1403,11 +1362,6 @@ export default function ReUIGanttChart({
               )
             })}
 
-            {/* Add Task Button at bottom */}
-            <div className="h-9 px-4 flex items-center gap-1.5 text-[12px] font-normal text-slate-400 hover:text-slate-600 cursor-pointer border-b border-slate-100/70 transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add task</span>
-            </div>
           </div>
         </div>
 
