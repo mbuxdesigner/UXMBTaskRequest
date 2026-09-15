@@ -111,12 +111,12 @@ export function saveTreesToStorage(trees: Record<string, IANode>): void {
 
 // Layout Dimensions per Tier
 const TIER_DIMENSIONS: Record<IATier, { width: number; height: number; x: number }> = {
-  1: { width: 260, height: 100, x: 40 },
-  2: { width: 250, height: 126, x: 340 },
-  3: { width: 240, height: 156, x: 640 },
-  4: { width: 230, height: 146, x: 940 },
+  1: { width: 260, height: 110, x: 40 },
+  2: { width: 250, height: 135, x: 340 },
+  3: { width: 240, height: 165, x: 640 },
+  4: { width: 230, height: 185, x: 940 },
 }
-const VERTICAL_GAP = 24
+const VERTICAL_GAP = 36
 
 export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATreeStateReturn {
   const [products] = useState<IAProductInfo[]>(IA_PRODUCTS)
@@ -601,92 +601,91 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    // 2. Second pass: Calculate Top-Down Vertical Column Hierarchy Positions
-    // - lv1: Product Root centered at the top
-    // - lv2: Modules arranged horizontally side-by-side (each starting a column)
-    // - lv3: Feature journeys indented under their respective lv2
-    // - lv4: Screens stacked vertically under their respective lv3
+    // 2. Second pass: Calculate Non-Overlapping Staggered Multi-Column Hierarchy Positions
+    // - lv1 (Root): Centered at the top (START_Y = 40)
+    // - lv2 (Modules): Arranged horizontally across columns at MODULES_TOP_Y = 220
+    // - lv3 (Journeys): Shifted to the right of Module (GAP_X = 80px)
+    // - lv4 (Screens): Shifted to the right of Journey (GAP_X = 80px), stacked vertically
+    // Guarantees ZERO card overlaps horizontally and vertically
     const resultNodes: LayoutNode[] = []
     const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
 
     const START_X = 60
     const START_Y = 40
-    const ROOT_BOTTOM_GAP = 70 // Gap between Root and Module row
-    const COLUMN_GAP = 60 // Spacing between columns
-    const VERTICAL_GAP_NODE = 24 // Vertical spacing between cards in the same column
-    const VERTICAL_GAP_SECTION = 36 // Spacing between different feature sections
-    const INDENT_LV3 = 28 // Indent for Lv3 features under Lv2
-    const INDENT_LV4 = 56 // Indent for Lv4 screens under Lv2 (28px under Lv3)
-
-    // Helper: Recursively layout nodes inside a column
-    function layoutColumnChildren(
-      parent: InternalNode,
-      colStartX: number,
-      startY: number
-    ): number {
-      let currentY = startY
-
-      for (let i = 0; i < parent.children.length; i++) {
-        const child = parent.children[i]
-
-        let indent = 0
-        if (child.node.tier === 3) {
-          indent = INDENT_LV3
-        } else if (child.node.tier >= 4) {
-          indent = INDENT_LV4
-        }
-
-        child.x = colStartX + indent
-        child.y = currentY
-
-        rawPairs.push({ parent, child })
-
-        currentY += child.height + VERTICAL_GAP_NODE
-
-        // If child is expanded, recursively lay out its children
-        if (child.children.length > 0 && child.isExpanded) {
-          currentY = layoutColumnChildren(child, colStartX, currentY)
-        }
-
-        // Add section gap after a tier 3 group
-        if (child.node.tier === 3) {
-          currentY += (VERTICAL_GAP_SECTION - VERTICAL_GAP_NODE)
-        }
-      }
-
-      return currentY
-    }
+    const MODULES_TOP_Y = 220
+    const GAP_X = 80
+    const MODULE_GAP_X = 120
+    const VERTICAL_GAP_SCREEN = 36
+    const VERTICAL_GAP_SECTION = 50
 
     const root = rootInternal
     root.y = START_Y
 
-    const modulesTopY = START_Y + root.height + ROOT_BOTTOM_GAP
-
     if (root.children.length === 0 || !root.isExpanded) {
       root.x = START_X
     } else {
-      let currentColStartX = START_X
+      let currentModuleX = START_X
 
       for (const module of root.children) {
-        module.x = currentColStartX
-        module.y = modulesTopY
+        const modX = currentModuleX
+        const modY = MODULES_TOP_Y
+
+        module.x = modX
+        module.y = modY
 
         rawPairs.push({ parent: root, child: module })
 
-        let columnEndY = module.y + module.height + VERTICAL_GAP_NODE
+        const luongs = module.children
+        let maxClusterWidth = module.width
 
-        if (module.children.length > 0 && module.isExpanded) {
-          columnEndY = layoutColumnChildren(module, currentColStartX, columnEndY)
+        if (luongs.length > 0 && module.isExpanded) {
+          const luongX = modX + module.width + GAP_X
+          const screenX = luongX + (TIER_DIMENSIONS[3]?.width || 240) + GAP_X
+
+          maxClusterWidth = Math.max(maxClusterWidth, module.width + GAP_X + (TIER_DIMENSIONS[3]?.width || 240))
+
+          let currentLuongY = MODULES_TOP_Y
+
+          for (const luong of luongs) {
+            luong.x = luongX
+            luong.y = currentLuongY
+
+            rawPairs.push({ parent: module, child: luong })
+
+            const screens = luong.children
+            let screenStartY = currentLuongY
+
+            if (screens.length > 0 && luong.isExpanded) {
+              maxClusterWidth = Math.max(
+                maxClusterWidth,
+                module.width + GAP_X + (TIER_DIMENSIONS[3]?.width || 240) + GAP_X + (TIER_DIMENSIONS[4]?.width || 230)
+              )
+
+              for (const screen of screens) {
+                screen.x = screenX
+                screen.y = screenStartY
+
+                rawPairs.push({ parent: luong, child: screen })
+
+                screenStartY += screen.height + VERTICAL_GAP_SCREEN
+              }
+            }
+
+            const screensSpan = screens.length > 0 && luong.isExpanded
+              ? (screenStartY - currentLuongY - VERTICAL_GAP_SCREEN)
+              : 0
+            const sectionHeight = Math.max(luong.height, screensSpan)
+
+            currentLuongY += sectionHeight + VERTICAL_GAP_SECTION
+          }
         }
 
-        // Compute column span based on child indents and widths
-        const colSpan = Math.max(300, module.width, INDENT_LV3 + 240, INDENT_LV4 + 230)
-        currentColStartX += colSpan + COLUMN_GAP
+        currentModuleX += maxClusterWidth + MODULE_GAP_X
       }
 
-      // Center root horizontally across all columns
-      const totalColumnsWidth = (currentColStartX - COLUMN_GAP) - START_X
-      root.x = Math.max(START_X, START_X + Math.round((totalColumnsWidth - root.width) / 2))
+      // Center root horizontally across all clusters
+      const totalWidth = (currentModuleX - MODULE_GAP_X) - START_X
+      root.x = Math.max(START_X, START_X + Math.round((totalWidth - root.width) / 2))
     }
 
     // Collect all nodes and apply custom coordinates if arranged by user
@@ -747,6 +746,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       if (parent.node.tier === 1) {
         fromPort = "bottom"
         toPort = "top"
+      } else if (cLayout.x >= pLayout.x + pLayout.width / 2) {
+        // Child is stepped to the right (Module -> Luồng, or Luồng -> Screen)
+        fromPort = "right"
+        toPort = "left"
       } else if (Math.abs(dx) >= Math.abs(dy)) {
         if (dx >= 0) {
           fromPort = "right"
