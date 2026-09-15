@@ -39,6 +39,113 @@ export const IA_PRODUCTS: IAProductInfo[] = [
 ]
 
 /**
+ * Tự động nhận diện biểu tượng icon phù hợp cho sản phẩm
+ */
+export function getProductIconName(name: string, code?: string): string {
+  const lower = `${name || ""} ${code || ""}`.toLowerCase()
+  if (lower.includes("app") || lower.includes("mobile") || lower.includes("ios") || lower.includes("android")) {
+    return "Smartphone"
+  }
+  if (
+    lower.includes("biz") ||
+    lower.includes("enterprise") ||
+    lower.includes("corp") ||
+    lower.includes("doanh nghiệp") ||
+    lower.includes("sme")
+  ) {
+    return "Building2"
+  }
+  if (lower.includes("web") || lower.includes("portal") || lower.includes("internet")) {
+    return "Globe"
+  }
+  if (lower.includes("baas") || lower.includes("api") || lower.includes("hạ tầng") || lower.includes("core")) {
+    return "Cpu"
+  }
+  return "Layers"
+}
+
+/**
+ * Khởi tạo Tier 1 Clean Root Node chuẩn cho sản phẩm bất kỳ
+ */
+export function createCleanRootNodeForProduct(prod: IAProductInfo): IANode {
+  return {
+    id: `node-${prod.id}-root`,
+    tier: 1,
+    name: prod.name,
+    code: prod.code || prod.name.toUpperCase().replace(/\s+/g, "_"),
+    description: prod.description || `Kiến trúc Thông tin ${prod.name}`,
+    parentId: null,
+    colorTheme: prod.color || "blue",
+    collapsed: false,
+    children: [],
+  }
+}
+
+/**
+ * Đọc danh mục Sản phẩm động từ Quản trị hệ thống (mbbank_admin_products)
+ */
+export function getAdminIAProducts(): IAProductInfo[] {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return IA_PRODUCTS
+  }
+  try {
+    const raw =
+      window.localStorage.getItem("mbbank_admin_products") ||
+      window.localStorage.getItem("ux_portal_products_v2")
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const activeList = parsed.filter((p: any) => p && p.status !== "Inactive" && p.name)
+        if (activeList.length > 0) {
+          return activeList.map((p: any) => {
+            const id = p.id || `prod-${p.code || p.name}`
+            const name = p.name
+            const code = p.code || p.name.toUpperCase().replace(/\s+/g, "_")
+            const description = p.description || `Sản phẩm số MBBank: ${name}`
+            const color = p.color || "blue"
+            const iconName = getProductIconName(name, code)
+            return {
+              id,
+              name,
+              code,
+              description,
+              color,
+              iconName,
+            }
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Error loading admin products for IA:", err)
+  }
+  return IA_PRODUCTS
+}
+
+/**
+ * Đọc danh mục Squads động từ Quản trị hệ thống
+ */
+export function getAdminSquadsList(): string[] {
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const raw =
+        window.localStorage.getItem("mbbank_admin_squads") ||
+        window.localStorage.getItem("ux_portal_squads_v2")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const names = parsed.map((s: any) => s.name).filter(Boolean)
+          if (names.length > 0) {
+            return Array.from(new Set([...names, ...STANDARD_SQUADS]))
+          }
+        }
+      }
+    } catch {}
+  }
+  return STANDARD_SQUADS
+}
+
+/**
  * Danh sách các Squads chuẩn trong hệ thống UXMB
  */
 export const STANDARD_SQUADS: string[] = [

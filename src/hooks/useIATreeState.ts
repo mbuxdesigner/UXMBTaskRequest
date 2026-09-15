@@ -1,6 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
-import { IA_PRODUCTS, DEFAULT_IA_TREES, getProductMetrics } from "@/data/iaMockData"
+import {
+  IA_PRODUCTS,
+  DEFAULT_IA_TREES,
+  getProductMetrics,
+  getAdminIAProducts,
+  createCleanRootNodeForProduct,
+} from "@/data/iaMockData"
 import { mockRequests, UXRequest } from "@/data/mockData"
 
 export const IA_STORAGE_KEY = "ux_portal_ia_tree_data_v4"
@@ -81,29 +87,63 @@ export function deepCloneAllTrees(trees: Record<string, IANode>): Record<string,
   return JSON.parse(JSON.stringify(trees))
 }
 
-// Helper: Load from localStorage safely
+// Helper: Load from localStorage safely with dynamic admin products reconciliation
 export function loadSavedTrees(): Record<string, IANode> {
+  const currentAdminProds = getAdminIAProducts()
+  const baseTrees: Record<string, IANode> = deepCloneAllTrees(DEFAULT_IA_TREES)
+
+  // Đảm bảo mọi sản phẩm từ Quản trị đều có cây dữ liệu khởi tạo
+  for (const prod of currentAdminProds) {
+    if (!baseTrees[prod.id]) {
+      if (prod.code === "APP_MB" && baseTrees["app-mbbank"]) {
+        baseTrees[prod.id] = deepCloneTree(baseTrees["app-mbbank"])
+      } else if (prod.code === "BIZ_MB" && baseTrees["biz-mb"]) {
+        baseTrees[prod.id] = deepCloneTree(baseTrees["biz-mb"])
+      } else if (prod.code === "WEB_PORTAL" && baseTrees["web-portal"]) {
+        baseTrees[prod.id] = deepCloneTree(baseTrees["web-portal"])
+      } else if (prod.code === "BAAS" && baseTrees["baas"]) {
+        baseTrees[prod.id] = deepCloneTree(baseTrees["baas"])
+      } else {
+        baseTrees[prod.id] = createCleanRootNodeForProduct(prod)
+      }
+    }
+  }
+
   if (typeof window === "undefined" || !window.localStorage) {
-    return deepCloneAllTrees(DEFAULT_IA_TREES)
+    return baseTrees
   }
   try {
     const raw = window.localStorage.getItem(IA_STORAGE_KEY)
     if (!raw || typeof raw !== "string" || raw.trim() === "") {
-      return deepCloneAllTrees(DEFAULT_IA_TREES)
+      return baseTrees
     }
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== "object" || !parsed.trees) {
-      return deepCloneAllTrees(DEFAULT_IA_TREES)
+      return baseTrees
     }
-    // Clean migration: if loaded trees contain old auto-generated demo nodes, reset to clean defaults
-    const appTree = parsed.trees["app-mbbank"]
-    if (appTree && appTree.children && appTree.children.some((c: IANode) => c.id?.includes("node-app-mb-d1-core") || c.id?.includes("node-app-mb-s1"))) {
-      return deepCloneAllTrees(DEFAULT_IA_TREES)
+    const savedTrees = parsed.trees as Record<string, IANode>
+    const merged: Record<string, IANode> = { ...baseTrees, ...savedTrees }
+
+    // Reconcile alias cho sản phẩm quản trị nếu chưa có trong saved
+    for (const prod of currentAdminProds) {
+      if (!merged[prod.id]) {
+        if (prod.code === "APP_MB" && merged["app-mbbank"]) {
+          merged[prod.id] = deepCloneTree(merged["app-mbbank"])
+        } else if (prod.code === "BIZ_MB" && merged["biz-mb"]) {
+          merged[prod.id] = deepCloneTree(merged["biz-mb"])
+        } else if (prod.code === "WEB_PORTAL" && merged["web-portal"]) {
+          merged[prod.id] = deepCloneTree(merged["web-portal"])
+        } else if (prod.code === "BAAS" && merged["baas"]) {
+          merged[prod.id] = deepCloneTree(merged["baas"])
+        } else {
+          merged[prod.id] = createCleanRootNodeForProduct(prod)
+        }
+      }
     }
-    return parsed.trees
+    return merged
   } catch (err) {
     console.warn("Storage parse error, resetting to seed defaults:", err)
-    return deepCloneAllTrees(DEFAULT_IA_TREES)
+    return baseTrees
   }
 }
 
@@ -132,16 +172,87 @@ const TIER_DIMENSIONS: Record<IATier, { width: number; height: number; x: number
 const VERTICAL_GAP = 36
 
 export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATreeStateReturn {
-  const [products] = useState<IAProductInfo[]>(IA_PRODUCTS)
-  const [selectedProductId, setSelectedProductId] = useState<string>(initialProductId)
+  const [products, setProducts] = useState<IAProductInfo[]>(() => getAdminIAProducts())
+  const [selectedProductId, setSelectedProductId] = useState<string>(() => {
+    const currentProds = getAdminIAProducts()
+    if (initialProductId && currentProds.some((p) => p.id === initialProductId)) {
+      return initialProductId
+    }
+    return currentProds[0]?.id || "app-mbbank"
+  })
   const [trees, setTrees] = useState<Record<string, IANode>>(() => loadSavedTrees())
   const [searchQuery, setSearchQuery] = useState<string>("")
   const layoutNodesRef = useRef<LayoutNode[]>([])
 
+  // Đồng bộ thời gian thực khi danh mục Sản phẩm trong Quản trị thay đổi
+  useEffect(() => {
+    const syncProducts = () => {
+      const latestProds = getAdminIAProducts()
+      setProducts(latestProds)
+      setSelectedProductId((curr) => {
+        if (latestProds.some((p) => p.id === curr)) return curr
+        return latestProds[0]?.id || curr
+      })
+      setTrees((prev) => {
+        let hasChanges = false
+        const updated = { ...prev }
+        for (const prod of latestProds) {
+          if (!updated[prod.id]) {
+            if (prod.code === "APP_MB" && updated["app-mbbank"]) {
+              updated[prod.id] = deepCloneTree(updated["app-mbbank"])
+            } else if (prod.code === "BIZ_MB" && updated["biz-mb"]) {
+              updated[prod.id] = deepCloneTree(updated["biz-mb"])
+            } else if (prod.code === "WEB_PORTAL" && updated["web-portal"]) {
+              updated[prod.id] = deepCloneTree(updated["web-portal"])
+            } else if (prod.code === "BAAS" && updated["baas"]) {
+              updated[prod.id] = deepCloneTree(updated["baas"])
+            } else {
+              updated[prod.id] = createCleanRootNodeForProduct(prod)
+            }
+            hasChanges = true
+          }
+        }
+        if (hasChanges) {
+          saveTreesToStorage(updated)
+          return updated
+        }
+        return prev
+      })
+    }
+
+    window.addEventListener("storage", syncProducts)
+    window.addEventListener("admin_products_changed", syncProducts)
+    window.addEventListener("ux_data_refreshed", syncProducts)
+    window.addEventListener("masterdata_synced", syncProducts)
+    return () => {
+      window.removeEventListener("storage", syncProducts)
+      window.removeEventListener("admin_products_changed", syncProducts)
+      window.removeEventListener("ux_data_refreshed", syncProducts)
+      window.removeEventListener("masterdata_synced", syncProducts)
+    }
+  }, [])
+
+  // Helper: Retrieve or dynamically initialize tree for a product
+  const getTargetTree = useCallback(
+    (treeMap: Record<string, IANode>, prodId: string): IANode => {
+      if (treeMap[prodId]) return treeMap[prodId]
+      const prod = products.find((p) => p.id === prodId)
+      if (prod) {
+        if (prod.code === "APP_MB" && treeMap["app-mbbank"]) return treeMap["app-mbbank"]
+        if (prod.code === "BIZ_MB" && treeMap["biz-mb"]) return treeMap["biz-mb"]
+        if (prod.code === "WEB_PORTAL" && treeMap["web-portal"]) return treeMap["web-portal"]
+        if (prod.code === "BAAS" && treeMap["baas"]) return treeMap["baas"]
+        return createCleanRootNodeForProduct(prod)
+      }
+      return DEFAULT_IA_TREES[prodId] || DEFAULT_IA_TREES["app-mbbank"]
+    },
+    [products]
+  )
+
   // Active Tree for current product
   const activeTree: IANode = useMemo(() => {
-    return trees[selectedProductId] || trees["app-mbbank"] || DEFAULT_IA_TREES["app-mbbank"]
-  }, [trees, selectedProductId])
+    return getTargetTree(trees, selectedProductId)
+  }, [trees, selectedProductId, getTargetTree])
 
   // Mock Requests indexed by request_id
   const requestsMap = useMemo(() => {
@@ -234,7 +345,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   // Toggle Collapse on a Node
   const toggleCollapse = useCallback((nodeId: string) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
 
       function dfs(curr: IANode): boolean {
@@ -255,12 +366,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Add Child Node
   const addChildNode = useCallback((parentId: string, nodeData: Partial<IANode>) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
       let created = false
 
@@ -310,12 +421,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Update Node
   const updateNode = useCallback((nodeId: string, nodeData: Partial<IANode>) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
 
       function dfs(curr: IANode): boolean {
@@ -353,7 +464,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Delete Node: Locks remaining nodes at their current canvas positions so no shifting occurs
   const deleteNode = useCallback((nodeId: string) => {
@@ -368,7 +479,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     }
 
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       if (current.id === nodeId) {
         throw new Error("Cannot delete Tier 1 Product Root node")
       }
@@ -407,14 +518,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Update Node Custom Position (from Canvas Drag & Drop)
   // When persist is false (during live dragging), performs an ultra-fast copy-on-write update without synchronous localStorage writes.
   // When persist is true (on drag release), commits to localStorage once.
   const updateNodePosition = useCallback((nodeId: string, x: number, y: number, persist: boolean = true) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
 
       function updateNodeInTree(node: IANode): IANode {
         if (node.id === nodeId) {
@@ -445,12 +556,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Update Node Dimensions (from Canvas Interactive Resize)
   const updateNodeDimensions = useCallback((nodeId: string, width: number, height: number, persist: boolean = true) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
 
       function updateDimensionsInTree(node: IANode): IANode {
         if (node.id === nodeId) {
@@ -481,12 +592,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Auto-align Tree: clears custom positions to restore computed tidy tree
   const autoAlignTree = useCallback(() => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
 
       function dfs(curr: IANode) {
@@ -504,12 +615,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Add child in specific port direction (Top, Bottom, Left, Right)
   const addChildInDirection = useCallback((parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => {
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
 
       function dfs(curr: IANode): boolean {
@@ -571,14 +682,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Connect two existing nodes (sourceNode -> targetNode)
   const connectNodes = useCallback((sourceNodeId: string, targetNodeId: string) => {
     if (sourceNodeId === targetNodeId) return
 
     setTrees((prevTrees) => {
-      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
 
       // 1. Verify target is not an ancestor of source (cycle prevention)
@@ -650,7 +761,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       saveTreesToStorage(nextTrees)
       return nextTrees
     })
-  }, [selectedProductId])
+  }, [selectedProductId, getTargetTree])
 
   // Create new node connected to sourceNode at drop position (customX, customY)
   const createConnectedNodeAt = useCallback(
@@ -661,7 +772,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       nodeData?: Partial<IANode>
     ) => {
       setTrees((prevTrees) => {
-        const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+        const current = getTargetTree(prevTrees, selectedProductId)
         const clone = deepCloneTree(current)
 
         function dfs(curr: IANode): boolean {
@@ -715,20 +826,35 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         return nextTrees
       })
     },
-    [selectedProductId]
+    [selectedProductId, getTargetTree]
   )
 
-  // Reset to Default
+  // Reset to Default: Khôi phục về cây gốc của sản phẩm đang chọn
   const resetToDefault = useCallback(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        window.localStorage.removeItem(IA_STORAGE_KEY)
-      } catch (e) {
-        console.warn("Could not clear localStorage:", e)
+    const currentProd = products.find((p) => p.id === selectedProductId)
+    let cleanRoot: IANode
+    if (currentProd) {
+      if (currentProd.code === "APP_MB" && DEFAULT_IA_TREES["app-mbbank"]) {
+        cleanRoot = deepCloneTree(DEFAULT_IA_TREES["app-mbbank"])
+      } else if (currentProd.code === "BIZ_MB" && DEFAULT_IA_TREES["biz-mb"]) {
+        cleanRoot = deepCloneTree(DEFAULT_IA_TREES["biz-mb"])
+      } else if (currentProd.code === "WEB_PORTAL" && DEFAULT_IA_TREES["web-portal"]) {
+        cleanRoot = deepCloneTree(DEFAULT_IA_TREES["web-portal"])
+      } else if (currentProd.code === "BAAS" && DEFAULT_IA_TREES["baas"]) {
+        cleanRoot = deepCloneTree(DEFAULT_IA_TREES["baas"])
+      } else {
+        cleanRoot = createCleanRootNodeForProduct(currentProd)
       }
+    } else {
+      cleanRoot = deepCloneTree(DEFAULT_IA_TREES[selectedProductId] || DEFAULT_IA_TREES["app-mbbank"])
     }
-    setTrees(deepCloneAllTrees(DEFAULT_IA_TREES))
-  }, [])
+
+    setTrees((prev) => {
+      const next = { ...prev, [selectedProductId]: cleanRoot }
+      saveTreesToStorage(next)
+      return next
+    })
+  }, [selectedProductId, products])
 
   // Listen to cross-tab storage changes
   useEffect(() => {

@@ -2105,6 +2105,7 @@ export default function QuanLyPage() {
 
   useEffect(() => {
     localStorage.setItem("mbbank_admin_products", JSON.stringify(products))
+    window.dispatchEvent(new Event("admin_products_changed"))
   }, [products])
 
   // Status Automation Rules State & Handlers
@@ -2906,6 +2907,7 @@ export default function QuanLyPage() {
     localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    window.dispatchEvent(new Event("admin_products_changed"))
     setShowAddProductModal(false)
     setNewProdName("")
     setNewProdDesc("")
@@ -2929,6 +2931,7 @@ export default function QuanLyPage() {
     localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    window.dispatchEvent(new Event("admin_products_changed"))
     logAdminAction(
       "Cập nhật Sản phẩm",
       editingProduct.name,
@@ -2953,6 +2956,7 @@ export default function QuanLyPage() {
     localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updatedSquads))
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    window.dispatchEvent(new Event("admin_products_changed"))
     logAdminAction(
       "Xóa Sản phẩm",
       productName,

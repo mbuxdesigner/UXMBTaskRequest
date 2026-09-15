@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { springs, dialogOverlayVariants, dialogContentVariants } from "@/lib/motion"
 import { IANode, IATier, IATouchpointType } from "@/types/ia"
-import { STANDARD_SQUADS } from "@/data/iaMockData"
+import { STANDARD_SQUADS, getAdminSquadsList } from "@/data/iaMockData"
 import { UXRequest } from "@/data/mockData"
 
 export type ModalMode = "add" | "edit" | "delete" | "reset" | null
@@ -71,6 +71,8 @@ export default function IANodeEditorModal({
   const [figmaUrl, setFigmaUrl] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string>("")
 
+  const availableSquads = useMemo(() => getAdminSquadsList(), [isOpen])
+
   // Task multi-select dropdown states
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>("")
   const [isTaskDropdownOpen, setIsTaskDropdownOpen] = useState<boolean>(false)
@@ -86,7 +88,7 @@ export default function IANodeEditorModal({
     if (mode === "edit" && targetNode) {
       setName(targetNode.name || "")
       const nodeSquad = targetNode.squad || ""
-      if (nodeSquad && !STANDARD_SQUADS.includes(nodeSquad)) {
+      if (nodeSquad && !availableSquads.includes(nodeSquad)) {
         setSquad("custom")
         setCustomSquad(nodeSquad)
       } else {
@@ -346,7 +348,7 @@ export default function IANodeEditorModal({
                       className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700"
                     >
                       <option value="">-- Chưa phân Squad --</option>
-                      {STANDARD_SQUADS.map((s) => (
+                      {availableSquads.map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
