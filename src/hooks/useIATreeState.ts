@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
-import { IANode, IAProductInfo, IATier, IATouchpointType } from "@/types/ia"
+import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
 import { IA_PRODUCTS, DEFAULT_IA_TREES, getProductMetrics } from "@/data/iaMockData"
 import { mockRequests, UXRequest } from "@/data/mockData"
 
@@ -28,6 +28,8 @@ export interface LayoutConnector {
   y1: number
   x2: number
   y2: number
+  fromPort: IAPortPosition
+  toPort: IAPortPosition
   path: string
   colorTheme?: string
   isHighlighted?: boolean
@@ -40,7 +42,10 @@ export interface UseIATreeStateReturn {
   setSelectedProductId: (id: string) => void
   toggleCollapse: (nodeId: string) => void
   addChildNode: (parentId: string, nodeData: Partial<IANode>) => void
+  addChildInDirection: (parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
+  updateNodePosition: (nodeId: string, x: number, y: number) => void
+  autoAlignTree: () => void
   deleteNode: (nodeId: string) => void
   resetToDefault: () => void
   searchQuery: string
@@ -348,6 +353,119 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     })
   }, [selectedProductId])
 
+  // Update Node Custom Position (from Canvas Drag & Drop)
+  const updateNodePosition = useCallback((nodeId: string, x: number, y: number) => {
+    setTrees((prevTrees) => {
+      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const clone = deepCloneTree(current)
+
+      function dfs(curr: IANode): boolean {
+        if (curr.id === nodeId) {
+          curr.customX = Math.round(x)
+          curr.customY = Math.round(y)
+          return true
+        }
+        if (curr.children) {
+          for (const child of curr.children) {
+            if (dfs(child)) return true
+          }
+        }
+        return false
+      }
+
+      dfs(clone)
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId])
+
+  // Auto-align Tree: clears custom positions to restore computed tidy tree
+  const autoAlignTree = useCallback(() => {
+    setTrees((prevTrees) => {
+      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const clone = deepCloneTree(current)
+
+      function dfs(curr: IANode) {
+        delete curr.customX
+        delete curr.customY
+        if (curr.children) {
+          for (const child of curr.children) {
+            dfs(child)
+          }
+        }
+      }
+
+      dfs(clone)
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId])
+
+  // Add child in specific port direction (Top, Bottom, Left, Right)
+  const addChildInDirection = useCallback((parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => {
+    setTrees((prevTrees) => {
+      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const clone = deepCloneTree(current)
+
+      function dfs(curr: IANode): boolean {
+        if (curr.id === parentId) {
+          curr.collapsed = false
+          const nextTier = Math.min(4, curr.tier + 1) as IATier
+          const newId = nodeData?.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+          let offsetX = 300
+          let offsetY = 0
+          if (direction === "bottom") {
+            offsetX = 0
+            offsetY = 130
+          } else if (direction === "top") {
+            offsetX = 0
+            offsetY = -130
+          } else if (direction === "left") {
+            offsetX = -300
+            offsetY = 0
+          }
+
+          const newNode: IANode = {
+            id: newId,
+            tier: nextTier,
+            name: (nodeData?.name && nodeData.name.trim()) || `Node mới`,
+            parentId: curr.id,
+            description: nodeData?.description || "",
+            code: nodeData?.code || "",
+            figmaUrl: nodeData?.figmaUrl,
+            customTag: nodeData?.customTag,
+            colorTheme: curr.colorTheme,
+            touchpointType: nextTier === 4 ? (nodeData?.touchpointType || "screen") : undefined,
+            children: nextTier < 4 ? [] : undefined,
+          }
+
+          if (curr.customX !== undefined && curr.customY !== undefined) {
+            newNode.customX = curr.customX + offsetX
+            newNode.customY = curr.customY + offsetY
+          }
+
+          if (!curr.children) curr.children = []
+          curr.children.push(newNode)
+          return true
+        }
+        if (curr.children) {
+          for (const child of curr.children) {
+            if (dfs(child)) return true
+          }
+        }
+        return false
+      }
+
+      dfs(clone)
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId])
+
   // Reset to Default
   const resetToDefault = useCallback(() => {
     if (typeof window !== "undefined" && window.localStorage) {
@@ -438,9 +556,43 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
     const rootInternal = buildInternal(activeTree)
 
-    // 2. Second pass: Calculate absolute Y positions
+    // Helper to calculate port anchor coordinates
+    function getPortCoord(
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      port: IAPortPosition
+    ): { x: number; y: number } {
+      switch (port) {
+        case "top":
+          return { x: x + width / 2, y }
+        case "bottom":
+          return { x: x + width / 2, y: y + height }
+        case "left":
+          return { x, y: y + height / 2 }
+        case "right":
+          return { x: x + width, y: y + height / 2 }
+      }
+    }
+
+    // Helper for port tangent direction
+    function getPortTangent(port: IAPortPosition, mag: number): { vx: number; vy: number } {
+      switch (port) {
+        case "right":
+          return { vx: mag, vy: 0 }
+        case "left":
+          return { vx: -mag, vy: 0 }
+        case "bottom":
+          return { vx: 0, vy: mag }
+        case "top":
+          return { vx: 0, vy: -mag }
+      }
+    }
+
+    // 2. Second pass: Calculate absolute positions (respecting customX/customY if user arranged)
     const resultNodes: LayoutNode[] = []
-    const resultConnectors: LayoutConnector[] = []
+    const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
 
     function positionNode(item: InternalNode, topY: number) {
       if (item.children.length === 0) {
@@ -456,12 +608,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         item.y = (firstChild.y + lastChild.y) / 2
       }
 
+      // If user customized position via canvas dragging, apply custom coordinates
+      const finalX = item.node.customX !== undefined ? item.node.customX : item.x
+      const finalY = item.node.customY !== undefined ? item.node.customY : Number(item.y.toFixed(2))
+
       const isHighlighted = matchedIds.has(item.node.id)
 
       resultNodes.push({
         node: item.node,
-        x: item.x,
-        y: Number(item.y.toFixed(2)),
+        x: finalX,
+        y: finalY,
         width: item.width,
         height: item.height,
         subtreeHeight: item.subtreeHeight,
@@ -473,34 +629,90 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         isHighlighted,
       })
 
-      // Generate connectors to visible children
+      // Record child edges for 4-way smart port connector routing
       for (const child of item.children) {
-        const x1 = item.x + item.width
-        const y1 = Number((item.y + item.height / 2).toFixed(2))
-        const x2 = child.x
-        const y2 = Number((child.y + child.height / 2).toFixed(2))
-        const dx = x2 - x1
-        const offset = Math.max(40, dx / 2)
-        const path = `M ${x1} ${y1} C ${x1 + offset} ${y1}, ${x2 - offset} ${y2}, ${x2} ${y2}`
-
-        resultConnectors.push({
-          id: `conn-${item.node.id}-${child.node.id}`,
-          parentId: item.node.id,
-          childId: child.node.id,
-          x1,
-          y1,
-          x2,
-          y2,
-          path,
-          colorTheme: item.node.colorTheme || child.node.colorTheme,
-          isHighlighted: isHighlighted || matchedIds.has(child.node.id),
-        })
+        rawPairs.push({ parent: item, child })
       }
     }
 
     positionNode(rootInternal, 40)
 
-    // 3. Compute Bounding Box
+    // Build fast lookup by node id for resolved layout positions
+    const layoutMap = new Map<string, LayoutNode>()
+    for (const rn of resultNodes) {
+      layoutMap.set(rn.node.id, rn)
+    }
+
+    // 3. Generate 4-Way Smart Connectors between Ports
+    const resultConnectors: LayoutConnector[] = []
+    for (const { parent, child } of rawPairs) {
+      const pLayout = layoutMap.get(parent.node.id)
+      const cLayout = layoutMap.get(child.node.id)
+      if (!pLayout || !cLayout) continue
+
+      // Parent center & Child center
+      const pcx = pLayout.x + pLayout.width / 2
+      const pcy = pLayout.y + pLayout.height / 2
+      const ccx = cLayout.x + cLayout.width / 2
+      const ccy = cLayout.y + cLayout.height / 2
+
+      const dx = ccx - pcx
+      const dy = ccy - pcy
+
+      // Select ports based on relative positioning
+      let fromPort: IAPortPosition
+      let toPort: IAPortPosition
+
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if (dx >= 0) {
+          fromPort = "right"
+          toPort = "left"
+        } else {
+          fromPort = "left"
+          toPort = "right"
+        }
+      } else {
+        if (dy >= 0) {
+          fromPort = "bottom"
+          toPort = "top"
+        } else {
+          fromPort = "top"
+          toPort = "bottom"
+        }
+      }
+
+      const p1 = getPortCoord(pLayout.x, pLayout.y, pLayout.width, pLayout.height, fromPort)
+      const p2 = getPortCoord(cLayout.x, cLayout.y, cLayout.width, cLayout.height, toPort)
+
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+      const mag = Math.max(30, Math.min(dist * 0.5, 120))
+      const t1 = getPortTangent(fromPort, mag)
+      const t2 = getPortTangent(toPort, mag)
+
+      const cp1x = Number((p1.x + t1.vx).toFixed(2))
+      const cp1y = Number((p1.y + t1.vy).toFixed(2))
+      const cp2x = Number((p2.x + t2.vx).toFixed(2))
+      const cp2y = Number((p2.y + t2.vy).toFixed(2))
+
+      const path = `M ${Number(p1.x.toFixed(2))} ${Number(p1.y.toFixed(2))} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${Number(p2.x.toFixed(2))} ${Number(p2.y.toFixed(2))}`
+
+      resultConnectors.push({
+        id: `conn-${parent.node.id}-${child.node.id}`,
+        parentId: parent.node.id,
+        childId: child.node.id,
+        x1: Number(p1.x.toFixed(2)),
+        y1: Number(p1.y.toFixed(2)),
+        x2: Number(p2.x.toFixed(2)),
+        y2: Number(p2.y.toFixed(2)),
+        fromPort,
+        toPort,
+        path,
+        colorTheme: parent.node.colorTheme || child.node.colorTheme,
+        isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+      })
+    }
+
+    // 4. Compute Bounding Box
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
@@ -534,7 +746,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     setSelectedProductId,
     toggleCollapse,
     addChildNode,
+    addChildInDirection,
     updateNode,
+    updateNodePosition,
+    autoAlignTree,
     deleteNode,
     resetToDefault,
     searchQuery,

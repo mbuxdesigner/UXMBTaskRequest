@@ -17,7 +17,10 @@ export default function IAPage() {
     setSelectedProductId,
     toggleCollapse,
     addChildNode,
+    addChildInDirection,
     updateNode,
+    updateNodePosition,
+    autoAlignTree,
     deleteNode,
     resetToDefault,
     searchQuery,
@@ -219,8 +222,11 @@ export default function IAPage() {
         onToggleCollapse={toggleCollapse}
         onOpenDetail={(req) => setSelectedRequest(req)}
         onAddChild={handleOpenAdd}
+        onAddChildInDirection={addChildInDirection}
         onEditNode={handleOpenEdit}
         onDeleteNode={handleOpenDelete}
+        onNodePositionChange={updateNodePosition}
+        onAutoAlign={autoAlignTree}
       />
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}

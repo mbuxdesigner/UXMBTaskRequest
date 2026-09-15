@@ -49,6 +49,8 @@ export default function IANodeEditorModal({
 }: IANodeEditorModalProps) {
   const [name, setName] = useState<string>("")
   const [code, setCode] = useState<string>("")
+  const [customTag, setCustomTag] = useState<string>("")
+  const [colorTheme, setColorTheme] = useState<string>("blue")
   const [description, setDescription] = useState<string>("")
   const [touchpointType, setTouchpointType] = useState<IATouchpointType>("screen")
   const [requestId, setRequestId] = useState<string>("")
@@ -64,15 +66,18 @@ export default function IANodeEditorModal({
     if (mode === "edit" && targetNode) {
       setName(targetNode.name || "")
       setCode(targetNode.code || "")
+      setCustomTag(targetNode.customTag || "")
+      setColorTheme(targetNode.colorTheme || "blue")
       setDescription(targetNode.description || "")
       setTouchpointType(targetNode.touchpointType || "screen")
       setRequestId(targetNode.requestId || "")
       setFigmaUrl(targetNode.figmaUrl || "")
       setErrorMessage("")
     } else if (mode === "add" && targetNode) {
-      const nextTier = (targetNode.tier + 1) as IATier
       setName("")
       setCode("")
+      setCustomTag("")
+      setColorTheme(targetNode.colorTheme || "blue")
       setDescription("")
       setTouchpointType("screen")
       setRequestId("")
@@ -94,6 +99,8 @@ export default function IANodeEditorModal({
       onConfirmAdd?.(targetNode.id, {
         name: name.trim(),
         code: code.trim() || undefined,
+        customTag: customTag.trim() || undefined,
+        colorTheme: colorTheme || undefined,
         description: description.trim() || undefined,
         touchpointType: targetNode.tier === 3 ? touchpointType : undefined,
         requestId: requestId.trim() || undefined,
@@ -108,6 +115,8 @@ export default function IANodeEditorModal({
       onConfirmEdit?.(targetNode.id, {
         name: name.trim(),
         code: code.trim() || undefined,
+        customTag: customTag.trim() || undefined,
+        colorTheme: colorTheme || undefined,
         description: description.trim() || undefined,
         touchpointType: targetNode.tier === 4 ? touchpointType : undefined,
         requestId: requestId.trim() || undefined,
@@ -229,6 +238,48 @@ export default function IANodeEditorModal({
                       className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
                       autoFocus
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Nhãn phân loại (Tag)
+                      </label>
+                      <input
+                        type="text"
+                        data-testid="ia-node-modal-tag-input"
+                        value={customTag}
+                        onChange={(e) => setCustomTag(e.target.value)}
+                        placeholder="VD: Onboarding, Thanh toán, eKYC..."
+                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Màu sắc chủ đề
+                      </label>
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {[
+                          { id: "blue", bg: "bg-blue-500", name: "Xanh dương" },
+                          { id: "emerald", bg: "bg-emerald-500", name: "Xanh lá" },
+                          { id: "purple", bg: "bg-purple-500", name: "Tím" },
+                          { id: "amber", bg: "bg-amber-500", name: "Vàng cam" },
+                          { id: "rose", bg: "bg-rose-500", name: "Đỏ hồng" },
+                          { id: "cyan", bg: "bg-cyan-500", name: "Xanh ngọc" },
+                        ].map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setColorTheme(c.id)}
+                            title={c.name}
+                            className={`w-5 h-5 rounded-full ${c.bg} transition-all cursor-pointer ${
+                              colorTheme === c.id ? "ring-2 ring-offset-1 ring-slate-700 scale-110" : "opacity-70 hover:opacity-100"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

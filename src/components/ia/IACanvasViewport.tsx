@@ -4,7 +4,7 @@ import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from "lucide-react"
 import { tactileProps } from "@/lib/motion"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
 import { LayoutNode, LayoutConnector } from "@/hooks/useIATreeState"
-import { IANode } from "@/types/ia"
+import { IANode, IAPortPosition } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
 import IABezierConnectors from "./IABezierConnectors"
 import IATreeNodeCard from "./IATreeNodeCard"
@@ -27,8 +27,11 @@ interface IACanvasViewportProps {
   onToggleCollapse: (nodeId: string) => void
   onOpenDetail?: (request: UXRequest) => void
   onAddChild: (parentNode: IANode) => void
+  onAddChildInDirection?: (parentId: string, direction: IAPortPosition) => void
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
+  onNodePositionChange?: (nodeId: string, x: number, y: number) => void
+  onAutoAlign?: () => void
 }
 
 export default function IACanvasViewport({
@@ -49,8 +52,11 @@ export default function IACanvasViewport({
   onToggleCollapse,
   onOpenDetail,
   onAddChild,
+  onAddChildInDirection,
   onEditNode,
   onDeleteNode,
+  onNodePositionChange,
+  onAutoAlign,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -114,11 +120,15 @@ export default function IACanvasViewport({
               layoutNode={layoutNode}
               linkedRequest={linkedRequest}
               isHighlighted={layoutNode.isHighlighted}
+              scale={transform.scale}
               onToggleCollapse={onToggleCollapse}
               onOpenDetail={onOpenDetail}
               onAddChild={onAddChild}
+              onAddChildInDirection={onAddChildInDirection}
               onEditNode={onEditNode}
               onDeleteNode={onDeleteNode}
+              onNodeDrag={onNodePositionChange}
+              onNodeDragEnd={onNodePositionChange}
             />
           )
         })}
@@ -129,6 +139,23 @@ export default function IACanvasViewport({
         data-testid="ia-canvas-floating-controls"
         className="absolute bottom-5 right-5 z-30 flex items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-lg text-slate-700"
       >
+        {onAutoAlign && (
+          <>
+            <button
+              type="button"
+              data-testid="ia-auto-align-btn"
+              onClick={onAutoAlign}
+              title="Tự động sắp xếp lại cây (Auto Align)"
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer select-none"
+              {...tactileProps.button}
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
+              <span>Sắp xếp tự động</span>
+            </button>
+            <div className="w-px h-4 bg-slate-200 mx-0.5" />
+          </>
+        )}
+
         <button
           type="button"
           data-testid="ia-zoom-in-btn"

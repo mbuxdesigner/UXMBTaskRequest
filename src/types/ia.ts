@@ -19,6 +19,11 @@ export type IATouchpointType =
   | "action_sheet"
 
 /**
+ * Vị trí 4 đầu nối (Connector Ports / Anchor Handles) trên thẻ Node
+ */
+export type IAPortPosition = "top" | "bottom" | "left" | "right"
+
+/**
  * Interface đại diện cho một Node trên cây Kiến trúc Thông tin
  */
 export interface IANode {
@@ -29,6 +34,9 @@ export interface IANode {
   description?: string
   parentId?: string | null
   children?: IANode[]
+  customX?: number        // Tọa độ X do người dùng kéo thả sắp xếp trên Canvas
+  customY?: number        // Tọa độ Y do người dùng kéo thả sắp xếp trên Canvas
+  customTag?: string      // Nhãn phân loại tùy biến người dùng tự nhập
   requestId?: string
   figmaUrl?: string
   touchpointType?: IATouchpointType
@@ -61,6 +69,7 @@ export interface IALocalStorageData {
   version: number
   lastUpdated: string
   trees: Record<string, IANode>
+  customPositions?: Record<string, Record<string, { x: number; y: number }>>
 }
 
 /**
@@ -71,3 +80,4 @@ export interface CanvasTransform {
   y: number
   scale: number
 }
+

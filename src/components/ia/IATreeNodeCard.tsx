@@ -1,4 +1,4 @@
-import React, { memo } from "react"
+import React, { memo, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import {
   ChevronRight,
@@ -18,9 +18,11 @@ import {
   Clock,
   AlertTriangle,
   Lock,
+  GripHorizontal,
+  Tag,
 } from "lucide-react"
 import { springs, tactileProps } from "@/lib/motion"
-import { IANode, IATier, IATouchpointType } from "@/types/ia"
+import { IANode, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
 import { LayoutNode } from "@/hooks/useIATreeState"
 import { UXRequest } from "@/data/mockData"
 
@@ -28,11 +30,15 @@ interface IATreeNodeCardProps {
   layoutNode: LayoutNode
   linkedRequest?: UXRequest
   isHighlighted?: boolean
+  scale?: number
   onToggleCollapse: (nodeId: string) => void
   onOpenDetail?: (request: UXRequest) => void
   onAddChild: (parentNode: IANode) => void
+  onAddChildInDirection?: (parentId: string, direction: IAPortPosition) => void
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
+  onNodeDrag?: (nodeId: string, x: number, y: number) => void
+  onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
 }
 
 function getTouchpointIcon(type?: IATouchpointType) {
@@ -74,25 +80,123 @@ function getStatusBadgeStyle(status?: string) {
   }
 }
 
+function getColorThemeStyles(theme?: string) {
+  switch (theme) {
+    case "emerald":
+      return {
+        border: "border-emerald-200 hover:border-emerald-400",
+        accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        portBorder: "border-emerald-500 hover:bg-emerald-50",
+      }
+    case "purple":
+      return {
+        border: "border-purple-200 hover:border-purple-400",
+        accent: "bg-purple-50 text-purple-700 border-purple-200",
+        portBorder: "border-purple-500 hover:bg-purple-50",
+      }
+    case "amber":
+      return {
+        border: "border-amber-200 hover:border-amber-400",
+        accent: "bg-amber-50 text-amber-700 border-amber-200",
+        portBorder: "border-amber-500 hover:bg-amber-50",
+      }
+    case "rose":
+      return {
+        border: "border-rose-200 hover:border-rose-400",
+        accent: "bg-rose-50 text-rose-700 border-rose-200",
+        portBorder: "border-rose-500 hover:bg-rose-50",
+      }
+    case "cyan":
+      return {
+        border: "border-cyan-200 hover:border-cyan-400",
+        accent: "bg-cyan-50 text-cyan-700 border-cyan-200",
+        portBorder: "border-cyan-500 hover:bg-cyan-50",
+      }
+    case "blue":
+    default:
+      return {
+        border: "border-slate-200 hover:border-blue-400",
+        accent: "bg-blue-50 text-blue-700 border-blue-200",
+        portBorder: "border-blue-500 hover:bg-blue-50",
+      }
+  }
+}
+
 function IATreeNodeCardComponent({
   layoutNode,
   linkedRequest,
   isHighlighted = false,
+  scale = 1.0,
   onToggleCollapse,
   onOpenDetail,
   onAddChild,
+  onAddChildInDirection,
   onEditNode,
   onDeleteNode,
+  onNodeDrag,
+  onNodeDragEnd,
 }: IATreeNodeCardProps) {
-  const { node, x, y, width, isCollapsed, isExpanded, hasChildren, childCount } = layoutNode
+  const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null)
 
   const effectiveFigmaUrl = node.figmaUrl || linkedRequest?.deliverables?.figma_url || linkedRequest?.deliverables?.prototype_url
   const effectiveDesigner = node.assignedDesigner || linkedRequest?.assigned_designer
   const effectiveStatus = node.status || linkedRequest?.status
   const effectiveProgress = node.progress ?? linkedRequest?.progress
 
+  const themeStyles = getColorThemeStyles(node.colorTheme)
+
+  // Drag and drop arranger logic
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    // Ignore clicks on buttons, inputs, links, or connection port add actions
+    if (target.closest("button, a, input, textarea, [data-port-action]")) {
+      return
+    }
+
+    e.stopPropagation()
+    setIsDragging(true)
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: x,
+      initY: y,
+    }
+
+    const currentScale = Math.max(0.1, scale)
+
+    const handlePointerMove = (moveEvt: PointerEvent) => {
+      if (!dragRef.current) return
+      const dx = (moveEvt.clientX - dragRef.current.startX) / currentScale
+      const dy = (moveEvt.clientY - dragRef.current.startY) / currentScale
+      const nextX = Math.round(dragRef.current.initX + dx)
+      const nextY = Math.round(dragRef.current.initY + dy)
+      onNodeDrag?.(node.id, nextX, nextY)
+    }
+
+    const handlePointerUp = (upEvt: PointerEvent) => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      window.removeEventListener("pointercancel", handlePointerUp)
+      setIsDragging(false)
+      if (dragRef.current) {
+        const dx = (upEvt.clientX - dragRef.current.startX) / currentScale
+        const dy = (upEvt.clientY - dragRef.current.startY) / currentScale
+        const finalX = Math.round(dragRef.current.initX + dx)
+        const finalY = Math.round(dragRef.current.initY + dy)
+        dragRef.current = null
+        onNodeDragEnd?.(node.id, finalX, finalY)
+      }
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    window.addEventListener("pointercancel", handlePointerUp)
+  }
+
   const handleCardClick = (e: React.MouseEvent) => {
-    // If card has linked task, open request detail drawer
     if (linkedRequest && onOpenDetail) {
       e.stopPropagation()
       onOpenDetail(linkedRequest)
@@ -106,30 +210,20 @@ function IATreeNodeCardComponent({
     }
   }
 
-  // Tier Theme Border & Accent Styling
-  let tierBorderClass = "border-slate-200 hover:border-slate-300"
-  let tierBgClass = "bg-white"
+  // Tier Theme Styling
   let tierBadgeText = "Cấp 4"
   let tierBadgeClass = "bg-slate-100 text-slate-600"
 
   if (node.tier === 1) {
-    tierBorderClass = "border-blue-400/80 shadow-md shadow-blue-500/10"
-    tierBgClass = "bg-gradient-to-br from-white via-blue-50/20 to-white"
     tierBadgeText = "Cấp 1 · Sản phẩm"
     tierBadgeClass = "bg-blue-600 text-white font-bold"
   } else if (node.tier === 2) {
-    tierBorderClass = "border-slate-200 hover:border-blue-300 shadow-xs"
-    tierBgClass = "bg-white"
     tierBadgeText = "Cấp 2 · Phân hệ"
     tierBadgeClass = "bg-slate-100 text-slate-700 font-semibold"
   } else if (node.tier === 3) {
-    tierBorderClass = "border-slate-200 hover:border-emerald-300 shadow-xs"
-    tierBgClass = "bg-white"
     tierBadgeText = "Cấp 3 · Luồng"
     tierBadgeClass = "bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/50"
   } else if (node.tier === 4) {
-    tierBorderClass = "border-slate-200 hover:border-amber-300 shadow-2xs"
-    tierBgClass = "bg-slate-50/70"
     tierBadgeText = "Cấp 4 · Màn hình"
     tierBadgeClass = "bg-amber-50 text-amber-700 font-semibold border border-amber-200/50"
   }
@@ -138,31 +232,136 @@ function IATreeNodeCardComponent({
     ? "ring-2 ring-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.6)] border-blue-500"
     : ""
 
+  const draggingClass = isDragging
+    ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
+    : "cursor-grab"
+
   return (
     <motion.div
       data-testid={`ia-node-card-${node.id}`}
       data-tier={node.tier}
       layoutId={`ia-card-motion-${node.id}`}
       transition={springs.snappy}
+      onPointerDown={handlePointerDown}
       style={{
         position: "absolute",
         left: x,
         top: y,
         width,
-        zIndex: isHighlighted ? 20 : 10,
+        zIndex: isDragging ? 40 : isHighlighted ? 20 : 10,
+        touchAction: "none",
       }}
-      className={`group rounded-xl border p-3 text-left transition-shadow duration-200 cursor-default select-none ${tierBgClass} ${tierBorderClass} ${highlightClass}`}
+      className={`group relative rounded-xl border bg-white p-3 text-left transition-all duration-150 select-none ${themeStyles.border} ${highlightClass} ${draggingClass}`}
       onClick={handleCardClick}
       {...tactileProps.card}
     >
-      {/* Top Header Row: Tier Badge, Code, and Action Menu */}
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
+      {/* ───────────────────────────────────────────────────────────────── */}
+
+      {/* TOP PORT */}
+      <div
+        data-testid={`ia-port-top-${node.id}`}
+        data-port="top"
+        className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+      >
+        <button
+          type="button"
+          data-port-action="true"
+          data-testid={`ia-port-add-top-${node.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddChildInDirection?.(node.id, "top")
+          }}
+          title="Nối thêm node phía trên"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+        >
+          <Plus className="w-2.5 h-2.5 stroke-[3]" />
+        </button>
+      </div>
+
+      {/* BOTTOM PORT */}
+      <div
+        data-testid={`ia-port-bottom-${node.id}`}
+        data-port="bottom"
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+      >
+        <button
+          type="button"
+          data-port-action="true"
+          data-testid={`ia-port-add-bottom-${node.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddChildInDirection?.(node.id, "bottom")
+          }}
+          title="Nối thêm node phía dưới"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+        >
+          <Plus className="w-2.5 h-2.5 stroke-[3]" />
+        </button>
+      </div>
+
+      {/* LEFT PORT */}
+      <div
+        data-testid={`ia-port-left-${node.id}`}
+        data-port="left"
+        className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30"
+      >
+        <button
+          type="button"
+          data-port-action="true"
+          data-testid={`ia-port-add-left-${node.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddChildInDirection?.(node.id, "left")
+          }}
+          title="Nối thêm node bên trái"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+        >
+          <Plus className="w-2.5 h-2.5 stroke-[3]" />
+        </button>
+      </div>
+
+      {/* RIGHT PORT */}
+      <div
+        data-testid={`ia-port-right-${node.id}`}
+        data-port="right"
+        className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30"
+      >
+        <button
+          type="button"
+          data-port-action="true"
+          data-testid={`ia-port-add-right-${node.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddChildInDirection?.(node.id, "right")
+          }}
+          title="Nối thêm node bên phải"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+        >
+          <Plus className="w-2.5 h-2.5 stroke-[3]" />
+        </button>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────────── */}
+      {/* NODE CARD CONTENT (User-Authored First)                          */}
+      {/* ───────────────────────────────────────────────────────────────── */}
+
+      {/* Top Header Row: Drag Handle, Tier Badge, Tag, Action Menu */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 overflow-hidden">
+          <GripHorizontal className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
           <span className={`text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 ${tierBadgeClass}`}>
             {tierBadgeText}
           </span>
-          {node.code && (
-            <span className="text-[10px] font-mono text-slate-400 truncate max-w-[100px]" title={node.code}>
+          {node.customTag && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium truncate max-w-[90px]" title={node.customTag}>
+              <Tag className="w-2 h-2" />
+              {node.customTag}
+            </span>
+          )}
+          {node.code && !node.customTag && (
+            <span className="text-[10px] font-mono text-slate-400 truncate max-w-[80px]" title={node.code}>
               {node.code}
             </span>
           )}
@@ -219,7 +418,7 @@ function IATreeNodeCardComponent({
         </div>
       </div>
 
-      {/* Node Title & Description */}
+      {/* User-Authored Node Title & Description */}
       <div className="mb-2">
         <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={node.name}>
           {node.name}
@@ -231,10 +430,10 @@ function IATreeNodeCardComponent({
         )}
       </div>
 
-      {/* Middle Row: Badges, Touchpoint Type, Critical Path */}
+      {/* Middle Row: Touchpoint type, Critical Path, Optional Task badge */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2">
         {node.tier === 4 && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-medium text-slate-600">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-medium text-slate-600">
             {getTouchpointIcon(node.touchpointType)}
             <span className="capitalize">{node.touchpointType || "Screen"}</span>
           </span>
@@ -247,27 +446,27 @@ function IATreeNodeCardComponent({
           </span>
         )}
 
-        {/* Linked Task ID Badge */}
+        {/* Optional Task ID Badge */}
         {node.requestId && (
           <span
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-medium border ${getStatusBadgeStyle(
               effectiveStatus
             )}`}
-            title={`Bài toán thiết kế: ${node.requestId}`}
+            title={`Bài toán thiết kế liên kết: ${node.requestId}`}
           >
             {node.requestId}
           </span>
         )}
       </div>
 
-      {/* Bottom Row: Linked Task Details & Expand/Collapse Toggle */}
+      {/* Bottom Row: Figma Link, Designer avatar, and Expand/Collapse */}
       <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100 text-[10px]">
         {/* Left: Designer Avatar & Figma Button */}
         <div className="flex items-center gap-1.5">
           {effectiveDesigner && (
             <div
               className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[9px] shrink-0"
-              title={`Designer phụ trách: ${effectiveDesigner}`}
+              title={`Phụ trách: ${effectiveDesigner}`}
             >
               {effectiveDesigner.charAt(0).toUpperCase()}
             </div>
@@ -286,7 +485,6 @@ function IATreeNodeCardComponent({
             </button>
           )}
 
-          {/* Progress Bar if present */}
           {effectiveProgress !== undefined && (
             <span className="text-[10px] font-medium text-slate-500 font-mono">
               {effectiveProgress}%
@@ -325,3 +523,4 @@ function IATreeNodeCardComponent({
 
 export const IATreeNodeCard = memo(IATreeNodeCardComponent)
 export default IATreeNodeCard
+
