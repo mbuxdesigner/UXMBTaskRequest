@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react"
-import { Layers, Sparkles, CheckCircle2, ShieldAlert, Lock } from "lucide-react"
+import { motion } from "framer-motion"
+import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye } from "lucide-react"
+import { springs } from "@/lib/motion"
+import PageHeader from "@/components/common/PageHeader"
 import { useIATreeState } from "@/hooks/useIATreeState"
 import { useCanvasTransform } from "@/hooks/useCanvasTransform"
 import IAToolbar from "@/components/ia/IAToolbar"
@@ -220,8 +223,112 @@ export default function IAPage() {
   }
 
   return (
-    <div className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4">
-      {/* 1. Top Toolbar: Product Selector, Metrics, Search & Reset */}
+    <div className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 animate-in fade-in-50 duration-200">
+      {/* 1. Page Header Synchronized with Track Task & System Style */}
+      <PageHeader
+        breadcrumb={{
+          parent: "MBBank UX Platform",
+          current: "Information Architecture",
+        }}
+        title="Information Architecture"
+        badge={
+          !canEdit ? (
+            <span
+              data-testid="ia-readonly-badge"
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold"
+              title="Bạn đang ở chế độ chỉ xem, không thể chỉnh sửa hoặc di chuyển node"
+            >
+              <Eye className="w-3 h-3 text-amber-600" />
+              Chế độ chỉ xem
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync
+            </span>
+          )
+        }
+        subtitle={
+          <div data-testid="ia-metrics-badge" className="flex min-w-0 flex-wrap items-center gap-2.5 pt-0.5">
+            {/* Phân hệ */}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-xs font-normal text-slate-500">Phân hệ</span>
+              <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {domainsCount}
+              </span>
+            </div>
+
+            {/* Luồng */}
+            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+              <span className="truncate text-xs font-normal text-slate-500">Luồng</span>
+              <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {metrics.featureCount}
+              </span>
+            </div>
+
+            {/* Màn hình */}
+            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+              <span className="truncate text-xs font-normal text-slate-500">Màn hình</span>
+              <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {metrics.screenCount}
+              </span>
+            </div>
+
+            {/* Trọng yếu */}
+            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+              <span className="truncate text-xs font-normal text-slate-500">Trọng yếu</span>
+              <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
+                {criticalPathsCount}
+              </span>
+            </div>
+
+            {/* Active Product & Description */}
+            {activeProduct && (
+              <div className="hidden lg:flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
+                <span className="text-xs font-semibold text-slate-700">{activeProduct.name}:</span>
+                <span className="text-xs text-slate-500 truncate max-w-[280px]">{activeProduct.description}</span>
+              </div>
+            )}
+          </div>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Nút Căn giữa sơ đồ */}
+            <motion.button
+              type="button"
+              data-testid="ia-fit-view-btn"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.94 }}
+              transition={springs.snappy}
+              onClick={handleFitToView}
+              title="Căn giữa sơ đồ toàn màn hình"
+              className="h-9 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
+              <span>Căn giữa</span>
+            </motion.button>
+
+            {/* Nút Khôi phục mặc định (chỉ hiển thị khi có quyền edit) */}
+            {canEdit && (
+              <motion.button
+                type="button"
+                data-testid="ia-reset-default-btn"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.94 }}
+                transition={springs.snappy}
+                onClick={handleOpenReset}
+                title="Khôi phục cấu trúc cây mặc định"
+                className="h-9 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Khôi phục mặc định</span>
+              </motion.button>
+            )}
+          </div>
+        }
+      />
+
+      {/* 2. Top Command Bar: Product Selector & Search */}
       <IAToolbar
         products={products}
         selectedProductId={selectedProductId}
@@ -236,25 +343,6 @@ export default function IAPage() {
         onResetToDefault={handleOpenReset}
         readOnly={!canEdit}
       />
-
-      {/* 2. Product Context Info Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-slate-50/70 rounded-xl border border-slate-200/60 text-xs text-slate-600">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-800">{activeProduct.name}:</span>
-          <span className="text-slate-500">{activeProduct.description}</span>
-        </div>
-        <div className="flex items-center gap-4 text-[11px]">
-          <span className="flex items-center gap-1 text-slate-600 font-medium">
-            <Layers className="w-3 h-3 text-blue-500" /> {domainsCount} Phân hệ
-          </span>
-          <span className="flex items-center gap-1 text-slate-600 font-medium">
-            <Sparkles className="w-3 h-3 text-amber-500" /> {criticalPathsCount} Luồng trọng yếu
-          </span>
-          <span className="flex items-center gap-1 text-emerald-600 font-medium">
-            <CheckCircle2 className="w-3 h-3" /> Cây IA Chuẩn MBBank
-          </span>
-        </div>
-      </div>
 
       {/* 3. Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
       <IACanvasViewport

@@ -156,7 +156,7 @@ export default function App() {
 
       compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
 
-      ia: "Kiến trúc Thông tin (IA) — MB UX Request Portal",
+      ia: "Information Architecture (IA) — MB UX Request Portal",
     }
 
     document.title =
