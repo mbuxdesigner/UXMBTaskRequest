@@ -10,6 +10,7 @@ import {
   UserRole,
   buildPhases,
   mockRequests,
+  isDemoRequest,
 } from "../data/mockData"
 import { getGoogleSheetConfig, saveGoogleSheetConfig } from "../config/googleSheetConfig"
 import { getStoredSession } from "./otpAuthService"
@@ -408,10 +409,18 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       if (localCached) {
         const parsed = JSON.parse(localCached)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          cachedRequestsMemory = deduplicateTaskIds(parsed.map(normalizeSheetRequest))
-          // Trigger background fetch without blocking UI
-          backgroundSyncRequests()
-          return cachedRequestsMemory
+          const cleaned = parsed.filter((r) => !isDemoRequest(r))
+          if (cleaned.length !== parsed.length) {
+            try {
+              localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
+            } catch {}
+          }
+          if (cleaned.length > 0) {
+            cachedRequestsMemory = deduplicateTaskIds(cleaned.map(normalizeSheetRequest))
+            // Trigger background fetch without blocking UI
+            backgroundSyncRequests()
+            return cachedRequestsMemory
+          }
         }
       }
     } catch (e) {
@@ -449,7 +458,8 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
             const data = await res.json()
             if (data.status === "success" && Array.isArray(data.requests)) {
               lastRemoteFetchSucceeded = true
-              const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
+              const cleanRemote = data.requests.filter((r: any) => !isDemoRequest(r))
+              const normalized = deduplicateTaskIds(cleanRemote.map(normalizeSheetRequest))
               cachedRequestsMemory = normalized
               try {
                 localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
@@ -476,7 +486,13 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       if (cached) {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed)) {
-          const normalized = deduplicateTaskIds(parsed.map(normalizeSheetRequest))
+          const cleaned = parsed.filter((r) => !isDemoRequest(r))
+          if (cleaned.length !== parsed.length) {
+            try {
+              localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
+            } catch {}
+          }
+          const normalized = deduplicateTaskIds(cleaned.map(normalizeSheetRequest))
           cachedRequestsMemory = normalized
           return normalized
         }
@@ -485,8 +501,8 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       console.warn("Could not read cached requests:", e)
     }
 
-    // Return starter mock requests if cache/sheet is empty
-    const fallback = deduplicateTaskIds(mockRequests.map(normalizeSheetRequest))
+    // Return starter mock requests if cache/sheet is empty (đã dọn sạch demo data)
+    const fallback = deduplicateTaskIds(mockRequests.filter((r) => !isDemoRequest(r)).map(normalizeSheetRequest))
     cachedRequestsMemory = fallback
     return fallback
   })().finally(() => {
@@ -1370,6 +1386,7 @@ export async function syncMasterDataToSheet(params: {
   rbac?: any
   nav_items?: any
   form_config?: any
+  ia_trees?: any
   actorEmail?: string
 }): Promise<{ success: boolean; message: string }> {
   const config = getGoogleSheetConfig()
@@ -1440,6 +1457,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
     selections?: any
     team_members?: any[]
     form_config?: any
+    ia_trees?: any
   }
 }> {
   const config = getGoogleSheetConfig()
@@ -1476,6 +1494,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
             selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
             team_members: json.team_members || json.master_data?.USERS_LIST,
             form_config: json.form_config || json.master_data?.FORM_CONFIG,
+            ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
           },
         }
       }
@@ -1514,6 +1533,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
           selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
           team_members: json.team_members || json.master_data?.USERS_LIST,
           form_config: json.form_config || json.master_data?.FORM_CONFIG,
+          ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
         },
       }
     }

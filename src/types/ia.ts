@@ -51,6 +51,7 @@ export interface IANode {
   customY?: number        // Tọa độ Y do người dùng kéo thả sắp xếp trên Canvas
   customWidth?: number    // Chiều rộng do người dùng kéo dãn tùy chỉnh trên Canvas
   customHeight?: number   // Chiều cao do người dùng kéo dãn tùy chỉnh trên Canvas
+  customTrunkOffset?: number // Khoảng cách trục thân bus line kéo thả dạng FigJam (pixel)
   squad?: string          // Squad phụ trách (Lending & Vay vốn, Cards, ...)
   taskIds?: string[]      // Danh sách các mã task liên kết với tính năng này
   hasActiveTask?: boolean // Trạng thái có task đang làm hay không
@@ -62,9 +63,86 @@ export interface IANode {
   assignedDesigner?: string
   colorTheme?: string
   isCriticalPath?: boolean
+  siblingRoots?: IANode[] // Danh sách các node Cấp 1 song song khác cùng thuộc sản phẩm
+  customTag?: string
+  displaySettings?: IANodeDisplaySettings // Cài đặt hiển thị On/Off chi tiết của từng node
   collapsed?: boolean
   createdAt?: string
   updatedAt?: string
+}
+
+/**
+ * Cài đặt hiển thị (Display / Visibility Settings) chi tiết cho từng thẻ Node
+ */
+export interface IANodeDisplaySettings {
+  allowDirectTasks?: boolean   // Cho phép tìm kiếm & gán bài toán trực tiếp vào node này
+  showProgress?: boolean       // Bật/tắt thanh tiến độ & checklist
+  rollupProgress?: boolean     // Tự động thu thập tiến độ từ tất cả các node con cháu
+  showSquad?: boolean          // Bật/tắt hiển thị nhãn Squad
+  showDesigner?: boolean       // Bật/tắt hiển thị avatar và tên người phụ trách
+  showStatus?: boolean         // Bật/tắt đèn báo trạng thái chân thẻ ("Đang có task làm", ...)
+  showBranchCount?: boolean    // Bật/tắt nút đếm nhánh con
+}
+
+/**
+ * Cấu hình hiển thị mặc định theo từng Cấp độ (Tier Defaults)
+ */
+export function getTierDefaultDisplaySettings(tier: IATier): Required<IANodeDisplaySettings> {
+  switch (tier) {
+    case 1:
+      return {
+        allowDirectTasks: false,
+        showProgress: true,
+        rollupProgress: true,
+        showSquad: false,
+        showDesigner: false,
+        showStatus: true,
+        showBranchCount: true,
+      }
+    case 2:
+      return {
+        allowDirectTasks: false,
+        showProgress: true,
+        rollupProgress: true,
+        showSquad: true,
+        showDesigner: false,
+        showStatus: true,
+        showBranchCount: true,
+      }
+    case 3:
+      return {
+        allowDirectTasks: true,
+        showProgress: true,
+        rollupProgress: true,
+        showSquad: true,
+        showDesigner: true,
+        showStatus: true,
+        showBranchCount: true,
+      }
+    case 4:
+      return {
+        allowDirectTasks: true,
+        showProgress: true,
+        rollupProgress: false,
+        showSquad: true,
+        showDesigner: true,
+        showStatus: true,
+        showBranchCount: false,
+      }
+  }
+}
+
+/**
+ * Cấu hình kích thước mặc định (độ dài/chiều cao) của từng cấp và khoảng cách
+ */
+export interface IATierDimensionSettings {
+  1: { width: number; height: number }
+  2: { width: number; height: number }
+  3: { width: number; height: number }
+  4: { width: number; height: number }
+  columnGap: number
+  verticalGapJourney: number
+  verticalGapScreen: number
 }
 
 /**

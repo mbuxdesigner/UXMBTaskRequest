@@ -164,7 +164,10 @@ export interface UseIATreeStateReturn {
 - `src/components/ia/IABezierConnectors.tsx` — Hardware-accelerated SVG cubic bezier connector curves
 - `src/components/ia/IATreeNodeCard.tsx` — Interactive card components for Tiers 1–4
 - `src/components/ia/IAToolbar.tsx` — Header toolbar (Product tabs, count badges, search, zoom/fit controls)
+- `src/components/ia/IASettingsModal.tsx` — Diagram layout settings modal (gap configuration, wire styles)
 - `src/components/ia/IANodeEditorModal.tsx` — Inline Add/Edit/Delete node dialog
 - `src/pages/IAPage.tsx` — Main IA page assembling toolbar, canvas, and drawer
+- `src/services/googleSheetService.ts` — 2-way cloud synchronization service with Google Apps Script
+- `google-apps-script-backend.js` — GAS backend with `saveIATreeData` / `getIATreeData` handlers
 - `test-e2e-ia-suite.mjs` — Comprehensive E2E test suite covering Tiers 1–4
 - `TEST_INFRA.md` — E2E test suite documentation and coverage matrix

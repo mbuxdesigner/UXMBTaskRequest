@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
-import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
+import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition, IATierDimensionSettings, getTierDefaultDisplaySettings } from "@/types/ia"
 import {
   IA_PRODUCTS,
   DEFAULT_IA_TREES,
@@ -7,9 +7,12 @@ import {
   getAdminIAProducts,
   createCleanRootNodeForProduct,
 } from "@/data/iaMockData"
-import { mockRequests, UXRequest } from "@/data/mockData"
+import { mockRequests, UXRequest, isDemoRequest } from "@/data/mockData"
+import { syncMasterDataToSheet, fetchMasterDataFromSheet, fetchRequestsFromSheet } from "@/services/googleSheetService"
+import { DEFAULT_TIER_DIMENSIONS } from "@/components/ia/IASettingsModal"
 
 export const IA_STORAGE_KEY = "ux_portal_ia_tree_data_v4"
+export const IA_TIER_DIMENSIONS_KEY = "ux_ia_tier_dimensions_v2"
 
 export interface LayoutNode {
   node: IANode
@@ -39,15 +42,23 @@ export interface LayoutConnector {
   path: string
   colorTheme?: string
   isHighlighted?: boolean
+  trunkHandle?: {
+    x: number
+    y: number
+    parentId: string
+    currentOffset: number
+  }
 }
 
 export interface UseIATreeStateReturn {
   activeTree: IANode
+  rootNodes: IANode[]
   products: IAProductInfo[]
   selectedProductId: string
   setSelectedProductId: (id: string) => void
   toggleCollapse: (nodeId: string) => void
   addChildNode: (parentId: string, nodeData: Partial<IANode>) => void
+  addRootNode: (nodeData: Partial<IANode>) => void
   addChildInDirection: (parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => void
   connectNodes: (sourceNodeId: string, targetNodeId: string) => void
   createConnectedNodeAt: (
@@ -58,7 +69,9 @@ export interface UseIATreeStateReturn {
   ) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
   updateNodePosition: (nodeId: string, x: number, y: number, persist?: boolean) => void
+  updateMultipleNodePositions: (positions: Array<{ nodeId: string; x: number; y: number }>, persist?: boolean) => void
   updateNodeDimensions: (nodeId: string, width: number, height: number, persist?: boolean) => void
+  updateTrunkOffset: (nodeId: string, offset: number, persist?: boolean) => void
   autoAlignTree: () => void
   deleteNode: (nodeId: string) => void
   resetToDefault: () => void
@@ -75,6 +88,11 @@ export interface UseIATreeStateReturn {
   metrics: { featureCount: number; screenCount: number }
   findNode: (id: string) => IANode | null
   requestsMap: Map<string, UXRequest>
+  trees: Record<string, IANode>
+  syncCloud: () => Promise<{ success: boolean; message: string }>
+  pullCloud: () => Promise<{ success: boolean; message: string }>
+  tierDimensions: IATierDimensionSettings
+  setTierDimensions: (settings: IATierDimensionSettings) => void
 }
 
 // Helper: Deep Clone Tree
@@ -85,6 +103,132 @@ export function deepCloneTree(node: IANode): IANode {
 // Helper: Deep Clone All Trees
 export function deepCloneAllTrees(trees: Record<string, IANode>): Record<string, IANode> {
   return JSON.parse(JSON.stringify(trees))
+}
+
+/**
+ * Số liệu tổng hợp từ toàn bộ cây con (Subtree Aggregated Metrics)
+ */
+export interface SubtreeMetrics {
+  totalTasks: number             // Tổng số task thực tế (unique) trong subtree
+  inProgressTasks: number        // Số task đang làm
+  completedTasks: number         // Số task hoàn thành
+  pendingTasks: number           // Số task chờ làm
+  progressPercent: number        // % tiến độ hoàn thành (0 - 100)
+  hasActiveTask: boolean         // Có ít nhất 1 task đang làm trong subtree
+  allCompleted: boolean          // Tất cả các task đã hoàn thành (khi totalTasks > 0)
+  directTasksCount: number       // Số task gắn trực tiếp vào chính node này
+  subtreeTaskIds: string[]       // Danh sách tất cả task IDs trong toàn bộ cây con
+}
+
+/**
+ * Hàm tính toán tổng hợp tiến độ và số lượng tính năng đang làm / hoàn thành
+ * từ toàn bộ các node con cháu cấp dưới (Level 4, Level 3 -> Level 2, Level 1)
+ */
+export function computeSubtreeMetrics(
+  node: IANode,
+  requestsMap?: Map<string, UXRequest>
+): SubtreeMetrics {
+  const taskIdSet = new Set<string>()
+  const directIds: string[] = []
+
+  // 1. Task trực tiếp tại node
+  if (node.taskIds && node.taskIds.length > 0) {
+    for (const id of node.taskIds) {
+      const t = id.trim()
+      if (t) {
+        taskIdSet.add(t)
+        directIds.push(t)
+      }
+    }
+  }
+  if (node.requestId) {
+    const t = node.requestId.trim()
+    if (t) {
+      taskIdSet.add(t)
+      if (!directIds.includes(t)) directIds.push(t)
+    }
+  }
+
+  // 2. Thu thập đệ quy toàn bộ task của tất cả node con cháu
+  function collectChildrenTasks(curr: IANode) {
+    if (!curr.children || curr.children.length === 0) return
+    for (const child of curr.children) {
+      if (child.taskIds && child.taskIds.length > 0) {
+        for (const id of child.taskIds) {
+          const t = id.trim()
+          if (t) taskIdSet.add(t)
+        }
+      }
+      if (child.requestId) {
+        const t = child.requestId.trim()
+        if (t) taskIdSet.add(t)
+      }
+      collectChildrenTasks(child)
+    }
+  }
+  collectChildrenTasks(node)
+
+  const subtreeTaskIds = Array.from(taskIdSet)
+  const totalTasks = subtreeTaskIds.length
+
+  let inProgressTasks = 0
+  let completedTasks = 0
+  let pendingTasks = 0
+
+  for (const id of subtreeTaskIds) {
+    const req = requestsMap?.get(id)
+    if (req) {
+      const s = (req.status || "").toLowerCase()
+      const isDone =
+        s.includes("hoàn thành") ||
+        s.includes("nghiệm thu") ||
+        s.includes("release") ||
+        req.progress === 100
+      const isDoing =
+        !isDone &&
+        (s.includes("thực hiện") ||
+          s.includes("đang làm") ||
+          s.includes("tiến hành") ||
+          s.includes("review") ||
+          (req.progress > 0 && req.progress < 100))
+
+      if (isDone) {
+        completedTasks++
+      } else if (isDoing) {
+        inProgressTasks++
+      } else {
+        pendingTasks++
+      }
+    } else {
+      // Task chưa có trong requestsMap (mã nhập thủ công)
+      if (directIds.includes(id) && node.hasActiveTask) {
+        inProgressTasks++
+      } else {
+        pendingTasks++
+      }
+    }
+  }
+
+  const progressPercent =
+    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : (node.progress ?? 0)
+
+  const hasActiveTask =
+    inProgressTasks > 0 || (node.hasActiveTask ?? false)
+
+  const allCompleted =
+    totalTasks > 0 && completedTasks === totalTasks
+
+  return {
+    totalTasks,
+    inProgressTasks,
+    completedTasks,
+    pendingTasks,
+    progressPercent,
+    hasActiveTask,
+    allCompleted,
+    directTasksCount: directIds.length,
+    subtreeTaskIds,
+  }
 }
 
 // Helper: Load from localStorage safely with dynamic admin products reconciliation
@@ -140,7 +284,31 @@ export function loadSavedTrees(): Record<string, IANode> {
         }
       }
     }
-    return merged
+
+    // Tự động loại bỏ bất kỳ liên kết bài toán demo cũ nào trong cây IA
+    function sanitizeNodeDemoData(node: IANode): IANode {
+      let newReqId = node.requestId
+      let newTaskIds = node.taskIds
+      if (newReqId && isDemoRequest({ request_id: newReqId })) {
+        newReqId = undefined
+      }
+      if (newTaskIds && newTaskIds.length > 0) {
+        const filtered = newTaskIds.filter((tid) => !isDemoRequest({ request_id: tid }))
+        newTaskIds = filtered.length > 0 ? filtered : undefined
+      }
+      return {
+        ...node,
+        requestId: newReqId,
+        taskIds: newTaskIds,
+        children: node.children ? node.children.map(sanitizeNodeDemoData) : [],
+      }
+    }
+
+    const sanitized: Record<string, IANode> = {}
+    for (const [k, v] of Object.entries(merged)) {
+      sanitized[k] = sanitizeNodeDemoData(v)
+    }
+    return sanitized
   } catch (err) {
     console.warn("Storage parse error, resetting to seed defaults:", err)
     return baseTrees
@@ -162,20 +330,102 @@ export function saveTreesToStorage(trees: Record<string, IANode>): void {
   }
 }
 
-// Layout Dimensions per Tier
-const TIER_DIMENSIONS: Record<IATier, { width: number; height: number; x: number }> = {
-  1: { width: 280, height: 125, x: 40 },
-  2: { width: 270, height: 165, x: 370 },
-  3: { width: 260, height: 175, x: 690 },
-  4: { width: 250, height: 185, x: 1000 },
+// Helper: Load and save Tier Dimension Settings
+export function loadTierDimensionSettings(): IATierDimensionSettings {
+  if (typeof window === "undefined" || !window.localStorage) return DEFAULT_TIER_DIMENSIONS
+  try {
+    const raw = window.localStorage.getItem(IA_TIER_DIMENSIONS_KEY)
+    if (!raw) return DEFAULT_TIER_DIMENSIONS
+    const parsed = JSON.parse(raw)
+    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao hoặc khoảng cách quá nhỏ gây đè thẻ
+    if (
+      !parsed[1]?.height || parsed[1].height < 140 ||
+      !parsed[2]?.height || parsed[2].height < 150 ||
+      !parsed[3]?.height || parsed[3].height < 150 ||
+      !parsed.verticalGapJourney || parsed.verticalGapJourney < 36 ||
+      !parsed.columnGap || parsed.columnGap < 90
+    ) {
+      saveTierDimensionSettings(DEFAULT_TIER_DIMENSIONS)
+      return DEFAULT_TIER_DIMENSIONS
+    }
+    return {
+      ...DEFAULT_TIER_DIMENSIONS,
+      ...parsed,
+      1: { ...DEFAULT_TIER_DIMENSIONS[1], ...(parsed[1] || {}) },
+      2: { ...DEFAULT_TIER_DIMENSIONS[2], ...(parsed[2] || {}) },
+      3: { ...DEFAULT_TIER_DIMENSIONS[3], ...(parsed[3] || {}) },
+      4: { ...DEFAULT_TIER_DIMENSIONS[4], ...(parsed[4] || {}) },
+    }
+  } catch {
+    return DEFAULT_TIER_DIMENSIONS
+  }
 }
+
+export function saveTierDimensionSettings(settings: IATierDimensionSettings): void {
+  if (typeof window === "undefined" || !window.localStorage) return
+  try {
+    window.localStorage.setItem(IA_TIER_DIMENSIONS_KEY, JSON.stringify(settings))
+  } catch (err) {
+    console.warn("Failed to persist tier dimensions:", err)
+  }
+}
+
+/**
+ * Tính toán chiều cao ước tính thực tế của một thẻ Node dựa trên nội dung & cấu hình hiển thị
+ * Giúp thuật toán Auto-Align / Sắp xếp tự động phân bổ khoảng cách chính xác, không bị đè thẻ
+ */
+export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDimensionSettings): number {
+  if (node.customHeight) return node.customHeight
+
+  const ds = node.displaySettings || getTierDefaultDisplaySettings(node.tier)
+
+  // 1. Padding và viền khung thẻ (pt-4: 16px, pb-3.5: 14px, border: 2px)
+  let h = 32
+
+  // 2. Hàng 1: Grip kéo + Squad badge + Action buttons
+  h += 28
+
+  // 3. Khoảng cách giữa Hàng 1 và Hàng 2
+  h += 8
+
+  // 4. Hàng 2: Tên tính năng + Mô tả (nếu có)
+  h += node.description ? 38 : 22
+
+  // 5. Hàng 3: Thông tin Designer hoặc Touchpoint
+  const showDesigner = ds.showDesigner !== false && (node.assignedDesigner || node.tier >= 3)
+  const showTouchpoint = Boolean(node.touchpointType) || node.tier === 4
+  if (showDesigner || showTouchpoint) {
+    h += 26
+  }
+
+  // 6. Hàng 4: Thanh tiến độ & Checklist
+  if (ds.showProgress !== false) {
+    h += 56
+  }
+
+  // 7. Hàng 5 & 6: Đường kẻ chia cách + Footer trạng thái & Đếm nhánh
+  if (ds.showStatus !== false || ds.showBranchCount !== false) {
+    h += 38
+  }
+
+  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 165 : node.tier === 2 ? 180 : node.tier === 3 ? 190 : 175)
+  return Math.max(defaultDim, Math.round(h))
+}
+
 const VERTICAL_GAP = 36
 
 export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATreeStateReturn {
   const [products, setProducts] = useState<IAProductInfo[]>(() => getAdminIAProducts())
+  const [tierDimensions, setTierDimensionsState] = useState<IATierDimensionSettings>(() => loadTierDimensionSettings())
+
+  const setTierDimensions = useCallback((settings: IATierDimensionSettings) => {
+    setTierDimensionsState(settings)
+    saveTierDimensionSettings(settings)
+  }, [])
+
   const [selectedProductId, setSelectedProductId] = useState<string>(() => {
     const currentProds = getAdminIAProducts()
-    if (initialProductId && currentProds.some((p) => p.id === initialProductId)) {
+    if (initialProductId && currentProds.some((p: IAProductInfo) => p.id === initialProductId)) {
       return initialProductId
     }
     return currentProds[0]?.id || "app-mbbank"
@@ -190,7 +440,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const latestProds = getAdminIAProducts()
       setProducts(latestProds)
       setSelectedProductId((curr) => {
-        if (latestProds.some((p) => p.id === curr)) return curr
+        if (latestProds.some((p: IAProductInfo) => p.id === curr)) return curr
         return latestProds[0]?.id || curr
       })
       setTrees((prev) => {
@@ -250,20 +500,61 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   )
 
   // Active Tree for current product
+  // Active Tree for current product
   const activeTree: IANode = useMemo(() => {
     return getTargetTree(trees, selectedProductId)
   }, [trees, selectedProductId, getTargetTree])
 
-  // Mock Requests indexed by request_id
+  // All root nodes (Primary LV1 + Sibling LV1s)
+  const rootNodes = useMemo<IANode[]>(() => {
+    const roots = [activeTree]
+    if (activeTree.siblingRoots && activeTree.siblingRoots.length > 0) {
+      roots.push(...activeTree.siblingRoots)
+    }
+    return roots
+  }, [activeTree])
+
+  // Quản lý danh sách bài toán thực tế (loại bỏ hoàn toàn demo data)
+  const [requestsList, setRequestsList] = useState<UXRequest[]>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const raw = window.localStorage.getItem("ux_portal_real_requests")
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            const clean = parsed.filter((r: UXRequest) => !isDemoRequest(r))
+            if (clean.length !== parsed.length) {
+              try {
+                window.localStorage.setItem("ux_portal_real_requests", JSON.stringify(clean))
+              } catch {}
+            }
+            return clean
+          }
+        }
+      } catch {}
+    }
+    return mockRequests.filter((r) => !isDemoRequest(r))
+  })
+
+  useEffect(() => {
+    fetchRequestsFromSheet().then((reqs) => {
+      if (Array.isArray(reqs)) {
+        const clean = reqs.filter((r: UXRequest) => !isDemoRequest(r))
+        setRequestsList(clean)
+      }
+    }).catch(() => {})
+  }, [])
+
+  // Requests indexed by request_id
   const requestsMap = useMemo(() => {
     const map = new Map<string, UXRequest>()
-    for (const req of mockRequests) {
+    for (const req of requestsList) {
       map.set(req.request_id, req)
     }
     return map
-  }, [])
+  }, [requestsList])
 
-  // Find node helper
+  // Find node helper across all root nodes
   const findNode = useCallback((id: string): IANode | null => {
     function dfs(curr: IANode): IANode | null {
       if (curr.id === id) return curr
@@ -275,8 +566,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
       return null
     }
-    return dfs(activeTree)
-  }, [activeTree])
+    for (const r of rootNodes) {
+      const found = dfs(r)
+      if (found) return found
+    }
+    return null
+  }, [rootNodes])
 
   // Search Multi-Field Matching Engine
   const searchResult = useMemo(() => {
@@ -300,7 +595,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         }
       }
     }
-    indexTree(activeTree)
+    for (const r of rootNodes) {
+      indexTree(r)
+    }
 
     for (const [id, node] of nodeMap.entries()) {
       const linkedReq = node.requestId ? requestsMap.get(node.requestId) : undefined
@@ -340,7 +637,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       ancestorIdsToExpand,
       matchCount: matchedIds.size,
     }
-  }, [activeTree, searchQuery, requestsMap])
+  }, [rootNodes, searchQuery, requestsMap])
 
   // Toggle Collapse on a Node
   const toggleCollapse = useCallback((nodeId: string) => {
@@ -361,7 +658,36 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         return false
       }
 
-      dfs(clone)
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        if (dfs(r)) break
+      }
+
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId, getTargetTree])
+
+  // Add Root Node (Multiple LV1s support)
+  const addRootNode = useCallback((nodeData: Partial<IANode>) => {
+    setTrees((prevTrees) => {
+      const current = getTargetTree(prevTrees, selectedProductId)
+      const clone = deepCloneTree(current)
+      const newId = nodeData.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const newRoot: IANode = {
+        id: newId,
+        tier: 1,
+        name: (nodeData.name && nodeData.name.trim()) || "Cấp 1 mới · Sản phẩm",
+        parentId: null,
+        description: nodeData.description || "",
+        code: nodeData.code || "",
+        colorTheme: nodeData.colorTheme || clone.colorTheme || "blue",
+        children: [],
+      }
+      if (!clone.siblingRoots) {
+        clone.siblingRoots = []
+      }
+      clone.siblingRoots.push(newRoot)
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
       return nextTrees
@@ -398,6 +724,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             touchpointType: nextTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
             children: nextTier < 4 ? [] : undefined,
             colorTheme: curr.colorTheme,
+            displaySettings: nodeData.displaySettings,
           }
           if (!curr.children) curr.children = []
           curr.children.push(newNode)
@@ -412,8 +739,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         return false
       }
 
-      const found = dfs(clone)
-      if (!found || !created) {
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        if (dfs(r)) {
+          created = true
+          break
+        }
+      }
+
+      if (!created) {
         throw new Error(`Parent node with id "${parentId}" not found`)
       }
 
@@ -449,6 +782,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           }
           if ("colorTheme" in nodeData) curr.colorTheme = nodeData.colorTheme
           if ("isCriticalPath" in nodeData) curr.isCriticalPath = nodeData.isCriticalPath
+          if ("displaySettings" in nodeData) curr.displaySettings = nodeData.displaySettings
           return true
         }
         if (curr.children) {
@@ -459,7 +793,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         return false
       }
 
-      dfs(clone)
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        if (dfs(r)) break
+      }
+
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
       return nextTrees
@@ -480,9 +817,35 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
     setTrees((prevTrees) => {
       const current = getTargetTree(prevTrees, selectedProductId)
+
+      // 1. Is it the primary root?
       if (current.id === nodeId) {
-        throw new Error("Cannot delete Tier 1 Product Root node")
+        if (current.siblingRoots && current.siblingRoots.length > 0) {
+          const [promoted, ...restSiblings] = current.siblingRoots
+          const nextPrimary: IANode = {
+            ...promoted,
+            siblingRoots: restSiblings,
+          }
+          const nextTrees = { ...prevTrees, [selectedProductId]: nextPrimary }
+          saveTreesToStorage(nextTrees)
+          return nextTrees
+        } else {
+          throw new Error("Không thể xóa node Cấp 1 duy nhất của sản phẩm")
+        }
       }
+
+      // 2. Is it a sibling root?
+      if (current.siblingRoots && current.siblingRoots.some((r) => r.id === nodeId)) {
+        const nextSiblings = current.siblingRoots.filter((r) => r.id !== nodeId)
+        const nextPrimary: IANode = {
+          ...current,
+          siblingRoots: nextSiblings,
+        }
+        const nextTrees = { ...prevTrees, [selectedProductId]: nextPrimary }
+        saveTreesToStorage(nextTrees)
+        return nextTrees
+      }
+
       const clone = deepCloneTree(current)
 
       // Lock current visual positions for all nodes in the tree so layout does not auto-shift
@@ -498,7 +861,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           }
         }
       }
-      lockPositions(clone)
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        lockPositions(r)
+      }
 
       function dfs(curr: IANode): boolean {
         if (!curr.children) return false
@@ -513,7 +878,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         return false
       }
 
-      dfs(clone)
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        if (dfs(r)) break
+      }
+
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
       return nextTrees
@@ -521,20 +889,54 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   }, [selectedProductId, getTargetTree])
 
   // Update Node Custom Position (from Canvas Drag & Drop)
-  // When persist is false (during live dragging), performs an ultra-fast copy-on-write update without synchronous localStorage writes.
-  // When persist is true (on drag release), commits to localStorage once.
   const updateNodePosition = useCallback((nodeId: string, x: number, y: number, persist: boolean = true) => {
     setTrees((prevTrees) => {
       const current = getTargetTree(prevTrees, selectedProductId)
 
+      // Lookup current layout positions to calculate relative delta dx, dy
+      const currentLayoutMap = new Map<string, LayoutNode>()
+      for (const ln of layoutNodesRef.current) {
+        currentLayoutMap.set(ln.node.id, ln)
+      }
+
+      // Helper to recursively shift all descendant nodes by dx, dy
+      function shiftDescendants(n: IANode, dx: number, dy: number): IANode {
+        if (!n.children || n.children.length === 0) return n
+        const newChildren = n.children.map((c) => {
+          const lNode = currentLayoutMap.get(c.id)
+          const baseCx = c.customX !== undefined ? c.customX : (lNode ? lNode.x : 0)
+          const baseCy = c.customY !== undefined ? c.customY : (lNode ? lNode.y : 0)
+          const shiftedChild: IANode = {
+            ...c,
+            customX: Math.round(baseCx + dx),
+            customY: Math.round(baseCy + dy),
+          }
+          return shiftDescendants(shiftedChild, dx, dy)
+        })
+        return { ...n, children: newChildren }
+      }
+
       function updateNodeInTree(node: IANode): IANode {
         if (node.id === nodeId) {
-          return {
+          const lNode = currentLayoutMap.get(node.id)
+          const baseNx = node.customX !== undefined ? node.customX : (lNode ? lNode.x : x)
+          const baseNy = node.customY !== undefined ? node.customY : (lNode ? lNode.y : y)
+          const dx = Math.round(x) - baseNx
+          const dy = Math.round(y) - baseNy
+
+          const updatedNode: IANode = {
             ...node,
             customX: Math.round(x),
             customY: Math.round(y),
           }
+
+          // If node has children and moved by (dx, dy), shift its descendants together
+          if (node.children && node.children.length > 0 && (dx !== 0 || dy !== 0)) {
+            return shiftDescendants(updatedNode, dx, dy)
+          }
+          return updatedNode
         }
+
         if (node.children && node.children.length > 0) {
           let childChanged = false
           const newChildren = node.children.map((c) => {
@@ -550,6 +952,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       const clone = updateNodeInTree(current)
+      if (current.siblingRoots && current.siblingRoots.length > 0) {
+        clone.siblingRoots = current.siblingRoots.map(updateNodeInTree)
+      }
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       if (persist) {
         saveTreesToStorage(nextTrees)
@@ -557,6 +962,70 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       return nextTrees
     })
   }, [selectedProductId, getTargetTree])
+
+  // Batch Update Multiple Nodes Custom Positions (for Multi-Selection Drag & Drop)
+  const updateMultipleNodePositions = useCallback(
+    (positions: Array<{ nodeId: string; x: number; y: number }>, persist: boolean = true) => {
+      if (!positions || positions.length === 0) return
+
+      const posMap = new Map<string, { x: number; y: number }>()
+      for (const p of positions) {
+        posMap.set(p.nodeId, { x: Math.round(p.x), y: Math.round(p.y) })
+      }
+
+      setTrees((prevTrees) => {
+        const current = getTargetTree(prevTrees, selectedProductId)
+
+        function updateNodeInTree(node: IANode): IANode {
+          let nodeChanged = false
+          let nextCustomX = node.customX
+          let nextCustomY = node.customY
+
+          if (posMap.has(node.id)) {
+            const p = posMap.get(node.id)!
+            nextCustomX = p.x
+            nextCustomY = p.y
+            nodeChanged = true
+          }
+
+          let nextChildren = node.children
+          if (node.children && node.children.length > 0) {
+            let childChanged = false
+            const newChildren = node.children.map((c) => {
+              const updated = updateNodeInTree(c)
+              if (updated !== c) childChanged = true
+              return updated
+            })
+            if (childChanged) {
+              nextChildren = newChildren
+              nodeChanged = true
+            }
+          }
+
+          if (nodeChanged) {
+            return {
+              ...node,
+              customX: nextCustomX,
+              customY: nextCustomY,
+              children: nextChildren,
+            }
+          }
+          return node
+        }
+
+        const clone = updateNodeInTree(current)
+        if (current.siblingRoots && current.siblingRoots.length > 0) {
+          clone.siblingRoots = current.siblingRoots.map(updateNodeInTree)
+        }
+        const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+        if (persist) {
+          saveTreesToStorage(nextTrees)
+        }
+        return nextTrees
+      })
+    },
+    [selectedProductId, getTargetTree]
+  )
 
   // Update Node Dimensions (from Canvas Interactive Resize)
   const updateNodeDimensions = useCallback((nodeId: string, width: number, height: number, persist: boolean = true) => {
@@ -586,6 +1055,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       const clone = updateDimensionsInTree(current)
+      if (current.siblingRoots && current.siblingRoots.length > 0) {
+        clone.siblingRoots = current.siblingRoots.map(updateDimensionsInTree)
+      }
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       if (persist) {
         saveTreesToStorage(nextTrees)
@@ -594,7 +1066,45 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     })
   }, [selectedProductId, getTargetTree])
 
-  // Auto-align Tree: clears custom positions to restore computed tidy tree
+  // Update Trunk Offset (from FigJam-style bus line dragging)
+  const updateTrunkOffset = useCallback((nodeId: string, offset: number, persist: boolean = true) => {
+    setTrees((prevTrees) => {
+      const current = getTargetTree(prevTrees, selectedProductId)
+
+      function updateTrunkInTree(node: IANode): IANode {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            customTrunkOffset: Math.round(offset),
+          }
+        }
+        if (node.children && node.children.length > 0) {
+          let childChanged = false
+          const newChildren = node.children.map((c) => {
+            const updated = updateTrunkInTree(c)
+            if (updated !== c) childChanged = true
+            return updated
+          })
+          if (childChanged) {
+            return { ...node, children: newChildren }
+          }
+        }
+        return node
+      }
+
+      const clone = updateTrunkInTree(current)
+      if (current.siblingRoots && current.siblingRoots.length > 0) {
+        clone.siblingRoots = current.siblingRoots.map(updateTrunkInTree)
+      }
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      if (persist) {
+        saveTreesToStorage(nextTrees)
+      }
+      return nextTrees
+    })
+  }, [selectedProductId, getTargetTree])
+
+  // Auto-align Tree: clears custom positions & dimensions to restore computed tidy tree
   const autoAlignTree = useCallback(() => {
     setTrees((prevTrees) => {
       const current = getTargetTree(prevTrees, selectedProductId)
@@ -603,6 +1113,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       function dfs(curr: IANode) {
         delete curr.customX
         delete curr.customY
+        delete curr.customWidth
+        delete curr.customHeight
+        delete curr.customTrunkOffset
         if (curr.children) {
           for (const child of curr.children) {
             dfs(child)
@@ -610,7 +1123,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         }
       }
 
-      dfs(clone)
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        dfs(r)
+      }
+
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
       return nextTrees
@@ -629,16 +1145,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           const nextTier = Math.min(4, curr.tier + 1) as IATier
           const newId = nodeData?.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
-          let offsetX = 300
+          let offsetX = 340
           let offsetY = 0
           if (direction === "bottom") {
             offsetX = 0
-            offsetY = 130
+            offsetY = 250
           } else if (direction === "top") {
             offsetX = 0
-            offsetY = -130
+            offsetY = -250
           } else if (direction === "left") {
-            offsetX = -300
+            offsetX = -340
             offsetY = 0
           }
 
@@ -867,10 +1383,17 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [])
 
-  // Compute Metrics
+  // Compute Metrics across all root nodes
   const metrics = useMemo(() => {
-    return getProductMetrics(activeTree)
-  }, [activeTree])
+    let featureCount = 0
+    let screenCount = 0
+    for (const r of rootNodes) {
+      const m = getProductMetrics(r)
+      featureCount += m.featureCount
+      screenCount += m.screenCount
+    }
+    return { featureCount, screenCount }
+  }, [rootNodes])
 
   // ---------------------------------------------------------------------------
   // Tidy Tree Layout Calculation Engine
@@ -894,9 +1417,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
     // 1. First pass: Build internal hierarchy with effective collapse state
     function buildInternal(node: IANode): InternalNode {
-      const dim = TIER_DIMENSIONS[node.tier] || { width: 220, height: 76, x: 40 }
+      const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 180 }
       const nodeWidth = node.customWidth || dim.width
-      const nodeHeight = node.customHeight || dim.height
+      const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
       const hasChildren = Boolean(node.children && node.children.length > 0)
       const childCount = node.children ? node.children.length : 0
 
@@ -923,7 +1446,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         node,
         width: nodeWidth,
         height: nodeHeight,
-        x: dim.x,
+        x: 0,
         y: 0,
         subtreeHeight,
         isCollapsed,
@@ -934,25 +1457,24 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    const rootInternal = buildInternal(activeTree)
-
     // Helper to calculate port anchor coordinates
     function getPortCoord(
       x: number,
       y: number,
       width: number,
       height: number,
-      port: IAPortPosition
+      port: IAPortPosition,
+      offset: number = 0
     ): { x: number; y: number } {
       switch (port) {
         case "top":
-          return { x: x + width / 2, y }
+          return { x: x + width / 2, y: y - offset }
         case "bottom":
-          return { x: x + width / 2, y: y + height }
+          return { x: x + width / 2, y: y + height + offset }
         case "left":
-          return { x, y: y + height / 2 }
+          return { x: x - offset, y: y + height / 2 }
         case "right":
-          return { x: x + width, y: y + height / 2 }
+          return { x: x + width + offset, y: y + height / 2 }
       }
     }
 
@@ -970,104 +1492,37 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    // 2. Second pass: Calculate Non-Overlapping Staggered Multi-Column Hierarchy Positions
-    // - lv1 (Root): Centered at the top (START_Y = 40)
-    // - lv2 (Modules): Arranged horizontally across columns at MODULES_TOP_Y = 220
-    // - lv3 (Journeys): Shifted to the right of Module (GAP_X = 80px)
-    // - lv4 (Screens): Shifted to the right of Journey (GAP_X = 80px), stacked vertically
-    // Guarantees ZERO card overlaps horizontally and vertically
+    // 2. Second pass: Calculate Columnar Indented Vertical Hierarchy Positions (Matching User Diagram)
+    // - LV1 (Product Root): Stretches horizontally to cover all its child LV2s!
+    // - LV2 (Domain Modules): Arranged horizontally across columns
+    // - LV3 (Feature Journeys): Stacked vertically below LV2, indented to the right (INDENT_LV3 = 48)
+    // - LV4 (Screens & Touchpoints): Stacked vertically below each LV3, indented to the right (INDENT_LV4 = 40)
+    // - Supports multiple LV1s placed side-by-side with LV1_GAP!
     const resultNodes: LayoutNode[] = []
     const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
 
     const START_X = 60
-    const START_Y = 40
-    const MODULES_TOP_Y = 220
-    const GAP_X = 80
-    const MODULE_GAP_X = 120
-    const VERTICAL_GAP_SCREEN = 36
-    const VERTICAL_GAP_SECTION = 50
-
-    const root = rootInternal
-    root.y = START_Y
-
-    if (root.children.length === 0 || !root.isExpanded) {
-      root.x = START_X
-    } else {
-      let currentModuleX = START_X
-
-      for (const module of root.children) {
-        const modX = currentModuleX
-        const modY = MODULES_TOP_Y
-
-        module.x = modX
-        module.y = modY
-
-        rawPairs.push({ parent: root, child: module })
-
-        const luongs = module.children
-        let maxClusterWidth = module.width
-
-        if (luongs.length > 0 && module.isExpanded) {
-          const luongX = modX + module.width + GAP_X
-          const screenX = luongX + (TIER_DIMENSIONS[3]?.width || 240) + GAP_X
-
-          maxClusterWidth = Math.max(maxClusterWidth, module.width + GAP_X + (TIER_DIMENSIONS[3]?.width || 240))
-
-          let currentLuongY = MODULES_TOP_Y
-
-          for (const luong of luongs) {
-            luong.x = luongX
-            luong.y = currentLuongY
-
-            rawPairs.push({ parent: module, child: luong })
-
-            const screens = luong.children
-            let screenStartY = currentLuongY
-
-            if (screens.length > 0 && luong.isExpanded) {
-              maxClusterWidth = Math.max(
-                maxClusterWidth,
-                module.width + GAP_X + (TIER_DIMENSIONS[3]?.width || 240) + GAP_X + (TIER_DIMENSIONS[4]?.width || 230)
-              )
-
-              for (const screen of screens) {
-                screen.x = screenX
-                screen.y = screenStartY
-
-                rawPairs.push({ parent: luong, child: screen })
-
-                screenStartY += screen.height + VERTICAL_GAP_SCREEN
-              }
-            }
-
-            const screensSpan = screens.length > 0 && luong.isExpanded
-              ? (screenStartY - currentLuongY - VERTICAL_GAP_SCREEN)
-              : 0
-            const sectionHeight = Math.max(luong.height, screensSpan)
-
-            currentLuongY += sectionHeight + VERTICAL_GAP_SECTION
-          }
-        }
-
-        currentModuleX += maxClusterWidth + MODULE_GAP_X
-      }
-
-      // Center root horizontally across all clusters
-      const totalWidth = (currentModuleX - MODULE_GAP_X) - START_X
-      root.x = Math.max(START_X, START_X + Math.round((totalWidth - root.width) / 2))
-    }
+    const START_Y = 60
+    const ROOT_TO_MODULE_GAP = 90
+    const INDENT_LV3 = 48
+    const INDENT_LV4 = 40
+    const VERTICAL_GAP_SCREEN = Math.max(32, tierDimensions.verticalGapScreen || 36)
+    const VERTICAL_GAP_JOURNEY = Math.max(48, tierDimensions.verticalGapJourney || 52)
+    const COLUMN_GAP = Math.max(100, tierDimensions.columnGap || 110)
+    const LV1_GAP = 140
 
     // Collect all nodes and apply custom coordinates if arranged by user
     function collectNodes(item: InternalNode) {
       const finalX = item.node.customX !== undefined ? item.node.customX : item.x
       const finalY = item.node.customY !== undefined ? item.node.customY : Number(item.y.toFixed(2))
+      const finalWidth = item.node.customWidth !== undefined ? item.node.customWidth : item.width
       const isHighlighted = matchedIds.has(item.node.id)
 
       resultNodes.push({
         node: item.node,
         x: finalX,
         y: finalY,
-        width: item.node.customWidth || item.width,
+        width: finalWidth,
         height: item.node.customHeight || item.height,
         subtreeHeight: item.subtreeHeight,
         isCollapsed: item.isCollapsed,
@@ -1083,7 +1538,87 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    collectNodes(root)
+    const allRootInternals = rootNodes.map(buildInternal)
+    let currentClusterStartX = START_X
+
+    for (const root of allRootInternals) {
+      root.y = START_Y
+
+      if (root.children.length === 0 || !root.isExpanded) {
+        root.x = currentClusterStartX
+        root.width = root.node.customWidth || tierDimensions[1].width
+        currentClusterStartX += root.width + LV1_GAP
+      } else {
+        let currentModuleX = currentClusterStartX
+
+        for (const module of root.children) {
+          const modX = currentModuleX
+          // Khoảng cách từ Root Cấp 1 xuống các phân hệ Cấp 2
+          const modY = Math.round(root.y + root.height + ROOT_TO_MODULE_GAP)
+
+          module.x = modX
+          module.y = modY
+
+          rawPairs.push({ parent: root, child: module })
+
+          let columnMaxRight = modX + module.width
+          let currentY = modY + module.height + VERTICAL_GAP_JOURNEY
+
+          const luongs = module.children || []
+          if (luongs.length > 0 && module.isExpanded) {
+            const luongX = modX + INDENT_LV3
+
+            for (const luong of luongs) {
+              luong.x = luongX
+              luong.y = currentY
+              columnMaxRight = Math.max(columnMaxRight, luongX + luong.width)
+              rawPairs.push({ parent: module, child: luong })
+
+              const screens = luong.children || []
+              if (screens.length > 0 && luong.isExpanded) {
+                currentY += luong.height + VERTICAL_GAP_SCREEN
+                const screenX = luongX + INDENT_LV4
+
+                for (const screen of screens) {
+                  screen.x = screenX
+                  screen.y = currentY
+                  columnMaxRight = Math.max(columnMaxRight, screenX + screen.width)
+                  rawPairs.push({ parent: luong, child: screen })
+
+                  currentY += screen.height + VERTICAL_GAP_SCREEN
+                }
+
+                // Khoảng cách từ màn hình cuối cùng tới luồng tính năng tiếp theo
+                currentY += VERTICAL_GAP_JOURNEY - VERTICAL_GAP_SCREEN
+              } else {
+                // Nếu không có màn hình con, khoảng cách tới luồng tiếp theo là VERTICAL_GAP_JOURNEY
+                currentY += luong.height + VERTICAL_GAP_JOURNEY
+              }
+            }
+          }
+
+          const columnWidth = columnMaxRight - modX
+          currentModuleX += columnWidth + COLUMN_GAP
+        }
+
+        // "khi tự chỉnh thì lv1 sẽ kéo dài phủ toàn bộ lv2"
+        const firstMod = root.children[0]
+        const lastMod = root.children[root.children.length - 1]
+
+        if (root.children.length > 1) {
+          root.x = firstMod.x
+          root.width = Math.max(tierDimensions[1].width, (lastMod.x + lastMod.width) - firstMod.x)
+        } else {
+          root.width = Math.max(tierDimensions[1].width, firstMod.width)
+          root.x = firstMod.x - (root.width - firstMod.width) / 2
+        }
+
+        const clusterMaxRight = Math.max(root.x + root.width, currentModuleX - COLUMN_GAP)
+        currentClusterStartX = clusterMaxRight + LV1_GAP
+      }
+
+      collectNodes(root)
+    }
 
     // Build fast lookup by node id for resolved layout positions
     const layoutMap = new Map<string, LayoutNode>()
@@ -1091,66 +1626,228 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       layoutMap.set(rn.node.id, rn)
     }
 
-    // 3. Generate 4-Way Smart Connectors between Ports
+    // Precalculate vertical span for each parent's children to position the FigJam trunk handle right at the midpoint
+    const parentBusSpanMap = new Map<string, { startY: number; maxY: number }>()
+    for (const { parent, child } of rawPairs) {
+      const pLayout = layoutMap.get(parent.node.id)
+      const cLayout = layoutMap.get(child.node.id)
+      if (!pLayout || !cLayout) continue
+      if ((parent.node.tier === 2 && child.node.tier === 3) || (parent.node.tier === 3 && child.node.tier === 4)) {
+        const startY = Math.round(pLayout.y + pLayout.height)
+        const targetY = Math.round(cLayout.y + cLayout.height / 2)
+        const existing = parentBusSpanMap.get(parent.node.id)
+        if (!existing) {
+          parentBusSpanMap.set(parent.node.id, { startY, maxY: targetY })
+        } else {
+          existing.maxY = Math.max(existing.maxY, targetY)
+        }
+      }
+    }
+    const handledParentSet = new Set<string>()
+
+    // Precalculate shared LV1 -> LV2 bus line height (forkY) for each LV1 parent
+    // All LV2 children under the same LV1 parent share the exact same horizontal bus line!
+    const lv1BusYMap = new Map<string, number>()
+    for (const { parent, child } of rawPairs) {
+      if (parent.node.tier === 1 && child.node.tier === 2) {
+        const cLayout = layoutMap.get(child.node.id)
+        if (!cLayout) continue
+        const childTopY = cLayout.y
+        const existing = lv1BusYMap.get(parent.node.id)
+        if (existing === undefined) {
+          lv1BusYMap.set(parent.node.id, childTopY)
+        } else {
+          lv1BusYMap.set(parent.node.id, Math.min(existing, childTopY))
+        }
+      }
+    }
+
+    // 3. Generate Orthogonal Trunk-and-Branch Connectors
     const resultConnectors: LayoutConnector[] = []
     for (const { parent, child } of rawPairs) {
       const pLayout = layoutMap.get(parent.node.id)
       const cLayout = layoutMap.get(child.node.id)
       if (!pLayout || !cLayout) continue
 
-      // Parent center & Child center
+      let fromPort: IAPortPosition = "bottom"
+      let toPort: IAPortPosition = "left"
+      let path = ""
+      const r = 8 // Corner fillet radius
+
+      // CASE 1: LV1 (Root) -> LV2 (Module)
+      // Fork bus line from bottom-center of LV1, branching across unified bus line and dropping into top-center of LV2
+      if (parent.node.tier === 1 && child.node.tier === 2) {
+        fromPort = "bottom"
+        toPort = "top"
+        const p1 = getPortCoord(pLayout.x, pLayout.y, pLayout.width, pLayout.height, "bottom")
+        // Offset 2px outside card top border so the arrowhead sits cleanly outside and touches the border without plunging into it
+        const p2 = getPortCoord(cLayout.x, cLayout.y, cLayout.width, cLayout.height, "top", 2)
+
+        const minChildTopY = lv1BusYMap.get(parent.node.id) ?? cLayout.y
+        // Compute a unified horizontal bus line for all children of this LV1
+        const forkY = Math.round(p1.y + Math.max(25, (minChildTopY - p1.y) * 0.45))
+        const cornerR = Math.min(10, Math.max(2, Math.abs(p2.x - p1.x) / 2))
+
+        if (Math.abs(p1.x - p2.x) < 4) {
+          path = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`
+        } else if (p2.y <= forkY + 15) {
+          // Fallback smooth bezier if node was dragged above the shared bus line
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+          const mag = Math.max(25, Math.min(dist * 0.5, 120))
+          path = `M ${p1.x} ${p1.y} C ${p1.x} ${p1.y + mag}, ${p2.x} ${p2.y - mag}, ${p2.x} ${p2.y}`
+        } else if (p2.x > p1.x) {
+          path = `M ${p1.x} ${p1.y} L ${p1.x} ${forkY - cornerR} Q ${p1.x} ${forkY} ${p1.x + cornerR} ${forkY} L ${p2.x - cornerR} ${forkY} Q ${p2.x} ${forkY} ${p2.x} ${forkY + cornerR} L ${p2.x} ${p2.y}`
+        } else {
+          path = `M ${p1.x} ${p1.y} L ${p1.x} ${forkY - cornerR} Q ${p1.x} ${forkY} ${p1.x - cornerR} ${forkY} L ${p2.x + cornerR} ${forkY} Q ${p2.x} ${forkY} ${p2.x} ${forkY + cornerR} L ${p2.x} ${p2.y}`
+        }
+
+        resultConnectors.push({
+          id: `conn-${parent.node.id}-${child.node.id}`,
+          parentId: parent.node.id,
+          childId: child.node.id,
+          x1: Number(p1.x.toFixed(2)),
+          y1: Number(p1.y.toFixed(2)),
+          x2: Number(p2.x.toFixed(2)),
+          y2: Number(p2.y.toFixed(2)),
+          fromPort,
+          toPort,
+          path,
+          colorTheme: parent.node.colorTheme || child.node.colorTheme,
+          isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+        })
+        continue
+      }
+
+      // CASE 2: LV2 (Module) -> LV3 (Feature Journey)
+      // Trunk drops down from bottom-left of LV2, elbows right (└─>) into exact vertical center of left edge of LV3
+      if (parent.node.tier === 2 && child.node.tier === 3) {
+        fromPort = "bottom"
+        toPort = "left"
+        const defaultOffset = 24
+        const offset = parent.node.customTrunkOffset ?? defaultOffset
+        const trunkX = Math.round(pLayout.x + offset)
+        const startY = Math.round(pLayout.y + pLayout.height)
+        const targetY = Math.round(cLayout.y + cLayout.height / 2)
+        // Offset 2px outside left border so arrowhead sits cleanly outside
+        const targetX = Math.round(cLayout.x - 2)
+
+        if (targetX >= trunkX + r && targetY >= startY + r) {
+          path = `M ${trunkX} ${startY} L ${trunkX} ${targetY - r} Q ${trunkX} ${targetY} ${trunkX + r} ${targetY} L ${targetX} ${targetY}`
+        } else {
+          // Fallback if node was custom-dragged
+          path = `M ${trunkX} ${startY} C ${trunkX} ${targetY}, ${targetX - 30} ${targetY}, ${targetX} ${targetY}`
+        }
+
+        let trunkHandle: LayoutConnector["trunkHandle"] = undefined
+        if (!handledParentSet.has(parent.node.id)) {
+          handledParentSet.add(parent.node.id)
+          const span = parentBusSpanMap.get(parent.node.id)
+          const handleY = span ? Math.round((span.startY + span.maxY) / 2) : Math.round((startY + targetY) / 2)
+          trunkHandle = {
+            x: trunkX,
+            y: handleY,
+            parentId: parent.node.id,
+            currentOffset: offset,
+          }
+        }
+
+        resultConnectors.push({
+          id: `conn-${parent.node.id}-${child.node.id}`,
+          parentId: parent.node.id,
+          childId: child.node.id,
+          x1: trunkX,
+          y1: startY,
+          x2: targetX,
+          y2: targetY,
+          fromPort,
+          toPort,
+          path,
+          colorTheme: parent.node.colorTheme || child.node.colorTheme,
+          isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          trunkHandle,
+        })
+        continue
+      }
+
+      // CASE 3: LV3 (Feature Journey) -> LV4 (Touchpoint Screen)
+      // Trunk drops down from bottom-left of LV3, elbows right (└─>) into exact vertical center of left edge of LV4
+      if (parent.node.tier === 3 && child.node.tier === 4) {
+        fromPort = "bottom"
+        toPort = "left"
+        const defaultOffset = 20
+        const offset = parent.node.customTrunkOffset ?? defaultOffset
+        const subTrunkX = Math.round(pLayout.x + offset)
+        const startY = Math.round(pLayout.y + pLayout.height)
+        const targetY = Math.round(cLayout.y + cLayout.height / 2)
+        // Offset 2px outside left border so arrowhead sits cleanly outside
+        const targetX = Math.round(cLayout.x - 2)
+
+        if (targetX >= subTrunkX + r && targetY >= startY + r) {
+          path = `M ${subTrunkX} ${startY} L ${subTrunkX} ${targetY - r} Q ${subTrunkX} ${targetY} ${subTrunkX + r} ${targetY} L ${targetX} ${targetY}`
+        } else {
+          // Fallback if custom-dragged
+          path = `M ${subTrunkX} ${startY} C ${subTrunkX} ${targetY}, ${targetX - 25} ${targetY}, ${targetX} ${targetY}`
+        }
+
+        let trunkHandle: LayoutConnector["trunkHandle"] = undefined
+        if (!handledParentSet.has(parent.node.id)) {
+          handledParentSet.add(parent.node.id)
+          const span = parentBusSpanMap.get(parent.node.id)
+          const handleY = span ? Math.round((span.startY + span.maxY) / 2) : Math.round((startY + targetY) / 2)
+          trunkHandle = {
+            x: subTrunkX,
+            y: handleY,
+            parentId: parent.node.id,
+            currentOffset: offset,
+          }
+        }
+
+        resultConnectors.push({
+          id: `conn-${parent.node.id}-${child.node.id}`,
+          parentId: parent.node.id,
+          childId: child.node.id,
+          x1: subTrunkX,
+          y1: startY,
+          x2: targetX,
+          y2: targetY,
+          fromPort,
+          toPort,
+          path,
+          colorTheme: parent.node.colorTheme || child.node.colorTheme,
+          isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          trunkHandle,
+        })
+        continue
+      }
+
+      // CASE 4: General Smart Bezier for arbitrary custom nodes or manual wire connections
       const pcx = pLayout.x + pLayout.width / 2
       const pcy = pLayout.y + pLayout.height / 2
       const ccx = cLayout.x + cLayout.width / 2
       const ccy = cLayout.y + cLayout.height / 2
-
       const dx = ccx - pcx
       const dy = ccy - pcy
 
-      // Select ports based on relative positioning
-      let fromPort: IAPortPosition
-      let toPort: IAPortPosition
-
-      // Root (Tier 1) connects to Modules (Tier 2): always bottom to top
-      if (parent.node.tier === 1) {
-        fromPort = "bottom"
-        toPort = "top"
-      } else if (cLayout.x >= pLayout.x + pLayout.width / 2) {
-        // Child is stepped to the right (Module -> Luồng, or Luồng -> Screen)
-        fromPort = "right"
-        toPort = "left"
-      } else if (Math.abs(dx) >= Math.abs(dy)) {
-        if (dx >= 0) {
-          fromPort = "right"
-          toPort = "left"
-        } else {
-          fromPort = "left"
-          toPort = "right"
-        }
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        fromPort = dx >= 0 ? "right" : "left"
+        toPort = dx >= 0 ? "left" : "right"
       } else {
-        if (dy >= 0) {
-          fromPort = "bottom"
-          toPort = "top"
-        } else {
-          fromPort = "top"
-          toPort = "bottom"
-        }
+        fromPort = dy >= 0 ? "bottom" : "top"
+        toPort = dy >= 0 ? "top" : "bottom"
       }
 
       const p1 = getPortCoord(pLayout.x, pLayout.y, pLayout.width, pLayout.height, fromPort)
-      const p2 = getPortCoord(cLayout.x, cLayout.y, cLayout.width, cLayout.height, toPort)
-
+      // Offset 2px outside target port border
+      const p2 = getPortCoord(cLayout.x, cLayout.y, cLayout.width, cLayout.height, toPort, 2)
       const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
-      const mag = Math.max(30, Math.min(dist * 0.5, 120))
+      const mag = Math.max(25, Math.min(dist * 0.5, 120))
       const t1 = getPortTangent(fromPort, mag)
       const t2 = getPortTangent(toPort, mag)
-
       const cp1x = Number((p1.x + t1.vx).toFixed(2))
       const cp1y = Number((p1.y + t1.vy).toFixed(2))
       const cp2x = Number((p2.x + t2.vx).toFixed(2))
       const cp2y = Number((p2.y + t2.vy).toFixed(2))
-
-      const path = `M ${Number(p1.x.toFixed(2))} ${Number(p1.y.toFixed(2))} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${Number(p2.x.toFixed(2))} ${Number(p2.y.toFixed(2))}`
+      path = `M ${Number(p1.x.toFixed(2))} ${Number(p1.y.toFixed(2))} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${Number(p2.x.toFixed(2))} ${Number(p2.y.toFixed(2))}`
 
       resultConnectors.push({
         id: `conn-${parent.node.id}-${child.node.id}`,
@@ -1196,21 +1893,53 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       connectors: resultConnectors,
       bounds: { minX, minY, maxX, maxY },
     }
-  }, [activeTree, searchResult])
+  }, [rootNodes, searchResult, tierDimensions])
+
+  // Sync entire IA trees to Google Sheet Cloud (RAW_SETTINGS)
+  const syncCloud = useCallback(async () => {
+    try {
+      const res = await syncMasterDataToSheet({ ia_trees: trees })
+      return res
+    } catch (err: any) {
+      return { success: false, message: err?.message || "Lỗi đồng bộ Google Sheet" }
+    }
+  }, [trees])
+
+  // Pull latest IA trees from Google Sheet Cloud
+  const pullCloud = useCallback(async () => {
+    try {
+      const res = await fetchMasterDataFromSheet()
+      if (res.success && res.data?.ia_trees) {
+        setTrees((prev) => {
+          const updated = { ...prev, ...res.data!.ia_trees }
+          saveTreesToStorage(updated)
+          return updated
+        })
+        return { success: true, message: "Đã tải cấu trúc IA mới nhất từ Google Sheet!" }
+      }
+      return { success: false, message: res.message || "Không có dữ liệu IA trên Cloud" }
+    } catch (err: any) {
+      return { success: false, message: err?.message || "Lỗi tải dữ liệu Cloud" }
+    }
+  }, [])
 
   return {
     activeTree,
+    rootNodes,
     products,
     selectedProductId,
     setSelectedProductId,
     toggleCollapse,
     addChildNode,
+    addRootNode,
     addChildInDirection,
     connectNodes,
     createConnectedNodeAt,
     updateNode,
     updateNodePosition,
+    updateMultipleNodePositions,
     updateNodeDimensions,
+    updateTrunkOffset,
     autoAlignTree,
     deleteNode,
     resetToDefault,
@@ -1223,5 +1952,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     metrics,
     findNode,
     requestsMap,
+    trees,
+    syncCloud,
+    pullCloud,
+    tierDimensions,
+    setTierDimensions,
   }
 }

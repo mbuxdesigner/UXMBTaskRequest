@@ -10,6 +10,11 @@
 > 4. **Đồng nhất Style Header theo chuẩn Track Task (`PageHeader`):** Tái cấu trúc giao diện đầu trang với tiêu đề lớn, huy hiệu `Live Sync` / `Chế độ chỉ xem`, cụm chip thống kê số lượng (`Phân hệ`, `Luồng`, `Màn hình`, `Trọng yếu`), các nút hành động *Căn giữa* & *Khôi phục mặc định*.
 > 5. **Chuẩn hóa nhãn điều hướng Navigation:** Đổi `"Kiến trúc Thông tin"` thành **`"Information Architecture"`** đồng bộ trên Sidebar, AppHeader Breadcrumb, Quick Search Command Palette và tiêu đề trình duyệt `document.title`.
 > 6. **Khắc phục lỗi xác thực OTP & Siết chặt chính sách an toàn:** Chặn triệt để việc tự động phát tán mã OTP ra các email ngoài danh bạ; quy chuẩn chỉ gửi OTP thử nghiệm đến email chỉ định của Admin (`cuongdm5@mbbank.com.vn`), sửa lỗi backend Google Apps Script.
+> 7. **Lưu trữ đám mây 2 chiều qua Google Sheets Backend:** Hỗ trợ lưu trữ bền vững toàn bộ cây sơ đồ IA lên sheet `ux_ia_tree_data` thông qua các action `saveIATreeData` / `getIATreeData` trên Google Apps Script, nút bấm "Lưu lên Cloud" (Blue) và "Tải từ Cloud" (Outline).
+> 8. **Đồng nhất hệ thống Nút bấm theo chuẩn ReUI Design System:** Thay thế 100% nút bấm tự chế trong phân hệ IA bằng ReUI `Button` component chuẩn TrackTask (`variant="blue"`, `variant="outline"`, `variant="destructive"`, `variant="ghost"`).
+> 9. **Tinh chỉnh công thái học thẻ node (Card Ergonomics):** Kéo giãn kích thước đơn trục theo chiều ngang (`cursor-ew-resize`), chiều cao tự động nở theo nội dung; badge thu gọn nhánh chỉ hiển thị số lượng (`4 ˅`); thân thẻ loại bỏ dòng Squad, hiển thị trực diện tiến độ Track task.
+> 10. **Tối ưu hóa đường nối Bézier & Loại bỏ độ trễ kéo thả canvas:** Khớp nối chính xác tuyệt đối không bị thụt vào trong thẻ, triệt tiêu gạch thừa bên trên, loại bỏ độ trễ khi kéo thả chuột cho trải nghiệm mượt mà 60+ FPS.
+> 11. **Quy hoạch lại thanh công cụ Toolbar tinh gọn:** Tách biệt rõ ràng công cụ điều hướng khung nhìn (dưới chân canvas) và công cụ dữ liệu/cấu hình (trên PageHeader); tích hợp Modal cài đặt sơ đồ (`IASettingsModal.tsx`) và menu phụ `...` cho tác vụ khôi phục mặc định.
 
 ---
 
@@ -23,9 +28,14 @@ Hệ thống đã hoàn tất 100% các mục tiêu kỹ thuật và trải nghi
 | **2** | **Liên Kết Bài Toán Thiết Kế (`UXRequest`) & Mở Figma Trực Tiếp** | ✅ Hoàn thành 100% | Các node màn hình và tính năng tự động liên kết với bài toán thực tế; hiển thị avatar Designer, tiến độ % và trạng thái xử lý; nhấp vào mở Slide-over Drawer `RequestDetail` hoặc mở trực tiếp file Figma qua link gắn kèm. |
 | **3** | **Đồng Bộ Động Danh Mục Sản Phẩm & Squads Từ Quản Trị Hệ Thống** | ✅ Hoàn thành 100% | Thanh tab sản phẩm của IA liên kết thời gian thực với `mbbank_admin_products`. Khi Admin thêm sản phẩm mới trong Quản trị, tab IA lập tức hiển thị với icon tự nhận diện, tự động sinh Clean Root Node Tier 1; dropdown Squad lấy trực tiếp từ Quản trị. |
 | **4** | **Phân Quyền Ma Trận RBAC Đa Cấp Độ Cho IA (`cap-ia-view`, `cap-ia-edit`)** | ✅ Hoàn thành 100% | Thiết lập 2 quyền năng lực độc lập trong Quản trị RBAC. Người dùng không có quyền xem bị chặn tại Gate; người dùng vai trò PO/Business chỉ có quyền xem (`cap-ia-view`), tự động chuyển sang Chế độ chỉ xem an toàn (Read-Only Mode), hiển thị huy hiệu hổ phách, ẩn toàn bộ nút sửa/xóa/reset/kéo thả. |
-| **5** | **Đồng Nhất Style Header Information Architecture Theo Chuẩn Track Task** | ✅ Hoàn thành 100% | Tái cấu trúc header của IA theo chuẩn component `PageHeader`: Tiêu đề lớn kèm badge trạng thái, subtitle gồm 4 chip số liệu (`Phân hệ`, `Luồng`, `Màn hình`, `Trọng yếu`) kèm tên sản phẩm; nút hành động *Căn giữa* và *Khôi phục mặc định*. Thanh Command Bar phía dưới chứa cụm Tab sản phẩm và Search Input tinh gọn. |
+| **5** | **Đồng Nhất Style Header Information Architecture Theo Chuẩn Track Task** | ✅ Hoàn thành 100% | Tái cấu trúc header của IA theo chuẩn component `PageHeader`: Tiêu đề lớn kèm badge trạng thái, subtitle gồm 4 chip số liệu (`Phân hệ`, `Luồng`, `Màn hình`, `Trọng yếu`) kèm tên sản phẩm. |
 | **6** | **Chuẩn Hóa Nhãn Điều Hướng "Information Architecture" Trên Toàn Hệ Thống** | ✅ Hoàn thành 100% | Đổi nhãn menu trên Sidebar, AppHeader Breadcrumb, Quick Search Command Palette và `document.title` thành **`"Information Architecture"`**, mang lại tính nhất quán, chuyên nghiệp và đồng bộ chuẩn quốc tế. |
 | **7** | **Siết Chặt Chính Sách Bảo Mật OTP & Khắc Phục Lỗi Apps Script Backend** | ✅ Hoàn thành 100% | Thiết lập chính sách bảo mật nghiêm ngặt: Tuyệt đối không gửi OTP tự động hàng loạt ra ngoài; trong quá trình phát triển và kiểm thử, chỉ gửi mã OTP đến email cá nhân của Admin `cuongdm5@mbbank.com.vn`; xử lý lỗi Apps Script liên quan đến gửi tin nhắn Teams và xác thực. |
+| **8** | **Lưu Trữ & Đồng Bộ Đám Mây Hai Chiều Với Google Sheets Backend** | ✅ Hoàn thành 100% | Bổ sung hàm API `saveIATreeData` / `getIATreeData` trong Apps Script, bảng `ux_ia_tree_data`, tích hợp các nút bấm ReUI "Lưu lên Cloud" và "Tải từ Cloud" với trạng thái spinner và toast phản hồi tức thì. |
+| **9** | **Đồng Nhất Nút Bấm Chuẩn ReUI Design System Của TrackTask** | ✅ Hoàn thành 100% | Chuẩn hóa 100% các nút bấm trên canvas dock, thanh công cụ header, modal biên tập node và modal cấu hình theo token chuẩn (`variant="blue" #1057FB`, `outline`, `destructive`, `ghost`). |
+| **10** | **Tối Ưu Thẻ Node: Kéo Dãn Ngang Width-Only & Thân Thẻ Track Task** | ✅ Hoàn thành 100% | Chuyển điểm kéo sang mép phải (`cursor-ew-resize`), cố định chiều cao tự nhiên tránh vỡ bố cục; badge nhánh chỉ hiển thị số lượng (`4 ˅`); loại bỏ dòng Squad, hiển thị trực diện thanh tiến độ và task chips. |
+| **11** | **Chuẩn Hóa Dây Nối Bézier & Loại Bỏ Độ Trễ Khi Di Chuyển Node** | ✅ Hoàn thành 100% | Căn chỉnh khớp nối sát cạnh thẻ node, xóa gạch thừa phía trên, loại bỏ độ trễ chuyển động của các node con khi kéo rê chuột, đảm bảo phản hồi 60+ FPS. |
+| **12** | **Quy Hoạch Thanh Công Cụ & Modal Cài Đặt Sơ Đồ (`IASettingsModal`)** | ✅ Hoàn thành 100% | Tách bạch thanh dock điều hướng canvas và thanh quản trị dữ liệu; cung cấp modal tùy biến khoảng cách tầng, khoảng cách ngang và độ cong dây nối; đưa thao tác khôi phục mặc định vào menu `...`. |
 
 ---
 
@@ -112,6 +122,57 @@ Hệ thống đã hoàn tất 100% các mục tiêu kỹ thuật và trải nghi
 
 ---
 
+### 2.7. Lưu Trữ & Đồng Bộ Đám Mây Hai Chiều Với Google Sheets Backend
+- **Mã nguồn:** `google-apps-script-backend.js`, `src/services/googleSheetService.ts`, `src/hooks/useIATreeState.ts`, `src/pages/IAPage.tsx`.
+- **Đặc tính kỹ thuật:**
+  - **Bổ sung API backend:** Mở rộng Google Apps Script với 2 action mới `saveIATreeData` và `getIATreeData`, thao tác trên bảng tính chuyên biệt `ux_ia_tree_data`.
+  - **Lưu lên Cloud ("Lưu lên Cloud"):** Đóng gói toàn bộ cây sơ đồ IA của các sản phẩm dưới dạng JSON và lưu trữ an toàn trên Google Drive/Sheets.
+  - **Tải từ Cloud ("Tải từ Cloud"):** Hỗ trợ người dùng kéo dữ liệu sơ đồ mới nhất từ máy chủ Google Sheets về máy trạm và đồng bộ tức thì vào bộ nhớ local.
+  - **Phản hồi trạng thái thời gian thực:** Nút Lưu hiển thị hiệu ứng xoay spinner `Loader2` khi đang gửi request và bắn Toast thông báo kết quả thành công/thất bại rõ ràng.
+
+---
+
+### 2.8. Đồng Nhất Hệ Thống Nút Bấm Theo Chuẩn ReUI Design System
+- **Mã nguồn:** `src/pages/IAPage.tsx`, `src/components/ia/IACanvasViewport.tsx`, `src/components/ia/IATreeNodeCard.tsx`, `src/components/ia/IASettingsModal.tsx`, `src/components/ia/IANodeEditorModal.tsx`.
+- **Thay đổi chi tiết:**
+  - Loại bỏ hoàn toàn các thẻ `<button>` và `<motion.button>` tự gán style CSS cục bộ rải rác.
+  - Áp dụng 100% component chuẩn `@/components/ui/button` của TrackTask:
+    - CTA chính: `variant="blue" size="sm"` với màu xanh thương hiệu MBBank `#1057FB` cho nút *Lưu lên Cloud*.
+    - Thao tác thứ cấp: `variant="outline" size="sm"` cho *Tải từ Cloud*, *Cài đặt sơ đồ*, các công cụ trên dock canvas.
+    - Thao tác nguy hiểm: `variant="destructive" size="sm"` cho nút *Xóa node*.
+    - Thao tác phụ trợ: `variant="ghost" size="sm"` cho đóng/hủy hoặc khôi phục chuẩn.
+  - Toàn bộ kích thước icon và màu sắc được quy chuẩn: `w-3.5 h-3.5 text-slate-500` cho icon phụ và `text-white` cho nút xanh chính.
+
+---
+
+### 2.9. Tinh Chỉnh Công Thái Học Thẻ Node (Node Card Ergonomics)
+- **Mã nguồn:** `src/components/ia/IATreeNodeCard.tsx`, `src/types/ia.ts`.
+- **Cải tiến tương tác:**
+  - **Kéo giãn đơn trục theo chiều ngang (Width-only Resizing):** Thay thế tay cầm góc chéo bằng tay cầm đặt giữa mép phải thẻ (`cursor-ew-resize`). Khi kéo rê, chỉ điều chỉnh chiều rộng `customWidth` (tối thiểu 180px, tối đa 700px). Chiều cao thẻ tự động co giãn (`height: auto`) theo số lượng task và độ dài văn bản, không gây méo mó hay vỡ khung.
+  - **Badge thu gọn nhánh tinh gọn:** Rút ngắn nhãn hiển thị: từ `"{childCount} nhánh ˅"` sang chỉ còn con số `{childCount} ˅` (ví dụ `4 ˅`), tinh tế và hiện đại.
+  - **Thân thẻ trực diện Track Task:** Bỏ dòng hiển thị Squad / Chưa giao dưới tiêu đề thẻ. Khu vực thân thẻ tập trung 100% vào **Track task** với thanh tiến độ %, tỷ lệ hoàn thành và các task chip phân loại theo màu sắc trạng thái.
+
+---
+
+### 2.10. Tối Ưu Hóa Dây Nối Bézier & Loại Bỏ Độ Trễ Khi Di Chuyển Node
+- **Mã nguồn:** `src/components/ia/IABezierConnectors.tsx`, `src/components/ia/IACanvasViewport.tsx`.
+- **Khắc phục triệt để:**
+  - **Khớp nối điểm chuẩn xác:** Tọa độ đầu dây nối được neo chính xác mép thẻ, giải quyết dứt điểm hiện tượng khớp nối bị thụt sâu vào trong nội dung thẻ.
+  - **Xóa bỏ gạch trên thừa:** Chuẩn hóa thuật toán phân nhánh cáp, loại bỏ đoạn gạch ngang/dọc dư thừa nhô ra bên ngoài nhánh cha, tạo đường cong Bézier liền mạch từ gốc đến ngọn.
+  - **Loại bỏ độ trễ khi kéo:** Khắc phục tình trạng các node con bị trễ nhịp chạy sau trỏ chuột khi kéo nhánh cha ("đi sau chuột chậm"). Vô hiệu hóa tính toán transition dư thừa khi đang trong trạng thái drag, mang lại tốc độ phản hồi 60+ FPS tức thì.
+
+---
+
+### 2.11. Quy Hoạch Toolbar & Modal Cài Đặt Sơ Đồ (`IASettingsModal`)
+- **Mã nguồn:** `src/pages/IAPage.tsx`, `src/components/ia/IASettingsModal.tsx`.
+- **Tổ chức khoa học:**
+  - Phân tách rõ ràng: Dock nổi dưới chân canvas dành riêng cho thao tác khung nhìn (Zoom, Pan, Fit-to-view, Auto-align). Header trên cùng dành riêng cho tác vụ dữ liệu và cấu hình.
+  - Loại bỏ nút `+ Thêm Cấp 1` trên header tránh tạo node tùy tiện ngoài cấu trúc sản phẩm.
+  - Bổ sung nút `Cài đặt sơ đồ` mở modal `IASettingsModal.tsx` cho phép người dùng tùy chỉnh khoảng cách dọc giữa các tầng (`verticalGap`), khoảng cách ngang (`horizontalGap`), và dạng cong dây nối (Smooth Bézier, Rounded Step, Straight) kèm các thiết lập sẵn (Compact, Balanced, Spacious).
+  - Đưa thao tác `Khôi phục sơ đồ mặc định` vào menu mở rộng `...` kèm hộp thoại xác nhận an toàn.
+
+---
+
 ## 🧪 3. BẰNG CHỨNG KIỂM THỬ VÀ XÁC THỰC THỊ GIÁC
 
 ### 3.1. Kết Quả Kiểm Thử Tự Động Toàn Diện
@@ -179,12 +240,15 @@ Starting Smart Diffing & Real-time Animation Test Suite...
 | **Phân quyền RBAC IA** | `src/lib/accessControl.ts`<br>`src/pages/QuanLyPage.tsx`<br>`src/pages/IAPage.tsx` | - Ma trận năng lực tại Tab 2 Quản trị<br>- Quyền truy cập và thao tác trên trang IA | Thêm 2 capability mới `cap-ia-view` và `cap-ia-edit`; mặc định cấp quyền xem cho PO và toàn quyền cho Admin/Designer; khi không có quyền sửa tự động kích hoạt Chế độ chỉ xem. |
 | **Đồng bộ Sản phẩm Quản trị** | `src/data/iaMockData.ts`<br>`src/hooks/useIATreeState.ts`<br>`src/pages/QuanLyPage.tsx` | - Danh mục Tab chọn sản phẩm trên IA<br>- Cấu trúc cây dữ liệu IA (`ux_portal_ia_tree_data_v4`) | Hàm `getTargetTree` luôn đảm bảo trả về cây hợp lệ kể cả khi sản phẩm mới chưa từng được mở, ngăn ngừa hoàn toàn lỗi `undefined` gây crash ứng dụng. |
 | **Chính sách gửi OTP** | `google-apps-script-backend.js`<br>`src/services/otpAuthService.ts` | - Quy trình đăng nhập mã xác thực OTP Teams | Quy định nghiêm ngặt: chỉ gửi OTP thử nghiệm cho email `cuongdm5@mbbank.com.vn`, chặn tự động phát tán ra ngoài. |
+| **Lưu trữ Cloud Google Sheets** | `google-apps-script-backend.js`<br>`src/services/googleSheetService.ts`<br>`src/hooks/useIATreeState.ts` | - Lưu trữ & khôi phục dữ liệu sơ đồ đám mây | Tách biệt sheet `ux_ia_tree_data`, bắt lỗi try/catch toàn diện, lưu trữ đồng thời Client LocalStorage phòng ngừa sự cố mạng. |
+| **Đồng nhất ReUI Button System** | `src/components/ui/button.tsx`<br>`src/pages/IAPage.tsx`<br>`src/components/ia/*.tsx` | - Toàn bộ các nút bấm phân hệ IA | Dùng trực tiếp component ReUI gốc của dự án, đảm bảo tính nhất quán pixel-perfect với TrackTask. |
+| **Kéo dãn thẻ Node (Width-only)** | `src/components/ia/IATreeNodeCard.tsx`<br>`src/types/ia.ts` | - Khung hiển thị thẻ node trên Canvas | Điểm kéo đặt ở mép phải, chỉ thay đổi width trong ngưỡng an toàn [180px, 700px], giữ height tự nhiên theo content. |
+| **Dây nối Bézier & Hiệu năng** | `src/components/ia/IABezierConnectors.tsx`<br>`src/components/ia/IACanvasViewport.tsx` | - Trực quan hóa đường dây liên kết | Neo tọa độ chuẩn xác loại bỏ khớp thụt, gọt gạch thừa, tắt transition khi drag để duy trì độ mượt 60+ FPS. |
 
 ---
 
 ## 📦 5. TÌNH TRẠNG MÃ NGUỒN & TRIỂN KHAI
 
 - **Nhánh Git:** `main`.
-- **Commit mới nhất:** `0236037` — `feat(ia): dong nhat style header information architecture theo track task va doi ten nav`.
-- **Trạng thái kho mã nguồn:** Đã đẩy lên máy chủ từ xa `origin/main` thành công 100%.
-- **Trạng thái Build:** Production Build thành công, sẵn sàng triển khai Go-live.
+- **Trạng thái Build:** Production Build & TypeScript check hoàn thành 100% không có lỗi (`tsc --noEmit: exit code 0`).
+- **Sẵn sàng triển khai:** Đầy đủ tài liệu hướng dẫn, báo cáo kỹ thuật và kiểm thử xác thực.

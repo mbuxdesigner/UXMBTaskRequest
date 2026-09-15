@@ -97,22 +97,28 @@ export function getAdminIAProducts(): IAProductInfo[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const activeList = parsed.filter((p: any) => p && p.status !== "Inactive" && p.name)
         if (activeList.length > 0) {
-          return activeList.map((p: any) => {
-            const id = p.id || `prod-${p.code || p.name}`
+          const seenIds = new Set<string>()
+          const prods: IAProductInfo[] = []
+          for (const p of activeList) {
+            const rawId = (p.id && String(p.id).trim()) || `prod-${p.code || p.name || ""}`.toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+            const id = rawId || `prod-${Math.random().toString(36).slice(2, 6)}`
+            if (seenIds.has(id)) continue
+            seenIds.add(id)
             const name = p.name
             const code = p.code || p.name.toUpperCase().replace(/\s+/g, "_")
             const description = p.description || `Sản phẩm số MBBank: ${name}`
             const color = p.color || "blue"
             const iconName = getProductIconName(name, code)
-            return {
+            prods.push({
               id,
               name,
               code,
               description,
               color,
               iconName,
-            }
-          })
+            })
+          }
+          if (prods.length > 0) return prods
         }
       }
     }
@@ -123,20 +129,23 @@ export function getAdminIAProducts(): IAProductInfo[] {
 }
 
 /**
- * Đọc danh mục Squads động từ Quản trị hệ thống
+ * Đọc danh mục Squads động từ Quản trị hệ thống (chỉ lấy đúng squad nội bộ thực tế, không lấy dữ liệu lạ)
  */
 export function getAdminSquadsList(): string[] {
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       const raw =
-        window.localStorage.getItem("mbbank_admin_squads") ||
-        window.localStorage.getItem("ux_portal_squads_v2")
+        window.localStorage.getItem("ux_portal_squads_v2") ||
+        window.localStorage.getItem("mbbank_admin_squads")
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const names = parsed.map((s: any) => s.name).filter(Boolean)
+          const names = parsed
+            .map((s: any) => (typeof s === "string" ? s : s?.name))
+            .filter((n: any) => Boolean(n && typeof n === "string" && n.trim()))
+            .map((n: string) => n.trim())
           if (names.length > 0) {
-            return Array.from(new Set([...names, ...STANDARD_SQUADS]))
+            return Array.from(new Set(names))
           }
         }
       }
@@ -146,19 +155,32 @@ export function getAdminSquadsList(): string[] {
 }
 
 /**
- * Danh sách các Squads chuẩn trong hệ thống UXMB
+ * Danh sách các Squads chuẩn thực tế trong hệ thống UXMB (QuanLyPage)
  */
 export const STANDARD_SQUADS: string[] = [
-  "Lending & Vay vốn",
-  "Cards & Thanh toán số",
-  "Transfer & Payment",
-  "eSaving & Tiết kiệm",
-  "Core Banking & Tài khoản",
-  "Digital Wealth & Đầu tư",
-  "BaaS & Open API",
-  "Biz Lending",
-  "Payroll & Quản lý lương",
+  "Onboarding",
+  "Base",
+  "Upsale",
+  "Partnership",
+  "Billing",
+  "CSOP",
+  "Junior",
+  "VietQR",
+  "Sub",
+  "Gold",
+  "Lending",
+  "eSaving",
+  "Core",
+  "Card",
+  "TransferD",
+  "Trái phiếu",
+  "Chứng chỉ quỹ",
+  "BeeRich",
+  "Visual",
   "Design System MB",
+  "Nội bộ",
+  "AI",
+  "BaaS",
 ]
 
 // ---------------------------------------------------------------------------

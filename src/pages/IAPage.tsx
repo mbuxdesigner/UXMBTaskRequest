@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react"
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { motion } from "framer-motion"
-import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye } from "lucide-react"
+import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye, CloudUpload, CloudDownload, RefreshCw, LayoutGrid, Plus, SlidersHorizontal, MoreHorizontal } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import { springs } from "@/lib/motion"
+import { Button } from "@/components/ui/button"
 import PageHeader from "@/components/common/PageHeader"
 import { useIATreeState } from "@/hooks/useIATreeState"
 import { useCanvasTransform } from "@/hooks/useCanvasTransform"
 import IAToolbar from "@/components/ia/IAToolbar"
 import IACanvasViewport from "@/components/ia/IACanvasViewport"
 import IANodeEditorModal, { ModalMode } from "@/components/ia/IANodeEditorModal"
+import IASettingsModal from "@/components/ia/IASettingsModal"
 import RequestDetail from "@/components/track/RequestDetail"
 import { IANode } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
@@ -44,17 +47,21 @@ export default function IAPage() {
 
   const {
     activeTree,
+    rootNodes,
     products,
     selectedProductId,
     setSelectedProductId,
     toggleCollapse,
     addChildNode,
+    addRootNode,
     addChildInDirection,
     connectNodes,
     createConnectedNodeAt,
     updateNode,
     updateNodePosition,
+    updateMultipleNodePositions,
     updateNodeDimensions,
+    updateTrunkOffset,
     autoAlignTree,
     deleteNode,
     resetToDefault,
@@ -66,6 +73,11 @@ export default function IAPage() {
     bounds,
     metrics,
     requestsMap,
+    trees,
+    syncCloud,
+    pullCloud,
+    tierDimensions,
+    setTierDimensions,
   } = useIATreeState("app-mbbank")
 
   const {
@@ -85,6 +97,21 @@ export default function IAPage() {
   // Modal dialog states for Add / Edit / Delete / Reset
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [targetNode, setTargetNode] = useState<IANode | null>(null)
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false)
+  const [isPullingCloud, setIsPullingCloud] = useState<boolean>(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setIsMoreMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Drawer state for linked UXRequest
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
@@ -97,24 +124,6 @@ export default function IAPage() {
   const activeProduct = useMemo(() => {
     return products.find((p) => p.id === selectedProductId) || products[0]
   }, [products, selectedProductId])
-
-  // Count domain modules (Tier 2)
-  const domainsCount = useMemo(() => {
-    return activeTree.children ? activeTree.children.length : 0
-  }, [activeTree])
-
-  // Count critical paths
-  const criticalPathsCount = useMemo(() => {
-    let count = 0
-    function traverse(node: IANode) {
-      if (node.isCriticalPath) count++
-      if (node.children) {
-        node.children.forEach(traverse)
-      }
-    }
-    traverse(activeTree)
-    return count
-  }, [activeTree])
 
   // Fit to View trigger
   const handleFitToView = useCallback(() => {
@@ -132,6 +141,12 @@ export default function IAPage() {
   const handleOpenAdd = useCallback((parent: IANode) => {
     if (!canEdit) return
     setTargetNode(parent)
+    setModalMode("add")
+  }, [canEdit])
+
+  const handleOpenAddRoot = useCallback(() => {
+    if (!canEdit) return
+    setTargetNode(null)
     setModalMode("add")
   }, [canEdit])
 
@@ -157,6 +172,49 @@ export default function IAPage() {
     setModalMode(null)
     setTargetNode(null)
   }, [])
+
+  // Cloud Sync Handler
+  const handleSyncCloud = useCallback(async () => {
+    if (!canEdit) return
+    setIsSyncingCloud(true)
+    try {
+      const ok = await syncCloud()
+      if (ok) {
+        toast.success("Đã đồng bộ sơ đồ IA lên Cloud thành công!")
+      } else {
+        toast.error("Không thể đồng bộ lên Cloud. Vui lòng thử lại!")
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Lỗi đồng bộ Cloud")
+    } finally {
+      setIsSyncingCloud(false)
+    }
+  }, [canEdit, syncCloud])
+
+  // Cloud Pull Handler
+  const handlePullCloud = useCallback(async () => {
+    setIsPullingCloud(true)
+    try {
+      const ok = await pullCloud()
+      if (ok) {
+        toast.success("Đã tải dữ liệu sơ đồ IA mới nhất từ Cloud!")
+        setTimeout(() => handleFitToView(), 150)
+      } else {
+        toast.info("Không có dữ liệu mới hơn trên Cloud hoặc đã khớp.")
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Lỗi tải từ Cloud")
+    } finally {
+      setIsPullingCloud(false)
+    }
+  }, [pullCloud, handleFitToView])
+
+  // Auto-align Tree Handler
+  const handleAutoAlign = useCallback(() => {
+    autoAlignTree()
+    toast.success("Đã căn chuẩn lại toàn bộ vị trí sơ đồ sitemap!")
+    setTimeout(() => handleFitToView(), 100)
+  }, [autoAlignTree, handleFitToView])
 
   // Camera Pan-to-Node helper for search match navigation
   const panToNode = useCallback(
@@ -248,81 +306,78 @@ export default function IAPage() {
             </span>
           )
         }
-        subtitle={
-          <div data-testid="ia-metrics-badge" className="flex min-w-0 flex-wrap items-center gap-2.5 pt-0.5">
-            {/* Phân hệ */}
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-xs font-normal text-slate-500">Phân hệ</span>
-              <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {domainsCount}
-              </span>
-            </div>
-
-            {/* Luồng */}
-            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-              <span className="truncate text-xs font-normal text-slate-500">Luồng</span>
-              <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {metrics.featureCount}
-              </span>
-            </div>
-
-            {/* Màn hình */}
-            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-              <span className="truncate text-xs font-normal text-slate-500">Màn hình</span>
-              <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {metrics.screenCount}
-              </span>
-            </div>
-
-            {/* Trọng yếu */}
-            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-              <span className="truncate text-xs font-normal text-slate-500">Trọng yếu</span>
-              <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {criticalPathsCount}
-              </span>
-            </div>
-
-            {/* Active Product & Description */}
-            {activeProduct && (
-              <div className="hidden lg:flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="text-xs font-semibold text-slate-700">{activeProduct.name}:</span>
-                <span className="text-xs text-slate-500 truncate max-w-[280px]">{activeProduct.description}</span>
-              </div>
-            )}
-          </div>
-        }
         actions={
           <div className="flex items-center gap-2">
-            {/* Nút Căn giữa sơ đồ */}
-            <motion.button
-              type="button"
-              data-testid="ia-fit-view-btn"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.94 }}
-              transition={springs.snappy}
-              onClick={handleFitToView}
-              title="Căn giữa sơ đồ toàn màn hình"
-              className="h-9 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+            {/* Nút Cài đặt sơ đồ */}
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="ia-settings-btn"
+              onClick={() => setIsSettingsOpen(true)}
+              title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
             >
-              <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
-              <span>Căn giữa</span>
-            </motion.button>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Cài đặt sơ đồ</span>
+            </Button>
 
-            {/* Nút Khôi phục mặc định (chỉ hiển thị khi có quyền edit) */}
+            {/* Nút Tải từ Cloud */}
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="ia-pull-cloud-btn"
+              onClick={handlePullCloud}
+              disabled={isPullingCloud}
+              title="Tải sơ đồ IA từ Google Sheets Cloud"
+            >
+              <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
+              <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
+            </Button>
+
+            {/* Nút Lưu lên Cloud (chỉ khi có quyền edit) - Primary Action */}
             {canEdit && (
-              <motion.button
-                type="button"
-                data-testid="ia-reset-default-btn"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.94 }}
-                transition={springs.snappy}
-                onClick={handleOpenReset}
-                title="Khôi phục cấu trúc cây mặc định"
-                className="h-9 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+              <Button
+                variant="blue"
+                size="sm"
+                data-testid="ia-sync-cloud-btn"
+                onClick={handleSyncCloud}
+                disabled={isSyncingCloud}
+                title="Lưu đồng bộ sơ đồ IA lên Google Sheets Cloud"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span>Khôi phục mặc định</span>
-              </motion.button>
+                <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
+                <span>{isSyncingCloud ? "Đang lưu..." : "Lưu lên Cloud"}</span>
+              </Button>
+            )}
+
+            {/* Menu tùy chọn thêm (...) */}
+            {canEdit && (
+              <div className="relative" ref={moreMenuRef}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="ia-more-menu-btn"
+                  onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                  title="Tùy chọn khác"
+                  className="px-2"
+                >
+                  <MoreHorizontal className="w-4 h-4 text-slate-500" />
+                </Button>
+
+                {isMoreMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false)
+                        handleOpenReset()
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-left transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Khôi phục sơ đồ mặc định</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         }
@@ -370,8 +425,10 @@ export default function IAPage() {
         onDeleteNode={handleOpenDelete}
         onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
         onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
+        onMultipleNodesDrag={canEdit ? updateMultipleNodePositions : undefined}
         onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
         onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
+        onTrunkDrag={canEdit ? updateTrunkOffset : undefined}
         onNodePositionChange={canEdit ? updateNodePosition : undefined}
         onAutoAlign={canEdit ? autoAlignTree : undefined}
         readOnly={!canEdit}
@@ -385,7 +442,11 @@ export default function IAPage() {
         isOpen={modalMode !== null}
         onClose={handleCloseModal}
         onConfirmAdd={(parentId, data) => {
-          addChildNode(parentId, data)
+          if (!parentId) {
+            addRootNode(data)
+          } else {
+            addChildNode(parentId, data)
+          }
           handleFitToView()
         }}
         onConfirmEdit={(nodeId, data) => {
@@ -400,7 +461,18 @@ export default function IAPage() {
         }}
       />
 
-      {/* 5. Request Detail Slide-Over Drawer Drilldown */}
+      {/* 5. Cài đặt kích thước độ dài các cấp */}
+      <IASettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentSettings={tierDimensions}
+        onSave={(newSettings) => {
+          setTierDimensions(newSettings)
+          setTimeout(() => handleFitToView(), 100)
+        }}
+      />
+
+      {/* 6. Request Detail Slide-Over Drawer Drilldown */}
       <RequestDetail
         request={selectedRequest}
         open={Boolean(selectedRequest)}

@@ -289,6 +289,7 @@ function doGet(e) {
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: masterData["USERS_LIST"] || null,
         form_config: masterData["FORM_CONFIG"] || null,
+        ia_trees: masterData["IA_TREES_DATA"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -417,6 +418,7 @@ function doPost(e) {
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: masterData["USERS_LIST"] || null,
         form_config: masterData["FORM_CONFIG"] || null,
+        ia_trees: masterData["IA_TREES_DATA"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -2728,6 +2730,7 @@ function handleSyncMasterData(data) {
   if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
   if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
   if (data.form_config || data.formConfig) configsToSave["FORM_CONFIG"] = data.form_config || data.formConfig;
+  if (data.ia_trees || data.iaTrees) configsToSave["IA_TREES_DATA"] = data.ia_trees || data.iaTrees;
 
   const existingKeys = {};
   const lastRow = rawSettings.getLastRow();

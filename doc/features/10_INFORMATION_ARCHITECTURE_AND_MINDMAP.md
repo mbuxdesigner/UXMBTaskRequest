@@ -164,41 +164,70 @@ Giao diện đầu trang Information Architecture được chuẩn hóa 100% the
 
 ---
 
-## 💾 8. CƠ CHẾ LƯU TRỮ VÀ KHÔI PHỤC DỮ LIỆU
+## 💾 8. CƠ CHẾ LƯU TRỮ ĐA TẦNG VÀ ĐỒNG BỘ ĐÁM MÂY (CLOUD PERSISTENCE & LOCALSTORAGE)
 
-- **Khóa lưu trữ LocalStorage:** `ux_portal_ia_tree_data_v4`.
-- **Cấu trúc lưu trữ:**
-  ```json
-  {
-    "version": 4,
-    "lastModified": 1789442000000,
-    "trees": {
-      "app-mbbank": { "id": "node-app-mb-root", "name": "App MBBank", "children": [...] },
-      "biz-mb": { "id": "node-biz-mb-root", "name": "Biz MB", "children": [...] },
-      "prod-credit-cards": { "id": "node-prod-credit-cards-root", "name": "Thẻ tín dụng số", "children": [...] }
-    }
-  }
-  ```
-- **Khôi phục mặc định theo sản phẩm (Isolated Reset):** Khi người dùng bấm "Khôi phục mặc định", hệ thống chỉ tái thiết lập cây của sản phẩm đang chọn, tuyệt đối không làm ảnh hưởng đến cấu trúc cây của các sản phẩm khác.
+Hệ thống triển khai cơ chế lưu trữ kết hợp bền vững giữa Client (LocalStorage) và Serverless Cloud (Google Sheets via Apps Script):
+
+1. **Khóa lưu trữ LocalStorage:** `ux_portal_ia_tree_data_v4`.
+   - Lưu trữ tức thì (zero-latency) mỗi khi có thay đổi trên canvas (di chuyển node, co giãn, thêm/sửa/xóa).
+   - Đảm bảo trạng thái công việc được giữ nguyên ngay cả khi tải lại trang hoặc mất kết nối mạng.
+2. **Đồng bộ Đám mây qua Google Sheets Backend (`saveIATreeData` / `getIATreeData`):**
+   - **Mã nguồn:** `google-apps-script-backend.js`, `src/services/googleSheetService.ts`, `src/hooks/useIATreeState.ts`.
+   - **Hành động "Lưu lên Cloud":** Đóng gói toàn bộ cây sơ đồ IA của các sản phẩm, gửi request lên Google Apps Script để ghi bền vững vào sheet `ux_ia_tree_data`.
+   - **Hành động "Tải từ Cloud":** Cho phép kéo dữ liệu chuẩn mới nhất từ Cloud về client và đồng bộ lại vào cây sơ đồ hiện tại.
+   - **Chỉ báo trạng thái trực quan:** Nút lưu hiển thị trạng thái đang đồng bộ (`Loader2` spinner), gửi Toast thông báo thành công hoặc cảnh báo lỗi chi tiết.
+3. **Khôi phục mặc định theo sản phẩm (Isolated Reset):** Khi người dùng bấm "Khôi phục mặc định", hệ thống chỉ tái thiết lập cây của sản phẩm đang chọn, tuyệt đối không làm ảnh hưởng đến cấu trúc cây của các sản phẩm khác.
 
 ---
 
-## 🧪 9. BỘ KIỂM THỬ TỰ ĐỘNG (AUTOMATED TEST SUITE)
+## 📐 9. TINH CHỈNH TRẢI NGHIỆM THẺ NODE (NODE CARD ERGONOMICS)
 
-Hệ thống cung cấp kịch bản kiểm thử E2E toàn diện thông qua Chrome DevTools Protocol (`scratch/test-ia-header-style.mjs` và `scratch/test-ia-admin-products-sync.mjs`):
+Thẻ phân cấp cây (`IATreeNodeCard.tsx`) được thiết kế lại tối ưu cho hiển thị thông tin ngân hàng và thao tác kéo giãn:
 
-```bash
-# Kiểm tra đồng nhất style Header và nhãn Navigation
-node scratch/test-ia-header-style.mjs
+1. **Kéo giãn thẻ đơn trục theo chiều ngang (Width-only Resizing):**
+   - **Vị trí tay cầm kéo:** Đặt tinh tế ở giữa mép phải thẻ (`cursor-ew-resize`), thay thế hoàn toàn cho tay cầm góc chéo cũ.
+   - **Bảo toàn chiều cao tự nhiên:** Khi kéo sang trái/phải, hệ thống chỉ cập nhật chiều rộng (`customWidth: 180px - 700px`). Chiều cao thẻ hoàn toàn tự động co giãn (`height: auto`) theo số dòng văn bản và các task chip bên trong, ngăn chặn triệt để hiện tượng vỡ bố cục, thừa khoảng trắng dọc hoặc bị che khuất nội dung.
+2. **Badge thu gọn nhánh tinh gọn (Streamlined Branch Badge):**
+   - Tối giản hóa nội dung badge thu gọn: chỉ hiển thị số lượng nhánh con (ví dụ: `4 ˅`), loại bỏ chữ "nhánh" để tiết kiệm diện tích và tăng tính cô đọng.
+3. **Thân thẻ trực quan — Trọng tâm Track Task:**
+   - Loại bỏ dòng thông tin Squad/Chưa giao rườm rà dưới tiêu đề thẻ.
+   - Đi thẳng vào khu vực **Track task**: hiển thị thanh tiến độ %, tỷ lệ hoàn thành (`x/y tasks`) và các chip bài toán thiết kế liên kết với màu sắc trạng thái tương ứng.
 
-# Kiểm tra đồng bộ động sản phẩm từ Quản trị
-node scratch/test-ia-admin-products-sync.mjs
-```
+---
 
-### Các tiêu chí xác thực:
-- [x] Nhãn Sidebar và AppHeader hiển thị chính xác `"Information Architecture"`.
-- [x] PageHeader render đầy đủ tiêu đề, badge, 4 metric chips và các nút actions.
-- [x] Read-Only mode kích hoạt đúng badge `Chế độ chỉ xem` và ẩn nút khôi phục mặc định.
-- [x] Sản phẩm tạo mới từ Quản trị lập tức xuất hiện trên thanh tab IA.
-- [x] Thêm, sửa, xóa node và lưu trữ bền vững qua tải lại trang.
-- [x] Lệnh `npm run build` đạt 0 lỗi TypeScript.
+## ⚡ 10. TỐI ƯU HÓA ĐƯỜNG NỐI BÉZIER & HIỆU NĂNG CANVAS
+
+1. **Khớp nối chuẩn xác & Triệt tiêu gạch thừa (`IABezierConnectors.tsx`):**
+   - **Khắc phục điểm khớp thụt:** Tọa độ neo của đường nối được khớp nối chính xác đến từng pixel với cổng kết nối của thẻ node, loại bỏ hoàn toàn lỗi dây bị thụt sâu vào trong nền thẻ.
+   - **Xóa bỏ gạch trên thừa:** Chuẩn hóa thuật toán phân nhánh cáp: loại bỏ đoạn gạch ngang/dọc dư thừa nhô ra bên ngoài nhánh cha, tạo đường cong Bézier mềm mại, liền mạch từ gốc đến ngọn.
+   - **Loại bỏ cụm nối rối:** Triệt tiêu các đoạn connector stubs trung gian gây rối mắt, giữ sơ đồ luôn thoáng đãng và thanh lịch.
+2. **Tối ưu hóa độ trễ khi kéo thả (`IACanvasViewport.tsx`):**
+   - Triệt tiêu hiện tượng các node con và đường dây chạy theo chuột bị trễ nhịp ("đi sau chuột chậm").
+   - Vô hiệu hóa transition trễ trong suốt thời gian kéo thả con trỏ (`pointer-events: none` trên SVG connectors và tắt hiệu ứng animation transition của layout frame khi drag), mang lại cảm giác phản hồi 1:1 tức thì ở tần số quét 60+ FPS.
+
+---
+
+## 🎨 11. ĐỒNG NHẤT HỆ THỐNG NÚT BẤM THEO REUI DESIGN SYSTEM & QUY HOẠCH TOOLBAR
+
+1. **Chuẩn hóa toàn diện với ReUI `Button` Component:**
+   - Thay thế toàn bộ thẻ nút bấm tự chế bằng component `@/components/ui/button` chuẩn của hệ thống TrackTask:
+     - Nút hành động chính: `variant="blue" size="sm"` (`#1057FB`) cho thao tác *"Lưu lên Cloud"*.
+     - Nút thứ cấp: `variant="outline" size="sm"` cho *"Tải từ Cloud"*, *"Cài đặt sơ đồ"*, các bộ chọn preset layout.
+     - Nút cảnh báo: `variant="destructive" size="sm"` cho *"Xóa node"*.
+     - Nút phụ trợ: `variant="ghost" size="sm"` cho các thao tác phụ.
+   - Kích thước icon chuẩn hóa `w-3.5 h-3.5 text-slate-500` đồng bộ toàn trang.
+2. **Quy hoạch phân tách ranh giới công cụ (Separation of Concerns):**
+   - **Thanh công cụ Canvas Dock (Nổi dưới chân màn hình):** Tập trung 100% vào điều hướng khung nhìn: Chế độ Chọn (`V`) / Pan (`H`), Căn chuẩn sơ đồ (`LayoutGrid`), Căn giữa Fit-to-view (`Maximize2`), Zoom In/Out và Zoom Reset.
+   - **Thanh công cụ PageHeader (Trên cùng):** Chuyên trách quản lý dữ liệu & cấu hình: `Tải từ Cloud`, `Lưu lên Cloud`, `Cài đặt sơ đồ` (mở modal cấu hình khoảng cách và dạng dây `IASettingsModal.tsx`), và menu hành động mở rộng `...` (chứa `Khôi phục sơ đồ mặc định` có xác nhận).
+   - **Loại bỏ nút dư thừa:** Bỏ nút `Thêm Cấp 1` trên header theo yêu cầu người dùng để tránh tạo node cấp 1 bừa bãi ngoài quy hoạch sản phẩm.
+
+---
+
+## 🧪 12. BỘ KIỂM THỬ TỰ ĐỘNG & ĐẢM BẢO CHẤT LƯỢNG (QA & TEST SUITE)
+
+Hệ thống cung cấp kịch bản kiểm thử toàn diện:
+- Kiểm tra toàn bộ mã nguồn với TypeScript: `npx tsc --noEmit` đạt 0 lỗi.
+- Kiểm thử E2E giao diện Header và Navigation: `node scratch/test-ia-header-style.mjs`.
+- Kiểm thử đồng bộ động sản phẩm Quản trị: `node scratch/test-ia-admin-products-sync.mjs`.
+- Unit test suite: `npm test` đạt 19/19 test cases passed.
+- Production Build: `npm run build` hoàn thành xuất sắc trong < 500ms.
