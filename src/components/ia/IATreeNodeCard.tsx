@@ -43,6 +43,8 @@ interface IATreeNodeCardProps {
   onDeleteNode: (node: IANode) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
   onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
+  onNodeResize?: (nodeId: string, width: number, height: number, persist?: boolean) => void
+  onNodeResizeEnd?: (nodeId: string, width: number, height: number, persist?: boolean) => void
 }
 
 function getTouchpointIcon(type?: IATouchpointType) {
@@ -84,44 +86,97 @@ function getStatusBadgeStyle(status?: string) {
   }
 }
 
-function getColorThemeStyles(theme?: string) {
-  switch (theme) {
-    case "emerald":
+function getTierThemeStyles(tier: IATier, customTheme?: string) {
+  // If user selected an explicit custom theme
+  if (customTheme && customTheme !== "blue") {
+    switch (customTheme) {
+      case "emerald":
+        return {
+          cardBg: "bg-gradient-to-b from-emerald-50/70 via-emerald-50/20 to-white",
+          border: "border-emerald-200/90 hover:border-emerald-400 shadow-xs shadow-emerald-500/5",
+          portBorder: "border-emerald-500 hover:bg-emerald-50",
+          tierBadge: "bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200/80",
+          tierText: tier === 1 ? "Cấp 1 · Sản phẩm" : tier === 2 ? "Cấp 2 · Phân hệ" : tier === 3 ? "Cấp 3 · Luồng" : "Cấp 4 · Màn hình",
+          accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        }
+      case "purple":
+      case "violet":
+        return {
+          cardBg: "bg-gradient-to-b from-purple-50/70 via-purple-50/20 to-white",
+          border: "border-purple-200/90 hover:border-purple-400 shadow-xs shadow-purple-500/5",
+          portBorder: "border-purple-500 hover:bg-purple-50",
+          tierBadge: "bg-purple-100 text-purple-800 font-semibold border border-purple-200/80",
+          tierText: tier === 1 ? "Cấp 1 · Sản phẩm" : tier === 2 ? "Cấp 2 · Phân hệ" : tier === 3 ? "Cấp 3 · Luồng" : "Cấp 4 · Màn hình",
+          accent: "bg-purple-50 text-purple-700 border-purple-200",
+        }
+      case "amber":
+        return {
+          cardBg: "bg-gradient-to-b from-amber-50/70 via-amber-50/20 to-white",
+          border: "border-amber-200/90 hover:border-amber-400 shadow-xs shadow-amber-500/5",
+          portBorder: "border-amber-500 hover:bg-amber-50",
+          tierBadge: "bg-amber-100 text-amber-800 font-semibold border border-amber-200/80",
+          tierText: tier === 1 ? "Cấp 1 · Sản phẩm" : tier === 2 ? "Cấp 2 · Phân hệ" : tier === 3 ? "Cấp 3 · Luồng" : "Cấp 4 · Màn hình",
+          accent: "bg-amber-50 text-amber-700 border-amber-200",
+        }
+      case "rose":
+        return {
+          cardBg: "bg-gradient-to-b from-rose-50/70 via-rose-50/20 to-white",
+          border: "border-rose-200/90 hover:border-rose-400 shadow-xs shadow-rose-500/5",
+          portBorder: "border-rose-500 hover:bg-rose-50",
+          tierBadge: "bg-rose-100 text-rose-800 font-semibold border border-rose-200/80",
+          tierText: tier === 1 ? "Cấp 1 · Sản phẩm" : tier === 2 ? "Cấp 2 · Phân hệ" : tier === 3 ? "Cấp 3 · Luồng" : "Cấp 4 · Màn hình",
+          accent: "bg-rose-50 text-rose-700 border-rose-200",
+        }
+      case "cyan":
+        return {
+          cardBg: "bg-gradient-to-b from-cyan-50/70 via-cyan-50/20 to-white",
+          border: "border-cyan-200/90 hover:border-cyan-400 shadow-xs shadow-cyan-500/5",
+          portBorder: "border-cyan-500 hover:bg-cyan-50",
+          tierBadge: "bg-cyan-100 text-cyan-800 font-semibold border border-cyan-200/80",
+          tierText: tier === 1 ? "Cấp 1 · Sản phẩm" : tier === 2 ? "Cấp 2 · Phân hệ" : tier === 3 ? "Cấp 3 · Luồng" : "Cấp 4 · Màn hình",
+          accent: "bg-cyan-50 text-cyan-700 border-cyan-200",
+        }
+    }
+  }
+
+  // Chia màu mặc định theo Level (Lv 1, Lv 2, Lv 3, Lv 4) chuẩn nhận diện MBBank
+  switch (tier) {
+    case 1:
       return {
-        border: "border-emerald-200 hover:border-emerald-400",
+        cardBg: "bg-gradient-to-b from-blue-50/80 via-blue-50/25 to-white",
+        border: "border-blue-300 hover:border-blue-500 shadow-xs shadow-blue-500/10",
+        portBorder: "border-blue-600 text-blue-600 hover:bg-blue-50 hover:border-blue-700",
+        tierBadge: "bg-blue-600 text-white font-bold shadow-xs",
+        tierText: "Cấp 1 · Sản phẩm",
+        accent: "bg-blue-50 text-blue-700 border-blue-200",
+      }
+    case 2:
+      return {
+        cardBg: "bg-gradient-to-b from-indigo-50/70 via-indigo-50/20 to-white",
+        border: "border-indigo-200 hover:border-indigo-400 shadow-xs shadow-indigo-500/5",
+        portBorder: "border-indigo-500 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-700",
+        tierBadge: "bg-indigo-100 text-indigo-800 font-semibold border border-indigo-200/80",
+        tierText: "Cấp 2 · Phân hệ",
+        accent: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      }
+    case 3:
+      return {
+        cardBg: "bg-gradient-to-b from-emerald-50/70 via-emerald-50/20 to-white",
+        border: "border-emerald-200 hover:border-emerald-400 shadow-xs shadow-emerald-500/5",
+        portBorder: "border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-700",
+        tierBadge: "bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200/80",
+        tierText: "Cấp 3 · Luồng",
         accent: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        portBorder: "border-emerald-500 hover:bg-emerald-50",
       }
-    case "purple":
-      return {
-        border: "border-purple-200 hover:border-purple-400",
-        accent: "bg-purple-50 text-purple-700 border-purple-200",
-        portBorder: "border-purple-500 hover:bg-purple-50",
-      }
-    case "amber":
-      return {
-        border: "border-amber-200 hover:border-amber-400",
-        accent: "bg-amber-50 text-amber-700 border-amber-200",
-        portBorder: "border-amber-500 hover:bg-amber-50",
-      }
-    case "rose":
-      return {
-        border: "border-rose-200 hover:border-rose-400",
-        accent: "bg-rose-50 text-rose-700 border-rose-200",
-        portBorder: "border-rose-500 hover:bg-rose-50",
-      }
-    case "cyan":
-      return {
-        border: "border-cyan-200 hover:border-cyan-400",
-        accent: "bg-cyan-50 text-cyan-700 border-cyan-200",
-        portBorder: "border-cyan-500 hover:bg-cyan-50",
-      }
-    case "blue":
+    case 4:
     default:
       return {
-        border: "border-slate-200 hover:border-blue-400",
-        accent: "bg-blue-50 text-blue-700 border-blue-200",
-        portBorder: "border-blue-500 hover:bg-blue-50",
+        cardBg: "bg-gradient-to-b from-amber-50/70 via-amber-50/20 to-white",
+        border: "border-amber-200 hover:border-amber-400 shadow-xs shadow-amber-500/5",
+        portBorder: "border-amber-500 text-amber-600 hover:bg-amber-50 hover:border-amber-700",
+        tierBadge: "bg-amber-100 text-amber-800 font-semibold border border-amber-200/80",
+        tierText: "Cấp 4 · Màn hình",
+        accent: "bg-amber-50 text-amber-700 border-amber-200",
       }
   }
 }
@@ -142,6 +197,8 @@ function IATreeNodeCardComponent({
   onDeleteNode,
   onNodeDrag,
   onNodeDragEnd,
+  onNodeResize,
+  onNodeResizeEnd,
 }: IATreeNodeCardProps) {
   const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
   const [isDragging, setIsDragging] = useState(false)
@@ -208,14 +265,14 @@ function IATreeNodeCardComponent({
   const effectiveStatus = node.status || linkedRequest?.status
   const effectiveProgress = node.progress ?? linkedRequest?.progress
 
-  const themeStyles = getColorThemeStyles(node.colorTheme)
+  const themeStyles = getTierThemeStyles(node.tier, node.colorTheme)
 
   // Drag and drop arranger logic
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     const target = e.target as HTMLElement
-    // Ignore clicks on buttons, inputs, links, or connection port add actions
-    if (target.closest("button, a, input, textarea, [data-port-action]")) {
+    // Ignore clicks on buttons, inputs, links, connection ports, or resize handle
+    if (target.closest("button, a, input, textarea, [data-port-action], [data-resize-handle]")) {
       return
     }
 
@@ -277,6 +334,75 @@ function IATreeNodeCardComponent({
     window.addEventListener("pointercancel", handlePointerUp)
   }
 
+  // Interactive Node Resizing (Bottom-Right corner drag)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<{ startX: number; startY: number; initWidth: number; initHeight: number } | null>(null)
+
+  const handleResizePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+
+    setIsResizing(true)
+    const currentScale = Math.max(0.1, scale)
+    const currentW = width
+    const currentH = layoutNode.height
+
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initWidth: currentW,
+      initHeight: currentH,
+    }
+
+    let rafId: number | null = null
+    let latestClientX = e.clientX
+    let latestClientY = e.clientY
+
+    const handleResizePointerMove = (moveEvt: PointerEvent) => {
+      if (!resizeRef.current) return
+      latestClientX = moveEvt.clientX
+      latestClientY = moveEvt.clientY
+
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null
+          const active = resizeRef.current
+          if (!active) return
+          const dx = (latestClientX - active.startX) / currentScale
+          const dy = (latestClientY - active.startY) / currentScale
+          const nextW = Math.max(180, Math.min(650, Math.round(active.initWidth + dx)))
+          const nextH = Math.max(90, Math.min(550, Math.round(active.initHeight + dy)))
+          onNodeResize?.(node.id, nextW, nextH)
+        })
+      }
+    }
+
+    const handleResizePointerUp = (upEvt: PointerEvent) => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      window.removeEventListener("pointermove", handleResizePointerMove)
+      window.removeEventListener("pointerup", handleResizePointerUp)
+      window.removeEventListener("pointercancel", handleResizePointerUp)
+      setIsResizing(false)
+      const endResize = resizeRef.current
+      resizeRef.current = null
+      if (endResize) {
+        const dx = (upEvt.clientX - endResize.startX) / currentScale
+        const dy = (upEvt.clientY - endResize.startY) / currentScale
+        const finalW = Math.max(180, Math.min(650, Math.round(endResize.initWidth + dx)))
+        const finalH = Math.max(90, Math.min(550, Math.round(endResize.initHeight + dy)))
+        onNodeResizeEnd?.(node.id, finalW, finalH)
+      }
+    }
+
+    window.addEventListener("pointermove", handleResizePointerMove)
+    window.addEventListener("pointerup", handleResizePointerUp)
+    window.addEventListener("pointercancel", handleResizePointerUp)
+  }
+
   const handleCardClick = (e: React.MouseEvent) => {
     if (linkedRequest && onOpenDetail) {
       e.stopPropagation()
@@ -291,23 +417,9 @@ function IATreeNodeCardComponent({
     }
   }
 
-  // Tier Theme Styling
-  let tierBadgeText = "Cấp 4"
-  let tierBadgeClass = "bg-slate-100 text-slate-600"
-
-  if (node.tier === 1) {
-    tierBadgeText = "Cấp 1 · Sản phẩm"
-    tierBadgeClass = "bg-blue-600 text-white font-bold"
-  } else if (node.tier === 2) {
-    tierBadgeText = "Cấp 2 · Phân hệ"
-    tierBadgeClass = "bg-slate-100 text-slate-700 font-semibold"
-  } else if (node.tier === 3) {
-    tierBadgeText = "Cấp 3 · Luồng"
-    tierBadgeClass = "bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/50"
-  } else if (node.tier === 4) {
-    tierBadgeText = "Cấp 4 · Màn hình"
-    tierBadgeClass = "bg-amber-50 text-amber-700 font-semibold border border-amber-200/50"
-  }
+  // Tier Theme Styling (Level 1: Blue, Level 2: Indigo, Level 3: Emerald, Level 4: Amber)
+  const tierBadgeText = themeStyles.tierText
+  const tierBadgeClass = themeStyles.tierBadge
 
   const highlightClass = isHighlighted
     ? "ring-2 ring-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.6)] border-blue-500"
@@ -321,7 +433,7 @@ function IATreeNodeCardComponent({
     ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
     : "cursor-grab"
 
-  const transitionClass = isDragging ? "transition-none" : "transition-all duration-150"
+  const transitionClass = isDragging || isResizing ? "transition-none" : "transition-all duration-150"
 
   return (
     <motion.div
@@ -329,8 +441,8 @@ function IATreeNodeCardComponent({
       data-tier={node.tier}
       data-node-id={node.id}
       data-is-drop-target={isWireDropTarget ? "true" : undefined}
-      layoutId={isDragging ? undefined : `ia-card-motion-${node.id}`}
-      transition={isDragging ? { duration: 0 } : springs.snappy}
+      layoutId={isDragging || isResizing ? undefined : `ia-card-motion-${node.id}`}
+      transition={isDragging || isResizing ? { duration: 0 } : springs.snappy}
       onPointerDown={handlePointerDown}
       style={{
         position: "absolute",
@@ -338,12 +450,13 @@ function IATreeNodeCardComponent({
         top: y,
         width,
         minHeight: layoutNode.height,
-        zIndex: isDragging ? 40 : isWireDropTarget ? 35 : isHighlighted ? 20 : 10,
+        height: node.customHeight ? layoutNode.height : undefined,
+        zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-xl border bg-white p-3 text-left ${transitionClass} select-none ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass}`}
+      className={`group relative rounded-xl border p-3 text-left flex flex-col justify-between ${transitionClass} select-none ${themeStyles.cardBg} ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass}`}
       onClick={handleCardClick}
-      {...(isDragging ? {} : tactileProps.card)}
+      {...(isDragging || isResizing ? {} : tactileProps.card)}
     >
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
@@ -691,6 +804,28 @@ function IATreeNodeCardComponent({
             )}
           </button>
         )}
+      </div>
+
+      {/* Interactive Bottom-Right Corner Resize Handle */}
+      <div
+        data-testid={`ia-resize-handle-${node.id}`}
+        data-resize-handle="true"
+        onPointerDown={handleResizePointerDown}
+        title="Kéo dãn kích thước node"
+        className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100 z-30 select-none"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3 h-3 rotate-0 pointer-events-none"
+        >
+          <circle cx="13" cy="13" r="1.5" />
+          <circle cx="13" cy="8" r="1.5" />
+          <circle cx="8" cy="13" r="1.5" />
+          <circle cx="13" cy="3" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="3" cy="13" r="1.5" />
+        </svg>
       </div>
     </motion.div>
   )

@@ -22,6 +22,7 @@ export default function IAPage() {
     createConnectedNodeAt,
     updateNode,
     updateNodePosition,
+    updateNodeDimensions,
     autoAlignTree,
     deleteNode,
     resetToDefault,
@@ -231,6 +232,8 @@ export default function IAPage() {
         onDeleteNode={handleOpenDelete}
         onNodeDrag={(id, x, y) => updateNodePosition(id, x, y, false)}
         onNodeDragEnd={(id, x, y) => updateNodePosition(id, x, y, true)}
+        onNodeResize={(id, w, h) => updateNodeDimensions(id, w, h, false)}
+        onNodeResizeEnd={(id, w, h) => updateNodeDimensions(id, w, h, true)}
         onNodePositionChange={updateNodePosition}
         onAutoAlign={autoAlignTree}
       />

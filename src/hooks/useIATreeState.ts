@@ -52,6 +52,7 @@ export interface UseIATreeStateReturn {
   ) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
   updateNodePosition: (nodeId: string, x: number, y: number, persist?: boolean) => void
+  updateNodeDimensions: (nodeId: string, width: number, height: number, persist?: boolean) => void
   autoAlignTree: () => void
   deleteNode: (nodeId: string) => void
   resetToDefault: () => void
@@ -446,6 +447,42 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     })
   }, [selectedProductId])
 
+  // Update Node Dimensions (from Canvas Interactive Resize)
+  const updateNodeDimensions = useCallback((nodeId: string, width: number, height: number, persist: boolean = true) => {
+    setTrees((prevTrees) => {
+      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+
+      function updateDimensionsInTree(node: IANode): IANode {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            customWidth: Math.round(width),
+            customHeight: Math.round(height),
+          }
+        }
+        if (node.children && node.children.length > 0) {
+          let childChanged = false
+          const newChildren = node.children.map((c) => {
+            const updated = updateDimensionsInTree(c)
+            if (updated !== c) childChanged = true
+            return updated
+          })
+          if (childChanged) {
+            return { ...node, children: newChildren }
+          }
+        }
+        return node
+      }
+
+      const clone = updateDimensionsInTree(current)
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      if (persist) {
+        saveTreesToStorage(nextTrees)
+      }
+      return nextTrees
+    })
+  }, [selectedProductId])
+
   // Auto-align Tree: clears custom positions to restore computed tidy tree
   const autoAlignTree = useCallback(() => {
     setTrees((prevTrees) => {
@@ -732,6 +769,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     // 1. First pass: Build internal hierarchy with effective collapse state
     function buildInternal(node: IANode): InternalNode {
       const dim = TIER_DIMENSIONS[node.tier] || { width: 220, height: 76, x: 40 }
+      const nodeWidth = node.customWidth || dim.width
+      const nodeHeight = node.customHeight || dim.height
       const hasChildren = Boolean(node.children && node.children.length > 0)
       const childCount = node.children ? node.children.length : 0
 
@@ -748,16 +787,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       // Compute subtree height
-      let subtreeHeight = dim.height + VERTICAL_GAP
+      let subtreeHeight = nodeHeight + VERTICAL_GAP
       if (children.length > 0) {
         const childrenHeight = children.reduce((sum, c) => sum + c.subtreeHeight, 0)
-        subtreeHeight = Math.max(dim.height + VERTICAL_GAP, childrenHeight)
+        subtreeHeight = Math.max(nodeHeight + VERTICAL_GAP, childrenHeight)
       }
 
       return {
         node,
-        width: dim.width,
-        height: dim.height,
+        width: nodeWidth,
+        height: nodeHeight,
         x: dim.x,
         y: 0,
         subtreeHeight,
@@ -902,8 +941,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         node: item.node,
         x: finalX,
         y: finalY,
-        width: item.width,
-        height: item.height,
+        width: item.node.customWidth || item.width,
+        height: item.node.customHeight || item.height,
         subtreeHeight: item.subtreeHeight,
         isCollapsed: item.isCollapsed,
         isExpanded: item.isExpanded,
@@ -1045,6 +1084,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     createConnectedNodeAt,
     updateNode,
     updateNodePosition,
+    updateNodeDimensions,
     autoAlignTree,
     deleteNode,
     resetToDefault,

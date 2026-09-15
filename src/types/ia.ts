@@ -49,6 +49,8 @@ export interface IANode {
   children?: IANode[]
   customX?: number        // Tọa độ X do người dùng kéo thả sắp xếp trên Canvas
   customY?: number        // Tọa độ Y do người dùng kéo thả sắp xếp trên Canvas
+  customWidth?: number    // Chiều rộng do người dùng kéo dãn tùy chỉnh trên Canvas
+  customHeight?: number   // Chiều cao do người dùng kéo dãn tùy chỉnh trên Canvas
   squad?: string          // Squad phụ trách (Lending & Vay vốn, Cards, ...)
   taskIds?: string[]      // Danh sách các mã task liên kết với tính năng này
   hasActiveTask?: boolean // Trạng thái có task đang làm hay không
