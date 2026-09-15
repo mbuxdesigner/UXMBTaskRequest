@@ -1358,7 +1358,7 @@ export async function syncTeamMembersToSheet(
 }
 
 /**
- * Đồng bộ Master Data (Squads, Products, Phases) lên Google Sheet
+ * Đồng bộ Master Data (Squads, Products, Phases, Form Config) lên Google Sheet
  */
 export async function syncMasterDataToSheet(params: {
   squads?: any[]
@@ -1369,6 +1369,7 @@ export async function syncMasterDataToSheet(params: {
   audit_logs?: any[]
   rbac?: any
   nav_items?: any
+  form_config?: any
   actorEmail?: string
 }): Promise<{ success: boolean; message: string }> {
   const config = getGoogleSheetConfig()
@@ -1423,7 +1424,7 @@ export async function syncMasterDataToSheet(params: {
 }
 
 /**
- * Tải Master Data (Squads, Products, Phases, Status Rules, Audit Logs, RBAC) từ Google Sheet về máy
+ * Tải Master Data (Squads, Products, Phases, Status Rules, Audit Logs, RBAC, Form Config) từ Google Sheet về máy
  */
 export async function fetchMasterDataFromSheet(): Promise<{
   success: boolean
@@ -1438,6 +1439,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
     nav_items?: any
     selections?: any
     team_members?: any[]
+    form_config?: any
   }
 }> {
   const config = getGoogleSheetConfig()
@@ -1473,6 +1475,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
             nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
             selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
             team_members: json.team_members || json.master_data?.USERS_LIST,
+            form_config: json.form_config || json.master_data?.FORM_CONFIG,
           },
         }
       }
@@ -1510,6 +1513,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
           nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
           selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
           team_members: json.team_members || json.master_data?.USERS_LIST,
+          form_config: json.form_config || json.master_data?.FORM_CONFIG,
         },
       }
     }
@@ -1524,6 +1528,41 @@ export async function fetchMasterDataFromSheet(): Promise<{
       success: false,
       message: `Lỗi kết nối Google Sheet: ${errorMsg}`,
     }
+  }
+}
+
+/**
+ * Đồng bộ cấu hình Form tiếp nhận yêu cầu UX lên Google Sheet (RAW_SETTINGS -> FORM_CONFIG)
+ */
+export async function syncFormConfigToSheet(
+  formConfig: any,
+  actorEmail?: string
+): Promise<{ success: boolean; message: string }> {
+  return syncMasterDataToSheet({
+    form_config: formConfig,
+    actorEmail,
+  })
+}
+
+/**
+ * Tải cấu hình Form tiếp nhận yêu cầu UX từ Google Sheet (RAW_SETTINGS -> FORM_CONFIG)
+ */
+export async function fetchFormConfigFromSheet(): Promise<{
+  success: boolean
+  message: string
+  formConfig?: any
+}> {
+  const res = await fetchMasterDataFromSheet()
+  if (res.success && res.data?.form_config) {
+    return {
+      success: true,
+      message: "Tải cấu hình Form từ Google Sheet thành công!",
+      formConfig: res.data.form_config,
+    }
+  }
+  return {
+    success: false,
+    message: res.message || "Chưa có cấu hình Form trong RAW_SETTINGS trên Google Sheet.",
   }
 }
 

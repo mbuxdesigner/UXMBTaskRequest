@@ -288,6 +288,7 @@ function doGet(e) {
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: masterData["USERS_LIST"] || null,
+        form_config: masterData["FORM_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -415,6 +416,7 @@ function doPost(e) {
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: masterData["USERS_LIST"] || null,
+        form_config: masterData["FORM_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -2725,6 +2727,7 @@ function handleSyncMasterData(data) {
   if (data.rbac) configsToSave["RBAC_CONFIG"] = data.rbac;
   if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
   if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
+  if (data.form_config || data.formConfig) configsToSave["FORM_CONFIG"] = data.form_config || data.formConfig;
 
   const existingKeys = {};
   const lastRow = rawSettings.getLastRow();

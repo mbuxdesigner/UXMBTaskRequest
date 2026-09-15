@@ -93,6 +93,7 @@ import {
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
 import FormConfigTab from "@/components/admin/FormConfigTab"
+import { getFormConfig, saveFormConfig } from "@/config/formConfig"
 import { TestExam } from "@/types/testAssessment"
 import {
   getRoleNavConfig,
@@ -1775,6 +1776,7 @@ export default function QuanLyPage() {
           rbac: rbacRolesPermissions,
           nav_items: navConfig,
           audit_logs: auditLogs,
+          form_config: getFormConfig(),
         })
       ])
 
@@ -1895,6 +1897,10 @@ export default function QuanLyPage() {
             localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(merged))
             return merged
           })
+        }
+        if (res.data.form_config && typeof res.data.form_config === "object") {
+          saveFormConfig(res.data.form_config)
+          updatedCount++
         }
 
         toast.success(`Đã tải & đồng bộ thành công toàn bộ dữ liệu từ Google Sheet về máy!`)

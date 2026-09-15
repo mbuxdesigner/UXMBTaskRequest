@@ -16,6 +16,7 @@ import {
   resetFormConfig,
   FORM_CONFIG_EVENT_NAME,
 } from "@/config/formConfig"
+import { syncFormConfigToSheet, fetchFormConfigFromSheet } from "@/services/googleSheetService"
 import {
   SlidersHorizontal,
   Save,
@@ -46,6 +47,8 @@ import {
   Lock,
   ArrowRight,
   Info,
+  Cloud,
+  CloudDownload,
 } from "lucide-react"
 
 interface FormConfigTabProps {
@@ -59,6 +62,7 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("fields")
   const [isDirty, setIsDirty] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [isPulling, setIsPulling] = useState<boolean>(false)
 
   // Sub-tab Options states for new option inline input
   const [newRequestType, setNewRequestType] = useState({ label: "", description: "" })
@@ -133,25 +137,78 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
     }))
   }
 
-  // Save changes
-  const handleSave = () => {
+  // Save changes (Local + Google Sheet RAW_SETTINGS -> FORM_CONFIG)
+  const handleSave = async () => {
     setIsSaving(true)
+    const toastId = toast.loading("Đang lưu cấu hình Form & đồng bộ lên Google Sheet...")
     try {
+      // 1. Lưu LocalStorage & dispatch event cập nhật form tức thời
       saveFormConfig(config)
       setIsDirty(false)
-      toast.success("Lưu cấu hình Form thành công", "Các thay đổi đã được áp dụng ngay lập tức cho màn hình Gửi yêu cầu.")
+
+      // 2. Đồng bộ lên Google Sheet RAW_SETTINGS -> FORM_CONFIG
+      const res = await syncFormConfigToSheet(config)
+      toast.dismiss(toastId)
+
+      if (res.success) {
+        toast.success(
+          "Lưu cấu hình Form thành công",
+          "Đã lưu vào bộ nhớ trình duyệt & đồng bộ lên Google Sheet (RAW_SETTINGS)."
+        )
+      } else {
+        toast.warning(
+          "Đã lưu nội bộ",
+          res.message || "Không thể đồng bộ lên Google Sheet (vui lòng kiểm tra script URL)."
+        )
+      }
+
       if (onLogAction) {
         onLogAction(
           "Cập nhật Cấu hình Form",
-          "Form Yêu cầu UX",
-          `Lưu phiên bản cấu hình v${config.version} (${config.fields.filter((f) => f.enabled).length}/${config.fields.length} trường hoạt động)`,
+          "RAW_SETTINGS",
+          `Lưu phiên bản cấu hình v${config.version} (${config.fields.filter((f) => f.enabled).length}/${config.fields.length} trường hoạt động) lên Google Sheet`,
           "workflow"
         )
       }
-    } catch {
-      toast.error("Lỗi khi lưu cấu hình", "Không thể ghi dữ liệu cấu hình vào bộ nhớ trình duyệt.")
+    } catch (err: any) {
+      toast.dismiss(toastId)
+      toast.error("Lỗi khi lưu cấu hình", err?.message || "Không thể ghi dữ liệu cấu hình.")
     } finally {
-      setTimeout(() => setIsSaving(false), 250)
+      setIsSaving(false)
+    }
+  }
+
+  // Pull from Google Sheet (RAW_SETTINGS -> FORM_CONFIG)
+  const handlePullFromSheet = async () => {
+    setIsPulling(true)
+    const toastId = toast.loading("Đang tải cấu hình Form từ Google Sheet (RAW_SETTINGS)...")
+    try {
+      const res = await fetchFormConfigFromSheet()
+      toast.dismiss(toastId)
+      if (res.success && res.formConfig) {
+        setConfig(res.formConfig)
+        saveFormConfig(res.formConfig)
+        setIsDirty(false)
+        toast.success(
+          "Tải thành công",
+          "Đã cập nhật cấu hình Form mới nhất từ Google Sheet (RAW_SETTINGS)!"
+        )
+        if (onLogAction) {
+          onLogAction(
+            "Tải cấu hình Form",
+            "RAW_SETTINGS",
+            "Nạp cấu hình Form từ Google Sheet về thiết bị thành công",
+            "workflow"
+          )
+        }
+      } else {
+        toast.error("Không tìm thấy", res.message || "Chưa có cấu hình Form trong RAW_SETTINGS trên Google Sheet.")
+      }
+    } catch (err: any) {
+      toast.dismiss(toastId)
+      toast.error("Lỗi tải từ Google Sheet", err?.message || String(err))
+    } finally {
+      setIsPulling(false)
     }
   }
 
@@ -333,6 +390,18 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap self-end md:self-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePullFromSheet}
+              disabled={isPulling}
+              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 cursor-pointer"
+              title="Tải cấu hình Form mới nhất từ Google Sheet (RAW_SETTINGS)"
+            >
+              <CloudDownload className={`w-3.5 h-3.5 ${isPulling ? "animate-spin text-blue-600" : "text-blue-500"}`} />
+              <span className="hidden sm:inline">Tải từ Sheet</span>
+            </Button>
+
             <label className="cursor-pointer">
               <input type="file" accept=".json" onChange={handleImportJson} className="hidden" />
               <Button
@@ -384,7 +453,7 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
               }`}
             >
               <Save className={`w-3.5 h-3.5 ${isSaving ? "animate-spin" : ""}`} />
-              <span>{isSaving ? "Đang lưu..." : isDirty ? "Lưu thay đổi *" : "Đã lưu"}</span>
+              <span>{isSaving ? "Đang lưu lên Sheet..." : isDirty ? "Lưu thay đổi *" : "Đã lưu"}</span>
             </Button>
           </div>
         </div>
@@ -407,8 +476,12 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
             <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
             <span>Lý do thời hạn: <strong className="text-slate-800">{config.options.deadlineReasons.filter((o) => o.enabled).length}</strong></span>
           </div>
-          <div className="ml-auto text-[11px] text-slate-400">
-            Cập nhật lần cuối: {config.lastUpdated}
+          <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-1 text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60" title="Cấu hình được lưu vào sheet RAW_SETTINGS trên Google Sheet">
+              <Cloud className="w-3 h-3 text-blue-600" />
+              Sheet: RAW_SETTINGS · FORM_CONFIG
+            </span>
+            <span>Cập nhật: {config.lastUpdated}</span>
           </div>
         </div>
       </Frame>
