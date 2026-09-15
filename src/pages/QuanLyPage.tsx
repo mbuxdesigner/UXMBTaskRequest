@@ -68,6 +68,7 @@ import {
   Home,
   CheckSquare,
   PlusCircle,
+  Network,
   GripVertical,
   ArrowUp,
   ArrowDown,
@@ -3144,6 +3145,7 @@ export default function QuanLyPage() {
                         overview: { label: "Overview (Tổng quan)", icon: <Home className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
                         track: { label: "Task của tôi (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
                         create: { label: "Tạo task mới (Gửi đề bài)", icon: <PlusCircle className="w-3.5 h-3.5" />, desc: "Form 3 bước gửi bài toán thiết kế UX cho team" },
+                        ia: { label: "Kiến trúc Thông tin (IA)", icon: <Network className="w-3.5 h-3.5" />, desc: "Sơ đồ cây tương tác Mindmap & Phân cấp tính năng đa sản phẩm" },
                       }[key]
 
                       if (!itemMeta) return null

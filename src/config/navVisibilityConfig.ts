@@ -8,6 +8,7 @@ export interface RoleNavVisibility {
   compressor: boolean
   manage: boolean
   invite: boolean
+  ia: boolean
 }
 
 export type RoleNavConfig = Record<UserRole, RoleNavVisibility>
@@ -23,6 +24,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: true,
     manage: true,
     invite: true,
+    ia: true,
   },
   "Design Owner": {
     overview: true,
@@ -32,6 +34,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: true,
     manage: false,
     invite: true,
+    ia: true,
   },
   Designer: {
     overview: true,
@@ -41,6 +44,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: true,
     manage: false,
     invite: false,
+    ia: true,
   },
   PO: {
     overview: false,
@@ -50,6 +54,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: false,
     manage: false,
     invite: false,
+    ia: true,
   },
   Business: {
     overview: false,
@@ -59,6 +64,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     compressor: false,
     manage: false,
     invite: false,
+    ia: true,
   },
 }
 
@@ -72,6 +78,7 @@ export function getRoleNavConfig(): RoleNavConfig {
       ...(parsed[role] || {}),
       invite: parsed[role]?.invite !== undefined ? parsed[role].invite : DEFAULT_ROLE_NAV_CONFIG[role].invite,
       manage: role === "Admin" ? (parsed.Admin?.manage ?? true) : false,
+      ia: parsed[role]?.ia !== undefined ? parsed[role].ia : DEFAULT_ROLE_NAV_CONFIG[role].ia,
     })
 
     return {
@@ -86,7 +93,7 @@ export function getRoleNavConfig(): RoleNavConfig {
   }
 }
 
-export type PlatformNavItemKey = "overview" | "track" | "create"
+export type PlatformNavItemKey = "overview" | "track" | "create" | "ia"
 export type ResourceNavItemKey = "compressor" | "test" | "manage" | "invite"
 export type NavItemKey = PlatformNavItemKey | ResourceNavItemKey
 
@@ -96,7 +103,7 @@ export interface NavOrderConfig {
 }
 
 export const DEFAULT_NAV_ORDER: NavOrderConfig = {
-  platform: ["overview", "track", "create"],
+  platform: ["overview", "track", "create", "ia"],
   resources: ["compressor", "test", "manage", "invite"],
 }
 
@@ -107,6 +114,10 @@ export function getNavOrderConfig(): NavOrderConfig {
     const raw = localStorage.getItem(STORAGE_KEY_NAV_ORDER)
     if (!raw) return DEFAULT_NAV_ORDER
     const parsed = JSON.parse(raw)
+    let platform = Array.isArray(parsed.platform) && parsed.platform.length > 0 ? [...parsed.platform] : [...DEFAULT_NAV_ORDER.platform]
+    if (!platform.includes("ia")) {
+      platform.push("ia")
+    }
     let resources = Array.isArray(parsed.resources) && parsed.resources.length > 0 ? [...parsed.resources] : [...DEFAULT_NAV_ORDER.resources]
     if (!resources.includes("invite")) {
       resources.push("invite")
@@ -115,7 +126,7 @@ export function getNavOrderConfig(): NavOrderConfig {
       resources.push("manage")
     }
     return {
-      platform: Array.isArray(parsed.platform) && parsed.platform.length > 0 ? parsed.platform : DEFAULT_NAV_ORDER.platform,
+      platform,
       resources,
     }
   } catch {

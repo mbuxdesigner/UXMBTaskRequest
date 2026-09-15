@@ -34,6 +34,7 @@ import {
   Hash,
   SearchX,
   Shield,
+  Network,
 } from "lucide-react"
 import type { Page } from "../Sidebar"
 import { UserRole, UXRequest } from "@/data/mockData"
@@ -72,6 +73,7 @@ const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },
   compressor: { title: "Nén & Tối ưu ảnh", section: "Resources" },
+  ia: { title: "Kiến trúc Thông tin", section: "Platform" },
 }
 
 export default function AppHeader({
@@ -733,6 +735,9 @@ export default function AppHeader({
     }
     if (visibility.create && canRoleAccessCapability(role, "cap-request")) {
       items.push({ id: "create", title: "Tạo task mới", subtitle: "Gửi đề bài UX", icon: PlusCircle })
+    }
+    if (visibility.ia) {
+      items.push({ id: "ia", title: "Kiến trúc Thông tin", subtitle: "Sơ đồ IA & Mindmap", icon: Network })
     }
     if (visibility.compressor) {
       items.push({ id: "compressor", title: "Nén ảnh", subtitle: "Tối ưu dung lượng", icon: Camera })

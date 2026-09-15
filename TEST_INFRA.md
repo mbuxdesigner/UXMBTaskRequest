@@ -1,199 +1,183 @@
-# Test Infrastructure & Quality Assurance Architecture
-# UXMB Task Request Dashboard (ReUI AI-Ops Architecture)
+# Information Architecture (IA) Interactive Mindmap Canvas — Test Infrastructure & Methodology Specification (TEST_INFRA.md)
 
 > **Document Version**: 1.0.0  
-> **Target Milestone**: Milestone 5 (E2E Testing Track & Complete Multi-Tier Test Suite)  
 > **Status**: APPROVED & PUBLISHED  
-> **Scope**: User Requirements R1–R7, Features F1–F26, 4-Tier Test Framework  
+> **Architectural Scope**: MBBank UX Request Portal — IA Interactive Mindmap Canvas (`#ia`)  
+> **Target Framework**: Node.js ESM (`node:assert/strict`), TypeScript AST / Contract Static Analysis, Pure Logic Oracles  
+> **Test Suite Entrypoint**: `node test-e2e-ia-suite.mjs` (Project Root)  
 
 ---
 
-## 1. Test Philosophy & Principles
+## 1. Executive Summary & Testing Philosophy
 
-The testing framework for the UXMB Task Request Dashboard refactoring adheres to an **opaque-box, requirement-driven, mathematically authoritative methodology**. Testing is treated as an independent verification track that validates behavior against the user specifications (ORIGINAL_REQUEST.md and PROJECT.md) rather than echoing internal implementation details.
+The Information Architecture (IA) Interactive Mindmap Canvas is a mission-critical subsystem within the MBBank UX Request Portal. It provides a 4-tier visual hierarchy across MBBank digital channels (`App MBBank`, `Biz MB`, `Web Portal`, `BaaS Open API`), real-time linkage to design tasks (`UXRequest`), inline node CRUD with persistent state, and an interactive 60+ FPS canvas with cursor-centric zoom and intelligent search path auto-expansion.
 
-### 1.1 Core Principles
+To guarantee pristine quality, zero regressions, and mathematical correctness across all features, this test infrastructure enforces an **Opaque-Box 4-Tier Testing Methodology**:
+- **Tier 1 — Feature Coverage**: Comprehensive unit & functional contract verification covering all 22 features (minimum 5 isolated test cases per feature = 110 test cases).
+- **Tier 2 — Boundary & Corner Cases**: Stressing limits, degenerate states, extreme numbers, zero values, special characters, and corrupted storage (minimum 5 test cases across 8 boundary domains = 40 test cases).
+- **Tier 3 — Cross-Feature Combinations**: Pairwise and complex multi-feature interactions (zoom + search, collapse + edit, delete + metric update, localStorage + session reload = 28 test cases).
+- **Tier 4 — Real-World Banking Application Scenarios**: End-to-end user workflows modeling actual retail banking, corporate banking, retail portal, embedded API, and enterprise design operations (16 test cases).
 
-1. **Opaque-Box Verification**:
-   - Tests evaluate system behavior, input/output transformations, state machine transitions, and UI contracts from the user perspective.
-   - Tests do not rely on implementation hacks or internals that could mask architectural flaws.
-
-2. **Authoritative Output Derivation**:
-   - Expected values are derived strictly from defined formulas, mathematical models, and operational specifications:
-     - Health status formula: `0-2 -> Ổn định`, `3-5 -> Cảnh báo`, `>5 -> Quá tải`.
-     - Capacity utilization: `<50% -> Sẵn sàng`, `50-79% -> Bình thường`, `80-99% -> Đang bận`, `>=100% -> Quá tải`.
-     - SLA compliance rate: `(onTimeCount / completedCount) * 100`, defaulting to `96.4%` benchmark when count is 0.
-     - Product categorization heuristics: Precedence order (`Lending` -> `BaaS` -> `Digi Invest` -> `TransferD` -> `Khác`) with negative guards for card keywords.
-     - Stagger entrance latency budget: `skeletonExit + delayChildren + (staggerChildren * 6) <= 550ms`.
-
-3. **Zero Facade Testing Policy**:
-   - Every test case executes concrete logic with asserted inputs and outputs.
-   - Dummy assertions (`assert.ok(true)`), bypassed reviews, and mock pass flags are strictly forbidden and audited via static analysis.
-
-4. **Progressive Testability & Isolation**:
-   - Tests are independent and self-contained; test order does not dictate test validity.
-   - All tests run seamlessly in Node.js ESM runtime without requiring external database connections or active browser daemons, enabling rapid CI/CD execution (<1.5s).
+**Grand Total**: **194 automated test cases** executed synchronously with deterministic verification and sub-second execution speed.
 
 ---
 
-## 2. Feature Inventory (F1 to F26) Coverage Table
-
-The complete system comprises 26 distinct features across 6 ReUI AI-Ops Frame blocks, the Top Command Bar, and the Reactive Synchronous State Engine.
-
-| Feature Code | Feature Name | Description | Source Ref | Milestone | Primary Component Source | Verification Tier |
-|:---|:---|:---|:---:|:---:|:---|:---:|
-| **F1** | Product Filter Pill Bar | 6-option segmented pill selector (`ALL`, Lending, TransferD, Digi Invest, BaaS, Khác) with Framer Motion shared layout indicator | R1 | M1 | `src/components/dashboard/ProductFilter.tsx` | T1, T2, T3 |
-| **F2** | Real-time Reactive Sync | Pure synchronous `useMemo` re-computation of filtered task subsets across all blocks with 0ms network latency | R1 | M1 | `src/pages/TongQuanPage.tsx` | T1, T2, T3, T4 |
-| **F3** | Live Sync Header & Refresh | Command bar action button triggering data reload and cache invalidation with spinning `RefreshCw` | R1 | M1 | `src/pages/TongQuanPage.tsx` | T1, T2 |
-| **F4** | Latest Sync Timestamp | Dynamic formatted time badge (`HH:mm:ss`) displaying exact last synchronization moment | R1 | M1 | `src/pages/TongQuanPage.tsx` | T1, T2 |
-| **F5** | Block 1 Pending Metric | Headline total of pending, blocked, and unassigned tasks requiring intervention | R2 | M2 | `src/components/dashboard/Block1PendingOverview.tsx` | T1, T2, T3 |
-| **F6** | Block 1 Health Badge | Color-coded team health status (Ổn định: 0-2, Cảnh báo: 3-5, Quá tải: >5) with pulse indicator | R2 | M2 | `src/components/dashboard/Block1PendingOverview.tsx` | T1, T2, T4 |
-| **F7** | Block 1 PO Overdue Detection | Automated detection of tasks awaiting PO response > 24 hours (`sent_to_po_at`) | R2 | M2 | `src/components/dashboard/Block1PendingOverview.tsx` | T1, T2, T4 |
-| **F8** | Block 1 Urgent Task List | Compact interactive list with user avatar, elapsed relative time, and status badge | R2 | M2 | `src/components/dashboard/Block1PendingOverview.tsx` | T1, T2 |
-| **F9** | Block 1 Drawer Drilldown | Clicking any urgent task invokes `onSelectRequest` opening the `RequestDetail` drawer | R2 | M2 | `src/components/dashboard/Block1PendingOverview.tsx` | T1, T2, T3 |
-| **F10** | Block 2 In-Progress Total | Total count of active tasks in the UX development pipeline (`status === "Đang thực hiện"`) | R3 | M2 | `src/components/dashboard/Block2InProgressWorkload.tsx` | T1, T2, T3 |
-| **F11** | Block 2 5 UX Stages Bar | Segmented multi-phase visual bar across Define, Wireframe, UI Design, Prototype, Ready to Dev | R3 | M2 | `src/components/dashboard/Block2InProgressWorkload.tsx` | T1, T2, T4 |
-| **F12** | Block 2 Average Progress % | Clamped mean progress percentage calculation of all running active tasks | R3 | M2 | `src/components/dashboard/Block2InProgressWorkload.tsx` | T1, T2 |
-| **F13** | Block 2 Delivery Tempo | Delivery velocity indicator (`tasks/tuần`) with operational pace assessment | R3 | M2 | `src/components/dashboard/Block2InProgressWorkload.tsx` | T1, T2, T4 |
-| **F14** | Block 3 Completed Count | Total count of finished and accepted tasks in period (`status === "Hoàn thành"`) | R4 | M3 | `src/components/dashboard/Block3CompletedSLA.tsx` | T1, T2, T3, T4 |
-| **F15** | Block 3 SLA On-time Rate % | Dynamic percentage of completed tasks delivered on or before committed expected deadline | R4 | M3 | `src/components/dashboard/Block3CompletedSLA.tsx` | T1, T2, T3, T4 |
-| **F16** | Block 3 Test Acceptance Rate % | Quality metric showing percentage of designs approved in First-Time Right acceptance (`94.2%`) | R4 | M3 | `src/components/dashboard/Block3CompletedSLA.tsx` | T1, T2 |
-| **F17** | Block 4 Production Release Feed | Vertical timeline feed of features recently deployed to live App/Web/Biz/BaaS channels | R5 | M3 | `src/components/dashboard/Block4ProductionReleases.tsx` | T1, T2, T4 |
-| **F18** | Block 4 Channel & Designer Meta | Digital channel categorization tag and lead designer avatar/name display | R5 | M3 | `src/components/dashboard/Block4ProductionReleases.tsx` | T1, T2, T4 |
-| **F19** | Block 4 "Đã Release" Badge | Distinctive emerald release badge with pulsing green live dot indicator | R5 | M3 | `src/components/dashboard/Block4ProductionReleases.tsx` | T1, T2 |
-| **F20** | Block 5 Squad Workload Meters | Capacity utilization meter per UX Squad (`active_tasks / capacity_threshold`) | R6 | M4 | `src/components/dashboard/Block5SquadActivity.tsx` | T1, T2, T3, T4 |
-| **F21** | Block 5 Squad Activity Level | Activity level evaluation: Sẵn sàng (<50%), Bình thường (50-79%), Đang bận (80-99%), Quá tải (>=100%) | R6 | M4 | `src/components/dashboard/Block5SquadActivity.tsx` | T1, T2, T4 |
-| **F22** | Block 5 Key Highlight Tasks | Priority tasks per squad filtered by Khẩn cấp, Cao, Trung bình with drilldown | R6 | M4 | `src/components/dashboard/Block5SquadActivity.tsx` | T1, T2, T4 |
-| **F23** | Block 6 Full-width ReUI Frame | Full-width container hosting Gantt roadmap with FrameHeader, Today indicator, and Footer | R7 | M4 | `src/components/dashboard/Block6GanttRoadmap.tsx` | T1, T2, T3 |
-| **F24** | Block 6 Timeline Schedule Sync | Start date to deadline timeline schedule bars synchronized for all filtered tasks | R7 | M4 | `src/components/dashboard/Block6GanttRoadmap.tsx` | T1, T2, T3, T4 |
-| **F25** | Block 6 "Today" Milestone Marker | Synchronized vertical Today milestone marker on the temporal timeline axis | R7 | M4 | `src/components/dashboard/Block6GanttRoadmap.tsx` | T1, T2 |
-| **F26** | Block 6 Direct Task Interaction | Clicking any Gantt bar or row invokes `onSelectRequest` opening `RequestDetail` drawer | R7 | M4 | `src/components/dashboard/Block6GanttRoadmap.tsx` | T1, T2, T3 |
-
----
-
-## 3. The 4-Tier Testing Methodology
-
-The test suite is partitioned into four distinct validation tiers, establishing complete depth and breadth of quality assurance.
+## 2. Test Architecture & Directory Layout
 
 ```
-+-------------------------------------------------------------------------------+
-|                       TIER 4: REAL-WORLD APPLICATION SCENARIOS               |
-|  - Operational simulations (Lending Crunch, SLA Audit, Production Go-Live)    |
-+-------------------------------------------------------------------------------+
-                                        ^
-                                        |
-+-------------------------------------------------------------------------------+
-|                     TIER 3: CROSS-FEATURE COMBINATORIAL INTERACTIONS          |
-|  - Pairwise filter switches ↔ 6 Frame blocks ↔ Drawer drilldowns ↔ Gantt sync |
-+-------------------------------------------------------------------------------+
-                                        ^
-                                        |
-+-------------------------------------------------------------------------------+
-|                       TIER 2: BOUNDARY & CORNER CASES                         |
-|  - Null/undefined, division-by-zero, extreme dates, malformed inputs (>=5/F)   |
-+-------------------------------------------------------------------------------+
-                                        ^
-                                        |
-+-------------------------------------------------------------------------------+
-|                       TIER 1: ISOLATED FEATURE COVERAGE                       |
-|  - Happy path verification for each of the 26 features in isolation (>=5/F)   |
-+-------------------------------------------------------------------------------+
+UXMBTaskRequest-main/
+├── TEST_INFRA.md                     # This documentation (Test methodology & catalog)
+├── TEST_READY.md                     # Readiness publication & runner commands
+├── test-e2e-ia-suite.mjs             # The unified 4-tier automated test suite runner
+│
+├── src/
+│   ├── types/ia.ts                   # 4-tier IA data types & schema contracts
+│   ├── data/iaMockData.ts            # Realistic seed mock datasets for 4 products
+│   ├── hooks/
+│   │   ├── useCanvasTransform.ts     # Viewport math (zoomAtPoint, fitToView, cursor invariance)
+│   │   └── useIATreeState.ts         # Tree state, CRUD mutations, search & localStorage sync
+│   ├── components/
+│   │   ├── Sidebar.tsx               # Navigation item & floating indicator contract
+│   │   ├── AppHeader.tsx             # Header metadata & breadcrumb contract
+│   │   └── ia/
+│   │       ├── IACanvasViewport.tsx  # 60+ FPS Canvas container with pan/zoom & grid
+│   │       ├── IABezierConnectors.tsx# SVG cubic bezier connection curves
+│   │       ├── IATreeNodeCard.tsx    # 4-tier card components with badges & avatars
+│   │       ├── IAToolbar.tsx         # Product switcher, count badge, search, zoom/fit
+│   │       └── IANodeEditorModal.tsx # Inline Add/Edit/Delete dialog
+│   ├── config/navVisibilityConfig.ts # RBAC matrix configuration for "ia" page
+│   ├── pages/IAPage.tsx              # Root IA layout coordinating canvas, toolbar, drawer
+│   └── App.tsx                       # Routing table, #ia hash handler, pageTitles
+└── ...
 ```
-
-### 3.1 Tier 1: Feature Coverage (>=5 test cases per feature)
-- **Goal**: Verify the primary behavior, happy paths, and contract obligations of every feature in isolation.
-- **Requirement**: Minimum 5 test cases per feature for all 26 features = **130+ test cases minimum**.
-- **Scope**:
-  - `F1`: Default option selection ("ALL"), label/icon/dot rendering, keyboard cycling (Arrow keys, Home, End), active pill `layoutId="product-filter-active"`, touch horizontal scroll.
-  - `F2`: Synchronous `useMemo` derivation, 0ms latency, reactive subset sizing for all 5 product types.
-  - `F3`: Refresh handler invocation, spinning icon state, cache bypass parameter pass-through.
-  - `F4`: Dynamic timestamp formatting (`HH:mm:ss`), locale string accuracy, header badge mounting.
-  - `F5`: Pending count summation (blocked + PO overdue + unassigned), headline metric presentation.
-  - `F6`: Health status thresholds (`0-2 -> Ổn định`, `3-5 -> Cảnh báo`, `>5 -> Quá tải`).
-  - `F7`: PO pending calculation against 24h threshold (`sent_to_po_at`).
-  - `F8`: Urgency scoring (Blocked 1000 > PO Overdue 500 > Unassigned 200), avatar and relative time.
-  - `F9`: `onSelectRequest` handler firing on item click with valid request object.
-  - `F10`: Active tasks filtering (`Đang thực hiện`), total count computation.
-  - `F11`: Phase normalizer (`mapPhaseToUXStage`) across 5 canonical UX stages.
-  - `F12`: Mean progress percentage calculation and visual bar width mapping.
-  - `F13`: Delivery tempo run-rate calculation (`tasks/tuần`) and pace label assignment.
-  - `F14`: Completed tasks filtering (`Hoàn thành` / `Done` / 100% progress).
-  - `F15`: Dynamic SLA on-time rate calculation comparing completion date to deadline.
-  - `F16`: First-Time Right acceptance rate benchmark adherence (`94.2%`).
-  - `F17`: Production release feed sorting chronologically descending (newest first).
-  - `F18`: Digital channel metadata tagging (App MBBank, Biz MBBank, Web MBBank, BaaS Platform).
-  - `F19`: Distinctive emerald "Đã Release" badge with pulse indicator.
-  - `F20`: Squad capacity utilization calculation (`active / threshold`).
-  - `F21`: Squad activity status classification (`Sẵn sàng`, `Bình thường`, `Đang bận`, `Quá tải`).
-  - `F22`: Priority filtering (Khẩn cấp, Cao, Trung bình) and trending task preview list.
-  - `F23`: Full-width ReUI Frame container structure (`FrameHeader`, `FrameBody`, `FrameFooter`).
-  - `F24`: Schedule start date to deadline bar mapping in Gantt roadmap.
-  - `F25`: Synchronized Today milestone marker line and header date badge.
-  - `F26`: Gantt task click-to-drawer drilldown handler wiring.
-
-### 3.2 Tier 2: Boundary, Extreme & Corner Cases (>=5 test cases per feature)
-- **Goal**: Stress-test the resilience of every feature against missing data, invalid types, extreme values, boundary conditions, and zero-state fallbacks.
-- **Requirement**: Minimum 5 test cases per feature for all 26 features = **130+ test cases minimum**.
-- **Scope**:
-  - Empty datasets (`requests = []`) across all blocks.
-  - Division-by-zero protection (e.g. `calculateSLARate([])` returns benchmark `96.4%` without `NaN`).
-  - Capacity threshold `0` or negative values (clamped to minimum `1`).
-  - Progress percentages outside standard range (`< 0` or `> 100` or non-numeric strings).
-  - Multi-format date strings (`DD/MM/YYYY`, `YYYY-MM-DD`, `ISO 8601`, malformed strings, null/undefined).
-  - Negative keyword collision guards (e.g., Credit Card "thẻ tín dụng" must NOT match "Lending").
-  - Edge Case E4: Completed tasks must NEVER be categorized as pending or blocked in Block 1.
-  - Extreme time horizons (dates in year 1970, 2099, missing deadlines).
-  - High volume stress (1,000 synthetic tasks processed without latency regression).
-
-### 3.3 Tier 3: Cross-Feature Combinations (Pairwise & Systemic Interactions)
-- **Goal**: Verify state synchronization and data coherence across multiple components when filters and interactions trigger simultaneously.
-- **Scope**:
-  - Filter Switch Consistency: Changing `selectedProduct` between `ALL`, `Lending`, `TransferD`, `Digi Invest`, `BaaS`, `Khác` updates all 6 blocks simultaneously.
-  - Mathematical Invariant: For any product filter, `Block1.totalPending + Block2.activeTasks + Block3.completedCount + otherTasks` strictly partitions the filtered dataset.
-  - Drilldown Contract Consistency: Clicking any task in Block 1, Block 2, Block 3, Block 4, Block 5, or Block 6 fires `onSelectRequest(req)` with the exact reference.
-  - Timeline Span Synchronization: The date range displayed in Block 6 FrameFooter matches the min/max date bounds of tasks present in Blocks 1-5.
-  - Zero-State Alignment: When a product filter has 0 tasks, all 6 blocks cleanly render their respective zero-state UI simultaneously without throwing errors.
-
-### 3.4 Tier 4: Real-World Application Scenarios
-- **Goal**: Simulate realistic operational banking scenarios to validate end-to-end user workflows.
-- **Scenario 1: The Lending Squad Crunch**
-  - High-pressure quarter-end period with 10+ loan applications incoming.
-  - 3 tasks with PO approval pending > 24 hours (`sent_to_po_at`), 1 blocked task.
-  - Verification: Block 1 health badge flips to "Quá tải" (red pulse), Block 5 Lending Squad meter spikes to >=100% "Quá tải", urgent task list displays PO delay hours.
-- **Scenario 2: End-of-Month SLA & Audit Review**
-  - Delivery of 20 completed features evaluated on the last day of the month.
-  - 18 tasks finished before deadline, 2 tasks overdue.
-  - Verification: Block 3 SLA on-time rate calculates to exactly `90.0%`, visual SLA bar changes to amber, on-time badges ("Đúng hạn" vs "Trễ hạn") reflect accurate flags.
-- **Scenario 3: Production Go-Live Release Timeline**
-  - Major release weekend deploying 5 banking features across App MBBank, Biz MBBank, and BaaS Platform.
-  - Verification: Block 4 displays chronological vertical timeline with newest release at top, digital channel badges correctly tag each platform, "Đã Release" badges pulse emerald.
-- **Scenario 4: BaaS Multi-Squad Synchronization**
-  - Open Banking initiative requiring coordinated API and SDK delivery across BaaS Gateway and Core UX squads.
-  - Verification: ProductFilter "BaaS" isolates only API/SDK tasks, Block 2 reflects 5 UX stages distribution, Block 6 Gantt synchronizes milestone dependencies.
 
 ---
 
-## 4. Test Runner Architecture (`test-e2e-suite.mjs`)
+## 3. Mathematical & Logical Invariant Contracts
 
-The executable test suite is authored as an ESM Node.js test runner located at the project root:
-`test-e2e-suite.mjs`.
+### 3.1. Cursor-Centric Zoom Invariance Contract
+When zooming at mouse pointer coordinate $(C_x, C_y)$ in viewport space, the canvas point under the cursor before zoom must remain exactly under the cursor after zoom:
+$$\frac{C_x - X_{new}}{S_{new}} = \frac{C_x - X_{old}}{S_{old}}$$
+$$X_{new} = C_x - (C_x - X_{old}) \times \frac{S_{new}}{S_{old}}$$
+$$Y_{new} = C_y - (C_y - Y_{old}) \times \frac{S_{new}}{S_{old}}$$
+Where:
+- $S_{new} = \text{clamp}(S_{old} \times \text{factor}, 0.25, 2.0)$
+- Scale factor $\Delta > 0$; scale strictly bound in $[0.25, 2.0]$ ($25\%$ to $200\%$).
 
-### 4.1 Invocation Command
+### 3.2. Bounding-Box Fit-to-View Centering Contract
+Given $N$ active (non-collapsed) nodes with bounding box $[\min X, \max X, \min Y, \max Y]$ and canvas dimensions $(W, H)$:
+$$\text{contentWidth} = \max X - \min X + 2 \times \text{padding}$$
+$$\text{contentHeight} = \max Y - \min Y + 2 \times \text{padding}$$
+$$\text{scale} = \text{clamp}\left(\min\left(\frac{W}{\text{contentWidth}}, \frac{H}{\text{contentHeight}}\right), 0.25, 1.25\right)$$
+$$\text{panX} = \frac{W}{2} - \frac{\min X + \max X}{2} \times \text{scale}$$
+$$\text{panY} = \frac{H}{2} - \frac{\min Y + \max Y}{2} \times \text{scale}$$
+
+### 3.3. Cubic Bezier Path Mathematical Invariance
+For a parent node right edge $(x_1, y_1)$ connecting to child node left edge $(x_2, y_2)$:
+$$dx = x_2 - x_1$$
+$$\text{controlOffset} = \max\left(40, \frac{dx}{2}\right)$$
+$$C_1 = (x_1 + \text{controlOffset}, y_1)$$
+$$C_2 = (x_2 - \text{controlOffset}, y_2)$$
+Path string format: `M x1 y1 C (x1+offset) y1, (x2-offset) y2, x2 y2`
+Ensures smooth, tangent-continuous curves without oscillation or cusp singularities regardless of branch distance.
+
+### 3.4. Search Multi-Field Matching & Ancestor Path Expansion Contract
+A query $Q$ matches a node $U$ if any of:
+1. $U.\text{name} \ni Q$ (case-insensitive substring)
+2. $U.\text{code} \ni Q$
+3. $U.\text{description} \ni Q$
+4. $U.\text{requestId} \ni Q$
+5. $\text{LinkedRequest}(U).\text{title} \ni Q$
+6. $U.\text{assignedDesigner} \ni Q$ or $\text{LinkedRequest}(U).\text{assigned\_designer} \ni Q$
+
+For each matched node $U$, every ancestor node $A \in \text{Ancestors}(U)$ is collected into $\text{ancestorIdsToExpand}$. All ancestors must have $\text{collapsed} = \text{false}$ during search active state.
+
+---
+
+## 4. Four-Tier Test Case Catalog
+
+### 4.1. Tier 1: Isolated Feature Coverage (F1 to F22, >= 5 test cases each = 110 tests)
+
+| Feature | ID Range | Focus Areas Tested |
+|---------|----------|-------------------|
+| **F1: Sidebar IA Nav Item** | `T1.F1.1`–`T1.F1.5` | Page type union contains `"ia"`, navigation item `{ id: "ia", label: "Kiến trúc Thông tin" }`, icon assignment, platform section grouping, active indicator configuration. |
+| **F2: App Routing & Headers** | `T1.F2.1`–`T1.F2.5` | URL hash `#ia` recognition, `validPages` inclusion, page title `"Kiến trúc Thông tin (IA)"`, `AppHeader` PAGE_METADATA mapping, ErrorBoundary wrapping. |
+| **F3: RBAC & Nav Visibility** | `T1.F3.1`–`T1.F3.5` | Role matrix includes `ia` key, Admin/Design Owner/Designer/PO access allowed, role fallback navigation, default navigation order. |
+| **F4: Product Switcher Bar** | `T1.F4.1`–`T1.F4.5` | 4 products supported (`app-mbbank`, `biz-mb`, `web-portal`, `baas`), active product switching, color token styling, icon mapping, invalid product fallback. |
+| **F5: Screen/Feature Metrics Badge** | `T1.F5.1`–`T1.F5.5` | Badge text format `[X luồng · Y màn hình]`, accurate Tier 3 count, accurate Tier 4 count, empty tree handling (0/0), dynamic update upon branch collapse/expand. |
+| **F6: 4-Tier IA Data Schema** | `T1.F6.1`–`T1.F6.5` | `IATier` valid values (1, 2, 3, 4), `IANode` required and optional fields, `IATouchpointType` union, `IAProductInfo` structure, `IALocalStorageData` structure. |
+| **F7: Realistic Seed Mock Data** | `T1.F7.1`–`T1.F7.5` | All 4 products populated, Root nodes have Tier 1 and null parentId, Children have valid tier progression ($T_{child} = T_{parent} + 1$), unique IDs across dataset, required descriptions. |
+| **F8: 60+ FPS Canvas Viewport** | `T1.F8.1`–`T1.F8.5` | Container transform CSS `translate3d(x, y, 0) scale(s)`, hardware acceleration styles (`will-change`, `backface-visibility`), dot-grid background, mouse drag pan calculation, cursor grab/grabbing states. |
+| **F9: Cursor-Centric Zoom** | `T1.F9.1`–`T1.F9.5` | Zoom in multiplier ($1.15$), Zoom out multiplier ($0.85$), Cursor invariance formula verification, Min zoom clamp ($0.25$), Max zoom clamp ($2.0$). |
+| **F10: Fit-to-View Engine** | `T1.F10.1`–`T1.F10.5` | Bounding box calculation, optimal scale calculation, center pan calculation, padding buffer preservation, empty/single-node tree behavior. |
+| **F11: Expand/Collapse Branches** | `T1.F11.1`–`T1.F11.5` | Toggle `collapsed` state on node, subtree hiding when collapsed, child state preservation, root node collapse toggle, leaf node non-collapsible behavior. |
+| **F12: SVG Cubic Bezier Connectors** | `T1.F12.1`–`T1.F12.5` | Control point calculation ($dx / 2$), SVG path `M C` syntax validity, horizontal left-to-right orientation, stroke styling and theme color inheritance, hidden connector for collapsed children. |
+| **F13: 4-Tier Card Component** | `T1.F13.1`–`T1.F13.5` | Tier 1 Root visual styles (heavy elevation, brand gradient), Tier 2 Module styles (border accent), Tier 3 Feature styles (journey badges), Tier 4 Screen styles (touchpoint pill), interactive hover/tactile props. |
+| **F14: Task Association & Badges** | `T1.F14.1`–`T1.F14.5` | `requestId` mapping to `UXRequest`, designer avatar rendering, status badge color mapping, progress bar percentage display, unassigned/missing task fallback. |
+| **F15: RequestDetail Drawer Drilldown**| `T1.F15.1`–`T1.F15.5` | Node click triggers drawer selection, pass correct `UXRequest` object, drawer open state toggle, drawer close handler, stopPropagation on secondary controls. |
+| **F16: Direct Figma Linkage** | `T1.F16.1`–`T1.F16.5` | Figma button renders when `figmaUrl` present, window.open called with `_blank` and `noopener`, URL protocol validation (`https://`), stopPropagation isolates canvas click, hidden button when no URL. |
+| **F17: Inline Add Child Node** | `T1.F17.1`–`T1.F17.5` | Add child to Tier 1 creates Tier 2, Add child to Tier 2 creates Tier 3, Add child to Tier 3 creates Tier 4, Tier 4 cannot have children, auto-expand parent when child added. |
+| **F18: Inline Edit Node** | `T1.F18.1`–`T1.F18.5` | Edit node name, edit node description, edit node code, edit figmaUrl, name validation (non-empty string required). |
+| **F19: Inline Delete Node** | `T1.F19.1`–`T1.F19.5` | Delete leaf node removes from parent children, delete branch node removes entire subtree, Tier 1 Product Root deletion blocked/prohibited, parent child array immutably updated, cleanup orphaned mappings. |
+| **F20: LocalStorage Persistence** | `T1.F20.1`–`T1.F20.5` | Storage key `ux_portal_ia_tree_data_v1`, serialization on CRUD mutation, deserialization on startup, JSON schema version header (`version: 1`), fallback to default on missing storage. |
+| **F21: Reset to Default** | `T1.F21.1`–`T1.F21.5` | Reverts custom tree mutations back to seed mock data, clears localStorage key, restores pristine counts, confirmation dialog requirement, toast notification trigger. |
+| **F22: Quick Search & Highlight Path**| `T1.F22.1`–`T1.F22.5` | Matches node name, matches node code, matches linked task title, matches assigned designer, builds ancestor expansion set. |
+
+---
+
+### 4.2. Tier 2: Boundary & Corner Cases (8 Domains, >= 5 test cases each = 40 tests)
+
+| Category | ID Range | Focus Areas Tested |
+|----------|----------|-------------------|
+| **B1: Zoom Clamping Extremes** | `T2.B1.1`–`T2.B1.5` | Zoom in beyond 200% clamped at exactly 2.0, Zoom out beyond 25% clamped at exactly 0.25, Zero factor handling, Negative factor rejected, 100 consecutive zoom clicks remain finite. |
+| **B2: Pan Coordinate Extremes** | `T2.B2.1`–`T2.B2.5` | Very large pan values ($10^6$) remain finite, NaN/undefined input fallback to 0, Cursor coordinates outside canvas viewport handled smoothly, Sub-pixel dragging precision, Pan with scale $\neq 1.0$. |
+| **B3: Fit-to-View Degenerates** | `T2.B3.1`–`T2.B3.5` | Empty tree (0 nodes) returns default transform, Single-node tree (width/height = 0) returns centered view without zero division, Ultra-wide tree (aspect ratio 50:1), Ultra-tall tree (aspect ratio 1:50), Zero viewport dimensions (0x0). |
+| **B4: CRUD Validation Limits** | `T2.B4.1`–`T2.B4.5` | Whitespace-only name (`"   "`) rejected, Maximum length name (255 chars) truncated smoothly, Maximum description (2000 chars), Special characters in name (`<script>`, `&`, `"`, `'`), Adding child to non-existent parent returns error. |
+| **B5: LocalStorage Malformed/Corrupt**| `T2.B5.1`–`T2.B5.5`| Corrupted JSON string in localStorage recovers gracefully without crash, Empty string in localStorage recovers to seed data, Storage quota exceeded (`QuotaExceededError`) caught safely, Unsupported schema version auto-migrated, Non-object storage content ignored. |
+| **B6: Search Boundary Queries** | `T2.B6.1`–`T2.B6.5` | Empty query returns 0 matches and empty expansion set, Whitespace query returns 0 matches, Regex special characters (`.*+?^${}()|[]\`) do not throw syntax errors, Unicode/Vietnamese diacritic query (`"Vay thấu chi"`), Query matching 100% of nodes. |
+| **B7: Deep Hierarchy & Cycles** | `T2.B7.1`–`T2.B7.5` | Tree with 50+ nodes in single branch, Preventing circular parent-child references, Node pointing to non-existent parentId, Multiple nodes sharing same tier, Flat sibling branches (100+ children). |
+| **B8: Task Linking Edge Cases** | `T2.B8.1`–`T2.B8.5` | `requestId` with leading/trailing spaces, `requestId` referencing non-existent task, Task with progress = 0%, Task with progress = 100%, Task with empty designer name. |
+
+---
+
+### 4.3. Tier 3: Cross-Feature Combinations (8 Combinations, 28 tests)
+
+| Combination | ID Range | Complex Interaction Tested |
+|-------------|----------|----------------------------|
+| **C1: Zoom + Quick Search** | `T3.C1.1`–`T3.C1.4` | Performing quick search while zoomed at 25% or 200%; ensuring highlighted node coordinate transform remains valid. |
+| **C2: Collapse + Quick Search** | `T3.C2.1`–`T3.C2.4` | Deeply nested leaf node inside collapsed Tier 2 and Tier 3 ancestors; search triggers ancestor expansion so node is exposed and visible. |
+| **C3: Add Child + LocalStorage + Reload** | `T3.C3.1`–`T3.C3.4` | Adding new screen at Tier 4, serializing to localStorage, instantiating fresh tree state from storage, verifying new screen persists with exact parent link. |
+| **C4: Edit Node + Task Sync** | `T3.C4.1`–`T3.C4.3` | Updating node's `requestId` immediately updates displayed task title, status badge color, progress percentage, and designer avatar. |
+| **C5: Delete Branch + Metrics Recalculation** | `T3.C5.1`–`T3.C5.4` | Deleting a Tier 2 module containing 3 feature journeys (Tier 3) and 12 screens (Tier 4); verifying toolbar badge immediately decrements by $(3, 12)$. |
+| **C6: Product Switch + Fit-to-View** | `T3.C6.1`–`T3.C6.3` | Switching from `app-mbbank` (large tree) to `baas` (compact tree); verifying active tree swaps, metrics update, and Fit-to-View recalculates bounding box. |
+| **C7: CRUD Overrides + Reset to Default** | `T3.C7.1`–`T3.C7.3` | Modifying tree heavily (adding 5 nodes, deleting 2, renaming 3), triggering Reset to Default; verifying storage is purged and pristine seed tree is restored. |
+| **C8: Rapid Expand/Collapse Cycles** | `T3.C8.1`–`T3.C8.3` | Stress-toggling collapse 20 times in rapid sequence; verifying tree height stays consistent, connector coordinates don't drift, and no duplicate nodes are created. |
+
+---
+
+### 4.4. Tier 4: Real-World Banking Application Scenarios (5 Scenarios, 16 tests)
+
+| Scenario | ID Range | Operational Banking Workflow Tested |
+|----------|----------|-------------------------------------|
+| **S1: Retail App eKYC & Cards Journey** | `T4.S1.1`–`T4.S1.4` | Customer navigates App MBBank IA -> Cards Module -> Online Credit Card Flow -> Verifies 3 screens (Select Card, NFC eKYC, Digital Contract) -> Links to `UXMB-2026-001` -> Inspects 85% progress & Figma link. |
+| **S2: Corporate Biz MB Payroll Flow** | `T4.S2.1`–`T4.S2.3` | Corporate user selects Biz MB product -> Inspects Maker-Checker approval and automated Payroll Module -> Verifies multi-tier screens (Excel upload, Dual Authorization, Success Receipt) -> Checks PO pending status. |
+| **S3: Retail Web Portal QR Sync Flow** | `T4.S3.1`–`T4.S3.3` | Web Portal Internet Banking product -> Navigation to QR Login Sync flow -> Verifies screens linked to `UXMB-2026-003` -> Validates Released status and 100% completion. |
+| **S4: BaaS Open API Partner Sandbox Flow** | `T4.S4.1`–`T4.S4.3` | FinTech partner explores BaaS Open API -> Navigates to Embedded Lending API & Developer Sandbox -> Verifies Tier 4 API endpoints/mock screens -> Validates Figma technical spec link. |
+| **S5: Enterprise Design Ops End-to-End** | `T4.S5.1`–`T4.S5.3` | Design Lead creates new "Tiết kiệm mục tiêu" flow under Savings Module -> Adds 2 new screens -> Modifies titles -> Saves to LocalStorage -> Runs Quick Search -> Verifies full-text discovery. |
+
+---
+
+## 5. Execution Instructions & Exit Code Contract
+
+### 5.1. Running the Test Suite
+From the repository root (`UXMBTaskRequest-main`), execute:
 ```bash
-node test-e2e-suite.mjs
+node test-e2e-ia-suite.mjs
 ```
 
-### 4.2 Exit Code Contract
-- Exit Code `0`: 100% of all test cases passed successfully.
-- Exit Code `1`: Any assertion failure occurred, halting with full diagnostic stack trace.
+### 5.2. Exit Code Contract
+- **Exit Code `0`**: All 194 tests across Tiers 1–4 passed with 100% assertion success.
+- **Exit Code `1`**: Any assertion failure or unexpected exception occurred. Full error trace, expected vs. actual values, and test ID are printed to stderr.
 
-### 4.3 Output Format
-The test runner outputs structured diagnostic logs:
-- Tier Header & Objective Summary
-- Per-feature test case checkmarks (`✓`) with descriptive test assertions
-- Summary statistical table detailing:
-  - Total Tests Executed
-  - Total Passed
-  - Total Failed
-  - Execution Time (ms)
-  - Feature Coverage Percentage (100% across F1–F26)
+---
+*Authored by Teamwork Preview E2E Test Writer for MBBank UX Request Portal.*

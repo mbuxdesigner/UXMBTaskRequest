@@ -15,6 +15,7 @@ import {
   Camera,
   Eye,
   UserPlus,
+  Network,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -34,7 +35,7 @@ import {
 } from "@/config/navVisibilityConfig"
 import { APP_CONTENT } from "@/config/content"
 
-export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor"
+export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia"
 
 interface SidebarProps {
   currentPage: Page
@@ -182,7 +183,7 @@ export default function Sidebar({
   const isAdmin = userRole === "Admin"
   const canSwitchRoles = userRole === "Admin" || Boolean(session?.isImpersonating) || session?.originalRole === "Admin"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
-  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create
+  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || currentRoleVisibility.ia
   const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
 
   const renderSidebarContent = (isMobile = false) => {
@@ -347,6 +348,45 @@ export default function Sidebar({
                       )}
                       <PlusCircle className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.create.title}</span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "ia" && currentRoleVisibility.ia) {
+                  const isActive = currentPage === "ia"
+                  const isHovered = hoveredNav === "ia"
+                  return (
+                    <button
+                      key="nav-ia"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("ia")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("ia")
+                        preloadPage("ia")
+                      }}
+                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <Network className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <span className="truncate relative z-10">Kiến trúc Thông tin</span>
                     </button>
                   )
                 }

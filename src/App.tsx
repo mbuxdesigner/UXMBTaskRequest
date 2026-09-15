@@ -49,6 +49,7 @@ import TrackRequestPage from "./pages/TrackRequestPage"
 import QuanLyPage from "./pages/QuanLyPage"
 import TestAssessmentPage from "./pages/TestAssessmentPage"
 import ImageCompressorPage from "./pages/ImageCompressorPage"
+import IAPage from "./pages/IAPage"
 
 // Route Preloaders (maintained for interface compatibility)
 export const preloadPage = (_page: Page) => {}
@@ -90,7 +91,7 @@ export default function App() {
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
     const rawHash = window.location.hash.replace(/^#/, "").split("?")[0] as Page
-    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage"]
+    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia"]
     const targetPage = validPages.includes(rawHash) ? rawHash : (s?.role === "PO" || s?.role === "Business" ? "track" : "overview")
 
     if (s?.role && !isPageAllowedForRole(targetPage, s.role)) {
@@ -147,6 +148,8 @@ export default function App() {
       test: "Khảo sát & Đánh giá năng lực UX — MB UX Request Portal",
 
       compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
+
+      ia: "Kiến trúc Thông tin (IA) — MB UX Request Portal",
     }
 
     document.title =
@@ -228,7 +231,8 @@ export default function App() {
         hash === "overview" ||
         hash === "create" ||
         hash === "test" ||
-        hash === "compressor"
+        hash === "compressor" ||
+        hash === "ia"
       ) {
         setPage((prev) => (prev !== (hash as Page) ? (hash as Page) : prev))
       }
@@ -368,6 +372,7 @@ export default function App() {
                   {page === "manage" && <QuanLyPage />}
                   {page === "test" && <TestAssessmentPage />}
                   {page === "compressor" && <ImageCompressorPage />}
+                  {page === "ia" && <IAPage />}
                 </motion.div>
               </AnimatePresence>
             </ErrorBoundary>
