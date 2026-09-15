@@ -233,25 +233,38 @@ export interface AuditLogItem {
 
 // Master Predefined Lists
 export const AVAILABLE_PRODUCTS_LIST = [
-  "App MBBank",
-  "Biz MBBank",
-  "BaaS & Open API",
-  "Design System & Nền tảng",
+  "APP MB",
+  "Digi invest",
+  "Backoffice",
+  "CRM",
+  "BaaS",
   "Khác",
 ]
 
 export const AVAILABLE_SQUADS_LIST = [
+  "Lending",
   "eSaving",
-  "Cards & Thanh toán số",
-  "Lending & Vay vốn",
-  "Core Banking & Tài khoản",
-  "Digital Wealth & Đầu tư",
-  "Chuyển tiền & Tiện ích số",
-  "Biz Lending",
-  "Biz eSaving",
-  "Payroll & Quản lý lương",
-  "BaaS Gateway",
-  "Design System MB",
+  "Core",
+  "Card",
+  "Onboarding",
+  "Base",
+  "Upsale",
+  "Partnership",
+  "Billing",
+  "CSOP",
+  "Junior",
+  "VietQR",
+  "Sub",
+  "TransferD",
+  "Gold",
+  "Trái phiếu",
+  "Chứng chỉ quỹ",
+  "BeeRich",
+  "Visual",
+  "Designe system",
+  "Nội bộ",
+  "AI",
+  "BaaS",
 ]
 
 // Initial Mock Data (loại bỏ mock user)
@@ -683,60 +696,479 @@ export const INITIAL_STATUS_RULES: StatusAutomationRule[] = [
 const INITIAL_PRODUCTS: ProductSetting[] = [
   {
     id: "prod-1",
-    name: "App MBBank",
+    name: "APP MB",
     code: "APP_MB",
     color: "blue",
     description: "Ứng dụng Ngân hàng số bán lẻ hàng đầu dành cho khách hàng cá nhân",
     status: "Active",
   },
   {
-    id: "prod-2",
-    name: "Biz MBBank",
-    code: "BIZ_MB",
-    color: "purple",
-    description: "Nền tảng tài chính số thông minh dành cho doanh nghiệp SME & Corporate",
-    status: "Active",
-  },
-  {
     id: "prod-3",
-    name: "BaaS & Open API",
-    code: "BAAS",
+    name: "Digi invest",
+    code: "DIGI_INVEST",
     color: "emerald",
-    description: "Hạ tầng kết nối đối tác, ngân hàng nhúng và hệ sinh thái Open Banking",
+    description: "Nền tảng đầu tư số, chứng khoán & tích lũy tài sản",
     status: "Active",
   },
   {
     id: "prod-4",
-    name: "Design System & Nền tảng",
-    code: "DS_CORE",
+    name: "Backoffice",
+    code: "BACKOFFICE",
     color: "amber",
-    description: "Thư viện thiết kế Liquid Glass, UX Guideline và công cụ vận hành nội bộ",
+    description: "Design System / Visual / AI ....",
+    status: "Active",
+  },
+  {
+    id: "prod-1788708686958",
+    name: "CRM",
+    code: "CRM",
+    color: "purple",
+    description: "Sản phẩm số MBBank",
+    status: "Active",
+  },
+  {
+    id: "prod-1788765119809",
+    name: "BaaS",
+    code: "BAAS",
+    color: "cyan",
+    description: "Sản phẩm số MBBank",
     status: "Active",
   },
 ]
 
 const INITIAL_SQUADS: SquadSetting[] = [
-  // --- Squads của App MBBank ---
-  { id: "sq-1", name: "eSaving", code: "ESAVING", productName: "App MBBank", productId: "prod-1", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 8, color: "bg-emerald-50 text-emerald-700 border-emerald-200", capacityThreshold: 8, domain: "Tiết kiệm trực tuyến, tích lũy số & chứng chỉ tiền gửi" },
-  { id: "sq-2", name: "Cards & Thanh toán số", code: "CARDS", productName: "App MBBank", productId: "prod-1", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam", "Nguyễn Văn Cường"], taskCount: 6, color: "bg-purple-50 text-purple-700 border-purple-200", capacityThreshold: 8, domain: "Thẻ tín dụng, thẻ ghi nợ & cổng thanh toán số" },
-  { id: "sq-3", name: "Lending & Vay vốn", code: "LENDING", productName: "App MBBank", productId: "prod-1", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Nguyễn Văn Cường", designers: ["Nguyễn Văn Cường"], taskCount: 8, color: "bg-blue-50 text-blue-700 border-blue-200", capacityThreshold: 10, domain: "Vay vốn tiêu dùng, thấu chi tín chấp & giải ngân số" },
-  { id: "sq-4", name: "Core Banking & Tài khoản", code: "CORE", productName: "App MBBank", productId: "prod-1", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Nguyễn Văn Cường", designers: ["Nguyễn Văn Cường"], taskCount: 5, color: "bg-indigo-50 text-indigo-700 border-indigo-200", capacityThreshold: 8, domain: "Tài khoản thanh toán, số tài khoản đẹp & chuyển tiền" },
-  { id: "sq-5", name: "Digital Wealth & Đầu tư", code: "WEALTH", productName: "App MBBank", productId: "prod-1", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Phạm Hải Đăng", designers: ["Phạm Hải Đăng", "Lê Hoàng Nam"], taskCount: 4, color: "bg-amber-50 text-amber-800 border-amber-200", capacityThreshold: 6, domain: "Đầu tư chứng khoán, chứng chỉ quỹ & tài chính gia đình" },
-  { id: "sq-6", name: "Chuyển tiền & Tiện ích số", code: "TRANSFER", productName: "App MBBank", productId: "prod-1", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 5, color: "bg-sky-50 text-sky-700 border-sky-200", capacityThreshold: 8, domain: "Chuyển tiền Napas247, hóa đơn & tiện ích đời sống" },
+  // --- Backoffice (4 squads) ---
+  {
+    id: "sq-1788708499200",
+    name: "Visual",
+    code: "DESIGN_SYSTEM",
+    productName: "Backoffice",
+    productId: "prod-4",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Đạt",
+    designers: ["Đạt", "Sương", "Phương", "Hồng"],
+    taskCount: 0,
+    color: "bg-amber-50 text-amber-800 border-amber-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708517752",
+    name: "Designe system",
+    code: "DESIGNE_SYSTEM",
+    productName: "Backoffice",
+    productId: "prod-4",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Hiệp",
+    designers: ["Hiệp", "Đạt", "Cường"],
+    taskCount: 0,
+    color: "bg-amber-50 text-amber-800 border-amber-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708548050",
+    name: "Nội bộ",
+    code: "N_I_B_",
+    productName: "Backoffice",
+    productId: "prod-4",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Trường",
+    designers: ["Trường", "Hiệp", "Triết", "Trang"],
+    taskCount: 0,
+    color: "bg-amber-50 text-amber-800 border-amber-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708562006",
+    name: "AI",
+    code: "AI",
+    productName: "Backoffice",
+    productId: "prod-4",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Trường", "Hiệp", "Đạt", "Triết"],
+    taskCount: 0,
+    color: "bg-amber-50 text-amber-800 border-amber-200",
+    capacityThreshold: 8,
+  },
 
-  // --- Squads của Biz MBBank ---
-  { id: "sq-7", name: "Biz Lending", code: "BIZ_LEND", productName: "Biz MBBank", productId: "prod-2", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Nguyễn Văn Cường", designers: ["Nguyễn Văn Cường"], taskCount: 4, color: "bg-blue-50 text-blue-700 border-blue-200", capacityThreshold: 8, domain: "Tín dụng & tài trợ thương mại cho doanh nghiệp SME" },
-  { id: "sq-8", name: "Biz eSaving", code: "BIZ_SAVE", productName: "Biz MBBank", productId: "prod-2", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 3, color: "bg-emerald-50 text-emerald-700 border-emerald-200", capacityThreshold: 8, domain: "Tiền gửi có kỳ hạn & quản lý vốn lưu động doanh nghiệp" },
-  { id: "sq-9", name: "Payroll & Quản lý lương", code: "PAYROLL", productName: "Biz MBBank", productId: "prod-2", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 2, color: "bg-violet-50 text-violet-700 border-violet-200", capacityThreshold: 6, domain: "Chi lương tự động & quản trị nhân sự số cho doanh nghiệp" },
+  // --- Digi invest (5 squads) ---
+  {
+    id: "sq-1788708626702",
+    name: "TransferD",
+    code: "TRANSFERD",
+    productName: "Digi invest",
+    productId: "prod-3",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Phong"],
+    taskCount: 0,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708646473",
+    name: "Gold",
+    code: "GOLD",
+    productName: "Digi invest",
+    productId: "prod-3",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Phong"],
+    taskCount: 0,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708654909",
+    name: "Trái phiếu",
+    code: "TR_I_PHI_U",
+    productName: "Digi invest",
+    productId: "prod-3",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Phong"],
+    taskCount: 0,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708661654",
+    name: "Chứng chỉ quỹ",
+    code: "CH_NG_CH__QU_",
+    productName: "Digi invest",
+    productId: "prod-3",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Phong"],
+    taskCount: 0,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788708668720",
+    name: "BeeRich",
+    code: "BEERICH",
+    productName: "Digi invest",
+    productId: "prod-3",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "TestRolePO",
+    pos: ["TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường", "Phong"],
+    taskCount: 0,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    capacityThreshold: 8,
+  },
 
-  // --- Squads của BaaS & Open API ---
-  { id: "sq-10", name: "BaaS Gateway", code: "BAAS_GW", productName: "BaaS & Open API", productId: "prod-3", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 3, color: "bg-cyan-50 text-cyan-700 border-cyan-200", capacityThreshold: 6, domain: "Cổng kết nối đối tác FinTech & nhúng dịch vụ ngân hàng" },
-  { id: "sq-11", name: "Partner Integration", code: "PARTNER", productName: "BaaS & Open API", productId: "prod-3", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Lê Hoàng Nam", designers: ["Lê Hoàng Nam"], taskCount: 2, color: "bg-teal-50 text-teal-700 border-teal-200", capacityThreshold: 6, domain: "Hạ tầng SDK & tích hợp API Open Banking" },
+  // --- BaaS (1 squad) ---
+  {
+    id: "sq-1788765499394",
+    name: "BaaS",
+    code: "BAAS",
+    productName: "BaaS",
+    productId: "prod-1788765119809",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "Hiền",
+    pos: ["Hiền", "TestRolePO"],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Chính",
+    designers: ["Chính", "Trường"],
+    taskCount: 0,
+    color: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    capacityThreshold: 8,
+  },
 
-  // --- Squads của Design System & Nền tảng ---
-  { id: "sq-12", name: "Design System MB", code: "DS_MB", productName: "Design System & Nền tảng", productId: "prod-4", leadPo: "Trần Mai Lan", pos: ["Trần Mai Lan"], leadBusiness: "Nguyễn Minh Tuấn", businesses: ["Nguyễn Minh Tuấn"], leadDesigner: "Nguyễn Văn Cường", designers: ["Nguyễn Văn Cường", "Lê Hoàng Nam"], taskCount: 4, color: "bg-slate-100 text-slate-800 border-slate-300", capacityThreshold: 10, domain: "Thư viện Liquid Glass System, Design Tokens & Component UI Kit" },
-  { id: "sq-13", name: "UX Operations", code: "UX_OPS", productName: "Design System & Nền tảng", productId: "prod-4", leadPo: "Vũ Quốc Anh", pos: ["Vũ Quốc Anh"], leadBusiness: "Hoàng Thu Trang", businesses: ["Hoàng Thu Trang"], leadDesigner: "Trường", designers: ["Trường", "Nguyễn Văn Cường"], taskCount: 2, color: "bg-slate-100 text-slate-700 border-slate-300", capacityThreshold: 6, domain: "Quy chuẩn thiết kế, công cụ đo lường & vận hành đội ngũ UX" },
+  // --- APP MB (13 squads) ---
+  {
+    id: "sq-1788856077034",
+    name: "Lending",
+    code: "LENDING",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "Đoàn Thị Phương Thảo",
+    businesses: ["Đoàn Thị Phương Thảo", "Huy"],
+    leadDesigner: "Trang",
+    designers: ["Trang"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1788862441241",
+    name: "eSaving",
+    code: "ESAVING",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370790075",
+    name: "Core",
+    code: "CORE",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Trường",
+    designers: ["Trường", "Mai Anh"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370804024",
+    name: "Card",
+    code: "CARD",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Trường",
+    designers: ["Trường", "Triết"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370833390",
+    name: "Onboarding",
+    code: "ONBOARDING",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Hiệp",
+    designers: ["Hiệp", "Đạt"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370855973",
+    name: "Base",
+    code: "BASE",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Đạt",
+    designers: ["Đạt"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370867373",
+    name: "Upsale",
+    code: "UPSALE",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370886456",
+    name: "Partnership",
+    code: "PARTNERSHIP",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Trường",
+    designers: ["Trường", "Triết", "Sương"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370902389",
+    name: "Billing",
+    code: "BILLING",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Trường",
+    designers: ["Trường", "Triết"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370914389",
+    name: "CSOP",
+    code: "CSOP",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Đạt",
+    designers: ["Đạt", "Sương"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370923923",
+    name: "Junior",
+    code: "JUNIOR",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Hiệp",
+    designers: ["Hiệp"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370932622",
+    name: "VietQR",
+    code: "VIETQR",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Hiệp",
+    designers: ["Hiệp"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
+  {
+    id: "sq-1789370941123",
+    name: "Sub",
+    code: "SUB",
+    productName: "APP MB",
+    productId: "prod-1",
+    domain: "Nghiệp vụ trực thuộc",
+    leadPo: "",
+    pos: [],
+    leadBusiness: "",
+    businesses: [],
+    leadDesigner: "Cường",
+    designers: ["Cường"],
+    taskCount: 0,
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    capacityThreshold: 8,
+  },
 ]
+
+/**
+ * Kiểm tra xem một Squad có trực thuộc Sản phẩm pr hay không (hỗ trợ cả ID, tên khớp, và biến thể tên)
+ */
+export function isSquadBelongToProduct(sq: SquadSetting, pr: ProductSetting): boolean {
+  if (!sq || !pr) return false
+  // 1. Khớp theo ID sản phẩm trực tiếp
+  if (sq.productId && pr.id && sq.productId === pr.id) return true
+
+  // 2. Khớp theo tên sản phẩm chính xác
+  const sProd = (sq.productName || (sq as any).product || (sq as any).product_name || "").trim().toLowerCase()
+  const pName = (pr.name || "").trim().toLowerCase()
+  if (sProd && pName && sProd === pName) return true
+
+  // 3. Khớp thông minh các biến thể tên sản phẩm MBBank
+  if (pName.includes("app mb") && (sProd.includes("app mb") || sq.productId === "prod-1")) return true
+  if (pName.includes("digi") && (sProd.includes("digi") || sq.productId === "prod-3")) return true
+  if (
+    (pName.includes("backoffice") || pName.includes("design system")) &&
+    (sProd.includes("backoffice") || sProd.includes("design system") || sq.productId === "prod-4")
+  ) {
+    return true
+  }
+  if (pName.includes("baas") && (sProd.includes("baas") || sq.productId === "prod-1788765119809")) return true
+  if (pName.includes("crm") && (sProd.includes("crm") || sq.productId === "prod-1788708686958")) return true
+
+  // 4. Khớp qua mảng products nếu squad phụ trách nhiều sản phẩm
+  if (Array.isArray(sq.products) && sq.products.some((p) => p && p.trim().toLowerCase() === pName)) {
+    return true
+  }
+
+  return false
+}
 
 export function getSquadDesigners(sq: SquadSetting): string[] {
   if (Array.isArray(sq.designers) && sq.designers.length > 0) {
@@ -1290,18 +1722,24 @@ export default function QuanLyPage() {
       try {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((s: any) => ({
-            ...s,
-            designers: Array.isArray(s.designers) && s.designers.length > 0
-              ? s.designers
-              : (s.leadDesigner ? [s.leadDesigner] : []),
-            pos: Array.isArray(s.pos) && s.pos.length > 0
-              ? s.pos
-              : (s.leadPo ? [s.leadPo] : []),
-            businesses: Array.isArray(s.businesses) && s.businesses.length > 0
-              ? s.businesses
-              : (s.leadBusiness ? [s.leadBusiness] : []),
-          }))
+          // Kiểm tra xem dữ liệu cache có khớp với các sản phẩm hiện tại hay không
+          const hasMatches = parsed.some((s: any) =>
+            INITIAL_PRODUCTS.some((p) => isSquadBelongToProduct(s, p))
+          )
+          if (hasMatches && parsed.length >= 20) {
+            return parsed.map((s: any) => ({
+              ...s,
+              designers: Array.isArray(s.designers) && s.designers.length > 0
+                ? s.designers
+                : (s.leadDesigner ? [s.leadDesigner] : []),
+              pos: Array.isArray(s.pos) && s.pos.length > 0
+                ? s.pos
+                : (s.leadPo ? [s.leadPo] : []),
+              businesses: Array.isArray(s.businesses) && s.businesses.length > 0
+                ? s.businesses
+                : (s.leadBusiness ? [s.leadBusiness] : []),
+            }))
+          }
         }
       } catch {}
     }
@@ -1316,14 +1754,19 @@ export default function QuanLyPage() {
     }))
   })
 
-  console.log("DEBUG_24_SQUADS:", JSON.stringify(squads.map((s: any) => ({
-    name: s.name || s.squad_name,
-    code: s.code || s.squad_id,
-    productName: s.productName,
-    product_name: s.product_name,
-    product: s.product,
-    productId: s.productId
-  }))));
+  // Tự động khôi phục & đồng bộ nếu danh sách squads hiện tại trong cache không khớp với sản phẩm nào
+  useEffect(() => {
+    if (products.length > 0 && squads.length > 0) {
+      const hasAnyMatches = products.some((pr) =>
+        squads.some((sq) => isSquadBelongToProduct(sq, pr))
+      )
+      if ((!hasAnyMatches || squads.length < 20) && INITIAL_SQUADS.length >= 20) {
+        setSquads(INITIAL_SQUADS)
+        localStorage.setItem("mbbank_admin_squads", JSON.stringify(INITIAL_SQUADS))
+        localStorage.setItem("ux_portal_squads_v2", JSON.stringify(INITIAL_SQUADS))
+      }
+    }
+  }, [products, squads])
 
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(() => getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(() => getNavOrderConfig())
@@ -1349,8 +1792,14 @@ export default function QuanLyPage() {
       const startTime = Date.now()
       try {
         const [masterRes, teamRes] = await Promise.all([
-          fetchMasterDataFromSheet(),
-          fetchTeamMembersFromSheet(),
+          fetchMasterDataFromSheet().catch((err) => {
+            console.warn("Could not sync master data from sheet:", err)
+            return null
+          }),
+          fetchTeamMembersFromSheet().catch((err) => {
+            console.warn("Could not sync team members from sheet:", err)
+            return null
+          }),
         ])
         if (!isMounted) return
 
@@ -1361,11 +1810,13 @@ export default function QuanLyPage() {
           if (Array.isArray(d.products) && d.products.length > 0) {
             setProducts(d.products)
             localStorage.setItem("mbbank_admin_products", JSON.stringify(d.products))
+            localStorage.setItem("ux_portal_products_v2", JSON.stringify(d.products))
           }
           if (Array.isArray(d.squads) && d.squads.length > 0) {
             freshSquads = d.squads
             setSquads(d.squads)
             localStorage.setItem("mbbank_admin_squads", JSON.stringify(d.squads))
+            localStorage.setItem("ux_portal_squads_v2", JSON.stringify(d.squads))
           }
           if (Array.isArray(d.phases) && d.phases.length > 0) {
             setUxPhases(d.phases)
@@ -1566,7 +2017,7 @@ export default function QuanLyPage() {
   // Add Squad Form State
   const [newSquadName, setNewSquadName] = useState("")
   const [newSquadCode, setNewSquadCode] = useState("")
-  const [newSquadProduct, setNewSquadProduct] = useState("App MBBank")
+  const [newSquadProduct, setNewSquadProduct] = useState("APP MB")
   const [newSquadDomain, setNewSquadDomain] = useState("")
   const [newSquadCapacity, setNewSquadCapacity] = useState(8)
   const [newSquadDesigners, setNewSquadDesigners] = useState<string[]>([])
@@ -1596,18 +2047,18 @@ export default function QuanLyPage() {
     if (list.length > 0) {
       return Array.from(new Set(list))
     }
-    return ["App MBBank"]
+    return ["APP MB"]
   }, [products])
 
   // Danh sách Squads phân bổ cho nhân sự: Chỉ lấy từ các squad thực tế thuộc sản phẩm đang hoạt động
   const allAvailableSquadNames = useMemo(() => {
-    const validSquads = squads.filter((s) => !s.productName || activeProductNamesSet.has(s.productName))
+    const validSquads = squads.filter((s) => !s.productName || products.some((p) => isSquadBelongToProduct(s, p)))
     const list = validSquads.map((s) => s.name).filter(Boolean)
     if (list.length > 0) {
       return Array.from(new Set(list))
     }
     return []
-  }, [squads, activeProductNamesSet])
+  }, [squads, products])
 
   // Sync to localStorage
   useEffect(() => {
@@ -2222,12 +2673,12 @@ export default function QuanLyPage() {
       return
     }
 
-    const targetProd = products.find((p) => p.name === newSquadProduct)
+    const targetProd = products.find((p) => p.name === newSquadProduct || p.id === newSquadProduct || p.name.toLowerCase() === (newSquadProduct || "").toLowerCase())
     const newSq: SquadSetting = {
       id: `sq-${Date.now()}`,
       name: newSquadName.trim(),
       code: newSquadCode.trim().toUpperCase() || newSquadName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 15),
-      productName: newSquadProduct || "App MBBank",
+      productName: targetProd ? targetProd.name : (newSquadProduct || "APP MB"),
       productId: targetProd?.id || "prod-1",
       domain: newSquadDomain.trim() || "Nghiệp vụ trực thuộc",
       leadPo: newSquadPos[0] || "",
@@ -3978,22 +4429,21 @@ export default function QuanLyPage() {
         {activeTab === "masterdata" && (
           <div className="space-y-6">
             {/* 1. Header Section */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center font-bold">
-                    <Boxes className="w-4 h-4" />
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/80 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                    <Boxes className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-slate-900">Danh mục Sản phẩm & Squads nghiệp vụ</h2>
-                    <p className="text-xs text-slate-500">
+                    <h2 className="text-base font-bold text-slate-900 leading-tight">Danh mục Sản phẩm & Squads nghiệp vụ</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Cấu trúc Master Data phân cấp: Nhóm các <strong>Squads chuyên môn</strong> trực thuộc từng <strong>Sản phẩm số</strong>
                     </p>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 font-medium">
+
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 font-medium shrink-0 self-start sm:self-auto shadow-2xs">
                   <span className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5 text-blue-600" />
                     <strong className="text-slate-900">{products.length}</strong> Sản phẩm
@@ -4004,31 +4454,48 @@ export default function QuanLyPage() {
                     <strong className="text-slate-900">{squads.length}</strong> Squads
                   </span>
                 </div>
+              </div>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setShowAddProductModal(true)}
-                  className="rounded-lg text-xs font-medium gap-1.5 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs"
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  <span>Thêm Sản phẩm</span>
-                </Button>
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setShowAddProductModal(true)}
+                    className="rounded-lg text-xs font-medium gap-1.5 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs"
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>Thêm Sản phẩm</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setNewSquadProduct(products[0]?.name || "APP MB")
+                      setNewSquadDesigners([])
+                      setNewSquadPos([])
+                      setShowAddSquadModal(true)
+                    }}
+                    className="rounded-lg text-xs font-medium gap-1.5 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm Squad mới</span>
+                  </Button>
+                </div>
 
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setNewSquadProduct(products[0]?.name || "App MBBank")
-                    setNewSquadDesigners([])
-                    setNewSquadPos([])
-                    setShowAddSquadModal(true)
-                  }}
-                  className="rounded-lg text-xs font-medium gap-1.5 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer"
+                  onClick={handlePullMasterDataFromSheet}
+                  disabled={isPullingMasterData}
+                  className="rounded-lg text-xs font-medium gap-1.5 bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer shadow-2xs"
+                  title="Tải lại toàn bộ 23 Squads & 5 Sản phẩm trực tiếp từ Google Sheet"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Thêm Squad mới</span>
+                  <RotateCcw className={`w-3.5 h-3.5 text-blue-600 ${isPullingMasterData ? "animate-spin" : ""}`} />
+                  <span>{isPullingMasterData ? "Đang đồng bộ..." : "Đồng bộ từ Sheet"}</span>
                 </Button>
               </div>
             </div>
@@ -4077,7 +4544,7 @@ export default function QuanLyPage() {
                 </button>
                 {products.map((pr) => {
                   const cDef = getProductColorDef(pr.name, pr.color)
-                  const count = squads.filter((s) => s.productName === pr.name).length
+                  const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
                   const isSelected = selectedProductFilter === pr.name
 
                   return (
@@ -4111,7 +4578,7 @@ export default function QuanLyPage() {
 
                 const renderedGroups = targetProducts.map((pr) => {
                   const cDef = getProductColorDef(pr.name, pr.color)
-                  const prodSquads = squads.filter((s) => s.productName === pr.name)
+                  const prodSquads = squads.filter((s) => isSquadBelongToProduct(s, pr))
                   const filteredSquads = prodSquads.filter((s) => {
                     if (!squadSearchQuery.trim()) return true
                     const q = squadSearchQuery.toLowerCase()
