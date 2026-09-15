@@ -172,6 +172,18 @@ export default function IANodeEditorModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (mode === "delete" && targetNode) {
+      onConfirmDelete?.(targetNode.id)
+      onClose()
+      return
+    }
+
+    if (mode === "reset") {
+      onConfirmReset?.()
+      onClose()
+      return
+    }
+
     if (!name.trim()) {
       setErrorMessage("Vui lòng nhập tên tính năng / node (không được để trống)")
       return
@@ -208,12 +220,6 @@ export default function IANodeEditorModal({
       onClose()
     } else if (mode === "edit" && targetNode) {
       onConfirmEdit?.(targetNode.id, nodePayload)
-      onClose()
-    } else if (mode === "delete" && targetNode) {
-      onConfirmDelete?.(targetNode.id)
-      onClose()
-    } else if (mode === "reset") {
-      onConfirmReset?.()
       onClose()
     }
   }

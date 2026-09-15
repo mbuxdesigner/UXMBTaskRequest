@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
 import { IA_PRODUCTS, DEFAULT_IA_TREES, getProductMetrics } from "@/data/iaMockData"
 import { mockRequests, UXRequest } from "@/data/mockData"
@@ -135,6 +135,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   const [selectedProductId, setSelectedProductId] = useState<string>(initialProductId)
   const [trees, setTrees] = useState<Record<string, IANode>>(() => loadSavedTrees())
   const [searchQuery, setSearchQuery] = useState<string>("")
+  const layoutNodesRef = useRef<LayoutNode[]>([])
 
   // Active Tree for current product
   const activeTree: IANode = useMemo(() => {
@@ -353,14 +354,39 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     })
   }, [selectedProductId])
 
-  // Delete Node
+  // Delete Node: Locks remaining nodes at their current canvas positions so no shifting occurs
   const deleteNode = useCallback((nodeId: string) => {
+    // Snapshot current visual positions from layoutNodesRef so remaining nodes don't jump or auto-rearrange
+    const positionMap = new Map<string, { x: number; y: number }>()
+    if (layoutNodesRef.current) {
+      for (const ln of layoutNodesRef.current) {
+        if (ln.node.id !== nodeId) {
+          positionMap.set(ln.node.id, { x: ln.x, y: ln.y })
+        }
+      }
+    }
+
     setTrees((prevTrees) => {
       const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
       if (current.id === nodeId) {
         throw new Error("Cannot delete Tier 1 Product Root node")
       }
       const clone = deepCloneTree(current)
+
+      // Lock current visual positions for all nodes in the tree so layout does not auto-shift
+      function lockPositions(curr: IANode) {
+        if (curr.id !== nodeId && positionMap.has(curr.id)) {
+          const pos = positionMap.get(curr.id)!
+          if (curr.customX === undefined) curr.customX = Math.round(pos.x)
+          if (curr.customY === undefined) curr.customY = Math.round(pos.y)
+        }
+        if (curr.children) {
+          for (const child of curr.children) {
+            lockPositions(child)
+          }
+        }
+      }
+      lockPositions(clone)
 
       function dfs(curr: IANode): boolean {
         if (!curr.children) return false
@@ -996,6 +1022,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       maxX = 800
       maxY = 600
     }
+
+    // Keep layoutNodesRef in sync with latest visual layout
+    layoutNodesRef.current = resultNodes
 
     return {
       layoutNodes: resultNodes,

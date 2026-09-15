@@ -251,7 +251,6 @@ export default function IAPage() {
         }}
         onConfirmDelete={(nodeId) => {
           deleteNode(nodeId)
-          handleFitToView()
         }}
         onConfirmReset={() => {
           resetToDefault()
