@@ -17,11 +17,12 @@ Deploy App/doc/
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
 │   ├── 📋 2026-09-04_DAILY_UPDATE_REPORT.md  <-- Báo cáo chi tiết nâng cấp ReUI 8 Tabs, Role Preview, Xuất CSV
 │   ├── 📋 2026-09-05_DAILY_UPDATE_REPORT.md  <-- Báo cáo Tool Quy tắc Trạng thái tự động, Gantt PO Pending, Đồng nhất UI Badge & Typography
-│   └── 📋 2026-09-07_DAILY_UPDATE_REPORT.md  <-- Báo cáo Nâng cấp Toàn diện: Image Compressor Standalone & JSZip, Chuẩn 2 loại Pending, @SenToPO Trigger, Đồng bộ 2 Chiều Google Sheets
+│   ├── 📋 2026-09-07_DAILY_UPDATE_REPORT.md  <-- Báo cáo Nâng cấp Toàn diện: Image Compressor Standalone & JSZip, Chuẩn 2 loại Pending, @SenToPO Trigger, Đồng bộ 2 Chiều Google Sheets
+│   └── 📋 2026-09-15_DAILY_UPDATE_REPORT.md  <-- Báo cáo Toàn diện: Information Architecture & Mindmap Canvas, Đồng nhất Header Style Track Task, Phân quyền RBAC IA, Đồng bộ Sản phẩm Quản trị, Bảo mật OTP
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
-│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Tự động đồng bộ vai trò từ Sheet USERS, Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất.
+│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Tự động đồng bộ vai trò từ Sheet USERS, Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất, Chính sách an toàn OTP.
 │   │
 │   ├── 📊 02_TASK_MANAGEMENT_AND_TRACKING.md
 │   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.
@@ -30,7 +31,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình tạo yêu cầu (RequestForm), Ràng buộc sản phẩm của PO, Đính kèm tài liệu Google Drive, Hiệu ứng Confetti (Matter.js).
 │   │
 │   ├── ⚙️ 04_ADMIN_PORTAL_AND_RBAC.md
-│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (8 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL.
+│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (8 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL, Đồng bộ Sản phẩm sang IA.
 │   │
 │   ├── 💾 05_GOOGLE_SHEET_AND_GAS_BACKEND.md
 │   │   └── Đọc khi: Đụng tới backend Google Apps Script (`google-apps-script-backend.js`), Cấu trúc lưu trữ JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), Nạp GViz CSV bảng USERS, API get_master_data & sync_master_data, Upload Avatar/Drive.
@@ -44,8 +45,11 @@ Deploy App/doc/
 │   ├── 🛠️ 08_BUILTIN_TOOLS_AND_UTILITIES.md
 │   │   └── Đọc khi: Sửa/Dùng công cụ nén ảnh Client-side độc lập (`ImageCompressorPage.tsx` & `ImageCompressorModal.tsx`), Đóng gói file ZIP hàng loạt (`jszip`), Chuyển đổi định dạng WebP/PNG/JPEG.
 │   │
-│   └── 🔄 09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md
-│       └── Đọc khi: Sửa/Làm mới Master Data (UX Squads, Phân bổ PO/Business/Designers theo vai trò, Sản phẩm số MBBank), Đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`), Khử trùng lặp Activity Comments (Deduplication Engine).
+│   ├── 🔄 09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md
+│   │   └── Đọc khi: Sửa/Làm mới Master Data (UX Squads, Phân bổ PO/Business/Designers theo vai trò, Sản phẩm số MBBank), Đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`), Khử trùng lặp Activity Comments (Deduplication Engine).
+│   │
+│   └── 🗺️ 10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md
+│       └── Đọc khi: Sửa/Làm mới Khung vẽ Sơ đồ Tư duy & Phân cấp 4 tầng (Product, Domain, Journey, Screen), Pan/Zoom/Fit view, Auto-align, Kéo nối dây Bezier, Đồng bộ Sản phẩm/Squads từ Quản trị, Phân quyền xem/sửa (cap-ia-view, cap-ia-edit), Header & Command bar chuẩn Track Task.
 ```
 
 ---

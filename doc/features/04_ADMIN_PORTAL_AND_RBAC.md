@@ -43,6 +43,7 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
 │   │
 │   ├── 🛡️ Tab 2: rbac - Phân quyền (RBAC) & Ma trận Menu
 │   │   ├── Bảng quy chuẩn năng lực hệ thống (Duyệt đề bài, Chấm test, Tải việc, SLA, Audit)
+│   │   ├── Tích hợp 2 Năng lực Kiến trúc Thông tin: cap-ia-view (Xem IA) & cap-ia-edit (Biên tập IA)
 │   │   ├── Ma trận bật/tắt hiển thị menu Sidebar cho từng Role
 │   │   └── Kéo thả GripVertical hoặc bấm ⬆️/⬇️ đổi thứ tự Menu Platform & Resources
 │   │
@@ -73,6 +74,7 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
     │   ├── Quản lý danh mục UX Squads: Tên, Mã Code, Hạn mức tasks, Sản phẩm phụ trách
     │   ├── Phân bổ nhân sự Squad theo Vai trò chuẩn (Role-Based Pickers): PO, Business, UX/UI Designers
     │   ├── Quản lý danh mục Phân hệ Sản phẩm MB (App MBBank, Lending, Cards, BaaS...)
+    │   ├── Tự động đồng bộ sang Kiến trúc Thông tin (IA): phát event admin_products_changed, sinh Clean Root Node cho sản phẩm mới
     │   └── Tự động đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`)
     │
     ├── 🔌 Tab 7: integrations - Cổng kết nối APIs & Webhooks

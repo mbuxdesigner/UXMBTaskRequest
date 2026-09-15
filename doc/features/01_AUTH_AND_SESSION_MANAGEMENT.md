@@ -83,6 +83,7 @@ sequenceDiagram
 | **Đổi Khâu & Cập Nhật % Tiến Độ Task** | ✅ Toàn quyền | ✅ Toàn quyền | ⚠️ Task được giao cho mình | ❌ Chỉ xem |
 | **Ghi chú Tiến độ & Cập nhật Deliverable** | ✅ Toàn quyền | ✅ Toàn quyền | ⚠️ Task được giao cho mình | ⚠️ Thêm comment |
 | **Phân bổ Designer phụ trách** | ✅ Toàn quyền | ✅ Toàn quyền | ❌ Không | ❌ Không |
+| **Xem & Biên tập Kiến trúc Thông tin (`ia`)** | ✅ Toàn quyền (Sửa/Xóa) | ✅ Toàn quyền (Sửa/Xóa) | ✅ Toàn quyền (Sửa/Xóa) | 👁️ Chỉ xem (Read-Only) |
 | **Quản trị Cấu hình Hệ thống (`manage`)** | ✅ Toàn quyền (8 tabs) | ✅ Toàn quyền (8 tabs) | ❌ Không | ❌ Không |
 | **Sử dụng Tool Nén Ảnh (`compressor`)** | ✅ Có | ✅ Có | ✅ Có | ✅ Có |
 | **Đặc quyền Xem trước vai trò (Role Preview)**| ✅ Có | ✅ Có | ❌ Không | ❌ Không |
@@ -96,6 +97,20 @@ sequenceDiagram
 - **API khôi phục:** `stopRolePreview()`.
 - **Nguyên lý:** Lưu `ux_portal_preview_role` vào storage, hàm `getEffectiveRole()` sẽ trả về role đang xem thử. Các component `Sidebar`, `AppHeader`, `RequestDetail` sẽ tự động hiển thị theo góc nhìn của role đó.
 - **Bảo mật:** Phiên thật `realSession` của Admin vẫn được lưu giữ an toàn, không bao giờ bị ghi đè thông tin xác thực.
+
+---
+
+## 🛡️ 3.2. CHÍNH SÁCH AN TOÀN & BẢO MẬT GỬI OTP (OTP DISPATCH SAFETY POLICY)
+
+Nhằm đảm bảo an toàn thông tin tối đa và tránh quấy rầy nhân sự trong hệ thống:
+1. **Quy tắc Nghiêm ngặt về Gửi OTP Thử nghiệm:**
+   - Tuyệt đối **KHÔNG** tự động kích hoạt gửi mã OTP hàng loạt cho danh sách người dùng trong cơ sở dữ liệu.
+   - Trong mọi kịch bản kiểm thử tự động, tích hợp hoặc sửa lỗi backend Google Apps Script, **CHỈ ĐƯỢC PHÉP** gửi mã OTP thử nghiệm tới email kiểm thử của Quản trị viên: `cuongdm5@mbbank.com.vn`.
+   - Các email khác khi thực hiện test nội bộ phải được chặn (mock/stubbed) ở tầng dịch vụ trước khi gọi ra API ngoài.
+2. **Khắc Phục Lỗi Apps Script Backend OTP (`google-apps-script-backend.js`):**
+   - Đảm bảo hàm `handleRequestOtp` kiểm tra tồn tại và phân quyền tài khoản hợp lệ trong Sheet `USERS`.
+   - Khắc phục các lỗi timeout hoặc lỗi kết nối webhook Teams: nếu gửi tin nhắn Teams không thành công, hệ thống ghi log chi tiết thay vì làm sập toàn bộ request xác thực của người dùng.
+   - Duy trì cơ chế Anti-Enumeration (luôn trả về thông báo an toàn chuẩn, không để lộ thông tin email có tồn tại hay không ra ngoài).
 
 ---
 
