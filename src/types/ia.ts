@@ -24,6 +24,19 @@ export type IATouchpointType =
 export type IAPortPosition = "top" | "bottom" | "left" | "right"
 
 /**
+ * Trạng thái đang kéo dây nối mũi tên từ một Cổng (Port Dragging Wire)
+ */
+export interface IAPortDragState {
+  sourceNodeId: string
+  sourcePort: IAPortPosition
+  startCanvasX: number
+  startCanvasY: number
+  currentCanvasX: number
+  currentCanvasY: number
+  hoveredTargetNodeId?: string | null
+}
+
+/**
  * Interface đại diện cho một Node trên cây Kiến trúc Thông tin
  */
 export interface IANode {

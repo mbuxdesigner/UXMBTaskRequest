@@ -35,6 +35,8 @@ interface IATreeNodeCardProps {
   onOpenDetail?: (request: UXRequest) => void
   onAddChild: (parentNode: IANode) => void
   onAddChildInDirection?: (parentId: string, direction: IAPortPosition) => void
+  onPortDragStart?: (nodeId: string, port: IAPortPosition, e: React.PointerEvent) => void
+  isWireDropTarget?: boolean
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
@@ -131,6 +133,8 @@ function IATreeNodeCardComponent({
   onOpenDetail,
   onAddChild,
   onAddChildInDirection,
+  onPortDragStart,
+  isWireDropTarget = false,
   onEditNode,
   onDeleteNode,
   onNodeDrag,
@@ -250,6 +254,10 @@ function IATreeNodeCardComponent({
     ? "ring-2 ring-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.6)] border-blue-500"
     : ""
 
+  const wireDropTargetClass = isWireDropTarget
+    ? "ring-4 ring-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.8)] scale-[1.03] border-blue-500 z-50 bg-blue-50/40"
+    : ""
+
   const draggingClass = isDragging
     ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
     : "cursor-grab"
@@ -260,6 +268,8 @@ function IATreeNodeCardComponent({
     <motion.div
       data-testid={`ia-node-card-${node.id}`}
       data-tier={node.tier}
+      data-node-id={node.id}
+      data-is-drop-target={isWireDropTarget ? "true" : undefined}
       layoutId={isDragging ? undefined : `ia-card-motion-${node.id}`}
       transition={isDragging ? { duration: 0 } : springs.snappy}
       onPointerDown={handlePointerDown}
@@ -269,10 +279,10 @@ function IATreeNodeCardComponent({
         top: y,
         width,
         minHeight: layoutNode.height,
-        zIndex: isDragging ? 40 : isHighlighted ? 20 : 10,
+        zIndex: isDragging ? 40 : isWireDropTarget ? 35 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-xl border bg-white p-3 text-left ${transitionClass} select-none ${themeStyles.border} ${highlightClass} ${draggingClass}`}
+      className={`group relative rounded-xl border bg-white p-3 text-left ${transitionClass} select-none ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass}`}
       onClick={handleCardClick}
       {...(isDragging ? {} : tactileProps.card)}
     >
@@ -290,12 +300,18 @@ function IATreeNodeCardComponent({
           type="button"
           data-port-action="true"
           data-testid={`ia-port-add-top-${node.id}`}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onPortDragStart?.(node.id, "top", e)
+          }}
           onClick={(e) => {
             e.stopPropagation()
-            onAddChildInDirection?.(node.id, "top")
+            if (!onPortDragStart) {
+              onAddChildInDirection?.(node.id, "top")
+            }
           }}
-          title="Nối thêm node phía trên"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+          title="Kéo mũi tên nối node hoặc click để thêm node phía trên"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
         >
           <Plus className="w-2.5 h-2.5 stroke-[3]" />
         </button>
@@ -311,12 +327,18 @@ function IATreeNodeCardComponent({
           type="button"
           data-port-action="true"
           data-testid={`ia-port-add-bottom-${node.id}`}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onPortDragStart?.(node.id, "bottom", e)
+          }}
           onClick={(e) => {
             e.stopPropagation()
-            onAddChildInDirection?.(node.id, "bottom")
+            if (!onPortDragStart) {
+              onAddChildInDirection?.(node.id, "bottom")
+            }
           }}
-          title="Nối thêm node phía dưới"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+          title="Kéo mũi tên nối node hoặc click để thêm node phía dưới"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
         >
           <Plus className="w-2.5 h-2.5 stroke-[3]" />
         </button>
@@ -332,12 +354,18 @@ function IATreeNodeCardComponent({
           type="button"
           data-port-action="true"
           data-testid={`ia-port-add-left-${node.id}`}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onPortDragStart?.(node.id, "left", e)
+          }}
           onClick={(e) => {
             e.stopPropagation()
-            onAddChildInDirection?.(node.id, "left")
+            if (!onPortDragStart) {
+              onAddChildInDirection?.(node.id, "left")
+            }
           }}
-          title="Nối thêm node bên trái"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+          title="Kéo mũi tên nối node hoặc click để thêm node bên trái"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
         >
           <Plus className="w-2.5 h-2.5 stroke-[3]" />
         </button>
@@ -353,12 +381,18 @@ function IATreeNodeCardComponent({
           type="button"
           data-port-action="true"
           data-testid={`ia-port-add-right-${node.id}`}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onPortDragStart?.(node.id, "right", e)
+          }}
           onClick={(e) => {
             e.stopPropagation()
-            onAddChildInDirection?.(node.id, "right")
+            if (!onPortDragStart) {
+              onAddChildInDirection?.(node.id, "right")
+            }
           }}
-          title="Nối thêm node bên phải"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-pointer ${themeStyles.portBorder}`}
+          title="Kéo mũi tên nối node hoặc click để thêm node bên phải"
+          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
         >
           <Plus className="w-2.5 h-2.5 stroke-[3]" />
         </button>

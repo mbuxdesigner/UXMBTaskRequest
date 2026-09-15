@@ -18,6 +18,8 @@ export default function IAPage() {
     toggleCollapse,
     addChildNode,
     addChildInDirection,
+    connectNodes,
+    createConnectedNodeAt,
     updateNode,
     updateNodePosition,
     autoAlignTree,
@@ -223,6 +225,8 @@ export default function IAPage() {
         onOpenDetail={(req) => setSelectedRequest(req)}
         onAddChild={handleOpenAdd}
         onAddChildInDirection={addChildInDirection}
+        onConnectNodes={connectNodes}
+        onCreateConnectedNodeAt={createConnectedNodeAt}
         onEditNode={handleOpenEdit}
         onDeleteNode={handleOpenDelete}
         onNodeDrag={(id, x, y) => updateNodePosition(id, x, y, false)}

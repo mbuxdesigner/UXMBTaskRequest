@@ -43,6 +43,13 @@ export interface UseIATreeStateReturn {
   toggleCollapse: (nodeId: string) => void
   addChildNode: (parentId: string, nodeData: Partial<IANode>) => void
   addChildInDirection: (parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => void
+  connectNodes: (sourceNodeId: string, targetNodeId: string) => void
+  createConnectedNodeAt: (
+    sourceNodeId: string,
+    position: { x: number; y: number },
+    sourcePort: IAPortPosition,
+    nodeData?: Partial<IANode>
+  ) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
   updateNodePosition: (nodeId: string, x: number, y: number, persist?: boolean) => void
   autoAlignTree: () => void
@@ -477,6 +484,147 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     })
   }, [selectedProductId])
 
+  // Connect two existing nodes (sourceNode -> targetNode)
+  const connectNodes = useCallback((sourceNodeId: string, targetNodeId: string) => {
+    if (sourceNodeId === targetNodeId) return
+
+    setTrees((prevTrees) => {
+      const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+      const clone = deepCloneTree(current)
+
+      // 1. Verify target is not an ancestor of source (cycle prevention)
+      function findAndVerify(curr: IANode, path: string[]): { targetIsAncestor: boolean } {
+        const nextPath = [...path, curr.id]
+        if (curr.id === sourceNodeId) {
+          if (path.includes(targetNodeId)) {
+            return { targetIsAncestor: true }
+          }
+        }
+        if (curr.children) {
+          for (const c of curr.children) {
+            const res = findAndVerify(c, nextPath)
+            if (res.targetIsAncestor) return res
+          }
+        }
+        return { targetIsAncestor: false }
+      }
+
+      const { targetIsAncestor } = findAndVerify(clone, [])
+      if (targetIsAncestor) {
+        console.warn("Cannot connect: target node is an ancestor of source node")
+        return prevTrees
+      }
+
+      // 2. Detach targetNode from its current parent
+      let detachedNode: IANode | null = null
+      function detach(curr: IANode): boolean {
+        if (!curr.children) return false
+        const idx = curr.children.findIndex((c) => c.id === targetNodeId)
+        if (idx !== -1) {
+          detachedNode = curr.children.splice(idx, 1)[0]
+          return true
+        }
+        for (const child of curr.children) {
+          if (detach(child)) return true
+        }
+        return false
+      }
+
+      detach(clone)
+      if (!detachedNode) {
+        console.warn("Target node not found for connection:", targetNodeId)
+        return prevTrees
+      }
+
+      // 3. Attach detachedNode as child of sourceNode
+      function attach(curr: IANode): boolean {
+        if (curr.id === sourceNodeId) {
+          curr.collapsed = false
+          if (!curr.children) curr.children = []
+          const nodeToAttach = detachedNode!
+          nodeToAttach.parentId = curr.id
+          nodeToAttach.tier = Math.min(4, curr.tier + 1) as IATier
+          curr.children.push(nodeToAttach)
+          return true
+        }
+        if (curr.children) {
+          for (const child of curr.children) {
+            if (attach(child)) return true
+          }
+        }
+        return false
+      }
+
+      attach(clone)
+
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId])
+
+  // Create new node connected to sourceNode at drop position (customX, customY)
+  const createConnectedNodeAt = useCallback(
+    (
+      sourceNodeId: string,
+      position: { x: number; y: number },
+      sourcePort: IAPortPosition,
+      nodeData?: Partial<IANode>
+    ) => {
+      setTrees((prevTrees) => {
+        const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
+        const clone = deepCloneTree(current)
+
+        function dfs(curr: IANode): boolean {
+          if (curr.id === sourceNodeId) {
+            curr.collapsed = false
+            const nextTier = Math.min(4, curr.tier + 1) as IATier
+            const newId = nodeData?.id || `node-wire-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+
+            const defaultName =
+              nextTier === 4
+                ? "Màn hình mới"
+                : nextTier === 3
+                ? "Luồng tính năng mới"
+                : "Phân hệ mới"
+
+            const newNode: IANode = {
+              id: newId,
+              tier: nextTier,
+              name: (nodeData?.name && nodeData.name.trim()) || defaultName,
+              parentId: curr.id,
+              description: nodeData?.description || "Tạo từ kéo nối cổng",
+              code: nodeData?.code || "",
+              figmaUrl: nodeData?.figmaUrl,
+              customTag: nodeData?.customTag,
+              colorTheme: curr.colorTheme,
+              customX: Math.round(position.x),
+              customY: Math.round(position.y),
+              touchpointType: nextTier === 4 ? (nodeData?.touchpointType || "screen") : undefined,
+              children: nextTier < 4 ? [] : undefined,
+            }
+
+            if (!curr.children) curr.children = []
+            curr.children.push(newNode)
+            return true
+          }
+          if (curr.children) {
+            for (const child of curr.children) {
+              if (dfs(child)) return true
+            }
+          }
+          return false
+        }
+
+        dfs(clone)
+        const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+        saveTreesToStorage(nextTrees)
+        return nextTrees
+      })
+    },
+    [selectedProductId]
+  )
+
   // Reset to Default
   const resetToDefault = useCallback(() => {
     if (typeof window !== "undefined" && window.localStorage) {
@@ -834,6 +982,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     toggleCollapse,
     addChildNode,
     addChildInDirection,
+    connectNodes,
+    createConnectedNodeAt,
     updateNode,
     updateNodePosition,
     autoAlignTree,

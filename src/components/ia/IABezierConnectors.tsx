@@ -1,12 +1,14 @@
 import React, { memo } from "react"
 import { LayoutConnector } from "@/hooks/useIATreeState"
+import { IAPortDragState } from "@/types/ia"
 
 interface IABezierConnectorsProps {
   connectors: LayoutConnector[]
   highlightedIds?: Set<string>
+  activeWireDrag?: IAPortDragState | null
 }
 
-function IABezierConnectorsComponent({ connectors, highlightedIds }: IABezierConnectorsProps) {
+function IABezierConnectorsComponent({ connectors, highlightedIds, activeWireDrag }: IABezierConnectorsProps) {
   return (
     <svg
       data-testid="ia-bezier-connectors-svg"
@@ -90,6 +92,60 @@ function IABezierConnectorsComponent({ connectors, highlightedIds }: IABezierCon
           />
         )
       })}
+
+      {/* Dynamic Drag-to-Connect Live Wire Preview */}
+      {activeWireDrag && (() => {
+        const { startCanvasX: p1x, startCanvasY: p1y, currentCanvasX: p2x, currentCanvasY: p2y, sourcePort } = activeWireDrag
+        const dist = Math.hypot(p2x - p1x, p2y - p1y)
+        const mag = Math.max(30, Math.min(dist * 0.5, 140))
+
+        let vx = 0
+        let vy = 0
+        if (sourcePort === "right") vx = mag
+        else if (sourcePort === "left") vx = -mag
+        else if (sourcePort === "bottom") vy = mag
+        else if (sourcePort === "top") vy = -mag
+
+        const cp1x = p1x + vx
+        const cp1y = p1y + vy
+        const cp2x = p2x - (vx !== 0 ? vx * 0.4 : 0)
+        const cp2y = p2y - (vy !== 0 ? vy * 0.4 : 0)
+
+        const dragPath = `M ${Number(p1x.toFixed(2))} ${Number(p1y.toFixed(2))} C ${Number(cp1x.toFixed(2))} ${Number(cp1y.toFixed(2))}, ${Number(cp2x.toFixed(2))} ${Number(cp2y.toFixed(2))}, ${Number(p2x.toFixed(2))} ${Number(p2y.toFixed(2))}`
+
+        return (
+          <g data-testid="ia-active-wire-drag">
+            {/* Pulsing glow background wire */}
+            <path
+              d={dragPath}
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth={3.5}
+              strokeDasharray="6 4"
+              strokeLinecap="round"
+              filter="url(#glow-filter)"
+            />
+            {/* Crisp foreground wire */}
+            <path
+              d={dragPath}
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              markerEnd="url(#ia-arrow-highlight)"
+            />
+            {/* Pulsing circle at cursor tip */}
+            <circle
+              cx={p2x}
+              cy={p2y}
+              r={5}
+              fill="#3b82f6"
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+          </g>
+        )
+      })()}
     </svg>
   )
 }

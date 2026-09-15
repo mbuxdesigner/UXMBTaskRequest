@@ -1,10 +1,10 @@
-import React, { useRef, useEffect } from "react"
+import React, { useRef, useEffect, useState, useCallback } from "react"
 import { motion } from "framer-motion"
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from "lucide-react"
 import { tactileProps } from "@/lib/motion"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
 import { LayoutNode, LayoutConnector } from "@/hooks/useIATreeState"
-import { IANode, IAPortPosition } from "@/types/ia"
+import { IANode, IAPortPosition, IAPortDragState } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
 import IABezierConnectors from "./IABezierConnectors"
 import IATreeNodeCard from "./IATreeNodeCard"
@@ -28,6 +28,12 @@ interface IACanvasViewportProps {
   onOpenDetail?: (request: UXRequest) => void
   onAddChild: (parentNode: IANode) => void
   onAddChildInDirection?: (parentId: string, direction: IAPortPosition) => void
+  onConnectNodes?: (sourceNodeId: string, targetNodeId: string) => void
+  onCreateConnectedNodeAt?: (
+    sourceNodeId: string,
+    position: { x: number; y: number },
+    sourcePort: IAPortPosition
+  ) => void
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
   onNodePositionChange?: (nodeId: string, x: number, y: number, persist?: boolean) => void
@@ -55,6 +61,8 @@ export default function IACanvasViewport({
   onOpenDetail,
   onAddChild,
   onAddChildInDirection,
+  onConnectNodes,
+  onCreateConnectedNodeAt,
   onEditNode,
   onDeleteNode,
   onNodePositionChange,
@@ -63,6 +71,144 @@ export default function IACanvasViewport({
   onAutoAlign,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Active port wire drag state for dynamic bezier preview & connection
+  const [activeWireDrag, setActiveWireDrag] = useState<IAPortDragState | null>(null)
+  const wireDragRef = useRef<{
+    sourceNodeId: string
+    sourcePort: IAPortPosition
+    startCanvasX: number
+    startCanvasY: number
+    startScreenX: number
+    startScreenY: number
+    hasMovedBeyondThreshold: boolean
+  } | null>(null)
+
+  const handlePortDragStart = useCallback(
+    (nodeId: string, port: IAPortPosition, e: React.PointerEvent) => {
+      const sourceLayout = layoutNodes.find((ln) => ln.node.id === nodeId)
+      if (!sourceLayout) return
+
+      let startCanvasX = sourceLayout.x + sourceLayout.width / 2
+      let startCanvasY = sourceLayout.y + sourceLayout.height / 2
+      if (port === "top") startCanvasY = sourceLayout.y
+      else if (port === "bottom") startCanvasY = sourceLayout.y + sourceLayout.height
+      else if (port === "left") startCanvasX = sourceLayout.x
+      else if (port === "right") startCanvasX = sourceLayout.x + sourceLayout.width
+
+      const container = containerRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const currentCanvasX = Number(((e.clientX - rect.left - transform.x) / transform.scale).toFixed(2))
+      const currentCanvasY = Number(((e.clientY - rect.top - transform.y) / transform.scale).toFixed(2))
+
+      wireDragRef.current = {
+        sourceNodeId: nodeId,
+        sourcePort: port,
+        startCanvasX,
+        startCanvasY,
+        startScreenX: e.clientX,
+        startScreenY: e.clientY,
+        hasMovedBeyondThreshold: false,
+      }
+
+      setActiveWireDrag({
+        sourceNodeId: nodeId,
+        sourcePort: port,
+        startCanvasX,
+        startCanvasY,
+        currentCanvasX,
+        currentCanvasY,
+        hoveredTargetNodeId: null,
+      })
+    },
+    [layoutNodes, transform]
+  )
+
+  // Listen to window pointer movements & release during active wire dragging
+  useEffect(() => {
+    if (!activeWireDrag) return
+
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      if (!wireDragRef.current || !containerRef.current) return
+
+      const dist = Math.hypot(
+        e.clientX - wireDragRef.current.startScreenX,
+        e.clientY - wireDragRef.current.startScreenY
+      )
+      if (dist >= 6) {
+        wireDragRef.current.hasMovedBeyondThreshold = true
+      }
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const canvasX = Number(((e.clientX - rect.left - transform.x) / transform.scale).toFixed(2))
+      const canvasY = Number(((e.clientY - rect.top - transform.y) / transform.scale).toFixed(2))
+
+      // Identify hovered card for connection target highlight
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      const targetCard = el?.closest("[data-node-id]") as HTMLElement | null
+      const hoveredId = targetCard?.getAttribute("data-node-id") || null
+      const validHoveredId =
+        hoveredId && hoveredId !== wireDragRef.current.sourceNodeId ? hoveredId : null
+
+      setActiveWireDrag((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentCanvasX: canvasX,
+              currentCanvasY: canvasY,
+              hoveredTargetNodeId: validHoveredId,
+            }
+          : null
+      )
+    }
+
+    const handleWindowPointerUp = (e: PointerEvent) => {
+      const drag = wireDragRef.current
+      wireDragRef.current = null
+      setActiveWireDrag(null)
+
+      if (!drag) return
+
+      // Quick click (< 6px movement) triggers standard directional child creation
+      if (!drag.hasMovedBeyondThreshold) {
+        onAddChildInDirection?.(drag.sourceNodeId, drag.sourcePort)
+        return
+      }
+
+      // Dragged wire drop
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      const targetCard = el?.closest("[data-node-id]") as HTMLElement | null
+      const targetId = targetCard?.getAttribute("data-node-id")
+
+      if (targetId && targetId !== drag.sourceNodeId) {
+        // Connect to existing target node
+        onConnectNodes?.(drag.sourceNodeId, targetId)
+      } else {
+        // Drop on empty canvas -> Create connected node at drop position
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect()
+          const dropCanvasX = Number(((e.clientX - rect.left - transform.x) / transform.scale).toFixed(2))
+          const dropCanvasY = Number(((e.clientY - rect.top - transform.y) / transform.scale).toFixed(2))
+          onCreateConnectedNodeAt?.(
+            drag.sourceNodeId,
+            { x: dropCanvasX, y: dropCanvasY },
+            drag.sourcePort
+          )
+        }
+      }
+    }
+
+    window.addEventListener("pointermove", handleWindowPointerMove)
+    window.addEventListener("pointerup", handleWindowPointerUp)
+    window.addEventListener("pointercancel", handleWindowPointerUp)
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove)
+      window.removeEventListener("pointerup", handleWindowPointerUp)
+      window.removeEventListener("pointercancel", handleWindowPointerUp)
+    }
+  }, [activeWireDrag, transform, onAddChildInDirection, onConnectNodes, onCreateConnectedNodeAt])
 
   // Attach native non-passive wheel listener for smooth cursor-centric zoom
   useEffect(() => {
@@ -93,7 +239,11 @@ export default function IACanvasViewport({
       onPointerCancel={onPointerUp}
       onPointerLeave={onPointerUp}
       className={`relative flex-1 w-full h-full min-h-[640px] overflow-hidden select-none bg-slate-50/50 rounded-2xl border border-slate-200/80 shadow-inner ${
-        isPanning ? "cursor-grabbing" : "cursor-grab"
+        activeWireDrag
+          ? "cursor-crosshair"
+          : isPanning
+          ? "cursor-grabbing"
+          : "cursor-grab"
       }`}
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px)",
@@ -112,7 +262,11 @@ export default function IACanvasViewport({
         }}
       >
         {/* SVG Cubic Bezier Connectors Layer */}
-        <IABezierConnectors connectors={connectors} highlightedIds={matchedIds} />
+        <IABezierConnectors
+          connectors={connectors}
+          highlightedIds={matchedIds}
+          activeWireDrag={activeWireDrag}
+        />
 
         {/* 4-Tier Interactive Node Cards Layer */}
         {layoutNodes.map((layoutNode) => {
@@ -126,11 +280,13 @@ export default function IACanvasViewport({
               layoutNode={layoutNode}
               linkedRequest={linkedRequest}
               isHighlighted={layoutNode.isHighlighted}
+              isWireDropTarget={activeWireDrag?.hoveredTargetNodeId === layoutNode.node.id}
               scale={transform.scale}
               onToggleCollapse={onToggleCollapse}
               onOpenDetail={onOpenDetail}
               onAddChild={onAddChild}
               onAddChildInDirection={onAddChildInDirection}
+              onPortDragStart={handlePortDragStart}
               onEditNode={onEditNode}
               onDeleteNode={onDeleteNode}
               onNodeDrag={onNodeDrag || ((id, x, y) => onNodePositionChange?.(id, x, y, false))}
