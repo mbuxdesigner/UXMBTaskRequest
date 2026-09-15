@@ -1290,6 +1290,18 @@ const RBAC_CAPABILITIES = [
     description: "Kiểm tra lịch sử thay đổi của toàn hệ thống, tải tệp sao lưu dữ liệu JSON và kiểm tra kết nối Google Sheet.",
     category: "Bảo mật & Giám sát",
   },
+  {
+    id: "cap-ia-view",
+    title: "Xem Kiến trúc Thông tin (IA)",
+    description: "Truy cập màn hình Kiến trúc Thông tin (IA), xem sơ đồ cây phân cấp, zoom/pan và xem chi tiết task liên kết.",
+    category: "Kiến trúc Thông tin (IA)",
+  },
+  {
+    id: "cap-ia-edit",
+    title: "Chỉnh sửa & Sắp xếp Node IA",
+    description: "Di chuyển, sắp xếp vị trí, thêm mới, xóa, đổi tên, kéo dãn kích thước và nối dây các node trên sơ đồ IA.",
+    category: "Kiến trúc Thông tin (IA)",
+  },
 ]
 
 export function isNameMatching(nameA?: string, nameB?: string): boolean {
@@ -1567,6 +1579,8 @@ export default function QuanLyPage() {
       "cap-workflow": ["Admin"],
       "cap-request": ["Admin", "Design Owner", "Designer", "PO", "Business"],
       "cap-audit": ["Admin", "Design Owner"],
+      "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
+      "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
     }
     const saved = localStorage.getItem("mbbank_admin_rbac")
     if (saved) {
@@ -1576,6 +1590,8 @@ export default function QuanLyPage() {
           ...defaultRbac,
           ...parsed,
           "cap-invite": parsed["cap-invite"] ?? defaultRbac["cap-invite"],
+          "cap-ia-view": parsed["cap-ia-view"] ?? defaultRbac["cap-ia-view"],
+          "cap-ia-edit": parsed["cap-ia-edit"] ?? defaultRbac["cap-ia-edit"],
         }
       } catch {}
     }
@@ -3455,6 +3471,8 @@ export default function QuanLyPage() {
                         "cap-workflow": ["Admin"],
                         "cap-request": ["Admin", "Design Owner", "Designer", "PO", "Business"],
                         "cap-audit": ["Admin", "Design Owner"],
+                        "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
+                        "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
                       }
                       setRbacRolesPermissions(defaultRbac)
                       localStorage.setItem("mbbank_admin_rbac", JSON.stringify(defaultRbac))

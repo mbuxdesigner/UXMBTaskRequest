@@ -58,6 +58,10 @@ export default function Sidebar({
     const currentSession = getStoredSession()
     return canRoleAccessCapability(currentSession?.role, "cap-invite")
   })
+  const [canViewIa, setCanViewIa] = useState<boolean>(() => {
+    const currentSession = getStoredSession()
+    return canRoleAccessCapability(currentSession?.role, "cap-ia-view")
+  })
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(getNavOrderConfig())
 
@@ -71,6 +75,7 @@ export default function Sidebar({
       setNavConfig(getRoleNavConfig())
       setNavOrder(getNavOrderConfig())
       setCanInvite(canRoleAccessCapability(s?.role, "cap-invite"))
+      setCanViewIa(canRoleAccessCapability(s?.role, "cap-ia-view"))
     }
     window.addEventListener("storage", handleStorage)
     window.addEventListener("auth_session_changed", handleStorage)
@@ -183,7 +188,7 @@ export default function Sidebar({
   const isAdmin = userRole === "Admin"
   const canSwitchRoles = userRole === "Admin" || Boolean(session?.isImpersonating) || session?.originalRole === "Admin"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
-  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || currentRoleVisibility.ia
+  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || (currentRoleVisibility.ia && canViewIa)
   const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
 
   const renderSidebarContent = (isMobile = false) => {
@@ -352,7 +357,7 @@ export default function Sidebar({
                   )
                 }
 
-                if (itemKey === "ia" && currentRoleVisibility.ia) {
+                if (itemKey === "ia" && currentRoleVisibility.ia && canViewIa) {
                   const isActive = currentPage === "ia"
                   const isHovered = hoveredNav === "ia"
                   return (

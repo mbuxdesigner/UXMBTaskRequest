@@ -13,6 +13,7 @@ import {
   ChevronUp,
   RotateCcw,
   GitFork,
+  Eye,
 } from "lucide-react"
 import { springs, tactileProps } from "@/lib/motion"
 import { IAProductInfo } from "@/types/ia"
@@ -29,6 +30,7 @@ interface IAToolbarProps {
   onNextMatch?: () => void
   onPrevMatch?: () => void
   onResetToDefault: () => void
+  readOnly?: boolean
 }
 
 function getProductIcon(iconName: string) {
@@ -58,6 +60,7 @@ export default function IAToolbar({
   onNextMatch,
   onPrevMatch,
   onResetToDefault,
+  readOnly,
 }: IAToolbarProps) {
   return (
     <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-xs">
@@ -180,18 +183,29 @@ export default function IAToolbar({
           )}
         </div>
 
-        {/* Reset to Default Button */}
-        <button
-          type="button"
-          data-testid="ia-reset-default-btn"
-          onClick={onResetToDefault}
-          title="Khôi phục cấu trúc cây mặc định"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold border border-slate-200/60 transition-colors cursor-pointer shrink-0"
-          {...tactileProps.button}
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-          <span>Khôi phục mặc định</span>
-        </button>
+        {/* Read-only Mode Badge OR Reset to Default Button */}
+        {readOnly ? (
+          <div
+            data-testid="ia-readonly-badge"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold border border-amber-200/80 shadow-2xs shrink-0 select-none"
+            title="Bạn đang ở chế độ chỉ xem, không thể chỉnh sửa hoặc di chuyển node"
+          >
+            <Eye className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Chế độ chỉ xem</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-testid="ia-reset-default-btn"
+            onClick={onResetToDefault}
+            title="Khôi phục cấu trúc cây mặc định"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold border border-slate-200/60 transition-colors cursor-pointer shrink-0"
+            {...tactileProps.button}
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+            <span>Khôi phục mặc định</span>
+          </button>
+        )}
       </div>
     </header>
   )

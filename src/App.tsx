@@ -42,6 +42,7 @@ import {
 import Sidebar from "./components/Sidebar"
 import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 import { getRoleNavConfig, DEFAULT_ROLE_NAV_CONFIG } from "@/config/navVisibilityConfig"
+import { canRoleAccessCapability } from "@/lib/accessControl"
 import type { UserRole } from "./data/mockData"
 import TongQuanPage from "./pages/TongQuanPage"
 import CreateRequestPage from "./pages/CreateRequestPage"
@@ -82,6 +83,12 @@ export default function App() {
 
   const isPageAllowedForRole = (targetPage: Page, role?: UserRole): boolean => {
     if (!role) return true
+    if (targetPage === "ia") {
+      const canView = canRoleAccessCapability(role, "cap-ia-view")
+      const navConfig = getRoleNavConfig()
+      const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
+      return canView && Boolean(visibility.ia)
+    }
     const navConfig = getRoleNavConfig()
     const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
     if (targetPage === "manage") return Boolean(visibility.manage)
@@ -161,13 +168,11 @@ export default function App() {
   useEffect(() => {
     const handleAuthChange = () => {
       const current = getStoredSession()
-
       setSession(current)
-
-      if (current?.role === "PO") {
-        setPage("track")
-
-        window.location.hash = "#track"
+      if (current?.role && !isPageAllowedForRole(page, current.role)) {
+        const fallback = isPageAllowedForRole("track", current.role) ? "track" : "create"
+        setPage(fallback)
+        window.location.hash = `#${fallback}`
       }
     }
 

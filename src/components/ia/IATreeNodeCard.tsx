@@ -45,6 +45,7 @@ interface IATreeNodeCardProps {
   onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
   onNodeResize?: (nodeId: string, width: number, height: number, persist?: boolean) => void
   onNodeResizeEnd?: (nodeId: string, width: number, height: number, persist?: boolean) => void
+  readOnly?: boolean
 }
 
 function getTouchpointIcon(type?: IATouchpointType) {
@@ -199,6 +200,7 @@ function IATreeNodeCardComponent({
   onNodeDragEnd,
   onNodeResize,
   onNodeResizeEnd,
+  readOnly = false,
 }: IATreeNodeCardProps) {
   const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
   const [isDragging, setIsDragging] = useState(false)
@@ -269,7 +271,7 @@ function IATreeNodeCardComponent({
 
   // Drag and drop arranger logic
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    if (readOnly || e.button !== 0) return
     const target = e.target as HTMLElement
     // Ignore clicks on buttons, inputs, links, connection ports, or resize handle
     if (target.closest("button, a, input, textarea, [data-port-action], [data-resize-handle]")) {
@@ -339,7 +341,7 @@ function IATreeNodeCardComponent({
   const resizeRef = useRef<{ startX: number; startY: number; initWidth: number; initHeight: number } | null>(null)
 
   const handleResizePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    if (readOnly || e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
 
@@ -429,7 +431,9 @@ function IATreeNodeCardComponent({
     ? "ring-4 ring-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.8)] scale-[1.03] border-blue-500 z-50 bg-blue-50/40"
     : ""
 
-  const draggingClass = isDragging
+  const draggingClass = readOnly
+    ? "cursor-default"
+    : isDragging
     ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
     : "cursor-grab"
 
@@ -443,7 +447,7 @@ function IATreeNodeCardComponent({
       data-is-drop-target={isWireDropTarget ? "true" : undefined}
       layoutId={isDragging || isResizing ? undefined : `ia-card-motion-${node.id}`}
       transition={isDragging || isResizing ? { duration: 0 } : springs.snappy}
-      onPointerDown={handlePointerDown}
+      onPointerDown={readOnly ? undefined : handlePointerDown}
       style={{
         position: "absolute",
         left: x,
@@ -461,114 +465,117 @@ function IATreeNodeCardComponent({
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
       {/* ───────────────────────────────────────────────────────────────── */}
+      {!readOnly && (
+        <>
+          {/* TOP PORT */}
+          <div
+            data-testid={`ia-port-top-${node.id}`}
+            data-port="top"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+          >
+            <button
+              type="button"
+              data-port-action="true"
+              data-testid={`ia-port-add-top-${node.id}`}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPortDragStart?.(node.id, "top", e)
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!onPortDragStart) {
+                  onAddChildInDirection?.(node.id, "top")
+                }
+              }}
+              title="Kéo mũi tên nối node hoặc click để thêm node phía trên"
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+            >
+              <Plus className="w-2.5 h-2.5 stroke-[3]" />
+            </button>
+          </div>
 
-      {/* TOP PORT */}
-      <div
-        data-testid={`ia-port-top-${node.id}`}
-        data-port="top"
-        className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
-      >
-        <button
-          type="button"
-          data-port-action="true"
-          data-testid={`ia-port-add-top-${node.id}`}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onPortDragStart?.(node.id, "top", e)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (!onPortDragStart) {
-              onAddChildInDirection?.(node.id, "top")
-            }
-          }}
-          title="Kéo mũi tên nối node hoặc click để thêm node phía trên"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-        >
-          <Plus className="w-2.5 h-2.5 stroke-[3]" />
-        </button>
-      </div>
+          {/* BOTTOM PORT */}
+          <div
+            data-testid={`ia-port-bottom-${node.id}`}
+            data-port="bottom"
+            className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+          >
+            <button
+              type="button"
+              data-port-action="true"
+              data-testid={`ia-port-add-bottom-${node.id}`}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPortDragStart?.(node.id, "bottom", e)
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!onPortDragStart) {
+                  onAddChildInDirection?.(node.id, "bottom")
+                }
+              }}
+              title="Kéo mũi tên nối node hoặc click để thêm node phía dưới"
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+            >
+              <Plus className="w-2.5 h-2.5 stroke-[3]" />
+            </button>
+          </div>
 
-      {/* BOTTOM PORT */}
-      <div
-        data-testid={`ia-port-bottom-${node.id}`}
-        data-port="bottom"
-        className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
-      >
-        <button
-          type="button"
-          data-port-action="true"
-          data-testid={`ia-port-add-bottom-${node.id}`}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onPortDragStart?.(node.id, "bottom", e)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (!onPortDragStart) {
-              onAddChildInDirection?.(node.id, "bottom")
-            }
-          }}
-          title="Kéo mũi tên nối node hoặc click để thêm node phía dưới"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-        >
-          <Plus className="w-2.5 h-2.5 stroke-[3]" />
-        </button>
-      </div>
+          {/* LEFT PORT */}
+          <div
+            data-testid={`ia-port-left-${node.id}`}
+            data-port="left"
+            className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30"
+          >
+            <button
+              type="button"
+              data-port-action="true"
+              data-testid={`ia-port-add-left-${node.id}`}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPortDragStart?.(node.id, "left", e)
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!onPortDragStart) {
+                  onAddChildInDirection?.(node.id, "left")
+                }
+              }}
+              title="Kéo mũi tên nối node hoặc click để thêm node bên trái"
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+            >
+              <Plus className="w-2.5 h-2.5 stroke-[3]" />
+            </button>
+          </div>
 
-      {/* LEFT PORT */}
-      <div
-        data-testid={`ia-port-left-${node.id}`}
-        data-port="left"
-        className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30"
-      >
-        <button
-          type="button"
-          data-port-action="true"
-          data-testid={`ia-port-add-left-${node.id}`}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onPortDragStart?.(node.id, "left", e)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (!onPortDragStart) {
-              onAddChildInDirection?.(node.id, "left")
-            }
-          }}
-          title="Kéo mũi tên nối node hoặc click để thêm node bên trái"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-        >
-          <Plus className="w-2.5 h-2.5 stroke-[3]" />
-        </button>
-      </div>
-
-      {/* RIGHT PORT */}
-      <div
-        data-testid={`ia-port-right-${node.id}`}
-        data-port="right"
-        className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30"
-      >
-        <button
-          type="button"
-          data-port-action="true"
-          data-testid={`ia-port-add-right-${node.id}`}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onPortDragStart?.(node.id, "right", e)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (!onPortDragStart) {
-              onAddChildInDirection?.(node.id, "right")
-            }
-          }}
-          title="Kéo mũi tên nối node hoặc click để thêm node bên phải"
-          className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-        >
-          <Plus className="w-2.5 h-2.5 stroke-[3]" />
-        </button>
-      </div>
+          {/* RIGHT PORT */}
+          <div
+            data-testid={`ia-port-right-${node.id}`}
+            data-port="right"
+            className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30"
+          >
+            <button
+              type="button"
+              data-port-action="true"
+              data-testid={`ia-port-add-right-${node.id}`}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPortDragStart?.(node.id, "right", e)
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!onPortDragStart) {
+                  onAddChildInDirection?.(node.id, "right")
+                }
+              }}
+              title="Kéo mũi tên nối node hoặc click để thêm node bên phải"
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+            >
+              <Plus className="w-2.5 h-2.5 stroke-[3]" />
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* NODE CARD CONTENT (User-Authored First)                          */}
@@ -577,7 +584,9 @@ function IATreeNodeCardComponent({
       {/* Top Header Row: Drag Handle, Tier Badge, Action Menu */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <GripHorizontal className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+          {!readOnly && (
+            <GripHorizontal className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+          )}
           <span className={`text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 ${tierBadgeClass}`}>
             {tierBadgeText}
           </span>
@@ -589,54 +598,56 @@ function IATreeNodeCardComponent({
         </div>
 
         {/* Action Controls: Add Child (+), Edit (pencil), Delete (trash) */}
-        <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
-          {node.tier < 4 && (
+        {!readOnly && (
+          <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
+            {node.tier < 4 && (
+              <button
+                type="button"
+                data-testid={`ia-add-child-btn-${node.id}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddChild(node)
+                }}
+                title="Thêm node con"
+                className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             <button
               type="button"
-              data-testid={`ia-add-child-btn-${node.id}`}
+              data-testid={`ia-edit-node-btn-${node.id}`}
               onClick={(e) => {
                 e.stopPropagation()
-                onAddChild(node)
+                onEditNode(node)
               }}
-              title="Thêm node con"
-              className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+              title="Chỉnh sửa node"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Pencil className="w-3 h-3" />
             </button>
-          )}
 
-          <button
-            type="button"
-            data-testid={`ia-edit-node-btn-${node.id}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onEditNode(node)
-            }}
-            title="Chỉnh sửa node"
-            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-
-          {node.tier > 1 ? (
-            <button
-              type="button"
-              data-testid={`ia-delete-node-btn-${node.id}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                onDeleteNode(node)
-              }}
-              title="Xóa node"
-              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          ) : (
-            <span title="Không thể xóa node gốc sản phẩm" className="p-1 text-slate-300">
-              <Lock className="w-3 h-3" />
-            </span>
-          )}
-        </div>
+            {node.tier > 1 ? (
+              <button
+                type="button"
+                data-testid={`ia-delete-node-btn-${node.id}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDeleteNode(node)
+                }}
+                title="Xóa node"
+                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            ) : (
+              <span title="Không thể xóa node gốc sản phẩm" className="p-1 text-slate-300">
+                <Lock className="w-3 h-3" />
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tên Tính Năng (Feature Name) & Squad & Mô tả */}
@@ -807,26 +818,28 @@ function IATreeNodeCardComponent({
       </div>
 
       {/* Interactive Bottom-Right Corner Resize Handle */}
-      <div
-        data-testid={`ia-resize-handle-${node.id}`}
-        data-resize-handle="true"
-        onPointerDown={handleResizePointerDown}
-        title="Kéo dãn kích thước node"
-        className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100 z-30 select-none"
-      >
-        <svg
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          className="w-3 h-3 rotate-0 pointer-events-none"
+      {!readOnly && (
+        <div
+          data-testid={`ia-resize-handle-${node.id}`}
+          data-resize-handle="true"
+          onPointerDown={handleResizePointerDown}
+          title="Kéo dãn kích thước node"
+          className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100 z-30 select-none"
         >
-          <circle cx="13" cy="13" r="1.5" />
-          <circle cx="13" cy="8" r="1.5" />
-          <circle cx="8" cy="13" r="1.5" />
-          <circle cx="13" cy="3" r="1.5" />
-          <circle cx="8" cy="8" r="1.5" />
-          <circle cx="3" cy="13" r="1.5" />
-        </svg>
-      </div>
+          <svg
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-3 h-3 rotate-0 pointer-events-none"
+          >
+            <circle cx="13" cy="13" r="1.5" />
+            <circle cx="13" cy="8" r="1.5" />
+            <circle cx="8" cy="13" r="1.5" />
+            <circle cx="13" cy="3" r="1.5" />
+            <circle cx="8" cy="8" r="1.5" />
+            <circle cx="3" cy="13" r="1.5" />
+          </svg>
+        </div>
+      )}
     </motion.div>
   )
 }

@@ -42,6 +42,7 @@ interface IACanvasViewportProps {
   onNodeResize?: (nodeId: string, width: number, height: number) => void
   onNodeResizeEnd?: (nodeId: string, width: number, height: number) => void
   onAutoAlign?: () => void
+  readOnly?: boolean
 }
 
 export default function IACanvasViewport({
@@ -73,6 +74,7 @@ export default function IACanvasViewport({
   onNodeResize,
   onNodeResizeEnd,
   onAutoAlign,
+  readOnly = false,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -90,6 +92,7 @@ export default function IACanvasViewport({
 
   const handlePortDragStart = useCallback(
     (nodeId: string, port: IAPortPosition, e: React.PointerEvent) => {
+      if (readOnly) return
       const sourceLayout = layoutNodes.find((ln) => ln.node.id === nodeId)
       if (!sourceLayout) return
 
@@ -290,14 +293,15 @@ export default function IACanvasViewport({
               onToggleCollapse={onToggleCollapse}
               onOpenDetail={onOpenDetail}
               onAddChild={onAddChild}
-              onAddChildInDirection={onAddChildInDirection}
-              onPortDragStart={handlePortDragStart}
+              onAddChildInDirection={readOnly ? undefined : onAddChildInDirection}
+              onPortDragStart={readOnly ? undefined : handlePortDragStart}
               onEditNode={onEditNode}
               onDeleteNode={onDeleteNode}
-              onNodeDrag={onNodeDrag || ((id, x, y) => onNodePositionChange?.(id, x, y, false))}
-              onNodeDragEnd={onNodeDragEnd || ((id, x, y) => onNodePositionChange?.(id, x, y, true))}
-              onNodeResize={onNodeResize}
-              onNodeResizeEnd={onNodeResizeEnd}
+              onNodeDrag={readOnly ? undefined : onNodeDrag || ((id, x, y) => onNodePositionChange?.(id, x, y, false))}
+              onNodeDragEnd={readOnly ? undefined : onNodeDragEnd || ((id, x, y) => onNodePositionChange?.(id, x, y, true))}
+              onNodeResize={readOnly ? undefined : onNodeResize}
+              onNodeResizeEnd={readOnly ? undefined : onNodeResizeEnd}
+              readOnly={readOnly}
             />
           )
         })}
@@ -308,7 +312,7 @@ export default function IACanvasViewport({
         data-testid="ia-canvas-floating-controls"
         className="absolute bottom-5 right-5 z-30 flex items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-lg text-slate-700"
       >
-        {onAutoAlign && (
+        {!readOnly && onAutoAlign && (
           <>
             <button
               type="button"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react"
-import { Layers, Sparkles, CheckCircle2 } from "lucide-react"
+import { Layers, Sparkles, CheckCircle2, ShieldAlert, Lock } from "lucide-react"
 import { useIATreeState } from "@/hooks/useIATreeState"
 import { useCanvasTransform } from "@/hooks/useCanvasTransform"
 import IAToolbar from "@/components/ia/IAToolbar"
@@ -8,8 +8,37 @@ import IANodeEditorModal, { ModalMode } from "@/components/ia/IANodeEditorModal"
 import RequestDetail from "@/components/track/RequestDetail"
 import { IANode } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
+import { getStoredSession, UserSession } from "@/services/otpAuthService"
+import { canRoleAccessCapability } from "@/lib/accessControl"
 
 export default function IAPage() {
+  const [session, setSession] = useState<UserSession | null>(getStoredSession())
+  const [canView, setCanView] = useState<boolean>(() => {
+    const s = getStoredSession()
+    return canRoleAccessCapability(s?.role, "cap-ia-view")
+  })
+  const [canEdit, setCanEdit] = useState<boolean>(() => {
+    const s = getStoredSession()
+    return canRoleAccessCapability(s?.role, "cap-ia-edit")
+  })
+
+  useEffect(() => {
+    const handleStorage = () => {
+      const s = getStoredSession()
+      setSession(s)
+      setCanView(canRoleAccessCapability(s?.role, "cap-ia-view"))
+      setCanEdit(canRoleAccessCapability(s?.role, "cap-ia-edit"))
+    }
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("auth_session_changed", handleStorage)
+    window.addEventListener("rbac_permissions_changed", handleStorage)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("auth_session_changed", handleStorage)
+      window.removeEventListener("rbac_permissions_changed", handleStorage)
+    }
+  }, [])
+
   const {
     activeTree,
     products,
@@ -96,26 +125,30 @@ export default function IAPage() {
     handleFitToView()
   }, [selectedProductId])
 
-  // Modal Action Handlers
+  // Modal Action Handlers (blocked if !canEdit)
   const handleOpenAdd = useCallback((parent: IANode) => {
+    if (!canEdit) return
     setTargetNode(parent)
     setModalMode("add")
-  }, [])
+  }, [canEdit])
 
   const handleOpenEdit = useCallback((node: IANode) => {
+    if (!canEdit) return
     setTargetNode(node)
     setModalMode("edit")
-  }, [])
+  }, [canEdit])
 
   const handleOpenDelete = useCallback((node: IANode) => {
+    if (!canEdit) return
     setTargetNode(node)
     setModalMode("delete")
-  }, [])
+  }, [canEdit])
 
   const handleOpenReset = useCallback(() => {
+    if (!canEdit) return
     setTargetNode(null)
     setModalMode("reset")
-  }, [])
+  }, [canEdit])
 
   const handleCloseModal = useCallback(() => {
     setModalMode(null)
@@ -170,6 +203,22 @@ export default function IAPage() {
     }
   }, [searchQuery, matchedIdList.length])
 
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 border border-amber-200">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 mb-1">
+          Không có quyền truy cập Kiến trúc Thông tin (IA)
+        </h2>
+        <p className="text-sm text-slate-500 max-w-md mb-6">
+          Tài khoản với vai trò <span className="font-semibold text-slate-700">{session?.role || "Hiện tại"}</span> chưa được cấp quyền xem sơ đồ Kiến trúc Thông tin. Vui lòng liên hệ Quản trị viên (Admin) để được mở quyền.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4">
       {/* 1. Top Toolbar: Product Selector, Metrics, Search & Reset */}
@@ -185,6 +234,7 @@ export default function IAPage() {
         onNextMatch={handleNextMatch}
         onPrevMatch={handlePrevMatch}
         onResetToDefault={handleOpenReset}
+        readOnly={!canEdit}
       />
 
       {/* 2. Product Context Info Bar */}
@@ -225,17 +275,18 @@ export default function IAPage() {
         onToggleCollapse={toggleCollapse}
         onOpenDetail={(req) => setSelectedRequest(req)}
         onAddChild={handleOpenAdd}
-        onAddChildInDirection={addChildInDirection}
-        onConnectNodes={connectNodes}
-        onCreateConnectedNodeAt={createConnectedNodeAt}
+        onAddChildInDirection={canEdit ? addChildInDirection : undefined}
+        onConnectNodes={canEdit ? connectNodes : undefined}
+        onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
         onEditNode={handleOpenEdit}
         onDeleteNode={handleOpenDelete}
-        onNodeDrag={(id, x, y) => updateNodePosition(id, x, y, false)}
-        onNodeDragEnd={(id, x, y) => updateNodePosition(id, x, y, true)}
-        onNodeResize={(id, w, h) => updateNodeDimensions(id, w, h, false)}
-        onNodeResizeEnd={(id, w, h) => updateNodeDimensions(id, w, h, true)}
-        onNodePositionChange={updateNodePosition}
-        onAutoAlign={autoAlignTree}
+        onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
+        onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
+        onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
+        onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
+        onNodePositionChange={canEdit ? updateNodePosition : undefined}
+        onAutoAlign={canEdit ? autoAlignTree : undefined}
+        readOnly={!canEdit}
       />
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}
