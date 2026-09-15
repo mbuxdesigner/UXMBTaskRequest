@@ -23,6 +23,11 @@ import PageHeader from "@/components/common/PageHeader"
 import FileUpload from "./FileUpload"
 import RequestReviewSheet from "./RequestReviewSheet"
 import SuccessCelebrationCard from "./SuccessCelebrationCard"
+import {
+  getFormConfig,
+  FORM_CONFIG_EVENT_NAME,
+  RequestFormConfig,
+} from "@/config/formConfig"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
@@ -100,6 +105,27 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loadingSelections, setLoadingSelections] = useState(true)
 
+  // Dynamic form configuration from Admin
+  const [formConfig, setFormConfig] = useState<RequestFormConfig>(() => getFormConfig())
+
+  useEffect(() => {
+    const handleConfigChange = (e: any) => {
+      if (e.detail) {
+        setFormConfig(e.detail)
+      } else {
+        setFormConfig(getFormConfig())
+      }
+    }
+    window.addEventListener(FORM_CONFIG_EVENT_NAME, handleConfigChange)
+    return () => window.removeEventListener(FORM_CONFIG_EVENT_NAME, handleConfigChange)
+  }, [])
+
+  const getField = (key: string) => formConfig.fields.find((f) => f.key === key)
+  const isFieldEnabled = (key: string) => getField(key)?.enabled !== false
+  const isFieldRequired = (key: string) => getField(key)?.required === true
+  const getFieldLabel = (key: string, fallback: string) => getField(key)?.label || fallback
+  const getFieldPlaceholder = (key: string, fallback: string) => getField(key)?.placeholder || fallback
+
   // Dynamic selections from Google Sheet
   const [selections, setSelections] = useState<SelectionsData>(FALLBACK_SELECTIONS)
 
@@ -134,6 +160,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
   // Cho phép dán ảnh chụp màn hình trực tiếp bằng Ctrl + V vào form yêu cầu
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
+      if (formConfig.rules && formConfig.rules.allowScreenshotsPaste === false) return
       const clipboardData = e.clipboardData
       if (!clipboardData) return
 
@@ -215,14 +242,37 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
   const rec = recommendSquad(form.product)
 
-  // Validate form
+  // Validate form linh hoạt theo cấu hình Admin
   const validate = (): boolean => {
     const e: Record<string, string> = {}
-    if (!form.title.trim()) e.title = "Vui lòng nhập tiêu đề yêu cầu"
-    if (!form.product) e.product = "Vui lòng chọn nền tảng / sản phẩm"
-    if (!form.request_type) e.request_type = "Vui lòng chọn loại yêu cầu"
-    if (!form.description.trim()) e.description = "Vui lòng mô tả chi tiết yêu cầu"
-    if (!form.release_date) e.release_date = "Vui lòng chọn ngày release dự kiến"
+    
+    formConfig.fields.forEach((f) => {
+      if (!f.enabled || !f.required) return
+
+      if (f.key === "title" && !form.title.trim()) {
+        e.title = `Vui lòng nhập ${f.label.toLowerCase()}`
+      } else if (f.key === "product" && !form.product) {
+        e.product = `Vui lòng chọn ${f.label.toLowerCase()}`
+      } else if (f.key === "preferred_squad" && !form.preferred_squad) {
+        e.preferred_squad = `Vui lòng chọn ${f.label.toLowerCase()}`
+      } else if (f.key === "request_type" && !form.request_type) {
+        e.request_type = `Vui lòng chọn ${f.label.toLowerCase()}`
+      } else if (f.key === "description" && !form.description.trim()) {
+        e.description = `Vui lòng nhập ${f.label.toLowerCase()}`
+      } else if (f.key === "business_need" && !form.business_need.trim()) {
+        e.business_need = `Vui lòng nhập ${f.label.toLowerCase()}`
+      } else if (f.key === "user_problem" && !form.user_problem.trim()) {
+        e.user_problem = `Vui lòng nhập ${f.label.toLowerCase()}`
+      } else if (f.key === "target_user" && !form.target_user.trim()) {
+        e.target_user = `Vui lòng nhập ${f.label.toLowerCase()}`
+      } else if (f.key === "release_date" && !form.release_date) {
+        e.release_date = `Vui lòng chọn ${f.label.toLowerCase()}`
+      } else if (f.key === "deadline_reason" && !form.deadline_reason) {
+        e.deadline_reason = `Vui lòng chọn ${f.label.toLowerCase()}`
+      } else if (f.key === "leader_report_note" && !form.leader_report_note.trim()) {
+        e.leader_report_note = `Vui lòng nhập ${f.label.toLowerCase()}`
+      }
+    })
 
     setErrors(e)
     return Object.keys(e).length === 0
@@ -468,18 +518,31 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
     label: p,
   }))
 
-  const requestTypeOptions: DropdownOption[] = selections.request_types.map((rt) => ({
-    value: rt,
-    label: rt,
-  }))
+  const requestTypeOptions: DropdownOption[] = (() => {
+    const configList = formConfig.options?.requestTypes?.filter((item) => item.enabled)
+    if (configList && configList.length > 0) {
+      return configList.map((rt) => ({
+        value: rt.value,
+        label: rt.label,
+        description: rt.description,
+      }))
+    }
+    return selections.request_types.map((rt) => ({
+      value: rt,
+      label: rt,
+    }))
+  })()
 
-  const deadlineReasonOptions: DropdownOption[] = [
-    { value: "", label: "Chọn lý do..." },
-    ...selections.deadline_reasons.map((dr) => ({
-      value: dr,
-      label: dr,
-    })),
-  ]
+  const deadlineReasonOptions: DropdownOption[] = (() => {
+    const configList = formConfig.options?.deadlineReasons?.filter((item) => item.enabled)
+    const baseList = configList && configList.length > 0
+      ? configList.map((dr) => ({ value: dr.value, label: dr.label, description: dr.description }))
+      : selections.deadline_reasons.map((dr) => ({ value: dr, label: dr }))
+    return [
+      { value: "", label: "Chọn lý do..." },
+      ...baseList,
+    ]
+  })()
 
   const hostName = session?.displayName || "Trần Hoàng Long"
 
@@ -555,248 +618,278 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
           {/* Main Title Đồng Bộ */}
           <PageHeader
             breadcrumb={{
-              parent: "MBBank UX Platform",
-              current: "Tạo task mới",
+              parent: formConfig.header?.parentBreadcrumb || "MBBank UX Platform",
+              current: formConfig.header?.currentBreadcrumb || "Tạo task mới",
             }}
-            title="Gửi yêu cầu thiết kế UX"
-            subtitle="Điền đầy đủ thông tin đề bài để UX Squad tiếp nhận và xử lý nhanh chóng nhất"
+            title={formConfig.header?.title || "Gửi yêu cầu thiết kế UX"}
+            subtitle={formConfig.header?.subtitle || "Điền đầy đủ thông tin đề bài để UX Squad tiếp nhận và xử lý nhanh chóng nhất"}
           />
 
           {/* 01 · THÔNG TIN YÊU CẦU */}
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              01 · THÔNG TIN YÊU CẦU
+              {formConfig.sections?.requestInfoTitle || "01 · THÔNG TIN YÊU CẦU"}
             </h2>
 
             {/* Tiêu đề yêu cầu */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
-                Tiêu đề yêu cầu <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="text"
-                value={form.title}
-                onChange={(e) => set("title")(e.target.value)}
-                placeholder="VD: Thiết kế lại màn hình chuyển tiền quốc tế"
-                className="h-12 bg-white rounded-xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
-                error={Boolean(errors.title)}
-              />
-              {errors.title && <p className="text-sm text-rose-500 font-medium">{errors.title}</p>}
-            </div>
+            {isFieldEnabled("title") && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {getFieldLabel("title", "Tiêu đề yêu cầu")}{" "}
+                  {isFieldRequired("title") && <span className="text-rose-500">*</span>}
+                </label>
+                <Input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => set("title")(e.target.value)}
+                  placeholder={getFieldPlaceholder("title", "VD: Thiết kế lại màn hình chuyển tiền quốc tế")}
+                  className="h-12 bg-white rounded-xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
+                  error={Boolean(errors.title)}
+                />
+                {errors.title && <p className="text-sm text-rose-500 font-medium">{errors.title}</p>}
+              </div>
+            )}
 
             {/* 3-Column: Sản phẩm số, Squad nghiệp vụ trực thuộc & Loại yêu cầu */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Cột 1: Sản phẩm số */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-slate-700">
-                    Sản phẩm số <span className="text-rose-500">*</span>
-                  </label>
-                  {isRestrictedPo && (
-                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100">
-                      ⚡ Phân bổ PO ({allocatedProducts.length} SP)
-                    </span>
-                  )}
+              {isFieldEnabled("product") && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-slate-700">
+                      {getFieldLabel("product", "Sản phẩm số")}{" "}
+                      {isFieldRequired("product") && <span className="text-rose-500">*</span>}
+                    </label>
+                    {isRestrictedPo && (
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full border border-blue-100">
+                        ⚡ Phân bổ PO ({allocatedProducts.length} SP)
+                      </span>
+                    )}
+                  </div>
+                  <DropdownMenu
+                    options={productOptions}
+                    value={form.product}
+                    onChange={handleProductChange}
+                    placeholder={getFieldPlaceholder("product", "Chọn sản phẩm...")}
+                    className="w-full"
+                    buttonClassName={`w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800 ${
+                      errors.product ? "border-rose-400 ring-1 ring-rose-200" : ""
+                    }`}
+                  />
+                  {errors.product && <p className="text-sm text-rose-500 font-medium">{errors.product}</p>}
                 </div>
-                <DropdownMenu
-                  options={productOptions}
-                  value={form.product}
-                  onChange={handleProductChange}
-                  placeholder="Chọn sản phẩm..."
-                  className="w-full"
-                  buttonClassName={`w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800 ${
-                    errors.product ? "border-rose-400 ring-1 ring-rose-200" : ""
-                  }`}
-                />
-                {errors.product && <p className="text-sm text-rose-500 font-medium">{errors.product}</p>}
-              </div>
+              )}
 
               {/* Cột 2: Squad nghiệp vụ trực thuộc */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-slate-700">
-                    Squad nghiệp vụ
-                  </label>
-                  {form.product && relevantSquads.length > 0 && (
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      {relevantSquads.length} squads
-                    </span>
-                  )}
+              {isFieldEnabled("preferred_squad") && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-slate-700">
+                      {getFieldLabel("preferred_squad", "Squad nghiệp vụ")}{" "}
+                      {isFieldRequired("preferred_squad") && <span className="text-rose-500">*</span>}
+                    </label>
+                    {form.product && relevantSquads.length > 0 && (
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {relevantSquads.length} squads
+                      </span>
+                    )}
+                  </div>
+                  <DropdownMenu
+                    options={squadOptions}
+                    value={form.preferred_squad}
+                    onChange={(val) => set("preferred_squad")(val)}
+                    placeholder={form.product ? getFieldPlaceholder("preferred_squad", "Chọn squad...") : "Chọn sản phẩm trước..."}
+                    className="w-full"
+                    buttonClassName="w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800"
+                  />
+                  {errors.preferred_squad && <p className="text-sm text-rose-500 font-medium">{errors.preferred_squad}</p>}
                 </div>
-                <DropdownMenu
-                  options={squadOptions}
-                  value={form.preferred_squad}
-                  onChange={(val) => set("preferred_squad")(val)}
-                  placeholder={form.product ? "Chọn squad..." : "Chọn sản phẩm trước..."}
-                  className="w-full"
-                  buttonClassName="w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800"
-                />
-              </div>
+              )}
 
               {/* Cột 3: Loại yêu cầu */}
-              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                <label className="block text-sm font-medium text-slate-700">
-                  Loại yêu cầu <span className="text-rose-500">*</span>
-                </label>
-                <DropdownMenu
-                  options={requestTypeOptions}
-                  value={form.request_type}
-                  onChange={(val) => set("request_type")(val)}
-                  placeholder="Chọn loại yêu cầu..."
-                  className="w-full"
-                  buttonClassName={`w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800 ${
-                    errors.request_type ? "border-rose-400 ring-1 ring-rose-200" : ""
-                  }`}
-                />
-                {errors.request_type && <p className="text-sm text-rose-500 font-medium">{errors.request_type}</p>}
-              </div>
+              {isFieldEnabled("request_type") && (
+                <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {getFieldLabel("request_type", "Loại yêu cầu")}{" "}
+                    {isFieldRequired("request_type") && <span className="text-rose-500">*</span>}
+                  </label>
+                  <DropdownMenu
+                    options={requestTypeOptions}
+                    value={form.request_type}
+                    onChange={(val) => set("request_type")(val)}
+                    placeholder={getFieldPlaceholder("request_type", "Chọn loại yêu cầu...")}
+                    className="w-full"
+                    buttonClassName={`w-full h-12 bg-slate-100/70 hover:bg-slate-100 border-slate-200/60 rounded-xl px-4 justify-between font-semibold text-slate-800 ${
+                      errors.request_type ? "border-rose-400 ring-1 ring-rose-200" : ""
+                    }`}
+                  />
+                  {errors.request_type && <p className="text-sm text-rose-500 font-medium">{errors.request_type}</p>}
+                </div>
+              )}
             </div>
           </div>
 
           {/* 02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ */}
           <div className="space-y-4 pt-2">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ
+              {formConfig.sections?.detailDescTitle || "02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ"}
             </h2>
 
             {/* Mô tả yêu cầu */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
-                Mô tả yêu cầu <span className="text-rose-500">*</span>
-              </label>
-              <Textarea
-                value={form.description}
-                onChange={(e) => set("description")(e.target.value)}
-                placeholder="Mô tả chi tiết nhu cầu cần UX team hỗ trợ..."
-                rows={5}
-                className="bg-white rounded-xl border-slate-200/90 p-4 text-sm focus:border-[#1E5AF6]"
-                error={Boolean(errors.description)}
-              />
-              {errors.description && <p className="text-sm text-rose-500 font-medium">{errors.description}</p>}
-            </div>
+            {isFieldEnabled("description") && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {getFieldLabel("description", "Mô tả yêu cầu")}{" "}
+                  {isFieldRequired("description") && <span className="text-rose-500">*</span>}
+                </label>
+                <Textarea
+                  value={form.description}
+                  onChange={(e) => set("description")(e.target.value)}
+                  placeholder={getFieldPlaceholder("description", "Mô tả chi tiết nhu cầu cần UX team hỗ trợ...")}
+                  rows={5}
+                  className="bg-white rounded-xl border-slate-200/90 p-4 text-sm focus:border-[#1E5AF6]"
+                  error={Boolean(errors.description)}
+                />
+                {errors.description && <p className="text-sm text-rose-500 font-medium">{errors.description}</p>}
+              </div>
+            )}
 
             {/* 2-Column: Tại sao yêu cầu này cần thiết & Vấn đề người dùng cần giải quyết */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Tại sao yêu cầu này cần thiết?
-                </label>
-                <Textarea
-                  value={form.business_need}
-                  onChange={(e) => set("business_need")(e.target.value)}
-                  placeholder="Vấn đề kinh doanh bạn đang muốn giải quyết là gì?"
-                  rows={3}
-                  className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
-                />
-              </div>
+              {isFieldEnabled("business_need") && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {getFieldLabel("business_need", "Tại sao yêu cầu này cần thiết?")}{" "}
+                    {isFieldRequired("business_need") && <span className="text-rose-500">*</span>}
+                  </label>
+                  <Textarea
+                    value={form.business_need}
+                    onChange={(e) => set("business_need")(e.target.value)}
+                    placeholder={getFieldPlaceholder("business_need", "Vấn đề kinh doanh bạn đang muốn giải quyết là gì?")}
+                    rows={3}
+                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                  />
+                  {errors.business_need && <p className="text-sm text-rose-500 font-medium">{errors.business_need}</p>}
+                </div>
+              )}
 
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Vấn đề người dùng cần giải quyết
-                </label>
-                <Textarea
-                  value={form.user_problem}
-                  onChange={(e) => set("user_problem")(e.target.value)}
-                  placeholder="Điểm đau hoặc nhu cầu chưa được đáp ứng của người dùng..."
-                  rows={3}
-                  className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
-                />
-              </div>
+              {isFieldEnabled("user_problem") && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {getFieldLabel("user_problem", "Vấn đề người dùng cần giải quyết")}{" "}
+                    {isFieldRequired("user_problem") && <span className="text-rose-500">*</span>}
+                  </label>
+                  <Textarea
+                    value={form.user_problem}
+                    onChange={(e) => set("user_problem")(e.target.value)}
+                    placeholder={getFieldPlaceholder("user_problem", "Điểm đau hoặc nhu cầu chưa được đáp ứng của người dùng...")}
+                    rows={3}
+                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                  />
+                  {errors.user_problem && <p className="text-sm text-rose-500 font-medium">{errors.user_problem}</p>}
+                </div>
+              )}
             </div>
 
             {/* Đối tượng người dùng mục tiêu */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
-                Đối tượng người dùng mục tiêu
-              </label>
-              <Input
-                type="text"
-                value={form.target_user}
-                onChange={(e) => set("target_user")(e.target.value)}
-                placeholder="VD: Khách hàng retail banking, độ tuổi 25-45"
-                className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
-              />
-            </div>
+            {isFieldEnabled("target_user") && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {getFieldLabel("target_user", "Đối tượng người dùng mục tiêu")}{" "}
+                  {isFieldRequired("target_user") && <span className="text-rose-500">*</span>}
+                </label>
+                <Input
+                  type="text"
+                  value={form.target_user}
+                  onChange={(e) => set("target_user")(e.target.value)}
+                  placeholder={getFieldPlaceholder("target_user", "VD: Khách hàng retail banking, độ tuổi 25-45")}
+                  className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
+                />
+                {errors.target_user && <p className="text-sm text-rose-500 font-medium">{errors.target_user}</p>}
+              </div>
+            )}
           </div>
 
           {/* 03 · TÀI LIỆU ĐÍNH KÈM */}
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                03 · TÀI LIỆU ĐÍNH KÈM
-              </h2>
+          {isFieldEnabled("doc_attachments") && (
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  {formConfig.sections?.attachmentsTitle || "03 · TÀI LIỆU ĐÍNH KÈM"}
+                </h2>
 
-              {/* Segmented Pill Toggle: Gửi link tài liệu | Tải file lên */}
-              <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60">
-                <button
-                  type="button"
-                  onClick={() => setAttachMode("link")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    attachMode === "link"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Gửi link tài liệu
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAttachMode("file")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    attachMode === "file"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Tải file lên
-                </button>
+                {/* Segmented Pill Toggle: Gửi link tài liệu | Tải file lên */}
+                <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={() => setAttachMode("link")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                      attachMode === "link"
+                        ? "bg-white text-slate-900 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Gửi link tài liệu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttachMode("file")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                      attachMode === "file"
+                        ? "bg-white text-slate-900 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Tải file lên
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Input Link (Multiple Links with + Button) or File Upload */}
-            {attachMode === "link" ? (
-              <div className="space-y-2.5">
-                {form.doc_links.map((link, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        type="url"
-                        value={link}
-                        onChange={(e) => handleLinkChange(index, e.target.value)}
-                        placeholder="https://docs.google.com/..."
-                        startIcon={<LinkIcon className="w-4 h-4 text-slate-400" />}
-                        className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm pl-10 focus:border-[#1E5AF6]"
-                      />
+              {/* Input Link (Multiple Links with + Button) or File Upload */}
+              {attachMode === "link" ? (
+                <div className="space-y-2.5">
+                  {form.doc_links.map((link, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          type="url"
+                          value={link}
+                          onChange={(e) => handleLinkChange(index, e.target.value)}
+                          placeholder="https://docs.google.com/..."
+                          startIcon={<LinkIcon className="w-4 h-4 text-slate-400" />}
+                          className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm pl-10 focus:border-[#1E5AF6]"
+                        />
+                      </div>
+                      {form.doc_links.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLink(index)}
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
+                          title="Xóa link này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
-                    {form.doc_links.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLink(index)}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
-                        title="Xóa link này"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ))}
 
-                {/* + Button gắn thêm link */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddLink}
-                  className="gap-1.5 text-xs sm:text-sm font-semibold rounded-xl border-dashed border-slate-300 hover:border-[#1E5AF6] hover:text-[#1E5AF6] bg-white h-9 px-3"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Thêm liên kết tài liệu khác</span>
-                </Button>
-              </div>
-            ) : (
-              <FileUpload files={files} onFilesChange={setFiles} />
-            )}
-          </div>
+                  {/* + Button gắn thêm link */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddLink}
+                    className="gap-1.5 text-xs sm:text-sm font-semibold rounded-xl border-dashed border-slate-300 hover:border-[#1E5AF6] hover:text-[#1E5AF6] bg-white h-9 px-3"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm liên kết tài liệu khác</span>
+                  </Button>
+                </div>
+              ) : (
+                <FileUpload files={files} onFilesChange={setFiles} />
+              )}
+            </div>
+          )}
 
         </div>
 
@@ -821,51 +914,60 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
               </div>
 
               {/* Ô CHỌN 1: Ngày release dự kiến (Nguyên khối chuẩn Figma / ReUI) */}
-              <div className="space-y-1">
-                <DatePicker
-                  label="Ngày release dự kiến *"
-                  icon={<Calendar className="w-5 h-5" />}
-                  value={form.release_date}
-                  onChange={(val) => set("release_date")(val)}
-                  placeholder="Chọn ngày..."
-                  className="w-full"
-                />
-                {errors.release_date && <p className="text-sm text-rose-500 font-medium pl-1">{errors.release_date}</p>}
-              </div>
+              {isFieldEnabled("release_date") && (
+                <div className="space-y-1">
+                  <DatePicker
+                    label={`${getFieldLabel("release_date", "Ngày release dự kiến")}${isFieldRequired("release_date") ? " *" : ""}`}
+                    icon={<Calendar className="w-5 h-5" />}
+                    value={form.release_date}
+                    onChange={(val) => set("release_date")(val)}
+                    placeholder={getFieldPlaceholder("release_date", "Chọn ngày...")}
+                    className="w-full"
+                  />
+                  {errors.release_date && <p className="text-sm text-rose-500 font-medium pl-1">{errors.release_date}</p>}
+                </div>
+              )}
 
               {/* Ô CHỌN 2: Lý do thời hạn (CÙNG THIẾT KẾ NGUYÊN KHỐI 100%) */}
-              <div className="space-y-1">
-                <DropdownMenu
-                  label="Lý do thời hạn này quan trọng?"
-                  icon={<User className="w-5 h-5" />}
-                  options={deadlineReasonOptions}
-                  value={form.deadline_reason}
-                  onChange={(val) => set("deadline_reason")(val)}
-                  placeholder="Chọn lý do..."
-                  className="w-full"
-                />
-              </div>
+              {isFieldEnabled("deadline_reason") && (
+                <div className="space-y-1">
+                  <DropdownMenu
+                    label={`${getFieldLabel("deadline_reason", "Lý do thời hạn này quan trọng?")}${isFieldRequired("deadline_reason") ? " *" : ""}`}
+                    icon={<User className="w-5 h-5" />}
+                    options={deadlineReasonOptions}
+                    value={form.deadline_reason}
+                    onChange={(val) => set("deadline_reason")(val)}
+                    placeholder={getFieldPlaceholder("deadline_reason", "Chọn lý do...")}
+                    className="w-full"
+                  />
+                  {errors.deadline_reason && <p className="text-sm text-rose-500 font-medium pl-1">{errors.deadline_reason}</p>}
+                </div>
+              )}
 
               {/* Kế hoạch báo cáo sắp tới */}
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Kế hoạch báo cáo sắp tới
-                </label>
-                <Textarea
-                  value={form.leader_report_note}
-                  onChange={(e) => set("leader_report_note")(e.target.value)}
-                  placeholder="VD: Báo cáo sếp Mai Anh vào ngày 01/06"
-                  rows={4}
-                  className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
-                />
-              </div>
+              {isFieldEnabled("leader_report_note") && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {getFieldLabel("leader_report_note", "Kế hoạch báo cáo sắp tới")}{" "}
+                    {isFieldRequired("leader_report_note") && <span className="text-rose-500">*</span>}
+                  </label>
+                  <Textarea
+                    value={form.leader_report_note}
+                    onChange={(e) => set("leader_report_note")(e.target.value)}
+                    placeholder={getFieldPlaceholder("leader_report_note", "VD: Báo cáo sếp Mai Anh vào ngày 01/06")}
+                    rows={4}
+                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                  />
+                  {errors.leader_report_note && <p className="text-sm text-rose-500 font-medium">{errors.leader_report_note}</p>}
+                </div>
+              )}
 
               {/* Submit Button -> ShimmerButton từ Joly UI */}
               <Button
                 type="submit"
                 className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-base rounded-lg shadow-md cursor-pointer"
               >
-                Gửi yêu cầu UX
+                {formConfig.sections?.submitButtonText || "Gửi yêu cầu UX"}
               </Button>
 
               {/* Footer Power by Tag */}

@@ -92,6 +92,7 @@ import {
 } from "lucide-react"
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
+import FormConfigTab from "@/components/admin/FormConfigTab"
 import { TestExam } from "@/types/testAssessment"
 import {
   getRoleNavConfig,
@@ -773,7 +774,7 @@ const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
   { id: "log-4", timestamp: "21/08/2026 16:20", actor: "Hệ thống Google Sheet", action: "Đồng bộ Realtime", target: "RAW_SETTINGS", details: "Lưu trữ thành công cấu hình USERS_LIST & SQUADS_LIST", type: "integration" },
 ]
 
-type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "masterdata" | "integrations" | "audit"
+type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "form_config" | "masterdata" | "integrations" | "audit"
 
 interface AdminNavItem {
   id: AdminTab
@@ -800,6 +801,7 @@ const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { id: "test_bank", title: "Quản lý Đề thi", icon: BookOpen },
       { id: "workflow", title: "Quy trình & Khâu UX", icon: Workflow },
+      { id: "form_config", title: "Cấu hình Form yêu cầu", icon: SlidersHorizontal },
     ],
   },
   {
@@ -3959,6 +3961,11 @@ export default function QuanLyPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB MỚI: CẤU HÌNH FORM TIẾP NHẬN YÊU CẦU UX */}
+        {activeTab === "form_config" && (
+          <FormConfigTab onLogAction={logAdminAction} />
         )}
 
         {/* TAB 5: DANH MỤC SẢN PHẨM & SQUADS (NHÓM SQUAD VỚI SẢN PHẨM, SQUAD CARD REUI CARD-15) */}
