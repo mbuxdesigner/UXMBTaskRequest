@@ -225,6 +225,8 @@ export default function IAPage() {
         onAddChildInDirection={addChildInDirection}
         onEditNode={handleOpenEdit}
         onDeleteNode={handleOpenDelete}
+        onNodeDrag={(id, x, y) => updateNodePosition(id, x, y, false)}
+        onNodeDragEnd={(id, x, y) => updateNodePosition(id, x, y, true)}
         onNodePositionChange={updateNodePosition}
         onAutoAlign={autoAlignTree}
       />

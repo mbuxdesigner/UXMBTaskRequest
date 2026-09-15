@@ -166,17 +166,33 @@ function IATreeNodeCardComponent({
     }
 
     const currentScale = Math.max(0.1, scale)
+    let rafId: number | null = null
+    let latestClientX = e.clientX
+    let latestClientY = e.clientY
 
     const handlePointerMove = (moveEvt: PointerEvent) => {
       if (!dragRef.current) return
-      const dx = (moveEvt.clientX - dragRef.current.startX) / currentScale
-      const dy = (moveEvt.clientY - dragRef.current.startY) / currentScale
-      const nextX = Math.round(dragRef.current.initX + dx)
-      const nextY = Math.round(dragRef.current.initY + dy)
-      onNodeDrag?.(node.id, nextX, nextY)
+      latestClientX = moveEvt.clientX
+      latestClientY = moveEvt.clientY
+
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null
+          if (!dragRef.current) return
+          const dx = (latestClientX - dragRef.current.startX) / currentScale
+          const dy = (latestClientY - dragRef.current.startY) / currentScale
+          const nextX = Math.round(dragRef.current.initX + dx)
+          const nextY = Math.round(dragRef.current.initY + dy)
+          onNodeDrag?.(node.id, nextX, nextY)
+        })
+      }
     }
 
     const handlePointerUp = (upEvt: PointerEvent) => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
       window.removeEventListener("pointermove", handlePointerMove)
       window.removeEventListener("pointerup", handlePointerUp)
       window.removeEventListener("pointercancel", handlePointerUp)
@@ -236,24 +252,27 @@ function IATreeNodeCardComponent({
     ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
     : "cursor-grab"
 
+  const transitionClass = isDragging ? "transition-none" : "transition-all duration-150"
+
   return (
     <motion.div
       data-testid={`ia-node-card-${node.id}`}
       data-tier={node.tier}
-      layoutId={`ia-card-motion-${node.id}`}
-      transition={springs.snappy}
+      layoutId={isDragging ? undefined : `ia-card-motion-${node.id}`}
+      transition={isDragging ? { duration: 0 } : springs.snappy}
       onPointerDown={handlePointerDown}
       style={{
         position: "absolute",
         left: x,
         top: y,
         width,
+        minHeight: layoutNode.height,
         zIndex: isDragging ? 40 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-xl border bg-white p-3 text-left transition-all duration-150 select-none ${themeStyles.border} ${highlightClass} ${draggingClass}`}
+      className={`group relative rounded-xl border bg-white p-3 text-left ${transitionClass} select-none ${themeStyles.border} ${highlightClass} ${draggingClass}`}
       onClick={handleCardClick}
-      {...tactileProps.card}
+      {...(isDragging ? {} : tactileProps.card)}
     >
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}

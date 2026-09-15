@@ -30,7 +30,9 @@ interface IACanvasViewportProps {
   onAddChildInDirection?: (parentId: string, direction: IAPortPosition) => void
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
-  onNodePositionChange?: (nodeId: string, x: number, y: number) => void
+  onNodePositionChange?: (nodeId: string, x: number, y: number, persist?: boolean) => void
+  onNodeDrag?: (nodeId: string, x: number, y: number) => void
+  onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
   onAutoAlign?: () => void
 }
 
@@ -56,6 +58,8 @@ export default function IACanvasViewport({
   onEditNode,
   onDeleteNode,
   onNodePositionChange,
+  onNodeDrag,
+  onNodeDragEnd,
   onAutoAlign,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -127,8 +131,8 @@ export default function IACanvasViewport({
               onAddChildInDirection={onAddChildInDirection}
               onEditNode={onEditNode}
               onDeleteNode={onDeleteNode}
-              onNodeDrag={onNodePositionChange}
-              onNodeDragEnd={onNodePositionChange}
+              onNodeDrag={onNodeDrag || ((id, x, y) => onNodePositionChange?.(id, x, y, false))}
+              onNodeDragEnd={onNodeDragEnd || ((id, x, y) => onNodePositionChange?.(id, x, y, true))}
             />
           )
         })}

@@ -44,7 +44,7 @@ export interface UseIATreeStateReturn {
   addChildNode: (parentId: string, nodeData: Partial<IANode>) => void
   addChildInDirection: (parentId: string, direction: IAPortPosition, nodeData?: Partial<IANode>) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
-  updateNodePosition: (nodeId: string, x: number, y: number) => void
+  updateNodePosition: (nodeId: string, x: number, y: number, persist?: boolean) => void
   autoAlignTree: () => void
   deleteNode: (nodeId: string) => void
   resetToDefault: () => void
@@ -111,10 +111,10 @@ export function saveTreesToStorage(trees: Record<string, IANode>): void {
 
 // Layout Dimensions per Tier
 const TIER_DIMENSIONS: Record<IATier, { width: number; height: number; x: number }> = {
-  1: { width: 260, height: 90, x: 40 },
-  2: { width: 250, height: 84, x: 340 },
-  3: { width: 240, height: 80, x: 640 },
-  4: { width: 230, height: 76, x: 940 },
+  1: { width: 260, height: 100, x: 40 },
+  2: { width: 250, height: 126, x: 340 },
+  3: { width: 240, height: 156, x: 640 },
+  4: { width: 230, height: 146, x: 940 },
 }
 const VERTICAL_GAP = 24
 
@@ -354,28 +354,39 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   }, [selectedProductId])
 
   // Update Node Custom Position (from Canvas Drag & Drop)
-  const updateNodePosition = useCallback((nodeId: string, x: number, y: number) => {
+  // When persist is false (during live dragging), performs an ultra-fast copy-on-write update without synchronous localStorage writes.
+  // When persist is true (on drag release), commits to localStorage once.
+  const updateNodePosition = useCallback((nodeId: string, x: number, y: number, persist: boolean = true) => {
     setTrees((prevTrees) => {
       const current = prevTrees[selectedProductId] || DEFAULT_IA_TREES[selectedProductId]
-      const clone = deepCloneTree(current)
 
-      function dfs(curr: IANode): boolean {
-        if (curr.id === nodeId) {
-          curr.customX = Math.round(x)
-          curr.customY = Math.round(y)
-          return true
-        }
-        if (curr.children) {
-          for (const child of curr.children) {
-            if (dfs(child)) return true
+      function updateNodeInTree(node: IANode): IANode {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            customX: Math.round(x),
+            customY: Math.round(y),
           }
         }
-        return false
+        if (node.children && node.children.length > 0) {
+          let childChanged = false
+          const newChildren = node.children.map((c) => {
+            const updated = updateNodeInTree(c)
+            if (updated !== c) childChanged = true
+            return updated
+          })
+          if (childChanged) {
+            return { ...node, children: newChildren }
+          }
+        }
+        return node
       }
 
-      dfs(clone)
+      const clone = updateNodeInTree(current)
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
-      saveTreesToStorage(nextTrees)
+      if (persist) {
+        saveTreesToStorage(nextTrees)
+      }
       return nextTrees
     })
   }, [selectedProductId])
