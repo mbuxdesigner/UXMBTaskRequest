@@ -178,11 +178,12 @@ function IATreeNodeCardComponent({
       if (rafId === null) {
         rafId = requestAnimationFrame(() => {
           rafId = null
-          if (!dragRef.current) return
-          const dx = (latestClientX - dragRef.current.startX) / currentScale
-          const dy = (latestClientY - dragRef.current.startY) / currentScale
-          const nextX = Math.round(dragRef.current.initX + dx)
-          const nextY = Math.round(dragRef.current.initY + dy)
+          const activeDrag = dragRef.current
+          if (!activeDrag) return
+          const dx = (latestClientX - activeDrag.startX) / currentScale
+          const dy = (latestClientY - activeDrag.startY) / currentScale
+          const nextX = Math.round(activeDrag.initX + dx)
+          const nextY = Math.round(activeDrag.initY + dy)
           onNodeDrag?.(node.id, nextX, nextY)
         })
       }
@@ -197,12 +198,13 @@ function IATreeNodeCardComponent({
       window.removeEventListener("pointerup", handlePointerUp)
       window.removeEventListener("pointercancel", handlePointerUp)
       setIsDragging(false)
-      if (dragRef.current) {
-        const dx = (upEvt.clientX - dragRef.current.startX) / currentScale
-        const dy = (upEvt.clientY - dragRef.current.startY) / currentScale
-        const finalX = Math.round(dragRef.current.initX + dx)
-        const finalY = Math.round(dragRef.current.initY + dy)
-        dragRef.current = null
+      const endDrag = dragRef.current
+      dragRef.current = null
+      if (endDrag) {
+        const dx = (upEvt.clientX - endDrag.startX) / currentScale
+        const dy = (upEvt.clientY - endDrag.startY) / currentScale
+        const finalX = Math.round(endDrag.initX + dx)
+        const finalY = Math.round(endDrag.initY + dy)
         onNodeDragEnd?.(node.id, finalX, finalY)
       }
     }

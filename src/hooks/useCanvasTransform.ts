@@ -184,9 +184,10 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
   }, [transform.x, transform.y])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragStartRef.current) return
-    const dx = e.clientX - dragStartRef.current.clientX
-    const dy = e.clientY - dragStartRef.current.clientY
+    const dragStart = dragStartRef.current
+    if (!dragStart) return
+    const dx = e.clientX - dragStart.clientX
+    const dy = e.clientY - dragStart.clientY
 
     // 3px drag threshold disambiguation
     if (!hasCrossedThresholdRef.current) {
@@ -197,11 +198,16 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
     }
 
     if (hasCrossedThresholdRef.current) {
-      setTransform((prev) => ({
-        ...prev,
-        x: Number((dragStartRef.current!.startX + dx).toFixed(4)),
-        y: Number((dragStartRef.current!.startY + dy).toFixed(4)),
-      }))
+      const nextX = Number((dragStart.startX + dx).toFixed(4))
+      const nextY = Number((dragStart.startY + dy).toFixed(4))
+      setTransform((prev) => {
+        if (prev.x === nextX && prev.y === nextY) return prev
+        return {
+          ...prev,
+          x: nextX,
+          y: nextY,
+        }
+      })
     }
   }, [])
 

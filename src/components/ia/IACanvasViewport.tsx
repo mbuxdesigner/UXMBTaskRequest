@@ -90,6 +90,8 @@ export default function IACanvasViewport({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerUp}
       className={`relative flex-1 w-full h-full min-h-[640px] overflow-hidden select-none bg-slate-50/50 rounded-2xl border border-slate-200/80 shadow-inner ${
         isPanning ? "cursor-grabbing" : "cursor-grab"
       }`}
