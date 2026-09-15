@@ -239,6 +239,7 @@ export default function IAPage() {
       <IANodeEditorModal
         mode={modalMode}
         targetNode={targetNode}
+        availableRequests={Array.from(requestsMap.values())}
         isOpen={modalMode !== null}
         onClose={handleCloseModal}
         onConfirmAdd={(parentId, data) => {

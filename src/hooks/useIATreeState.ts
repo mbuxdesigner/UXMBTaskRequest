@@ -3,7 +3,7 @@ import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition } from 
 import { IA_PRODUCTS, DEFAULT_IA_TREES, getProductMetrics } from "@/data/iaMockData"
 import { mockRequests, UXRequest } from "@/data/mockData"
 
-export const IA_STORAGE_KEY = "ux_portal_ia_tree_data_v1"
+export const IA_STORAGE_KEY = "ux_portal_ia_tree_data_v4"
 
 export interface LayoutNode {
   node: IANode
@@ -94,6 +94,11 @@ export function loadSavedTrees(): Record<string, IANode> {
     if (!parsed || typeof parsed !== "object" || !parsed.trees) {
       return deepCloneAllTrees(DEFAULT_IA_TREES)
     }
+    // Clean migration: if loaded trees contain old auto-generated demo nodes, reset to clean defaults
+    const appTree = parsed.trees["app-mbbank"]
+    if (appTree && appTree.children && appTree.children.some((c: IANode) => c.id?.includes("node-app-mb-d1-core") || c.id?.includes("node-app-mb-s1"))) {
+      return deepCloneAllTrees(DEFAULT_IA_TREES)
+    }
     return parsed.trees
   } catch (err) {
     console.warn("Storage parse error, resetting to seed defaults:", err)
@@ -118,10 +123,10 @@ export function saveTreesToStorage(trees: Record<string, IANode>): void {
 
 // Layout Dimensions per Tier
 const TIER_DIMENSIONS: Record<IATier, { width: number; height: number; x: number }> = {
-  1: { width: 260, height: 110, x: 40 },
-  2: { width: 250, height: 135, x: 340 },
-  3: { width: 240, height: 165, x: 640 },
-  4: { width: 230, height: 185, x: 940 },
+  1: { width: 280, height: 125, x: 40 },
+  2: { width: 270, height: 165, x: 370 },
+  3: { width: 260, height: 175, x: 690 },
+  4: { width: 250, height: 185, x: 1000 },
 }
 const VERTICAL_GAP = 36
 
@@ -190,14 +195,23 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const nameMatch = Boolean(node.name && node.name.toLowerCase().includes(normalized))
       const codeMatch = Boolean(node.code && node.code.toLowerCase().includes(normalized))
       const descMatch = Boolean(node.description && node.description.toLowerCase().includes(normalized))
+      const squadMatch = Boolean(node.squad && node.squad.toLowerCase().includes(normalized))
       const taskIdMatch = Boolean(node.requestId && node.requestId.toLowerCase().includes(normalized))
+      const multiTaskMatch = Boolean(
+        node.taskIds &&
+        node.taskIds.some(
+          (tid) =>
+            tid.toLowerCase().includes(normalized) ||
+            requestsMap.get(tid)?.title.toLowerCase().includes(normalized)
+        )
+      )
       const taskTitleMatch = Boolean(linkedReq?.title && linkedReq.title.toLowerCase().includes(normalized))
       const designerMatch = Boolean(
         (node.assignedDesigner && node.assignedDesigner.toLowerCase().includes(normalized)) ||
         (linkedReq?.assigned_designer && linkedReq.assigned_designer.toLowerCase().includes(normalized))
       )
 
-      if (nameMatch || codeMatch || descMatch || taskIdMatch || taskTitleMatch || designerMatch) {
+      if (nameMatch || codeMatch || descMatch || squadMatch || taskIdMatch || multiTaskMatch || taskTitleMatch || designerMatch) {
         matchedIds.add(id)
         let curr = id
         while (parentMap.has(curr)) {
@@ -264,6 +278,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             description: nodeData.description || "",
             code: nodeData.code || "",
             figmaUrl: nodeData.figmaUrl,
+            squad: nodeData.squad,
+            taskIds: nodeData.taskIds,
+            hasActiveTask: nodeData.hasActiveTask,
             requestId: nodeData.requestId,
             touchpointType: nextTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
             children: nextTier < 4 ? [] : undefined,
@@ -309,11 +326,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           }
           if ("description" in nodeData) curr.description = nodeData.description
           if ("code" in nodeData) curr.code = nodeData.code
+          if ("squad" in nodeData) curr.squad = nodeData.squad
+          if ("taskIds" in nodeData) curr.taskIds = nodeData.taskIds
+          if ("hasActiveTask" in nodeData) curr.hasActiveTask = nodeData.hasActiveTask
           if ("requestId" in nodeData) curr.requestId = nodeData.requestId
           if ("figmaUrl" in nodeData) curr.figmaUrl = nodeData.figmaUrl
           if ("touchpointType" in nodeData && curr.tier === 4) {
             curr.touchpointType = nodeData.touchpointType as IATouchpointType
           }
+          if ("colorTheme" in nodeData) curr.colorTheme = nodeData.colorTheme
+          if ("isCriticalPath" in nodeData) curr.isCriticalPath = nodeData.isCriticalPath
           return true
         }
         if (curr.children) {
@@ -454,6 +476,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             description: nodeData?.description || "",
             code: nodeData?.code || "",
             figmaUrl: nodeData?.figmaUrl,
+            squad: nodeData?.squad,
+            taskIds: nodeData?.taskIds,
+            hasActiveTask: nodeData?.hasActiveTask,
+            requestId: nodeData?.requestId,
             customTag: nodeData?.customTag,
             colorTheme: curr.colorTheme,
             touchpointType: nextTier === 4 ? (nodeData?.touchpointType || "screen") : undefined,
@@ -596,6 +622,10 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
               description: nodeData?.description || "Tạo từ kéo nối cổng",
               code: nodeData?.code || "",
               figmaUrl: nodeData?.figmaUrl,
+              squad: nodeData?.squad,
+              taskIds: nodeData?.taskIds,
+              hasActiveTask: nodeData?.hasActiveTask,
+              requestId: nodeData?.requestId,
               customTag: nodeData?.customTag,
               colorTheme: curr.colorTheme,
               customX: Math.round(position.x),

@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef } from "react"
+import React, { memo, useState, useRef, useMemo } from "react"
 import { motion } from "framer-motion"
 import {
   ChevronRight,
@@ -20,6 +20,7 @@ import {
   Lock,
   GripHorizontal,
   Tag,
+  Users,
 } from "lucide-react"
 import { springs, tactileProps } from "@/lib/motion"
 import { IANode, IATier, IATouchpointType, IAPortPosition } from "@/types/ia"
@@ -29,6 +30,7 @@ import { UXRequest } from "@/data/mockData"
 interface IATreeNodeCardProps {
   layoutNode: LayoutNode
   linkedRequest?: UXRequest
+  requestsMap?: Map<string, UXRequest>
   isHighlighted?: boolean
   scale?: number
   onToggleCollapse: (nodeId: string) => void
@@ -127,6 +129,7 @@ function getColorThemeStyles(theme?: string) {
 function IATreeNodeCardComponent({
   layoutNode,
   linkedRequest,
+  requestsMap,
   isHighlighted = false,
   scale = 1.0,
   onToggleCollapse,
@@ -143,6 +146,62 @@ function IATreeNodeCardComponent({
   const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null)
+
+  // Resolve all linked tasks (from node.taskIds or node.requestId)
+  const taskIdsList = useMemo(() => {
+    const list: string[] = []
+    if (node.taskIds && node.taskIds.length > 0) {
+      node.taskIds.forEach((id) => {
+        if (id && !list.includes(id)) list.push(id)
+      })
+    }
+    if (node.requestId && !list.includes(node.requestId)) {
+      list.push(node.requestId)
+    }
+    return list
+  }, [node.taskIds, node.requestId])
+
+  // Look up UXRequests for all linked tasks
+  const linkedRequests = useMemo(() => {
+    const reqs: UXRequest[] = []
+    if (linkedRequest) reqs.push(linkedRequest)
+    if (requestsMap) {
+      taskIdsList.forEach((id) => {
+        const r = requestsMap.get(id)
+        if (r && !reqs.some((existing) => existing.request_id === r.request_id)) {
+          reqs.push(r)
+        }
+      })
+    }
+    return reqs
+  }, [linkedRequest, requestsMap, taskIdsList])
+
+  // Determine "Trạng thái có task đang làm hay không"
+  const hasActiveTask = useMemo(() => {
+    if (node.hasActiveTask !== undefined) {
+      return node.hasActiveTask
+    }
+    if (taskIdsList.length === 0) return false
+    return linkedRequests.some((r) => {
+      const s = (r.status || "").toLowerCase()
+      return (
+        s.includes("thực hiện") ||
+        s.includes("đang làm") ||
+        s.includes("review") ||
+        s.includes("tiến hành") ||
+        (r.progress > 0 && r.progress < 100)
+      )
+    })
+  }, [node.hasActiveTask, taskIdsList, linkedRequests])
+
+  const allTasksCompleted = useMemo(() => {
+    if (taskIdsList.length === 0) return false
+    if (hasActiveTask) return false
+    return linkedRequests.every((r) => {
+      const s = (r.status || "").toLowerCase()
+      return s.includes("hoàn thành") || s.includes("nghiệm thu") || s.includes("release") || r.progress === 100
+    })
+  }, [taskIdsList, hasActiveTask, linkedRequests])
 
   const effectiveFigmaUrl = node.figmaUrl || linkedRequest?.deliverables?.figma_url || linkedRequest?.deliverables?.prototype_url
   const effectiveDesigner = node.assignedDesigner || linkedRequest?.assigned_designer
@@ -402,20 +461,14 @@ function IATreeNodeCardComponent({
       {/* NODE CARD CONTENT (User-Authored First)                          */}
       {/* ───────────────────────────────────────────────────────────────── */}
 
-      {/* Top Header Row: Drag Handle, Tier Badge, Tag, Action Menu */}
+      {/* Top Header Row: Drag Handle, Tier Badge, Action Menu */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <GripHorizontal className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
           <span className={`text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 ${tierBadgeClass}`}>
             {tierBadgeText}
           </span>
-          {node.customTag && (
-            <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium truncate max-w-[90px]" title={node.customTag}>
-              <Tag className="w-2 h-2" />
-              {node.customTag}
-            </span>
-          )}
-          {node.code && !node.customTag && (
+          {node.code && (
             <span className="text-[10px] font-mono text-slate-400 truncate max-w-[80px]" title={node.code}>
               {node.code}
             </span>
@@ -473,9 +526,21 @@ function IATreeNodeCardComponent({
         </div>
       </div>
 
-      {/* User-Authored Node Title & Description */}
+      {/* Tên Tính Năng (Feature Name) & Squad & Mô tả */}
       <div className="mb-2">
-        <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={node.name}>
+        {node.squad && (
+          <div className="mb-1.5 flex items-center">
+            <span
+              data-testid={`ia-node-squad-${node.id}`}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/70 font-semibold truncate max-w-full"
+              title={`Squad phụ trách: ${node.squad}`}
+            >
+              <Users className="w-3 h-3 shrink-0 text-indigo-500" />
+              <span className="truncate">{node.squad}</span>
+            </span>
+          </div>
+        )}
+        <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-snug" title={node.name}>
           {node.name}
         </h4>
         {node.description && (
@@ -485,32 +550,87 @@ function IATreeNodeCardComponent({
         )}
       </div>
 
-      {/* Middle Row: Touchpoint type, Critical Path, Optional Task badge */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-2">
-        {node.tier === 4 && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-medium text-slate-600">
-            {getTouchpointIcon(node.touchpointType)}
-            <span className="capitalize">{node.touchpointType || "Screen"}</span>
-          </span>
-        )}
+      {/* Middle Row: Trạng thái có task đang làm & Danh sách Task & Badges */}
+      <div className="flex flex-col gap-1.5 mb-2">
+        {/* Trạng thái task */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {hasActiveTask ? (
+            <span
+              data-testid={`ia-task-status-active-${node.id}`}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs"
+              title="Tính năng đang có bài toán thiết kế đang triển khai"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Đang có task làm</span>
+            </span>
+          ) : allTasksCompleted ? (
+            <span
+              data-testid={`ia-task-status-done-${node.id}`}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60"
+              title="Tất cả các task đã hoàn thành"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5 text-blue-600" />
+              <span>Đã hoàn thành</span>
+            </span>
+          ) : (
+            <span
+              data-testid={`ia-task-status-idle-${node.id}`}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-normal text-slate-400 bg-slate-50 border border-slate-200/60"
+              title="Hiện chưa có task nào đang làm"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+              <span>Không có task làm</span>
+            </span>
+          )}
 
-        {node.isCriticalPath && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-700">
-            <Sparkles className="w-2.5 h-2.5 text-amber-600" />
-            Trọng yếu
-          </span>
-        )}
+          {node.isCriticalPath && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-700">
+              <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+              Trọng yếu
+            </span>
+          )}
 
-        {/* Optional Task ID Badge */}
-        {node.requestId && (
-          <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-medium border ${getStatusBadgeStyle(
-              effectiveStatus
-            )}`}
-            title={`Bài toán thiết kế liên kết: ${node.requestId}`}
-          >
-            {node.requestId}
-          </span>
+          {node.tier === 4 && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-medium text-slate-600">
+              {getTouchpointIcon(node.touchpointType)}
+              <span className="capitalize">{node.touchpointType || "Screen"}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Danh sách Task liên kết */}
+        {taskIdsList.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 mt-0.5" data-testid={`ia-task-list-${node.id}`}>
+            {taskIdsList.slice(0, 2).map((tid) => {
+              const req = requestsMap?.get(tid) || (linkedRequest?.request_id === tid ? linkedRequest : undefined)
+              const badgeStyle = getStatusBadgeStyle(req?.status)
+              return (
+                <button
+                  key={tid}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (req && onOpenDetail) onOpenDetail(req)
+                  }}
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-mono font-medium border transition-colors cursor-pointer ${badgeStyle}`}
+                  title={req ? `${tid}: ${req.title} (${req.status})` : tid}
+                >
+                  <span>{tid}</span>
+                </button>
+              )
+            })}
+            {taskIdsList.length > 2 && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-mono font-medium"
+                title={taskIdsList.slice(2).join(", ")}
+              >
+                +{taskIdsList.length - 2} task
+              </span>
+            )}
+          </div>
         )}
       </div>
 

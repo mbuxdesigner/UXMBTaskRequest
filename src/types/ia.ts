@@ -49,8 +49,10 @@ export interface IANode {
   children?: IANode[]
   customX?: number        // Tọa độ X do người dùng kéo thả sắp xếp trên Canvas
   customY?: number        // Tọa độ Y do người dùng kéo thả sắp xếp trên Canvas
-  customTag?: string      // Nhãn phân loại tùy biến người dùng tự nhập
-  requestId?: string
+  squad?: string          // Squad phụ trách (Lending & Vay vốn, Cards, ...)
+  taskIds?: string[]      // Danh sách các mã task liên kết với tính năng này
+  hasActiveTask?: boolean // Trạng thái có task đang làm hay không
+  requestId?: string      // Tương thích ngược với mã 1 task đơn lẻ
   figmaUrl?: string
   touchpointType?: IATouchpointType
   status?: string

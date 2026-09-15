@@ -279,6 +279,7 @@ export default function IACanvasViewport({
               key={layoutNode.node.id}
               layoutNode={layoutNode}
               linkedRequest={linkedRequest}
+              requestsMap={requestsMap}
               isHighlighted={layoutNode.isHighlighted}
               isWireDropTarget={activeWireDrag?.hoveredTargetNodeId === layoutNode.node.id}
               scale={transform.scale}
