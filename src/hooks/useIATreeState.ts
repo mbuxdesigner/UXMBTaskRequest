@@ -601,28 +601,98 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    // 2. Second pass: Calculate absolute positions (respecting customX/customY if user arranged)
+    // 2. Second pass: Calculate Top-Down Vertical Column Hierarchy Positions
+    // - lv1: Product Root centered at the top
+    // - lv2: Modules arranged horizontally side-by-side (each starting a column)
+    // - lv3: Feature journeys indented under their respective lv2
+    // - lv4: Screens stacked vertically under their respective lv3
     const resultNodes: LayoutNode[] = []
     const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
 
-    function positionNode(item: InternalNode, topY: number) {
-      if (item.children.length === 0) {
-        item.y = topY + (item.subtreeHeight - item.height) / 2
-      } else {
-        let currentChildTop = topY
-        for (const child of item.children) {
-          positionNode(child, currentChildTop)
-          currentChildTop += child.subtreeHeight
+    const START_X = 60
+    const START_Y = 40
+    const ROOT_BOTTOM_GAP = 70 // Gap between Root and Module row
+    const COLUMN_GAP = 60 // Spacing between columns
+    const VERTICAL_GAP_NODE = 24 // Vertical spacing between cards in the same column
+    const VERTICAL_GAP_SECTION = 36 // Spacing between different feature sections
+    const INDENT_LV3 = 28 // Indent for Lv3 features under Lv2
+    const INDENT_LV4 = 56 // Indent for Lv4 screens under Lv2 (28px under Lv3)
+
+    // Helper: Recursively layout nodes inside a column
+    function layoutColumnChildren(
+      parent: InternalNode,
+      colStartX: number,
+      startY: number
+    ): number {
+      let currentY = startY
+
+      for (let i = 0; i < parent.children.length; i++) {
+        const child = parent.children[i]
+
+        let indent = 0
+        if (child.node.tier === 3) {
+          indent = INDENT_LV3
+        } else if (child.node.tier >= 4) {
+          indent = INDENT_LV4
         }
-        const firstChild = item.children[0]
-        const lastChild = item.children[item.children.length - 1]
-        item.y = (firstChild.y + lastChild.y) / 2
+
+        child.x = colStartX + indent
+        child.y = currentY
+
+        rawPairs.push({ parent, child })
+
+        currentY += child.height + VERTICAL_GAP_NODE
+
+        // If child is expanded, recursively lay out its children
+        if (child.children.length > 0 && child.isExpanded) {
+          currentY = layoutColumnChildren(child, colStartX, currentY)
+        }
+
+        // Add section gap after a tier 3 group
+        if (child.node.tier === 3) {
+          currentY += (VERTICAL_GAP_SECTION - VERTICAL_GAP_NODE)
+        }
       }
 
-      // If user customized position via canvas dragging, apply custom coordinates
+      return currentY
+    }
+
+    const root = rootInternal
+    root.y = START_Y
+
+    const modulesTopY = START_Y + root.height + ROOT_BOTTOM_GAP
+
+    if (root.children.length === 0 || !root.isExpanded) {
+      root.x = START_X
+    } else {
+      let currentColStartX = START_X
+
+      for (const module of root.children) {
+        module.x = currentColStartX
+        module.y = modulesTopY
+
+        rawPairs.push({ parent: root, child: module })
+
+        let columnEndY = module.y + module.height + VERTICAL_GAP_NODE
+
+        if (module.children.length > 0 && module.isExpanded) {
+          columnEndY = layoutColumnChildren(module, currentColStartX, columnEndY)
+        }
+
+        // Compute column span based on child indents and widths
+        const colSpan = Math.max(300, module.width, INDENT_LV3 + 240, INDENT_LV4 + 230)
+        currentColStartX += colSpan + COLUMN_GAP
+      }
+
+      // Center root horizontally across all columns
+      const totalColumnsWidth = (currentColStartX - COLUMN_GAP) - START_X
+      root.x = Math.max(START_X, START_X + Math.round((totalColumnsWidth - root.width) / 2))
+    }
+
+    // Collect all nodes and apply custom coordinates if arranged by user
+    function collectNodes(item: InternalNode) {
       const finalX = item.node.customX !== undefined ? item.node.customX : item.x
       const finalY = item.node.customY !== undefined ? item.node.customY : Number(item.y.toFixed(2))
-
       const isHighlighted = matchedIds.has(item.node.id)
 
       resultNodes.push({
@@ -640,13 +710,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         isHighlighted,
       })
 
-      // Record child edges for 4-way smart port connector routing
       for (const child of item.children) {
-        rawPairs.push({ parent: item, child })
+        collectNodes(child)
       }
     }
 
-    positionNode(rootInternal, 40)
+    collectNodes(root)
 
     // Build fast lookup by node id for resolved layout positions
     const layoutMap = new Map<string, LayoutNode>()
@@ -674,7 +743,11 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       let fromPort: IAPortPosition
       let toPort: IAPortPosition
 
-      if (Math.abs(dx) >= Math.abs(dy)) {
+      // Root (Tier 1) connects to Modules (Tier 2): always bottom to top
+      if (parent.node.tier === 1) {
+        fromPort = "bottom"
+        toPort = "top"
+      } else if (Math.abs(dx) >= Math.abs(dy)) {
         if (dx >= 0) {
           fromPort = "right"
           toPort = "left"
