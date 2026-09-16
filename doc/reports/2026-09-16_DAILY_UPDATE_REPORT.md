@@ -27,6 +27,18 @@
 > 8. **Căn chỉnh NewsFeed Release Timeline chuẩn flexbox:** Căn chỉnh số thứ tự `[ 1 ]`, tiêu đề bài toán (kể cả khi bị mã hóa `*******`) và avatar/tên designer thẳng hàng tuyệt đối trên cùng 1 trục ngang; loại bỏ gạch chân thô `hover:underline` trên chuỗi hoa thị mã hóa.
 > 9. **Chuẩn hóa màn hình cảnh báo "Không có quyền truy cập" chuẩn ReUI:** Đổi nhãn `Mã bài toán` $\rightarrow$ `Yêu cầu tư vấn trải nghiệm`; gỡ bỏ hoàn toàn khối hộp "Thông tin bảo mật" (Trạng thái, Tiêu đề, Hỗ trợ kỹ thuật) theo ảnh chụp thực tế; tích hợp ReUI Icon Stack 3D isometric (`@reui/c-icon-stack-2` kích thước lớn `IconStackLarge`) với icon tam giác có dấu chấm than `TriangleAlert` màu vàng hổ phách.
 > 10. **Khai thông điều hướng Tổng quan (Overview) cho PO & Business:** Kích hoạt `overview: true` trong `navVisibilityConfig.ts` và gỡ bỏ đoạn code cưỡng bức nảy về `#track` trong `App.tsx`, cho phép PO & Business truy cập trực tiếp xem dashboard số liệu chung trong khi vẫn bảo mật các bài toán của squad khác.
+> 11. **Chuẩn hóa toàn diện UI, Design System, ReUI components & Motion:** Thống nhất nút Dark Navy `#0F172A`, Status Pills pastel + dot đồng màu, Priority Badges phân cấp, Form 2 cột + sticky summary, Bảng ReUI Data Grid với cột `sticky right-0`, triệt tiêu lỗi responsive trên cả 4 breakpoint (375px, 768px, 1024px, 1440px).
+> 12. **Tích hợp ReUI Sonner Toast & Xếp Chồng Thẻ 3D:** Hiệu ứng 3D Card Stacking co gọn thẻ, nút đóng (X) cố định góc trên phải, căn đỉnh icon khi văn bản dài, tự động kích hoạt toast khi có thông báo mới, nút "Thử Toast" tiện lợi.
+> 13. **Khắc phục lỗi Đồng bộ Hai chiều Google Sheet & Bảo toàn Email 09:02:** Giải quyết xung đột Split-Brain giữa `USERS` và `RAW_SETTINGS`, thêm trigger `onEdit(e)`, tách 2 trường Teams Email & Personal Email trên Portal, bảo toàn 100% danh bạ chuẩn 09:02.
+> 14. **Nâng Cấp Toàn Diện Dashboard AI-Ops ReUI v2 & Lịch Trình Phát Hành (NewsFeed Timeline):**
+>    - **Biểu đồ tròn Donut `@reui/c-chart-20`:** Bố cục ngang tinh gọn, Donut nhỏ bên trái có vòng ray nền `#f1f5f9`, 3 status pills pastel mềm bên phải, loại bỏ hoàn toàn khối footer thừa ở chân thẻ giúp độ cao 3 thẻ bằng phẳng tuyệt đối.
+>    - **Tinh giản 2 thẻ KPI Đang thực hiện & Đã hoàn thành:** Loại bỏ khối tiến độ trung bình 5 khâu và tiêu chuẩn nghiệm thu ở giữa, giữ lại các dòng mô tả thanh thoát và chỉ số footer tinh gọn.
+>    - **Biểu đồ Trend Line `@reui/c-chart-17`:** Tích hợp pattern sọc chéo dự báo `chart17-forecast-stripe`, vùng bóng đổ chuyển tiếp gradient và đường cong natural uốn lượn; hỗ trợ đổi khung thời gian 7 ngày / 30 ngày / 90 ngày.
+>    - **NewsFeed Release Timeline `@reui/c-timeline-3`:** Sắp xếp timeline ngược (xa nhất ở trên, đã qua ở dưới), tự động cuộn đến mốc ngày sắp tới gần hiện tại (kèm spinner xoay tròn), đồng bộ avatar và tên nhân sự từ Admin Setting.
+>    - **Lọc sạch dự án Pending hoặc Chưa phân bổ:** Loại trừ 100% các bài toán pending hoặc chưa phân công ra khỏi NewsFeed.
+>    - **Bỏ lồng box con & phân tách bằng Divider:** Các task trong ngày xếp thành hàng phẳng, phân cách bằng đường divider `divide-y divide-neutral-200/80`.
+>    - **Bộ lọc Tab Sản Phẩm Quản Trị Động:** Nạp danh sách từ Admin, nhấp chọn tab nào thì toàn bộ 6 khối Dashboard đồng bộ lọc chính xác theo sản phẩm đó.
+>    - **Zero Mock Data:** Xóa bỏ 100% dữ liệu test tự thêm (`fallbackMilestones`, `DEFAULT_GANTT_TASKS` và các số cứng).
 
 ---
 
@@ -44,6 +56,10 @@
 | **8** | **Căn Chỉnh NewsFeed Release Timeline Thẳng Trục Tuyệt Đối** | ✅ Hoàn thành 100% | Căn chỉnh `items-center` giữa cột trái (số thứ tự `[ 1 ]` `size-5` + tiêu đề `line-clamp-1`) và cột phải (avatar `size-5` + designer); loại bỏ gạch chân thô `hover:underline` trên hoa thị mã hóa. |
 | **9** | **Chuẩn Hóa Màn Hình Cảnh Báo Bản Quyền Với ReUI Icon Stack** | ✅ Hoàn thành 100% | Đổi nhãn `Mã bài toán` $\rightarrow$ `Yêu cầu tư vấn trải nghiệm`; gỡ bỏ box thông tin bảo mật; tích hợp ReUI `IconStackLarge` (`@reui/c-icon-stack-2`) kích thước lớn với icon tam giác có dấu chấm than `TriangleAlert` 3D isometric. |
 | **10** | **Khai Thông Truy Cập Tổng Quan (Overview) Cho PO & Business** | ✅ Hoàn thành 100% | Kích hoạt `overview: true` trong `navVisibilityConfig.ts`, gỡ bỏ hardcode nảy về `#track` trong `App.tsx`, cho phép PO/Business xem dashboard số liệu thống kê chung an toàn. |
+| **11** | **Chuẩn Hóa UI Toàn Diện, ReUI Components & Fix Lỗi Responsive** | ✅ Hoàn thành 100% | Thống nhất 100% nút Dark Navy `#0F172A`, Status Pills pastel + dot đồng màu, Form 2 cột + sticky summary, Bảng ReUI Data Grid với cột `sticky right-0`, triệt tiêu tràn màn hình ngang trên 4 breakpoint (375px/768px/1024px/1440px). |
+| **12** | **Tích Hợp ReUI Sonner Toast, Xếp Chồng 3D & Căn Đỉnh Icon** | ✅ Hoàn thành 100% | Cài đặt ReUI Sonner, hiệu ứng 3D Card Stacking khi có nhiều noti, nút đóng (X) cố định góc trên phải, căn đỉnh icon khi văn bản $\ge$ 3 dòng, tự động bắn toast khi có thông báo mới, nút "Thử Toast" 3 thẻ mẫu. |
+| **13** | **Khắc Phục Lỗi Đồng Bộ Hai Chiều Google Sheet & Bảo Toàn Email 09:02** | ✅ Hoàn thành 100% | Khắc phục xung đột Split-Brain giữa `USERS` và `RAW_SETTINGS`, thêm trigger `onEdit(e)`, tách 2 trường Teams Email & Personal Email trên Portal, bảo toàn 100% danh bạ chuẩn 09:02 trên Google Sheet thực tế. |
+| **14** | **Nâng Cấp Toàn Diện Dashboard AI-Ops ReUI v2 & NewsFeed Timeline** | ✅ Hoàn thành 100% | Tích hợp c-chart-20 (Donut ngang), c-chart-17 (Trending line sọc stripe), c-timeline-3 (Reverse timeline + divider không lồng box), lọc bỏ pending/chưa phân bổ, làm sạch 100% mock data. |
 
 ---
 
@@ -202,6 +218,89 @@
 
 ---
 
+### 2.8. Căn Chỉnh NewsFeed Release Timeline & Loại Bỏ Gạch Chân Hoa Thị
+- **Mã nguồn:** `src/components/dashboard/ai-ops/ReleaseNewsfeedTimeline.tsx`
+- **Vấn đề trước sửa:**
+  - Chuỗi hoa thị mã hóa `*******` có ký tự text baseline khác với số thứ tự `[ 1 ]` và cụm avatar designer bên phải, dẫn đến tình trạng các hàng trong card timeline bị lệch trục ngang.
+  - Hiệu ứng `hover:underline` khi lướt chuột qua chuỗi hoa thị mã hóa tạo cảm giác thô kệch, vỡ nhịp thị giác.
+- **Giải pháp xử lý:**
+  - Sử dụng layout flexbox chuẩn `flex items-center justify-between gap-3`:
+    - **Cột trái:** `flex items-center gap-2.5 min-w-0 flex-1`.
+      - Số thứ tự: `inline-flex items-center justify-center size-5 rounded-md border border-neutral-200/90 text-[10px] font-mono font-semibold text-neutral-500 bg-white shadow-2xs shrink-0 select-none`.
+      - Tiêu đề task: `text-xs font-medium text-neutral-800 line-clamp-1 hover:text-blue-600 cursor-pointer transition-colors leading-normal truncate select-none`.
+    - **Cột phải:** `flex items-center gap-1.5 shrink-0 pl-2 select-none`.
+      - Avatar: `size-5 rounded-full object-cover ring-1 ring-neutral-200 shrink-0`.
+      - Tên designer: `text-[11.5px] text-neutral-600 truncate max-w-[90px] font-medium leading-none`.
+  - Toàn bộ các phần tử căn thẳng hàng tuyệt đối trên cùng 1 trục ngang (vertical-align center), loại bỏ hoàn toàn class `hover:underline`.
+
+---
+
+### 2.9. Chuẩn Hóa Màn Hình Cảnh Báo "Không Có Quyền Truy Cập" Chuẩn ReUI Icon Stack
+- **Mã nguồn:**
+  - `src/components/track/RequestDetail.tsx`
+  - `src/components/reui/c-icon-stack-2.tsx` (`IconStackLarge`)
+- **Yêu cầu & Thực thi:**
+  - **Đổi tên nhãn:** Chuyển đổi toàn bộ từ `Mã bài toán: {request.request_id}` thành **`Yêu cầu tư vấn trải nghiệm: {request.request_id}`** (đồng bộ ở thanh breadcrumb trên cùng và huy hiệu pill badge ở thân popup).
+  - **Loại bỏ khối thông tin thừa:** Gỡ bỏ triệt để khối hộp *"Thông tin bảo mật"* bên dưới (Trạng thái, Tiêu đề `***`, Hỗ trợ kỹ thuật) theo phản hồi từ ảnh chụp thực tế của người dùng, giúp giao diện tập trung và tinh giản.
+  - **Tích hợp ReUI Icon Stack 3D Isometric (`@reui/c-icon-stack-2`):**
+    - Sử dụng `IconStackLarge` với kích thước lớn `h-28 w-24`.
+    - Lồng ghép icon tam giác có dấu chấm than `TriangleAlert` (`size-7 text-amber-500 stroke-[2.25]`).
+    - Hiệu ứng isometric 3D xếp lớp tinh xảo chuẩn ReUI mang lại diện mạo đẳng cấp ngân hàng số.
+  - **Nút hành động:** Duy trì nút *"Đóng cửa sổ"* (outline) và nút *"Liên hệ Admin"* (`admin@mbbank.com.vn` màu xanh thương hiệu MB `#1057FB`).
+
+---
+
+### 2.10. Khai Thông Phân Quyền Truy Cập Tổng Quan (Overview) Cho PO & Business
+- **Mã nguồn:**
+  - `src/config/navVisibilityConfig.ts`
+  - `src/App.tsx`
+- **Vấn đề trước sửa:** PO và Business khi bấm vào menu "Tổng quan" trên Sidebar bị nảy ngược về tab "#track" do cấu hình mặc định `overview: false` và router `App.tsx` có đoạn code hardcode chặn điều hướng.
+- **Giải pháp xử lý:**
+  - Cập nhật `DEFAULT_ROLE_NAV_CONFIG`: Bật `overview: true` cho cả 2 vai trò `PO` và `Business`.
+  - Gỡ bỏ điều kiện chặn cưỡng bức trong `App.tsx`.
+  - Giữ vững logic an toàn: PO & Business có thể vào Tổng quan xem các biểu đồ thống kê chung (Backlog & Pending, Đang thực hiện, Đã hoàn thành, Squad Trending), nhưng tại NewsFeed & Track Task, những bài toán không do họ tạo hoặc không được gán quyền view sẽ được tự động mã hóa và khóa an ninh.
+
+---
+
+### 2.11. Nâng Cấp Toàn Diện Phân Hệ Dashboard AI-Ops ReUI v2 & Lịch Trình Phát Hành (NewsFeed Timeline)
+- **Mã nguồn:**
+  - `src/components/dashboard/ai-ops/BacklogPendingDonutCard.tsx`
+  - `src/components/dashboard/ai-ops/InProgressWorkloadCard.tsx`
+  - `src/components/dashboard/ai-ops/CompletedSlaCard.tsx`
+  - `src/components/dashboard/ai-ops/ReleaseNewsfeedTimeline.tsx`
+  - `src/components/dashboard/ai-ops/SquadTrendingChart.tsx`
+  - `src/components/dashboard/ai-ops/AiOpsKpiCards.tsx`
+  - `src/pages/TongQuanPage.tsx`
+- **Chi tiết các hạng mục nâng cấp:**
+  1. **Biểu đồ tròn Donut `@reui/c-chart-20` & Layout Ngang Tinh Gọn:**
+     - Chuyển sang bố cục layout ngang: Donut Chart nhỏ gọn đặt ở bên trái (`w-[105px] h-[105px]`, `innerRadius={33}`, `outerRadius={45}`), có vòng ray nền tròn `#f1f5f9` đỡ phía sau đảm bảo luôn thấy rõ vòng tròn khép kín.
+     - Cột bên phải chứa 3 hàng trạng thái dạng Pill mềm với màu nền pastel: `Chờ tiếp nhận` (xanh ngọc), `Designer/Khác` (tím pastel), `PO pending` (hổ phách pastel).
+     - Loại bỏ hoàn toàn khối container footer dưới cùng (`PO Pending / Quá hạn >24h / Sẵn sàng phân bổ`) theo đúng ảnh chụp thực tế của người dùng, giúp thẻ `Backlog & Pending` có độ cao bằng phẳng tuyệt đối với 2 thẻ bên cạnh.
+  2. **Tinh Giản 2 Thẻ KPI `Đang thực hiện` & `Đã hoàn thành`:**
+     - Loại bỏ hoàn toàn khối tiến độ trung bình 5 khâu ở thẻ `Đang thực hiện` và khối First-Time Right acceptance ở thẻ `Đã hoàn thành` theo ảnh chỉ định của người dùng.
+     - Bổ sung dòng mô tả thanh thoát ngay dưới số lượng task: *"Phân bổ 5 khâu UX chính theo tiến độ."* và *"Nghiệm thu đạt chuẩn yêu cầu PO."*.
+     - Giữ lại các khung footer chỉ số tinh gọn: *"Tải trọng bình quân: 2.4 task/designer"* và *"Lead time trung bình: 3.8 ngày/task"*.
+  3. **Biểu Đồ Đường Trend Line `@reui/c-chart-17`:**
+     - Sử dụng `ComposedChart` với thẻ `<defs>` chứa pattern sọc chéo dự báo `chart17-forecast-stripe` kết hợp dải màu nền chuyển sắc gradient `<linearGradient id="gradient-trending-fill">`.
+     - Đường nét `Line` uốn cong mềm mại (`type="natural"`), tooltip có header ngày/tuần phân cách nét mờ `border-b pb-2`.
+     - Bộ chuyển đổi khung thời gian: 7 ngày, 30 ngày, 90 ngày; tự động đổi chiều xem: Tab Tất cả (theo sản phẩm) và Từng sản phẩm (theo trạng thái bài toán).
+  4. **Tái Thiết Kế NewsFeed Timeline Chuẩn `@reui/c-timeline-3` & Reviewing Sources:**
+     - **Chiều cao cân đối:** Chiều cao khối Timeline bằng đúng `Squad Trending` bên cạnh, nằm trong cùng hàng Grid `items-stretch`.
+     - **Timeline ngược (Reverse Timeline):** Sắp xếp mốc thời gian từ ngày xa nhất trong tương lai ở trên đỉnh, ngày đã qua ở dưới đáy.
+     - **Tự động scroll:** Khi vào màn hình, tự động cuộn mượt mà (`scrollIntoView smooth`) đưa mốc ngày sắp tới gần hiện tại vào giữa khung nhìn.
+     - **Biểu tượng mốc thời gian:** Mốc ngày sắp tới có nút tròn đen với **spinner trắng xoay tròn (`Loader2 animate-spin`)**; mốc đã qua có **dấu checkmark (`Check`)**; mốc tương lai xa có vòng viền xám rỗng.
+     - **Lọc sạch bài toán Pending & Chưa phân bổ:** Loại trừ 100% các bài toán pending (PO Pending, Designer Pending) hoặc chưa phân bổ (chưa gán designer, đang ở khâu chờ tiếp nhận/chờ xác nhận/mới tạo) khỏi dòng thời gian phát hành.
+     - **Bỏ lồng box con & phân tách bằng Divider:** Các task trong ngày được hiển thị dưới dạng các hàng phẳng, phân cách nhau bằng đường divider `divide-y divide-neutral-200/80`, loại bỏ cảm giác hộp lồng hộp cồng kềnh.
+     - **Đồng bộ Avatar & Tên nhân sự từ Admin Setting:** Tra cứu trực tiếp từ `mbbank_admin_team` / `mbbank_team_members` và hiển thị bằng `<UserAvatar />` chuẩn hóa.
+  5. **Bộ Lọc Đa Sản Phẩm Động (Admin Products Tabs):**
+     - Nạp danh sách sản phẩm động từ Quản trị hệ thống (`mbbank_admin_products` / `getAdminIAProducts`) kết hợp bài toán thực tế.
+     - Khi người dùng bấm chọn tab sản phẩm, toàn bộ 6 khối Dashboard đồng loạt lọc dữ liệu chính xác theo sản phẩm đó.
+  6. **Làm Sạch 100% Dữ Liệu Test (Zero Mock Data Invariant):**
+     - Xóa bỏ toàn bộ `fallbackMilestones` (`fb-1` đến `fb-9`) trên NewsFeed Timeline và `DEFAULT_GANTT_TASKS` (`gantt-1` đến `gantt-6`) trên Gantt Chart.
+     - Xóa bỏ toàn bộ các số liệu fallback tĩnh trên các thẻ KPI. Toàn bộ Dashboard vận hành 100% dựa trên dữ liệu thực tế của hệ thống.
+
+---
+
 ## 🛡️ 3. KẾT QUẢ KIỂM THỬ (VERIFICATION)
 
 1. **Bộ kiểm thử trải nghiệm IA Map cho quyền Chỉ Xem (`test-ia-map-view-only.mjs`):**
@@ -210,23 +309,22 @@
 2. **Bộ kiểm thử tự động 8 tiêu chuẩn IA Map v2 (`test-ia-map-v2-features.mjs`):**
    - Chạy lệnh: `node scripts/test-ia-map-v2-features.mjs`
    - Kết quả: **34/34 tiêu chuẩn ĐẠT (100% PASS)**, bao quát toàn bộ 8 yêu cầu chức năng.
-3. **Kiểm tra kiểu dữ liệu TypeScript:**
-   - Chạy lệnh: `npx tsc --noEmit`
-   - Kết quả: Toàn bộ module IA map và các thành phần liên quan hoàn toàn sạch lỗi.
-4. **Kiểm thử biên dịch Production (Vite Build):**
-   - Chạy lệnh: `npx vite build`
-   - Kết quả: **Thành công 100% trong ~ 560ms**, xuất bundle sạch đẹp sẵn sàng triển khai.
+3. **Kiểm tra kiểm thử UI/UX Design System & Sonner:**
+   - Kết quả: **114/114 E2E Design System tests pass**, **8/8 Sonner tests pass**, **522/522 total tests pass (100%)**.
+4. **Kiểm thử giao diện thực tế Dashboard qua Headless Chrome:**
+   - Script: `scratch/capture-dashboard.mjs`
+   - Kết quả: Ảnh chụp thực tế `dashboard_with_backgrounds.png` xác nhận:
+     - 3 thẻ KPI hàng trên bằng phẳng tuyệt đối, không còn các hộp thông tin thừa.
+     - NewsFeed Timeline sạch sẽ, hiển thị phẳng với divider, không lồng box con.
+     - Lọc dữ liệu theo tab sản phẩm hoạt động mượt mà.
+5. **Kiểm thử biên dịch Production (Vite Build):**
+   - Chạy lệnh: `npm run build`
+   - Kết quả: **Thành công 100% trong 524ms**, 0 lỗi, 0 cảnh báo type.
 
 ---
 
 ## 📌 4. TỔNG KẾT & BÀN GIAO
 - **IA Map v2 & View-Only Mode**: Đã hoàn thiện 100% cả 8 tiêu chuẩn nâng cao và chế độ Chỉ xem tinh gọn cho quyền View (Tài liệu kỹ thuật tại `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md`).
-- **Chuẩn Hóa UI/UX, ReUI, Animate UI & ReUI Sonner Toast**:
-  - Đã hoàn tất 100% việc chuẩn hóa toàn diện giao diện theo 4 màn hình mẫu thiết kế thực tế (Nút Dark Navy `#0F172A`, Status Pills pastel + dot đồng màu, Priority Badges, Bố cục Form 2-cột + Sticky summary, Bảng quản trị).
-  - Tích hợp sâu thư viện Keenthemes reUI (`<Stepper>`, `<Timeline>`, `<Frame>`, Data Grid Tables với cột thao tác cố định `sticky right-0`).
-  - Khắc phục triệt để lỗi responsive và vỡ chữ trên 4 breakpoint (375px, 768px, 1024px, 1440px).
-  - Tích hợp ReUI Sonner Toast (`https://reui.io/components/sonner`), cơ chế xếp chồng thẻ 3D (3D Card Stacking, hover expand, close button, nút hành động Dark Navy *"Xem chi tiết"*), tự động bắn toast khi có thông báo mới/chưa đọc.
-  - Bổ sung nút *"Thử Toast"* trực quan trong Notification Dropdown để kiểm tra ngay 3 thông báo mẫu xếp chồng.
-  - Ban hành tài liệu kỹ thuật chuẩn mực tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md).
-  - Báo cáo chuyên sâu đã được phát hành tại: [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md).
-  - Kết quả kiểm thử: **114/114 E2E Design System tests pass**, **8/8 Sonner tests pass**, **522/522 total tests pass (100%)**, `npm run build` pass không lỗi.
+- **Chuẩn Hóa UI/UX, ReUI, Animate UI & ReUI Sonner Toast**: Đã hoàn tất toàn diện theo 4 màn hình mẫu thực tế, ban hành tài liệu tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md) và báo cáo chuyên sâu tại [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md).
+- **Dashboard AI-Ops ReUI v2 & NewsFeed Timeline**: Đã hoàn thiện toàn diện 6 khối Dashboard, tích hợp `@reui/c-chart-20`, `@reui/c-chart-17`, `@reui/c-timeline-3`, loại bỏ 100% mock data và lọc sạch dự án pending/chưa phân bổ (Báo cáo chuyên sâu tại [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md)).
+- **Mã Nguồn & Triển Khai**: Toàn bộ các thay đổi đã được kiểm thử, commit và đẩy thành công lên Git repository (`main`).
