@@ -13,19 +13,23 @@ Khi bạn được giao một nhiệm vụ, hãy mở ngay tài liệu chuyên t
 Deploy App/doc/
 │
 ├── 📖 00_OVERVIEW_AND_ONBOARDING.md   <-- BẠN ĐANG ĐỌC TÀI LIỆU NÀY (Tổng quan, Bản đồ tra cứu)
+├── 🎨 UI_DESIGN_SYSTEM.md              <-- TÀI LIỆU THIẾT KẾ TOÀN DIỆN: Tokens (#0F172A), Pills, Badges, ReUI Sonner Toast, Responsive 4 breakpoint
 │
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
 │   ├── 📋 2026-09-04_DAILY_UPDATE_REPORT.md  <-- Báo cáo chi tiết nâng cấp ReUI 8 Tabs, Role Preview, Xuất CSV
 │   ├── 📋 2026-09-05_DAILY_UPDATE_REPORT.md  <-- Báo cáo Tool Quy tắc Trạng thái tự động, Gantt PO Pending, Đồng nhất UI Badge & Typography
 │   ├── 📋 2026-09-07_DAILY_UPDATE_REPORT.md  <-- Báo cáo Nâng cấp Toàn diện: Image Compressor Standalone & JSZip, Chuẩn 2 loại Pending, @SenToPO Trigger, Đồng bộ 2 Chiều Google Sheets
-│   └── 📋 2026-09-15_DAILY_UPDATE_REPORT.md  <-- Báo cáo Toàn diện: Information Architecture & Mindmap Canvas, Đồng nhất Header Style Track Task, Phân quyền RBAC IA, Đồng bộ Sản phẩm Quản trị, Bảo mật OTP
+│   ├── 📋 2026-09-15_DAILY_UPDATE_REPORT.md  <-- Báo cáo Toàn diện: Information Architecture & Mindmap Canvas, Đồng nhất Header Style Track Task, Phân quyền RBAC IA, Đồng bộ Sản phẩm Quản trị, Bảo mật OTP
+│   ├── 📋 2026-09-16_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 16/09: Format Due Date Gantt DD/MM/YYYY, Component Kbd ReUI, Dynamic Email Lookup, Masking Task PO/Business, IA Map v2 (8 tiêu chuẩn vượt ReUI Flow) & Chế độ View-Only tinh gọn
+│   ├── 📋 2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md  <-- Báo cáo: Tích hợp chuẩn @reui/c-chart-20 (Donut), @reui/c-chart-17 (Trending), @reui/c-timeline-3 (Reverse Timeline, Spinner, Card Ảnh 4), Đồng bộ Tab Sản phẩm Admin
+│   └── 📋 2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md  <-- Báo cáo: Chuẩn hóa 4 layout mẫu thực tế, Nút Dark Navy #0F172A, Status Pills dot đồng màu, ReUI Sonner Toast 3D Stacking, Fix Responsive 375-1440px
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
 │   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Tự động đồng bộ vai trò từ Sheet USERS, Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất, Chính sách an toàn OTP.
 │   │
 │   ├── 📊 02_TASK_MANAGEMENT_AND_TRACKING.md
-│   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.
+│   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending, format DD/MM/YYYY), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.
 │   │
 │   ├── 📝 03_REQUEST_CREATION_FLOW.md
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình tạo yêu cầu (RequestForm), Ràng buộc sản phẩm của PO, Đính kèm tài liệu Google Drive, Hiệu ứng Confetti (Matter.js).
@@ -48,8 +52,11 @@ Deploy App/doc/
 │   ├── 🔄 09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md
 │   │   └── Đọc khi: Sửa/Làm mới Master Data (UX Squads, Phân bổ PO/Business/Designers theo vai trò, Sản phẩm số MBBank), Đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`), Khử trùng lặp Activity Comments (Deduplication Engine).
 │   │
-│   └── 🗺️ 10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md
-│       └── Đọc khi: Sửa/Làm mới Khung vẽ Sơ đồ Tư duy & Phân cấp 4 tầng (Product, Domain, Journey, Screen), Pan/Zoom/Fit view, Auto-align, Kéo nối dây Bezier, Đồng bộ Sản phẩm/Squads từ Quản trị, Phân quyền xem/sửa (cap-ia-view, cap-ia-edit), Header & Command bar chuẩn Track Task.
+│   ├── 🗺️ 10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md
+│   │   └── Đọc khi: Sửa/Làm mới IA map v2 vượt chuẩn ReUI Flow: Đa nút gốc Tier 1 độc lập trên cùng sản phẩm, Chip chọn sản phẩm có màu quản trị + số đếm (X), QuickAdd Sidebar kiểu n8n (kéo thả node), Snap to Grid 20px, Căn chuẩn layout, Minimap bản đồ nhỏ, Thẻ node chỉ hiện action khi click chọn, Thanh công cụ nổi IANodeFloatingToolbar, Nhập/Xuất JSON siêu tốc, và Trải nghiệm tinh gọn Zero-Clutter cho quyền View (PO, Business, Viewer: Kéo xem, tích chọn xem chi tiết node, vew full, ẩn sạch 100% tính năng thừa).
+│   │
+│   └── 📈 11_DASHBOARD_AND_AIOPS_REUI.md
+│       └── Đọc khi: Sửa/Làm mới Dashboard điều hành AIOps, Biểu đồ Donut Backlog & Pending (@reui/c-chart-20), Biểu đồ Line Squad Trending (@reui/c-chart-17), NewsFeed Timeline ngược & auto-scroll (@reui/c-timeline-3), Thẻ task Ảnh 4 (Reviewing sources), Double Shell Cards, Lọc theo Tab sản phẩm Admin.
 ```
 
 ---

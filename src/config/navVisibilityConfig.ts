@@ -47,7 +47,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     ia: true,
   },
   PO: {
-    overview: false,
+    overview: true,
     track: true,
     create: true,
     test: false,
@@ -57,7 +57,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     ia: true,
   },
   Business: {
-    overview: false,
+    overview: true,
     track: true,
     create: true,
     test: false,

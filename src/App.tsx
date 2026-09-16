@@ -99,7 +99,11 @@ export default function App() {
     const s = getStoredSession()
     const rawHash = window.location.hash.replace(/^#/, "").split("?")[0] as Page
     const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia"]
-    const targetPage = validPages.includes(rawHash) ? rawHash : (s?.role === "PO" || s?.role === "Business" ? "track" : "overview")
+    const targetPage = validPages.includes(rawHash)
+      ? rawHash
+      : (s?.role === "PO" || s?.role === "Business"
+          ? (isPageAllowedForRole("overview", s.role) ? "overview" : "track")
+          : "overview")
 
     if (s?.role && !isPageAllowedForRole(targetPage, s.role)) {
       return isPageAllowedForRole("track", s.role) ? "track" : "create"
@@ -130,6 +134,18 @@ export default function App() {
     window.location.hash = `#${newPage}`
   }
 
+  // Lắng nghe sự kiện thay đổi cấu hình điều hướng (RBAC Navigation) & phân quyền
+  const [navVersion, setNavVersion] = useState(0)
+  useEffect(() => {
+    const handleNavChange = () => setNavVersion((v) => v + 1)
+    window.addEventListener("nav_visibility_changed", handleNavChange)
+    window.addEventListener("rbac_permissions_changed", handleNavChange)
+    return () => {
+      window.removeEventListener("nav_visibility_changed", handleNavChange)
+      window.removeEventListener("rbac_permissions_changed", handleNavChange)
+    }
+  }, [])
+
   // Tự động chuyển về trang hợp lệ nếu vai trò hiện tại không được cấp quyền xem trang đang đứng
   useEffect(() => {
     const userRole = session?.role
@@ -138,7 +154,7 @@ export default function App() {
       setPage(fallback)
       window.location.hash = `#${fallback}`
     }
-  }, [session?.role, page])
+  }, [session?.role, page, navVersion])
 
   // Đồng bộ tiêu đề trang (Document Title) theo từng ngữ cảnh nghiệp vụ
 
@@ -156,7 +172,7 @@ export default function App() {
 
       compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
 
-      ia: "Information Architecture (IA) — MB UX Request Portal",
+      ia: "IA map — MB UX Request Portal",
     }
 
     document.title =
@@ -217,10 +233,9 @@ export default function App() {
         // Chỉ tài khoản có vai trò Admin mới được phép vào trang quản trị hệ thống
 
         if (!current || current.role !== "Admin") {
-          const fallback: Page =
-            current?.role === "PO" || current?.role === "Business"
-              ? "track"
-              : "overview"
+          const fallback: Page = isPageAllowedForRole("overview", current?.role)
+            ? "overview"
+            : (isPageAllowedForRole("track", current?.role) ? "track" : "create")
 
           setPage((prev) => (prev !== fallback ? fallback : prev))
           window.location.hash = `#${fallback}`
@@ -265,27 +280,22 @@ export default function App() {
     }
   }, [])
 
-  // Tự động chuyển PO & Business về màn hình "Yêu cầu của tôi" khi đăng nhập, chặn non-Admin vào manage
-
+  // Chặn non-Admin vào manage và điều hướng về trang phù hợp với quyền hạn
   useEffect(() => {
-    if (session && session.role !== "Admin" && page === "manage") {
-      const fallback: Page =
-        session.role === "PO" || session.role === "Business"
-          ? "track"
-          : "overview"
+    const userRole = session?.role
+    if (session && userRole !== "Admin" && page === "manage") {
+      const fallback: Page = isPageAllowedForRole("overview", userRole)
+        ? "overview"
+        : (isPageAllowedForRole("track", userRole) ? "track" : "create")
 
       setPage(fallback)
-
       window.location.hash = `#${fallback}`
-    } else if (
-      (session?.role === "PO" || session?.role === "Business") &&
-      page === "overview"
-    ) {
-      setPage("track")
-
-      window.location.hash = "#track"
+    } else if (userRole && !isPageAllowedForRole(page, userRole)) {
+      const fallback = isPageAllowedForRole("track", userRole) ? "track" : "create"
+      setPage(fallback)
+      window.location.hash = `#${fallback}`
     }
-  }, [session?.role, page])
+  }, [session?.role, page, navVersion])
 
   // Background prefetch remaining pages during browser idle time
 
@@ -316,7 +326,7 @@ export default function App() {
 
             const defaultPage: Page =
               newSession.role === "PO" || newSession.role === "Business"
-                ? "track"
+                ? (isPageAllowedForRole("overview", newSession.role) ? "overview" : "track")
                 : "overview"
 
             setPage(defaultPage)
@@ -330,7 +340,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen bg-[#FCFCFD]">
+      <div className="min-h-screen bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative">
         {/* Role Impersonation / Preview Floating Controller */}
         <RolePreviewBanner session={session} />
 
@@ -342,7 +352,7 @@ export default function App() {
         />
 
         {/* Container chính: Offset theo sidebar w-60 (240px) */}
-        <div className="md:ml-60 min-h-screen bg-[#FCFCFD] flex flex-col">
+        <div className="md:ml-60 min-h-screen bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1">
           {/* ReUI App Shell 12 Global Sticky Header */}
           <AppHeader
             currentPage={page}
@@ -354,7 +364,7 @@ export default function App() {
           />
 
           {/* Main Content View */}
-          <div className="flex-1 w-full px-6 py-6 lg:px-8 lg:py-8">
+          <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
             <ErrorBoundary>
               <AnimatePresence mode="wait">
                 <motion.div
@@ -363,7 +373,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.22, ease: "easeInOut" }}
-                  className="w-full"
+                  className="w-full min-w-0 max-w-full"
                 >
                   {page === "overview" && <TongQuanPage />}
                   {page === "create" && (
@@ -384,7 +394,7 @@ export default function App() {
           </div>
 
           {/* ReUI App Shell 12 Footer */}
-          <footer className="w-full border-t border-slate-200/80 px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
+          <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
             <div>2026 © MBBank UX Platform</div>
           </footer>
         </div>

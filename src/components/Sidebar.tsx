@@ -103,6 +103,24 @@ export default function Sidebar({
     }
   }, [])
 
+  // Lock body scroll when mobile drawer is open & auto-close on expand >= 768px (md)
+  useEffect(() => {
+    if (mobileOpen) {
+      const originalOverflow = document.body.style.overflow
+      document.body.style.overflow = "hidden"
+      const handleResize = () => {
+        if (window.innerWidth >= 768) {
+          setMobileOpen(false)
+        }
+      }
+      window.addEventListener("resize", handleResize)
+      return () => {
+        document.body.style.overflow = originalOverflow
+        window.removeEventListener("resize", handleResize)
+      }
+    }
+  }, [mobileOpen])
+
   useEffect(() => {
     fetchRequests()
       .then((reqs) => {
@@ -391,7 +409,7 @@ export default function Sidebar({
                         />
                       )}
                       <Network className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">Information Architecture</span>
+                      <span className="truncate relative z-10">IA map</span>
                     </button>
                   )
                 }

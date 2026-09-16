@@ -73,7 +73,7 @@ const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },
   compressor: { title: "Nén & Tối ưu ảnh", section: "Resources" },
-  ia: { title: "Information Architecture", section: "Platform" },
+  ia: { title: "IA map", section: "Platform" },
 }
 
 export default function AppHeader({
@@ -84,7 +84,7 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const [appsOpen, setAppsOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const { unreadCount } = useNotifications()
+  const { unreadCount, notifications } = useNotifications()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -105,6 +105,42 @@ export default function AppHeader({
   const userMenuRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const headerAvatarInputRef = useRef<HTMLInputElement>(null)
+
+  // Tự động thông báo Toast ReUI khi có thông báo chưa đọc trên phiên làm việc
+  useEffect(() => {
+    if (unreadCount > 0 && typeof window !== "undefined") {
+      const hasNotified = sessionStorage.getItem("ux_has_notified_unread_toast")
+      if (!hasNotified) {
+        sessionStorage.setItem("ux_has_notified_unread_toast", "true")
+        const latest = notifications.find((n) => !n.read)
+        const desc = latest
+          ? `${latest.title}: ${latest.message}`
+          : "Có các cập nhật mới về bài toán và tiến độ thiết kế cần rà soát."
+        toast.info(`Bạn có ${unreadCount} thông báo mới chưa đọc`, desc, {
+          duration: 5000,
+          action: {
+            label: "Xem thông báo",
+            onClick: () => {
+              setNotifOpen(true)
+              setAppsOpen(false)
+              setUserMenuOpen(false)
+            },
+          },
+        })
+      }
+    }
+  }, [unreadCount, notifications])
+
+  // Lắng nghe sự kiện mở trực tiếp dropdown thông báo
+  useEffect(() => {
+    const handleOpenNotif = () => {
+      setNotifOpen(true)
+      setAppsOpen(false)
+      setUserMenuOpen(false)
+    }
+    window.addEventListener("open_notifications_dropdown", handleOpenNotif)
+    return () => window.removeEventListener("open_notifications_dropdown", handleOpenNotif)
+  }, [])
 
   // Đồng bộ cấu hình hiển thị phân quyền Realtime với Quản trị
   useEffect(() => {
@@ -737,7 +773,7 @@ export default function AppHeader({
       items.push({ id: "create", title: "Tạo task mới", subtitle: "Gửi đề bài UX", icon: PlusCircle })
     }
     if (visibility.ia) {
-      items.push({ id: "ia", title: "Information Architecture", subtitle: "Sơ đồ IA & Mindmap", icon: Network })
+      items.push({ id: "ia", title: "IA map", subtitle: "Sơ đồ IA & Mindmap", icon: Network })
     }
     if (visibility.compressor) {
       items.push({ id: "compressor", title: "Nén ảnh", subtitle: "Tối ưu dung lượng", icon: Camera })
@@ -753,7 +789,7 @@ export default function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-6 lg:px-8 flex items-center justify-between select-none">
+      <header className="sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 flex items-center justify-between select-none">
         {/* Left: Mobile hamburger + ReUI Breadcrumb (Dashboards > Overview style) */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onToggleMobileMenu && (

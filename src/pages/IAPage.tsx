@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { motion } from "framer-motion"
-import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye, CloudUpload, CloudDownload, RefreshCw, LayoutGrid, Plus, SlidersHorizontal, MoreHorizontal } from "lucide-react"
+import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye, CloudUpload, CloudDownload, RefreshCw, LayoutGrid, Plus, SlidersHorizontal, MoreHorizontal, FileCode, Copy } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import { springs } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
@@ -11,8 +11,10 @@ import IAToolbar from "@/components/ia/IAToolbar"
 import IACanvasViewport from "@/components/ia/IACanvasViewport"
 import IANodeEditorModal, { ModalMode } from "@/components/ia/IANodeEditorModal"
 import IASettingsModal from "@/components/ia/IASettingsModal"
+import IAQuickAddSidebar, { QuickAddNodeType } from "@/components/ia/IAQuickAddSidebar"
+import IAJsonImportModal from "@/components/ia/IAJsonImportModal"
 import RequestDetail from "@/components/track/RequestDetail"
-import { IANode } from "@/types/ia"
+import { IANode, IATier } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
 import { getStoredSession, UserSession } from "@/services/otpAuthService"
 import { canRoleAccessCapability } from "@/lib/accessControl"
@@ -78,6 +80,7 @@ export default function IAPage() {
     pullCloud,
     tierDimensions,
     setTierDimensions,
+    importTree,
   } = useIATreeState("app-mbbank")
 
   const {
@@ -97,6 +100,9 @@ export default function IAPage() {
   // Modal dialog states for Add / Edit / Delete / Reset
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [targetNode, setTargetNode] = useState<IANode | null>(null)
+  const [selectedNode, setSelectedNode] = useState<IANode | null>(null)
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(true)
+  const [isJsonImportOpen, setIsJsonImportOpen] = useState<boolean>(false)
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false)
   const [isPullingCloud, setIsPullingCloud] = useState<boolean>(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
@@ -167,6 +173,11 @@ export default function IAPage() {
     setTargetNode(null)
     setModalMode("reset")
   }, [canEdit])
+
+  const handleOpenViewNode = useCallback((node: IANode) => {
+    setTargetNode(node)
+    setModalMode("view")
+  }, [])
 
   const handleCloseModal = useCallback(() => {
     setModalMode(null)
@@ -264,6 +275,102 @@ export default function IAPage() {
     }
   }, [searchQuery, matchedIdList.length])
 
+  // Check role for Design Admin or Design Owner (Requirement 5) - chỉ khả dụng khi có quyền Edit
+  const isDesignAdminOrOwner = useMemo(() => {
+    if (!canEdit) return false
+    const r = (session?.role || "").toLowerCase()
+    return r.includes("admin") || r.includes("owner") || canEdit
+  }, [session?.role, canEdit])
+
+  // Copy IA Map as JSON (Requirement 8)
+  const handleCopyJson = useCallback(() => {
+    try {
+      const dataToExport = {
+        product: activeProduct?.name || selectedProductId,
+        exportedAt: new Date().toISOString(),
+        tree: activeTree,
+        siblingRoots: rootNodes.length > 1 ? rootNodes.slice(1) : undefined,
+      }
+      const jsonStr = JSON.stringify(dataToExport, null, 2)
+      navigator.clipboard.writeText(jsonStr)
+      toast.success("Đã sao chép cấu trúc sơ đồ IA map (JSON) vào bộ nhớ tạm!")
+    } catch (e) {
+      toast.error("Không thể sao chép JSON")
+    }
+  }, [activeProduct, selectedProductId, activeTree, rootNodes])
+
+  // Quick Add Node from Sidebar (Requirement 5)
+  const handleAddFromSidebar = useCallback(
+    (item: QuickAddNodeType) => {
+      if (!canEdit) return
+
+      if (item.tier === 1) {
+        addRootNode({
+          name: `Cấp 1 mới · ${activeProduct?.name || "Sản phẩm"}`,
+          tier: 1,
+        })
+        toast.success("Đã tạo thêm Tier 1 mới cho sản phẩm!")
+        setTimeout(() => handleFitToView(), 100)
+        return
+      }
+
+      // Tier 2, 3, 4: Gắn vào node đang chọn hoặc root node
+      const targetParent = selectedNode || activeTree
+      if (!targetParent) return
+
+      addChildNode(targetParent.id, {
+        name: item.name,
+        tier: item.tier,
+        touchpointType: item.touchpointType,
+      })
+      toast.success(`Đã thêm ${item.name} vào dưới "${targetParent.name}"!`)
+      setTimeout(() => handleFitToView(), 100)
+    },
+    [canEdit, activeProduct, addRootNode, selectedNode, activeTree, addChildNode, handleFitToView]
+  )
+
+  // Drag-and-Drop Node from Sidebar onto Canvas (Requirement 5 & 6)
+  const handleAddNodeAtPosition = useCallback(
+    (position: { x: number; y: number }, nodeData: Partial<IANode>) => {
+      if (!canEdit) return
+
+      if (nodeData.tier === 1) {
+        addRootNode({
+          name: nodeData.name || `Cấp 1 mới · ${activeProduct?.name || "Sản phẩm"}`,
+          tier: 1,
+          customX: position.x,
+          customY: position.y,
+        })
+        toast.success("Đã tạo thêm Tier 1 mới tại vị trí chỉ định!")
+        return
+      }
+
+      const targetParent = selectedNode || activeTree
+      if (!targetParent) return
+
+      addChildNode(targetParent.id, {
+        name: nodeData.name || "Node mới",
+        tier: (nodeData.tier || 2) as IATier,
+        touchpointType: nodeData.touchpointType,
+        customX: position.x,
+        customY: position.y,
+      })
+      toast.success(`Đã thêm node mới vào sơ đồ!`)
+    },
+    [canEdit, activeProduct, addRootNode, selectedNode, activeTree, addChildNode]
+  )
+
+  // Handle JSON Import (Requirement 8)
+  const handleImportJson = useCallback(
+    (imported: IANode | IANode[]) => {
+      importTree(imported)
+      setIsJsonImportOpen(false)
+      toast.success("Đã nhập thành công sơ đồ IA map!")
+      setTimeout(() => handleFitToView(), 150)
+    },
+    [importTree, handleFitToView]
+  )
+
   if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
@@ -281,14 +388,14 @@ export default function IAPage() {
   }
 
   return (
-    <div className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 animate-in fade-in-50 duration-200">
+    <main id="main-content" tabIndex={-1} className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 animate-in fade-in-50 duration-200 min-w-0 max-w-full outline-none">
       {/* 1. Page Header Synchronized with Track Task & System Style */}
       <PageHeader
         breadcrumb={{
           parent: "MBBank UX Platform",
-          current: "Information Architecture",
+          current: "IA map",
         }}
-        title="Information Architecture"
+        title="IA map"
         badge={
           !canEdit ? (
             <span
@@ -307,36 +414,36 @@ export default function IAPage() {
           )
         }
         actions={
-          <div className="flex items-center gap-2">
-            {/* Nút Cài đặt sơ đồ */}
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="ia-settings-btn"
-              onClick={() => setIsSettingsOpen(true)}
-              title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Cài đặt sơ đồ</span>
-            </Button>
-
-            {/* Nút Tải từ Cloud */}
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="ia-pull-cloud-btn"
-              onClick={handlePullCloud}
-              disabled={isPullingCloud}
-              title="Tải sơ đồ IA từ Google Sheets Cloud"
-            >
-              <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
-              <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
-            </Button>
-
-            {/* Nút Lưu lên Cloud (chỉ khi có quyền edit) - Primary Action */}
-            {canEdit && (
+          canEdit ? (
+            <div className="flex items-center gap-2">
+              {/* Nút Cài đặt sơ đồ */}
               <Button
-                variant="blue"
+                variant="outline"
+                size="sm"
+                data-testid="ia-settings-btn"
+                onClick={() => setIsSettingsOpen(true)}
+                title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Cài đặt sơ đồ</span>
+              </Button>
+
+              {/* Nút Tải từ Cloud */}
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="ia-pull-cloud-btn"
+                onClick={handlePullCloud}
+                disabled={isPullingCloud}
+                title="Tải sơ đồ IA từ Google Sheets Cloud"
+              >
+                <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
+                <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
+              </Button>
+
+              {/* Nút Lưu lên Cloud (chỉ khi có quyền edit) - Primary Action */}
+              <Button
+                variant="default"
                 size="sm"
                 data-testid="ia-sync-cloud-btn"
                 onClick={handleSyncCloud}
@@ -346,10 +453,8 @@ export default function IAPage() {
                 <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
                 <span>{isSyncingCloud ? "Đang lưu..." : "Lưu lên Cloud"}</span>
               </Button>
-            )}
 
-            {/* Menu tùy chọn thêm (...) */}
-            {canEdit && (
+              {/* Menu tùy chọn thêm (...) */}
               <div className="relative" ref={moreMenuRef}>
                 <Button
                   variant="outline"
@@ -363,9 +468,38 @@ export default function IAPage() {
                 </Button>
 
                 {isMoreMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
                     <button
                       type="button"
+                      data-testid="ia-more-import-json"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false)
+                        setIsJsonImportOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 text-left transition-colors cursor-pointer"
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Nhập JSON / Đẩy map nhanh</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="ia-more-copy-json"
+                      onClick={() => {
+                        setIsMoreMenuOpen(false)
+                        handleCopyJson()
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Sao chép sơ đồ (JSON)</span>
+                    </button>
+
+                    <div className="my-1 border-t border-slate-100" />
+
+                    <button
+                      type="button"
+                      data-testid="ia-more-reset"
                       onClick={() => {
                         setIsMoreMenuOpen(false)
                         handleOpenReset()
@@ -378,8 +512,8 @@ export default function IAPage() {
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          ) : undefined
         }
       />
 
@@ -397,42 +531,65 @@ export default function IAPage() {
         onPrevMatch={handlePrevMatch}
         onResetToDefault={handleOpenReset}
         readOnly={!canEdit}
+        trees={trees}
       />
 
-      {/* 3. Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
-      <IACanvasViewport
-        transform={transform}
-        isPanning={isPanning}
-        layoutNodes={layoutNodes}
-        connectors={connectors}
-        matchedIds={searchResult.matchedIds}
-        requestsMap={requestsMap}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
-        resetZoom={resetZoom}
-        onFitToView={handleFitToView}
-        onToggleCollapse={toggleCollapse}
-        onOpenDetail={(req) => setSelectedRequest(req)}
-        onAddChild={handleOpenAdd}
-        onAddChildInDirection={canEdit ? addChildInDirection : undefined}
-        onConnectNodes={canEdit ? connectNodes : undefined}
-        onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
-        onEditNode={handleOpenEdit}
-        onDeleteNode={handleOpenDelete}
-        onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
-        onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
-        onMultipleNodesDrag={canEdit ? updateMultipleNodePositions : undefined}
-        onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
-        onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
-        onTrunkDrag={canEdit ? updateTrunkOffset : undefined}
-        onNodePositionChange={canEdit ? updateNodePosition : undefined}
-        onAutoAlign={canEdit ? autoAlignTree : undefined}
-        readOnly={!canEdit}
-      />
+      {/* 3. Main IA Interactive Canvas Workspace (Flex layout with QuickAdd Sidebar & Canvas) */}
+      <div className="relative flex-1 flex w-full h-[calc(100vh-14rem)] min-h-[640px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-50">
+        {/* Left Quick Add Sidebar for Design Admin / Design Owner (Requirement 5) */}
+        {isDesignAdminOrOwner && (
+          <IAQuickAddSidebar
+            isOpen={isQuickAddOpen}
+            onToggle={() => setIsQuickAddOpen((prev) => !prev)}
+            onAddNode={handleAddFromSidebar}
+            selectedNodeId={selectedNode?.id}
+            selectedNodeName={selectedNode?.name}
+            selectedNodeTier={selectedNode?.tier}
+          />
+        )}
+
+        {/* Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
+        <IACanvasViewport
+          transform={transform}
+          setTransform={setTransform}
+          isPanning={isPanning}
+          layoutNodes={layoutNodes}
+          connectors={connectors}
+          matchedIds={searchResult.matchedIds}
+          requestsMap={requestsMap}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onWheel={handleWheel}
+          zoomIn={zoomIn}
+          zoomOut={zoomOut}
+          resetZoom={resetZoom}
+          onFitToView={handleFitToView}
+          onToggleCollapse={toggleCollapse}
+          onOpenDetail={(req) => setSelectedRequest(req)}
+          onOpenNodeDetail={handleOpenViewNode}
+          onAddChild={handleOpenAdd}
+          onAddChildInDirection={canEdit ? addChildInDirection : undefined}
+          onConnectNodes={canEdit ? connectNodes : undefined}
+          onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
+          onEditNode={handleOpenEdit}
+          onDeleteNode={handleOpenDelete}
+          onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
+          onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
+          onMultipleNodesDrag={canEdit ? updateMultipleNodePositions : undefined}
+          onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
+          onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
+          onTrunkDrag={canEdit ? updateTrunkOffset : undefined}
+          onNodePositionChange={canEdit ? updateNodePosition : undefined}
+          onAutoAlign={canEdit ? autoAlignTree : undefined}
+          readOnly={!canEdit}
+          bounds={bounds}
+          onCopyJson={handleCopyJson}
+          onOpenImportJson={() => setIsJsonImportOpen(true)}
+          onSelectNode={setSelectedNode}
+          onAddNodeAtPosition={canEdit ? handleAddNodeAtPosition : undefined}
+        />
+      </div>
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}
       <IANodeEditorModal
@@ -441,6 +598,7 @@ export default function IAPage() {
         availableRequests={Array.from(requestsMap.values())}
         isOpen={modalMode !== null}
         onClose={handleCloseModal}
+        onOpenRequestDetail={(req) => setSelectedRequest(req)}
         onConfirmAdd={(parentId, data) => {
           if (!parentId) {
             addRootNode(data)
@@ -472,12 +630,21 @@ export default function IAPage() {
         }}
       />
 
-      {/* 6. Request Detail Slide-Over Drawer Drilldown */}
+      {/* 6. Modal Nhập JSON / Đẩy Map Nhanh (Requirement 8) */}
+      <IAJsonImportModal
+        isOpen={isJsonImportOpen}
+        onClose={() => setIsJsonImportOpen(false)}
+        currentTree={activeTree}
+        selectedProductName={activeProduct?.name || "MBBank"}
+        onImportJson={handleImportJson}
+      />
+
+      {/* 7. Request Detail Slide-Over Drawer Drilldown */}
       <RequestDetail
         request={selectedRequest}
         open={Boolean(selectedRequest)}
         onClose={() => setSelectedRequest(null)}
       />
-    </div>
+    </main>
   )
 }

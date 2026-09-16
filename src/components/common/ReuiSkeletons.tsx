@@ -181,7 +181,7 @@ export function TableRowsSkeleton({ rowCount = 6 }: { rowCount?: number }) {
           </td>
 
           {/* Action */}
-          <td className="px-3 py-3 text-right">
+          <td className="px-3 py-3 text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]">
             <Skeleton className="size-7 rounded-lg ml-auto" />
           </td>
         </tr>
@@ -273,9 +273,9 @@ export function GridCardsSkeleton({ cardCount = 6 }: { cardCount?: number }) {
 export function FormSkeleton() {
   return (
     <div className="space-y-8 pb-16 animate-in fade-in-30 duration-200">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         {/* Left Column Form */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="w-full xl:col-span-8 space-y-8">
           {/* Header */}
           <div className="space-y-2">
             <Skeleton className="h-3.5 w-36 rounded-md" />
@@ -328,7 +328,7 @@ export function FormSkeleton() {
         </div>
 
         {/* Right Floating Card */}
-        <div className="lg:col-span-4 sticky top-6">
+        <div className="w-full xl:col-span-4 xl:sticky xl:top-20">
           <div className="p-6 rounded-2xl border border-slate-200/90 bg-white shadow-xl space-y-6">
             <div className="space-y-2">
               <Skeleton className="h-5 w-32 rounded-md" />
@@ -568,7 +568,7 @@ export function TableRowSkeletonPlaceholder({ className }: { className?: string 
       </td>
 
       {/* 8. Action */}
-      <td className="px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint">
+      <td className="px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]">
         <Skeleton className="size-7 rounded-4xl ml-auto" />
       </td>
     </motion.tr>

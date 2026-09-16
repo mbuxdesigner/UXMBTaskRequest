@@ -70,7 +70,10 @@ function formatDueDate(dateStr?: string): string {
   if (!dateStr) return ""
   const d = parseDate(dateStr)
   if (isNaN(d.getTime())) return ""
-  return `${MONTH_NAMES_SHORT[d.getMonth()]} ${d.getDate()}`
+  const day = String(d.getDate()).padStart(2, "0")
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
 }
 
 export interface TaskStageStatusInfo {
@@ -1137,7 +1140,7 @@ export default function ReUIGanttChart({
             )}
 
             {visibleColumns.due && (
-              <div className="w-20 text-left pl-2 shrink-0 font-medium text-slate-500">
+              <div className="w-24 text-left pl-2 shrink-0 font-medium text-slate-500">
                 Due date
               </div>
             )}
@@ -1333,7 +1336,7 @@ export default function ReUIGanttChart({
 
                                   {/* Due Date */}
                                   {visibleColumns.due && (
-                                    <div className={`w-20 text-left pl-2 text-[11.5px] shrink-0 font-mono truncate ${
+                                    <div className={`w-24 text-left pl-2 text-[11.5px] shrink-0 font-mono truncate ${
                                       isOverdue ? "text-rose-600 font-semibold" : "text-slate-500 font-normal"
                                     }`}>
                                       {releaseDateFormatted || "—"}
@@ -1804,7 +1807,7 @@ export default function ReUIGanttChart({
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Release / Hạn:</span>
                 <span className="font-mono text-emerald-400 font-bold">
-                  {hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline || "Chưa hạn"}
+                  {formatDueDate(hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline) || "Chưa hạn"}
                 </span>
               </div>
 
@@ -1829,8 +1832,12 @@ export default function ReUIGanttChart({
             </div>
 
             {/* Hint */}
-            <div className="pt-1 text-[10px] text-slate-500 font-medium text-center">
-              💡 Click để mở chi tiết đề bài & cập nhật tiến độ
+            <div className={`pt-1 text-[10px] font-medium text-center ${
+              hoveredTooltip.request.isRestricted ? "text-amber-400/90" : "text-slate-500"
+            }`}>
+              {hoveredTooltip.request.isRestricted 
+                ? "🔒 Không có quyền truy cập bài toán này (Liên hệ Admin)" 
+                : "💡 Click để mở chi tiết đề bài & cập nhật tiến độ"}
             </div>
           </motion.div>
         )}

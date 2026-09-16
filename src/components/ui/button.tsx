@@ -7,20 +7,20 @@ import { cn } from "@/lib/utils"
 import { springs } from "@/lib/motion"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3A6B]/30 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer",
   {
     variants: {
       variant: {
         default:
-          "bg-[#1B3A6B] text-white shadow-xs hover:bg-[#152e54] hover:shadow-md",
+          "bg-slate-900 text-white shadow-xs hover:bg-slate-800 active:bg-slate-950 focus-visible:ring-slate-900/30",
         primary:
-          "bg-[#1B3A6B] text-white shadow-xs hover:bg-[#152e54] hover:shadow-md",
+          "bg-slate-900 text-white shadow-xs hover:bg-slate-800 active:bg-slate-950 focus-visible:ring-slate-900/30",
         blue:
           "bg-[#1057FB] text-white shadow-xs hover:bg-blue-700 active:bg-blue-800",
         teal:
           "bg-[#0D9B97] text-white shadow-xs hover:bg-[#0b8380] hover:shadow-md",
         destructive:
-          "bg-rose-600 text-white shadow-xs hover:bg-rose-700",
+          "bg-rose-600 text-white shadow-xs hover:bg-rose-700 active:bg-rose-800",
         outline:
           "border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900",
         secondary:
@@ -28,9 +28,9 @@ const buttonVariants = cva(
         ghost:
           "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
         link:
-          "text-[#1B3A6B] underline-offset-4 hover:underline",
+          "text-slate-900 underline-offset-4 hover:underline",
         softNavy:
-          "bg-[#1B3A6B]/10 text-[#1B3A6B] hover:bg-[#1B3A6B]/20",
+          "bg-slate-900/10 text-slate-900 hover:bg-slate-900/20",
         softTeal:
           "bg-[#0D9B97]/10 text-[#0D9B97] hover:bg-[#0D9B97]/20",
         softSuccess:

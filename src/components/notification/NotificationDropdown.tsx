@@ -22,7 +22,7 @@ import {
   Users,
   AtSign,
 } from "lucide-react"
-import { useNotifications } from "../../services/notificationService"
+import { useNotifications, triggerTestStackedNotifications } from "../../services/notificationService"
 import { NotificationItem, NotificationType } from "../../types/notification"
 import { NOTIFICATION_TEMPLATES } from "../../config/notificationTemplates"
 import { springs, originPopoverVariants } from "@/lib/motion"
@@ -242,16 +242,27 @@ export default function NotificationDropdown({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* Nút Demo Toast Sonner Xếp Chồng */}
+            <button
+              type="button"
+              onClick={() => triggerTestStackedNotifications()}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 transition-colors cursor-pointer"
+              title="Kích hoạt 3 Toast mẫu xếp chồng chuẩn ReUI Sonner"
+            >
+              <Sparkles className="w-3 h-3 text-amber-600" />
+              <span>Thử Toast</span>
+            </button>
+
             {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={markAllAsRead}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-[#1057fb] hover:bg-blue-50/80 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium text-[#1057fb] hover:bg-blue-50/80 transition-colors cursor-pointer"
                 title="Đánh dấu tất cả là đã đọc"
               >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Đọc tất cả</span>
+                <CheckCheck className="w-3 h-3" />
+                <span>Đọc hết</span>
               </button>
             )}
             {notifications.length > 0 && (

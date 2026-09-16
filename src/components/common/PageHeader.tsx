@@ -38,7 +38,7 @@ export default function PageHeader({
       </div>
 
       {actions && (
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center flex-wrap gap-2 sm:gap-2.5 self-start sm:self-auto">
           {actions}
         </div>
       )}

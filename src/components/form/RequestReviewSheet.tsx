@@ -1,6 +1,8 @@
 import React from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { dialogOverlayVariants, springs } from "@/lib/motion"
 import { 
   X, 
   ArrowLeft, 
@@ -51,28 +53,50 @@ export default function RequestReviewSheet({
 }: RequestReviewSheetProps) {
   const validLinks = form.doc_links.filter((l) => l.trim().length > 0)
 
-  return (
+  // Body scroll lock & Escape key dismiss with cleanup
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open && !isSubmitting) {
+        onClose()
+      }
+    }
+    if (open) {
+      document.body.style.overflow = "hidden"
+      window.addEventListener("keydown", handleKeyDown)
+    }
+    return () => {
+      document.body.style.overflow = "unset"
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [open, isSubmitting, onClose])
+
+  return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <motion.div
+          key="review-sheet-root"
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          className="fixed inset-0 z-50 overflow-hidden select-none"
+        >
           {/* Backdrop Blur Overlay with fade animation */}
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-slate-900/35 backdrop-blur-xs"
+            key="review-sheet-backdrop"
+            variants={dialogOverlayVariants}
+            className="fixed inset-0 bg-slate-900/35 backdrop-blur-xs cursor-pointer"
             onClick={onClose}
           />
 
           {/* Floating Sheet Panel sliding from right to left */}
-          <div className="fixed inset-y-2 right-2 sm:inset-y-4 sm:right-4 max-w-full flex z-50">
+          <div className="fixed inset-y-2 right-2 sm:inset-y-4 sm:right-4 max-w-full flex z-50 pointer-events-none">
             <motion.aside 
+              key="review-sheet-panel"
               initial={{ x: "100%", opacity: 0.5 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "100%", opacity: 0 }}
-              transition={{ type: "spring", damping: 28, stiffness: 260 }}
-              className="w-[95vw] sm:w-[540px] md:w-[600px] bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden"
+              transition={springs.gentle}
+              className="pointer-events-auto w-[95vw] sm:w-[540px] md:w-[600px] bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden"
               role="dialog"
               aria-modal="true"
             >
@@ -337,11 +361,13 @@ export default function RequestReviewSheet({
 
                 <Button
                   type="button"
-                  size="default"
+                  variant="primary"
+                  size="lg"
+                  tactile
                   loading={isSubmitting}
                   disabled={isSubmitting}
                   onClick={onConfirm}
-                  className="px-6 h-10 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs gap-2 text-xs cursor-pointer"
+                  className="px-6 h-10 bg-slate-900 text-white hover:bg-slate-800 font-bold rounded-xl shadow-xs gap-2 text-xs cursor-pointer"
                 >
                   {!isSubmitting && <Send className="w-4 h-4" />}
                   <span>{isSubmitting ? "Đang gửi..." : "Gửi đầu bài"}</span>
@@ -349,8 +375,9 @@ export default function RequestReviewSheet({
               </div>
             </motion.aside>
           </div>
-        </div>
+        </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

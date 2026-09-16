@@ -23,6 +23,9 @@ import {
   Sliders,
   TrendingUp,
   CheckSquare,
+  Eye,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import { springs, dialogOverlayVariants, drawerVariants } from "@/lib/motion"
 import { Switch } from "@/components/ui/switch"
@@ -32,7 +35,7 @@ import { IANode, IATier, IATouchpointType, IANodeDisplaySettings, getTierDefault
 import { getAdminSquadsList } from "@/data/iaMockData"
 import { UXRequest, isDemoRequest } from "@/data/mockData"
 
-export type ModalMode = "add" | "edit" | "delete" | "reset" | null
+export type ModalMode = "add" | "edit" | "delete" | "reset" | "view" | null
 
 export interface IANodeEditorModalProps {
   mode: ModalMode
@@ -44,6 +47,7 @@ export interface IANodeEditorModalProps {
   onConfirmEdit?: (nodeId: string, data: Partial<IANode>) => void
   onConfirmDelete?: (nodeId: string) => void
   onConfirmReset?: () => void
+  onOpenRequestDetail?: (request: UXRequest) => void
 }
 
 const TOUCHPOINT_OPTIONS: { value: IATouchpointType; label: string }[] = [
@@ -64,6 +68,24 @@ export const COLOR_OPTIONS = [
   { id: "cyan", bg: "bg-cyan-500", name: "Xanh ngọc" },
   { id: "purple", bg: "bg-purple-600", name: "Tím" },
 ]
+
+function getTouchpointIcon(type?: IATouchpointType) {
+  switch (type) {
+    case "modal":
+      return <Layout className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+    case "bottom_sheet":
+      return <PanelBottom className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+    case "push_notification":
+      return <Bell className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+    case "webview":
+      return <Globe className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+    case "action_sheet":
+      return <PanelBottom className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+    case "screen":
+    default:
+      return <Smartphone className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+  }
+}
 
 function getTaskStatusBadge(status?: string) {
   const s = (status || "").toLowerCase()
@@ -92,7 +114,9 @@ export default function IANodeEditorModal({
   onConfirmEdit,
   onConfirmDelete,
   onConfirmReset,
+  onOpenRequestDetail,
 }: IANodeEditorModalProps) {
+  const [copiedId, setCopiedId] = useState(false)
   const [name, setName] = useState<string>("")
   const [squad, setSquad] = useState<string>("")
   const [customSquad, setCustomSquad] = useState<string>("")
@@ -341,9 +365,33 @@ export default function IANodeEditorModal({
 
   if (!isOpen || !mode) return null
 
+  const isViewMode = mode === "view"
   const isFormMode = mode === "add" || mode === "edit"
   const isDeleteMode = mode === "delete"
   const isResetMode = mode === "reset"
+
+  // Linked requests for targetNode (used in view mode and details)
+  const targetNodeTasks = useMemo(() => {
+    if (!targetNode) return []
+    const ids = targetNode.taskIds && targetNode.taskIds.length > 0
+      ? targetNode.taskIds
+      : targetNode.requestId
+      ? [targetNode.requestId]
+      : []
+    return ids.map((id) => {
+      const match = availableRequests.find((r) => r.request_id === id)
+      if (match) return match
+      return {
+        request_id: id,
+        title: `Bài toán ${id}`,
+        status: "Đang thực hiện",
+        squad: targetNode.squad || "Chưa gán",
+        requester: "Hệ thống",
+        designer: "Chưa gán",
+        created_at: new Date().toISOString(),
+      } as UXRequest
+    })
+  }, [targetNode, availableRequests])
 
   const showTouchpointSelect =
     (mode === "add" && targetNode?.tier === 3) ||
@@ -390,6 +438,220 @@ export default function IANodeEditorModal({
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Chi tiết Node cho View Mode */}
+              {isViewMode && targetNode && (
+                <div className="space-y-5" data-testid="ia-node-view-details">
+                  {/* Header Title & Tier Badge */}
+                  <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono">
+                          Tier {targetNode.tier} · {
+                            targetNode.tier === 1
+                              ? "Cấp 1 · Sản phẩm chính"
+                              : targetNode.tier === 2
+                              ? "Cấp 2 · Phân hệ chức năng"
+                              : targetNode.tier === 3
+                              ? "Cấp 3 · Tính năng nghiệp vụ"
+                              : "Cấp 4 · Điểm chạm (Touchpoint)"
+                          }
+                        </span>
+                        {targetNode.code && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-mono font-semibold">
+                            {targetNode.code}
+                          </span>
+                        )}
+                        {targetNode.isCriticalPath && (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
+                            Tuyến trọng yếu
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                        {targetNode.name}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* ID Node with Copy action */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                    <div className="text-xs">
+                      <span className="text-slate-500 font-medium">Mã định danh ID: </span>
+                      <span className="font-mono font-bold text-slate-800">{targetNode.id}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(targetNode.id)
+                        setCopiedId(true)
+                        setTimeout(() => setCopiedId(false), 2000)
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      {copiedId ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedId ? "Đã chép" : "Sao chép"}</span>
+                    </button>
+                  </div>
+
+                  {/* Thông tin chi tiết phân loại */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
+                      <div className="text-slate-500 font-medium flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Squad phụ trách</span>
+                      </div>
+                      <div className="font-semibold text-slate-800">
+                        {targetNode.squad || "Chưa phân công"}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
+                      <div className="text-slate-500 font-medium flex items-center gap-1">
+                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Loại điểm chạm</span>
+                      </div>
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        {getTouchpointIcon(targetNode.touchpointType)}
+                        <span>
+                          {TOUCHPOINT_OPTIONS.find((t) => t.value === targetNode.touchpointType)?.label.split(" (")[0] || "Màn hình chính"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
+                      <div className="text-slate-500 font-medium flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Màu chủ đề</span>
+                      </div>
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <span
+                          className={`w-3 h-3 rounded-full ${
+                            COLOR_OPTIONS.find((c) => c.id === targetNode.colorTheme)?.bg || "bg-[#1057FB]"
+                          }`}
+                        />
+                        <span>{COLOR_OPTIONS.find((c) => c.id === targetNode.colorTheme)?.name || "Xanh MB"}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
+                      <div className="text-slate-500 font-medium">Thẻ phân loại (Tag)</div>
+                      <div className="font-semibold text-slate-800">
+                        {targetNode.customTag ? (
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">
+                            {targetNode.customTag}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">Không có thẻ</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mô tả / Ghi chú */}
+                  <div className="space-y-1.5 text-xs">
+                    <label className="font-semibold text-slate-700">Mô tả tính năng</label>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 leading-relaxed min-h-[50px]">
+                      {targetNode.description || <span className="text-slate-400 italic">Không có mô tả chi tiết cho node này.</span>}
+                    </div>
+                  </div>
+
+                  {/* Figma URL */}
+                  <div className="space-y-1.5 text-xs">
+                    <label className="font-semibold text-slate-700">Thiết kế Figma</label>
+                    {targetNode.figmaUrl ? (
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-purple-50/60 border border-purple-200/80 text-purple-900">
+                        <div className="truncate max-w-[280px] font-mono text-[11px] text-purple-700">
+                          {targetNode.figmaUrl}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(targetNode.figmaUrl, "_blank", "noopener,noreferrer")}
+                          className="border-purple-300 text-purple-700 hover:bg-purple-100/60 h-7 text-xs"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          <span>Mở Figma</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 italic">
+                        Chưa liên kết đường dẫn Figma
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bài toán thiết kế liên kết (UX Requests) */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                        <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Bài toán thiết kế liên kết ({targetNodeTasks.length})</span>
+                      </label>
+                    </div>
+
+                    {targetNodeTasks.length > 0 ? (
+                      <div className="space-y-2">
+                        {targetNodeTasks.map((req) => (
+                          <div
+                            key={req.request_id}
+                            className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-colors flex items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-blue-600 text-[11px]">
+                                  {req.request_id}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getTaskStatusBadge(req.status)}`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              <div className="font-semibold text-slate-800 truncate text-xs">
+                                {req.title}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {req.squad || "Chưa gán squad"} · {req.designer || "Chưa có designer"}
+                              </div>
+                            </div>
+
+                            {onOpenRequestDetail && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  onClose()
+                                  onOpenRequestDetail(req)
+                                }}
+                                className="shrink-0 h-7 text-xs"
+                              >
+                                <Eye className="w-3 h-3 mr-1" />
+                                <span>Chi tiết</span>
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-center italic">
+                        Chưa có bài toán thiết kế nào được liên kết với node này.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Nhánh con phụ thuộc */}
+                  {targetNode.children && targetNode.children.length > 0 && (
+                    <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-200/60 text-xs text-blue-900 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-blue-600" />
+                        <span className="font-semibold">Nhánh con trực thuộc</span>
+                      </div>
+                      <span className="font-bold text-blue-700">{targetNode.children.length} nhánh</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1036,55 +1298,74 @@ export default function IANodeEditorModal({
 
             {/* Sheet Footer Buttons (ReUI Pinned Bottom Bar) */}
             <div className="p-4 border-t border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between gap-3 shrink-0">
-              <div>
-                {mode === "edit" && targetNode && onConfirmDelete && (
+              {isViewMode ? (
+                <div className="w-full flex items-center justify-between">
+                  <span className="text-xs text-slate-500">
+                    Chế độ xem thông tin chi tiết node
+                  </span>
                   <Button
                     type="button"
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
-                    onClick={() => {
-                      onConfirmDelete(targetNode.id)
-                      onClose()
-                    }}
+                    onClick={onClose}
+                    data-testid="ia-modal-close-btn"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Xóa node</span>
+                    Đóng
                   </Button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    {mode === "edit" && targetNode && onConfirmDelete && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          onConfirmDelete(targetNode.id)
+                          onClose()
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa node</span>
+                      </Button>
+                    )}
+                  </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onClose}
-                >
-                  {isDeleteMode ? "Hủy bỏ" : "Đóng"}
-                </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onClose}
+                    >
+                      {isDeleteMode ? "Hủy bỏ" : "Đóng"}
+                    </Button>
 
-                <Button
-                  type="submit"
-                  variant={isDeleteMode ? "destructive" : "blue"}
-                  size="sm"
-                  data-testid="ia-modal-confirm-btn"
-                >
-                  {mode === "add" && (
-                    <>
-                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>Tạo Nhánh Mới</span>
-                    </>
-                  )}
-                  {mode === "edit" && (
-                    <>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>Lưu Thay Đổi</span>
-                    </>
-                  )}
-                  {mode === "delete" && <span>Xác Nhận Xóa</span>}
-                  {mode === "reset" && <span>Khôi Phục Ngay</span>}
-                </Button>
-              </div>
+                    <Button
+                      type="submit"
+                      variant={isDeleteMode ? "destructive" : "default"}
+                      size="sm"
+                      data-testid="ia-modal-confirm-btn"
+                    >
+                      {mode === "add" && (
+                        <>
+                          <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>Tạo Nhánh Mới</span>
+                        </>
+                      )}
+                      {mode === "edit" && (
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>Lưu Thay Đổi</span>
+                        </>
+                      )}
+                      {mode === "delete" && <span>Xác Nhận Xóa</span>}
+                      {mode === "reset" && <span>Khôi Phục Ngay</span>}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </form>
         </motion.div>

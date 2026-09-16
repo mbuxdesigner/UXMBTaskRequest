@@ -1,5 +1,6 @@
 import { UXRequest } from "@/data/mockData"
 import { UserSession } from "@/services/otpAuthService"
+import { getStoredTaskViewers } from "@/services/googleSheetService"
 
 export interface UserScope {
   products: string[]
@@ -223,7 +224,15 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
   }
 
   // 2. Task Viewers (Người theo dõi): Được quyền xem chi tiết bài toán (kể cả ngoài squad, không phải tác giả/người được gán)
-  if (isUserInViewers(r.viewers, session)) {
+  const reqId = r.request_id || r.id
+  let combinedViewers = Array.isArray(r.viewers) && r.viewers.length > 0 ? r.viewers : []
+  if (reqId) {
+    const stored = getStoredTaskViewers(reqId)
+    if (stored.length > 0) {
+      combinedViewers = Array.from(new Set([...combinedViewers, ...stored]))
+    }
+  }
+  if (isUserInViewers(combinedViewers, session)) {
     return true
   }
 
@@ -397,3 +406,20 @@ export function canRoleAccessCapability(role: string | undefined | null, capId: 
   const allowed = permissions[capId] || DEFAULT_RBAC_PERMISSIONS[capId] || []
   return allowed.includes(role)
 }
+
+/**
+ * Sinh chuỗi mã hóa ký tự '*' với độ dài ngẫu nhiên khác nhau (từ 14 đến 30 ký tự)
+ * Được tính toán cố định theo chuỗi seed/id để tránh hiện tượng giật nhảy độ dài khi re-render.
+ */
+export function generateMaskedTitle(taskId?: string, fallbackSeed?: string): string {
+  const seedStr = String(taskId || fallbackSeed || "MB_TASK_MASKED")
+  let hash = 0
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i)
+    hash |= 0
+  }
+  // Độ dài ngẫu nhiên ổn định từ 14 đến 30 ký tự
+  const length = 14 + (Math.abs(hash) % 17)
+  return "*".repeat(length)
+}
+

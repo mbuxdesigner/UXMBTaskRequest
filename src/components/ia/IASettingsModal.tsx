@@ -313,7 +313,7 @@ export default function IASettingsModal({
                 </Button>
                 <Button
                   type="submit"
-                  variant="blue"
+                  variant="default"
                   size="sm"
                 >
                   <Check className="w-3.5 h-3.5" />

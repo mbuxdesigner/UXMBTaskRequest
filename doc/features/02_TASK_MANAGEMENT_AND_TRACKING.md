@@ -104,6 +104,28 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
   - **Ô 3 (Dưới - Trái):** `Dates` (Ngày tạo và Hạn hoàn thành với bộ chọn ReUI Date Picker).
   - **Ô 4 (Dưới - Phải):** `Priority` (Độ ưu tiên: High / Medium / Low).
 
+### 3.3. Chuẩn Hóa Định Dạng Hạn Chót (Due Date) Chuẩn `DD/MM/YYYY` Trên Biểu Đồ Gantt
+- Toàn bộ cột **Due date** trên biểu đồ Gantt (`ReUIGanttChart`) được chuyển đổi triệt để từ định dạng tiếng Anh (`Sep 16`, `Oct 1`,...) sang định dạng số **`DD/MM/YYYY`** (ví dụ: `16/09/2026`, `01/10/2026`).
+- Cột Due date được mở rộng từ `w-20` (80px) lên `w-24` (96px) ở cả Header và các dòng Task để hiển thị trọn vẹn chuỗi 10 ký tự mà không bị cắt chữ (truncate).
+- Tooltip hover trên timeline Gantt đồng bộ định dạng `DD/MM/YYYY`.
+
+### 3.4. Tích Hợp UI Component Kbd Chuẩn ReUI (`@reui/c-kbd-1`) Trong Khung Trao Đổi
+- Tạo component `src/components/ui/kbd.tsx` chuẩn ReUI / shadcn với hiệu ứng đổ bóng viền 3D keycap tactile.
+- Khung trao đổi `ai-prompt-box.tsx` sử dụng thẻ `<Kbd size="xs">Enter ↵</Kbd> gửi` và `<Kbd size="xs">Shift</Kbd> + <Kbd size="xs">Enter ↵</Kbd> xuống dòng` thay cho text thuần trước đây.
+
+### 3.5. Cơ Chế Bảo Mật & Mã Hóa Task PO / Business Trên Dashboard (Data Privacy RBAC)
+- **Mục tiêu:** Dashboard hiển thị toàn bộ bài toán của tất cả Squads/Sản phẩm nhằm phục vụ điều phối và tiến độ chung, nhưng phải đảm bảo an toàn bí mật đề bài giữa các đơn vị kinh doanh.
+- **Quy chuẩn mã hóa:**
+  - Đối với người dùng có vai trò **PO** hoặc **Business**: Các bài toán **KHÔNG DO CHÍNH HỌ TẠO** sẽ tự động được mã hóa tiêu đề thành chuỗi `********` có độ dài ngẫu nhiên khác nhau (`generateMaskedTitle()` cố định theo hash ID để tránh giật giao diện).
+  - Biểu đồ Gantt trên Dashboard hiển thị các thanh task mã hóa kèm tooltip cảnh báo `🔒 Không có quyền truy cập bài toán này (Liên hệ Admin)`.
+- **Cơ chế khóa an toàn khi mở chi tiết:**
+  - Khi click mở Drawer/Sheet `RequestDetail`, hệ thống kiểm tra phân quyền `canUserAccessRequest(req, session)`.
+  - Nếu không có quyền, Sheet lập tức chặn hiển thị toàn bộ tài liệu, brief, link figma, bình luận và hiển thị giao diện cảnh báo:
+    - Huy hiệu mã bài toán + Icon khóa `ShieldAlert` nổi bật.
+    - Tiêu đề: **"Không có quyền truy cập"**.
+    - Hướng dẫn: **"Bài toán này thuộc quyền quản lý của đơn vị khác. Vui lòng liên hệ Quản trị viên (Admin) để được cấp quyền theo dõi hoặc phê duyệt."**
+    - Các nút hành động: *Đóng cửa sổ* & *Gửi email liên hệ Admin (`admin@mbbank.com.vn`)*.
+
 ---
 
 ## 🔍 4. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG (IMPACT MATRIX)
@@ -113,7 +135,8 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
 | **Logic Phân loại Pending** | `src/config/statusConfig.ts`<br>`src/components/track/RequestDetail.tsx`<br>`src/components/track/SolutionAgentsTable.tsx` | Đảm bảo hàm `getRequestPendingClassification()` luôn xử lý an toàn khi thiếu trường dữ liệu (`req.sent_to_po_at` null hoặc rỗng), không gây crash ứng dụng. |
 | **Tự động hóa `@SenToPO:`** | `src/components/jolyui/ai-prompt-box.tsx`<br>`src/components/track/RequestDetail.tsx` | Regex bắt link figma phải linh hoạt với cả link share desktop app, prototype mode và link canvas chung. |
 | **Stage 7 trên Gantt Chart** | `src/components/reui/gantt-chart.tsx` | Mốc 7 chỉ xuất hiện khi task ở trạng thái chờ PO; không làm lệch dải thời gian của các khâu 1-6 trước đó. |
-| **Lưới 2x2 Properties Grid** | `src/components/track/RequestDetail.tsx` | Mỗi thao tác đổi giá trị trong ô thuộc tính phải kích hoạt Optimistic UI ngay lập tức và gọi API `updateTaskProgressInSheet()` ở background. |
+| **Định dạng Due Date Gantt** | `src/components/reui/gantt-chart.tsx` | Cột `w-24` bảo đảm không xô lệch các cột Status và Assignee lân cận. |
+| **Mã hóa Task Dashboard RBAC** | `src/pages/TongQuanPage.tsx`<br>`src/lib/accessControl.ts`<br>`src/components/track/RequestDetail.tsx`<br>`src/components/dashboard/ai-ops/ReleaseNewsfeedTimeline.tsx`<br>`src/components/dashboard/ai-ops/TrackTaskGanttFrame.tsx` | Đảm bảo PO/Business xem đầy đủ số liệu thống kê chung (KPI cards, Squad Trending, Tabs sản phẩm). Riêng tại NewsFeed & Track Task: task do họ tạo hoặc được gán quyền view thì hiển thị rõ ràng; task không tạo và không gán quyền view sẽ bị mã hóa `*******` và khi click chi tiết sẽ báo không có quyền truy cập. |
 
 ---
 
@@ -125,5 +148,12 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
 - [x] **Kiểm tra cú pháp `@SenToPO:`:**
   - Nhập `@SenToPO: https://figma.com/design/sample-url` vào ô trao đổi -> Bấm gửi -> Trạng thái đổi thành `Đã gửi PO`, xuất hiện nút "Mở Figma", link trong comment được bôi xanh và click mở tab mới.
 - [x] **Kiểm tra Gantt Timeline:** Mở chế độ Gantt Chart -> Task chờ PO hiển thị block màu hổ phách và dot vàng, Footer Legend có mốc `7. PO Pending`.
-- [x] **Kiểm tra Bảng Danh sách Task:** Chiều cao cả 3 badge Trạng thái, Squad, Ưu tiên bằng nhau chằn chặn `h-[22px]`; các task trong nhóm Overload không còn hiện badge đỏ `[Trễ]`.
+- [x] **Kiểm tra Định dạng Due Date:** Hiển thị chuẩn `DD/MM/YYYY` (ví dụ `16/09/2026`), độ rộng cột cân đối không bị truncate.
+- [x] **Kiểm tra UI Kbd:** Gợi ý phím tắt trong khung chat hiển thị phím bấm nổi ReUI sắc nét (`Enter ↵`, `Shift`, `Enter ↵`).
+- [x] **Kiểm tra Phân quyền Mã hóa Dashboard:**
+  - Đăng nhập quyền PO/Business -> Dashboard hiển thị đầy đủ số liệu thống kê 3 thẻ KPI và Squad Trending.
+  - Tại NewsFeed và Track Task: task do chính PO/Business tạo HOẶC được gán quyền view (viewers) hiển thị rõ ràng, mở xem chi tiết bình thường.
+  - Task không tạo và không được gán quyền view hiển thị dưới dạng chuỗi `********` có độ dài ngẫu nhiên khác nhau.
+  - Bấm vào task bị mã hóa -> Sheet hiển thị giao diện báo *"Không có quyền truy cập, vui lòng liên hệ Admin"*, không để lộ bất kỳ nội dung nhạy cảm nào.
 - [x] **Kiểm tra Build & Compile:** Chạy `npm run build` hoàn thành với 0 cảnh báo hoặc lỗi cú pháp.
+

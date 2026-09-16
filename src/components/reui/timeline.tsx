@@ -72,7 +72,7 @@ export function TimelineIcon({
         status === "completed" &&
           "bg-emerald-500 text-white shadow-emerald-500/20",
         status === "current" &&
-          "bg-[#1B3A6B] text-white ring-4 ring-[#1B3A6B]/15 shadow-md shadow-[#1B3A6B]/30",
+          "bg-slate-900 text-white ring-4 ring-slate-900/15 shadow-md shadow-slate-900/30",
         status === "pending" &&
           "bg-slate-100 text-slate-400 border border-slate-200",
         status === "failed" &&

@@ -93,6 +93,7 @@ export interface UseIATreeStateReturn {
   pullCloud: () => Promise<{ success: boolean; message: string }>
   tierDimensions: IATierDimensionSettings
   setTierDimensions: (settings: IATierDimensionSettings) => void
+  importTree: (imported: IANode | IANode[]) => void
 }
 
 // Helper: Deep Clone Tree
@@ -683,6 +684,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         code: nodeData.code || "",
         colorTheme: nodeData.colorTheme || clone.colorTheme || "blue",
         children: [],
+        customX: nodeData.customX,
+        customY: nodeData.customY,
       }
       if (!clone.siblingRoots) {
         clone.siblingRoots = []
@@ -725,6 +728,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             children: nextTier < 4 ? [] : undefined,
             colorTheme: curr.colorTheme,
             displaySettings: nodeData.displaySettings,
+            customX: nodeData.customX,
+            customY: nodeData.customY,
           }
           if (!curr.children) curr.children = []
           curr.children.push(newNode)
@@ -830,7 +835,18 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           saveTreesToStorage(nextTrees)
           return nextTrees
         } else {
-          throw new Error("Không thể xóa node Cấp 1 duy nhất của sản phẩm")
+          const currentProd = products.find((p) => p.id === selectedProductId)
+          const cleanRoot = currentProd
+            ? createCleanRootNodeForProduct(currentProd)
+            : {
+                id: `node-${Date.now()}`,
+                tier: 1 as IATier,
+                name: "Sản phẩm mới",
+                children: [],
+              }
+          const nextTrees = { ...prevTrees, [selectedProductId]: cleanRoot }
+          saveTreesToStorage(nextTrees)
+          return nextTrees
         }
       }
 
@@ -1923,6 +1939,27 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     }
   }, [])
 
+  // Import Entire Tree / Multiple Trees for selected product
+  const importTree = useCallback((imported: IANode | IANode[]) => {
+    setTrees((prevTrees) => {
+      let rootToSave: IANode
+      if (Array.isArray(imported)) {
+        if (imported.length === 0) return prevTrees
+        const [primary, ...siblings] = imported
+        rootToSave = {
+          ...deepCloneTree(primary),
+          siblingRoots: siblings.map(deepCloneTree),
+        }
+      } else {
+        rootToSave = deepCloneTree(imported)
+      }
+
+      const nextTrees = { ...prevTrees, [selectedProductId]: rootToSave }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId])
+
   return {
     activeTree,
     rootNodes,
@@ -1957,5 +1994,6 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     pullCloud,
     tierDimensions,
     setTierDimensions,
+    importTree,
   }
 }

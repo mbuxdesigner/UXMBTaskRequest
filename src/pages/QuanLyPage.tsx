@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
+import { staggerContainerVariants, staggerItemVariants, durations, springs } from "@/lib/motion"
 import { Frame } from "@/components/reui/frame"
 import { DropdownMenu, type DropdownOption } from "@/components/reui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
+import { Badge, StatusPill, PriorityBadge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -115,6 +115,8 @@ export interface TeamMember {
   id: string
   name: string
   email: string
+  teamsEmail?: string // Email Teams (Nhận OTP)
+  personalEmail?: string // Email cá nhân (Đăng nhập)
   role: UserRole
   squad?: string // Legacy fallback
   squads: string[] // 1 Designer -> nhiều Squads, 1 PO -> nhiều Squads
@@ -1566,6 +1568,9 @@ export default function QuanLyPage() {
     window.addEventListener("hashchange", handleHashChange)
     return () => window.removeEventListener("hashchange", handleHashChange)
   }, [])
+
+  const [hoveredMobTab, setHoveredMobTab] = useState<AdminTab | null>(null)
+  const [hoveredSidebarTab, setHoveredSidebarTab] = useState<AdminTab | null>(null)
   const [adminRunningTest, setAdminRunningTest] = useState<TestExam | null>(null)
   const [roleFilter, setRoleFilter] = useState<string>("ALL")
   const [memberSearchQuery, setMemberSearchQuery] = useState<string>("")
@@ -2515,8 +2520,14 @@ export default function QuanLyPage() {
       (p) => validProductsSet.has(p) || p === "Toàn hàng" || p === "Chưa gán"
     )
 
+    const resolvedTeamsEmail = member.teamsEmail || member.email || ""
+    const resolvedPersonalEmail = member.personalEmail || member.email || resolvedTeamsEmail
+
     setEditingMember({
       ...member,
+      email: resolvedTeamsEmail || resolvedPersonalEmail,
+      teamsEmail: resolvedTeamsEmail,
+      personalEmail: resolvedPersonalEmail,
       squads: sanitizedSquads.length > 0 ? sanitizedSquads : (allAvailableSquadNames[0] ? [allAvailableSquadNames[0]] : []),
       products: sanitizedProducts.length > 0 ? sanitizedProducts : (allAvailableProductNames[0] ? [allAvailableProductNames[0]] : []),
     })
@@ -2537,8 +2548,15 @@ export default function QuanLyPage() {
       (p) => validProductsSet.has(p) || p === "Toàn hàng" || p === "Chưa gán"
     )
 
+    const finalTeamsEmail = (editingMember.teamsEmail || editingMember.email || "").trim()
+    const finalPersonalEmail = (editingMember.personalEmail || editingMember.email || finalTeamsEmail).trim()
+    const finalPrimaryEmail = finalTeamsEmail || finalPersonalEmail
+
     const sanitizedMember: TeamMember = {
       ...editingMember,
+      email: finalPrimaryEmail,
+      teamsEmail: finalTeamsEmail,
+      personalEmail: finalPersonalEmail,
       squads: cleanSquads.length > 0 ? cleanSquads : (allAvailableSquadNames[0] ? [allAvailableSquadNames[0]] : []),
       products: cleanProducts.length > 0 ? cleanProducts : (allAvailableProductNames[0] ? [allAvailableProductNames[0]] : []),
       squad: cleanSquads[0] || allAvailableSquadNames[0] || "eSaving",
@@ -3119,62 +3137,109 @@ export default function QuanLyPage() {
     </motion.div>
 
       {/* 2. Responsive 2-Column Settings Layout (ReUI Blocks Application/Settings) */}
-      {/* Mobile / Tablet Horizontal Navigation Tabs (lg:hidden) */}
-      <motion.div variants={staggerItemVariants} className="lg:hidden">
-        <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60">
+      {/* Mobile / Tablet Horizontal Navigation Tabs (xl:hidden) */}
+      <motion.div variants={staggerItemVariants} className="xl:hidden">
+        <div 
+          role="tablist"
+          aria-label="Danh mục cài đặt quản trị"
+          className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60 select-none"
+          onMouseLeave={() => setHoveredMobTab(null)}
+        >
           {ADMIN_NAV_GROUPS.flatMap((g) => g.items).map((item) => {
             const isActive = activeTab === item.id
+            const isHovered = hoveredMobTab === item.id
             return (
               <button
                 key={`mob-tab-${item.id}`}
+                role="tab"
                 type="button"
+                aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => {
                   setActiveTab(item.id)
                   window.location.hash = `#manage?tab=${item.id}`
                 }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                onMouseEnter={() => setHoveredMobTab(item.id)}
+                className={`relative isolate flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                   isActive
-                    ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                    ? "text-slate-900 font-semibold"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <item.icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{item.title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="admin-mob-tab-pill"
+                    className="absolute inset-0 bg-white rounded-lg shadow-2xs -z-10"
+                    transition={springs.indicator}
+                  />
+                )}
+                {isHovered && !isActive && (
+                  <motion.div
+                    layoutId="admin-mob-tab-hover"
+                    className="absolute inset-0 bg-slate-200/50 rounded-lg -z-10"
+                    transition={springs.snappy}
+                  />
+                )}
+                <item.icon className="w-3.5 h-3.5 shrink-0 relative z-10" />
+                <span className="relative z-10">{item.title}</span>
               </button>
             )
           })}
         </div>
       </motion.div>
 
-      {/* Main 2-Column Grid (lg: and above) */}
-      <motion.div variants={staggerItemVariants} className="flex flex-col lg:flex-row gap-8 items-start">
+      {/* Main 2-Column Grid (xl: and above) */}
+      <motion.div variants={staggerItemVariants} className="flex flex-col xl:flex-row gap-6 xl:gap-8 items-start">
         {/* CỘT 1: Navigation Rail (Minimalist ReUI Sidebar) */}
-        <aside className="hidden lg:block w-60 xl:w-64 shrink-0 lg:sticky lg:top-6">
+        <aside className="hidden xl:block w-60 xl:w-64 shrink-0 xl:sticky xl:top-6">
           <nav className="space-y-6">
             {ADMIN_NAV_GROUPS.map((group) => (
               <div key={group.category} className="space-y-1">
                 <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   {group.category}
                 </div>
-                <div className="space-y-0.5">
+                <div 
+                  role="tablist"
+                  aria-orientation="vertical"
+                  className="space-y-0.5"
+                  onMouseLeave={() => setHoveredSidebarTab(null)}
+                >
                   {group.items.map((item) => {
                     const isActive = activeTab === item.id
                     return (
                       <button
                         key={item.id}
+                        role="tab"
                         type="button"
+                        aria-selected={isActive}
+                        tabIndex={isActive ? 0 : -1}
                         onClick={() => {
                           setActiveTab(item.id)
                           window.location.hash = `#manage?tab=${item.id}`
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-sm font-medium transition-colors cursor-pointer select-none ${
+                        onMouseEnter={() => setHoveredSidebarTab(item.id)}
+                        className={`relative isolate w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 text-sm font-medium transition-colors cursor-pointer select-none ${
                           isActive
-                            ? "bg-slate-100 text-slate-900 font-semibold"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                            ? "text-slate-900 font-semibold"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80"
                         }`}
                       >
-                        <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-slate-900" : "text-slate-400"}`} />
-                        <span className="truncate">{item.title}</span>
+                        {isActive && (
+                          <motion.div
+                            layoutId="admin-sidebar-active-indicator"
+                            className="absolute inset-0 bg-slate-100 rounded-lg -z-10"
+                            transition={springs.indicator}
+                          />
+                        )}
+                        {hoveredSidebarTab === item.id && !isActive && (
+                          <motion.div
+                            layoutId="admin-sidebar-hover-indicator"
+                            className="absolute inset-0 bg-slate-50 rounded-lg -z-10"
+                            transition={springs.snappy}
+                          />
+                        )}
+                        <item.icon className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-400"}`} />
+                        <span className="truncate relative z-10">{item.title}</span>
                       </button>
                     )
                   })}
@@ -3193,41 +3258,41 @@ export default function QuanLyPage() {
 
             {/* Quick Metrics (Clean ReUI Stats) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+              <Frame variant="default" padding="sm" className="space-y-1 hover:border-slate-300 transition-colors">
                 <span className="text-xs font-medium text-slate-500">Tổng nhân sự</span>
                 <div className="text-2xl font-bold text-slate-900 font-mono">
                   <NumberTicker value={teamMembers.length} />
                 </div>
                 <span className="text-xs text-slate-400">100% tài khoản active</span>
-              </div>
+              </Frame>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+              <Frame variant="default" padding="sm" className="space-y-1 hover:border-slate-300 transition-colors">
                 <span className="text-xs font-medium text-slate-500">Design Owners</span>
                 <div className="text-2xl font-bold text-slate-900 font-mono">
                   <NumberTicker value={teamMembers.filter(m => m.role === "Design Owner" || m.role === "Admin").length} />
                 </div>
                 <span className="text-xs text-slate-400">Phân công & duyệt</span>
-              </div>
+              </Frame>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+              <Frame variant="default" padding="sm" className="space-y-1 hover:border-slate-300 transition-colors">
                 <span className="text-xs font-medium text-slate-500">UX Designers</span>
                 <div className="text-2xl font-bold text-slate-900 font-mono">
                   <NumberTicker value={teamMembers.filter(m => m.role === "Designer").length} />
                 </div>
                 <span className="text-xs text-slate-400">Đa-Squad thực thi</span>
-              </div>
+              </Frame>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+              <Frame variant="default" padding="sm" className="space-y-1 hover:border-slate-300 transition-colors">
                 <span className="text-xs font-medium text-slate-500">Product Owners (PO)</span>
                 <div className="text-2xl font-bold text-slate-900 font-mono">
                   <NumberTicker value={teamMembers.filter(m => m.role === "PO").length} />
                 </div>
                 <span className="text-xs text-slate-400">Phân hệ sản phẩm</span>
-              </div>
+              </Frame>
             </div>
 
             {/* Team Table Card (Unified ReUI Card) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               {/* Card Header & Main Actions */}
               <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -3298,61 +3363,81 @@ export default function QuanLyPage() {
               </div>
 
               {/* Members Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 text-slate-500 text-xs font-medium border-b border-slate-200">
-                      <th className="py-3 px-4 font-medium">Nhân sự</th>
-                      <th className="py-3 px-4 font-medium">Vai trò (Role)</th>
-                      <th className="py-3 px-4 font-medium">Squads phụ trách</th>
-                      <th className="py-3 px-4 font-medium">Sản phẩm phân bổ (PO/Design)</th>
-                      <th className="py-3 px-4 font-medium text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {filteredMembers.map((member, idx) => (
-                      <tr key={member.id ? `mem-row-${member.id}-${idx}` : `mem-${idx}`} className="hover:bg-slate-50/60 transition-colors group">
-                        {/* Member Info */}
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative group/ava flex-shrink-0 cursor-pointer" title="Bấm để tải ảnh đại diện lên Google Drive">
-                              <UserAvatar
-                                name={member.name}
-                                avatarUrl={member.avatarUrl}
-                                size="md"
-                                className={`transition-opacity ${
-                                  uploadingAvatarMemberId === member.id ? "opacity-30 animate-pulse" : ""
-                                }`}
-                              />
-                              <label className="absolute inset-0 rounded-full bg-slate-900/60 text-white flex items-center justify-center opacity-0 group-hover/ava:opacity-100 transition-opacity cursor-pointer shadow-sm">
-                                <Camera className="w-3 h-3" />
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  disabled={uploadingAvatarMemberId === member.id}
-                                  onChange={(e) => handleAvatarUpload(member.id, member.email, e)}
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[240px] pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[800px] border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="h-9">
+                        <th className="py-2.5 px-4 text-left font-medium border-b border-slate-200/70">Nhân sự</th>
+                        <th className="py-2.5 px-4 text-left font-medium border-b border-slate-200/70">Vai trò (Role)</th>
+                        <th className="py-2.5 px-4 text-left font-medium border-b border-slate-200/70">Squads phụ trách</th>
+                        <th className="py-2.5 px-4 text-left font-medium border-b border-slate-200/70">Sản phẩm phân bổ (PO/Design)</th>
+                        <th className="py-2.5 px-3 text-right font-medium w-[80px] min-w-[80px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
+                      {filteredMembers.map((member, idx) => (
+                        <tr key={member.id ? `mem-row-${member.id}-${idx}` : `mem-${idx}`} className="transition-colors hover:bg-slate-50/80 even:bg-slate-50/40 group">
+                          {/* Member Info */}
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
+                            <div className="flex items-center gap-3">
+                              <div className="relative group/ava flex-shrink-0 cursor-pointer" title="Bấm để tải ảnh đại diện lên Google Drive">
+                                <UserAvatar
+                                  name={member.name}
+                                  avatarUrl={member.avatarUrl}
+                                  size="md"
+                                  className={`transition-opacity ${
+                                    uploadingAvatarMemberId === member.id ? "opacity-30 animate-pulse" : ""
+                                  }`}
                                 />
-                              </label>
-                            </div>
-                            <div>
-                              <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs">
-                                <span>{member.name}</span>
-                                {member.status === "On Leave" && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200">Nghỉ phép</span>
-                                )}
-                                {member.status === "Busy" && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200">Bận cao</span>
-                                )}
+                                <label className="absolute inset-0 rounded-full bg-slate-900/60 text-white flex items-center justify-center opacity-0 group-hover/ava:opacity-100 transition-opacity cursor-pointer shadow-sm">
+                                  <Camera className="w-3 h-3" />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={uploadingAvatarMemberId === member.id}
+                                    onChange={(e) => handleAvatarUpload(member.id, member.email, e)}
+                                  />
+                                </label>
                               </div>
-                              <div className="text-[11px] text-slate-400 font-mono">{member.email}</div>
+                              <div>
+                                <div className="font-semibold text-slate-900 flex items-center gap-1.5 text-xs">
+                                  <span>{member.name}</span>
+                                  {member.status === "On Leave" && (
+                                    <StatusPill size="xs" dot dotColor="bg-amber-500" className="bg-amber-50 text-amber-700 border-amber-200">Nghỉ phép</StatusPill>
+                                  )}
+                                  {member.status === "Busy" && (
+                                    <StatusPill size="xs" dot dotColor="bg-rose-500" className="bg-rose-50 text-rose-700 border-rose-200">Bận cao</StatusPill>
+                                  )}
+                                  {member.status === "Active" && (
+                                    <StatusPill size="xs" dot dotColor="bg-emerald-500" className="bg-emerald-50 text-emerald-700 border-emerald-200">Hoạt động</StatusPill>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-mono flex flex-col gap-0.5 mt-0.5">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-slate-700 font-medium">{member.teamsEmail || member.email}</span>
+                                    <span className="text-[9.5px] px-1 py-0.2 rounded bg-blue-50 text-blue-600 border border-blue-100">Teams OTP</span>
+                                  </div>
+                                  {member.personalEmail && member.personalEmail !== (member.teamsEmail || member.email) && (
+                                    <div className="text-[10.5px] text-slate-400">
+                                      Đăng nhập: {member.personalEmail}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Role */}
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded-md font-medium text-xs border ${
+                          {/* Role */}
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
+                            <span className={`px-2 py-0.5 rounded-md font-medium text-xs border ${
                             member.role === "Admin"
                               ? "bg-slate-900 text-white border-slate-900"
                               : member.role === "Design Owner"
@@ -3368,7 +3453,7 @@ export default function QuanLyPage() {
                         </td>
 
                         {/* Multi-Squads */}
-                        <td className="py-3 px-4 max-w-[220px]">
+                        <td className="py-3 px-4 align-middle border-b border-slate-200/70 max-w-[220px]">
                           <div className="flex flex-wrap gap-1">
                             {(member.squads && member.squads.length > 0 ? member.squads : [member.squad || "Chưa phân bổ"]).map((sq, sqI) => {
                               const isAll = sq === "All Squads"
@@ -3392,7 +3477,7 @@ export default function QuanLyPage() {
                         </td>
 
                         {/* Multi-Products */}
-                        <td className="py-3 px-4 max-w-[220px]">
+                        <td className="py-3 px-4 align-middle border-b border-slate-200/70 max-w-[220px]">
                           <div className="flex flex-wrap gap-1">
                             {(member.products && member.products.length > 0 ? member.products : ["Chưa gán"]).map((pr, prI) => {
                               const isAll = pr === "Toàn hàng" || pr === "Tất cả"
@@ -3415,8 +3500,8 @@ export default function QuanLyPage() {
                           </div>
                         </td>
 
-                        {/* Actions (Edit & Delete) */}
-                        <td className="py-3 px-4 text-right">
+                        {/* Actions (Edit & Delete) - Sticky right-0 */}
+                        <td className="py-3 px-3 text-right align-middle w-[80px] min-w-[80px] sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 group-even:bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
@@ -3442,6 +3527,7 @@ export default function QuanLyPage() {
                 </table>
               </div>
             </div>
+          </Frame>
           </div>
         )}
 
@@ -3450,7 +3536,7 @@ export default function QuanLyPage() {
           <div className="space-y-6">
 
             {/* Card 1: Ma trận Phân quyền Vai trò (True RBAC Matrix Table) */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               {/* Card Header */}
               <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -3513,60 +3599,68 @@ export default function QuanLyPage() {
               </div>
 
               {/* True RBAC Matrix Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
-                      <th className="py-3 px-6 w-[45%]">Quyền hạn hành động & Nghiệp vụ</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Admin</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Design Owner</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Designer</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">PO</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Business</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {RBAC_CAPABILITIES.map((cap) => (
-                      <tr key={cap.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3.5 px-6">
-                          <div className="space-y-0.5">
-                            <div className="text-xs sm:text-sm font-semibold text-slate-900">{cap.title}</div>
-                            <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl">{cap.description}</p>
-                          </div>
-                        </td>
-                        {(["Admin", "Design Owner", "Designer", "PO", "Business"] as const).map((role) => {
-                          const isEnabled = (rbacRolesPermissions[cap.id] || []).includes(role)
-                          return (
-                            <td key={`${cap.id}-${role}`} className="py-3.5 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleCapability(cap.id, role)}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  isEnabled ? "bg-slate-900" : "bg-slate-200"
-                                }`}
-                                role="switch"
-                                aria-checked={isEnabled}
-                                title={`Bấm để ${isEnabled ? "TẮT" : "BẬT"} "${cap.title}" cho ${role}`}
-                              >
-                                <span
-                                  aria-hidden="true"
-                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                                    isEnabled ? "translate-x-4" : "translate-x-0"
-                                  }`}
-                                />
-                              </button>
-                            </td>
-                          )
-                        })}
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[700px] border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="border-b border-slate-200/70">
+                        <th className="py-3 px-6 w-[45%] border-b border-slate-200/70">Quyền hạn hành động & Nghiệp vụ</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Admin</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Design Owner</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Designer</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">PO</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Business</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
+                      {RBAC_CAPABILITIES.map((cap) => (
+                        <tr key={cap.id} className="transition-colors hover:bg-slate-50/80 even:bg-slate-50/40">
+                          <td className="py-3.5 px-6 align-middle border-b border-slate-200/70">
+                            <div className="space-y-0.5">
+                              <div className="text-xs sm:text-sm font-semibold text-slate-900">{cap.title}</div>
+                              <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl">{cap.description}</p>
+                            </div>
+                          </td>
+                          {(["Admin", "Design Owner", "Designer", "PO", "Business"] as const).map((role) => {
+                            const isEnabled = (rbacRolesPermissions[cap.id] || []).includes(role)
+                            return (
+                              <td key={`${cap.id}-${role}`} className="py-3.5 px-3 text-center align-middle border-b border-slate-200/70">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCapability(cap.id, role)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    isEnabled ? "bg-slate-900" : "bg-slate-200"
+                                  }`}
+                                  role="switch"
+                                  aria-checked={isEnabled}
+                                  title={`Bấm để ${isEnabled ? "TẮT" : "BẬT"} "${cap.title}" cho ${role}`}
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                      isEnabled ? "translate-x-4" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </Frame>
 
             {/* Role Navigation Menu Visibility & Ordering Settings Card */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">
@@ -3594,19 +3688,26 @@ export default function QuanLyPage() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
-                      <th className="py-3 px-6 w-[45%]">Mục trên Sidebar</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Admin</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Design Owner</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Designer</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">PO</th>
-                      <th className="py-3 px-3 text-center font-medium w-[11%]">Business</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[700px] border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="border-b border-slate-200/70">
+                        <th className="py-3 px-6 w-[45%] border-b border-slate-200/70">Mục trên Sidebar</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Admin</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Design Owner</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Designer</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">PO</th>
+                        <th className="py-3 px-3 text-center font-medium w-[11%] border-b border-slate-200/70">Business</th>
+                      </tr>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
                     {/* NHÓM 1: PLATFORM */}
                     <tr className="bg-slate-50 border-y border-slate-200">
                       <td colSpan={6} className="py-2.5 px-6 text-slate-700 text-xs font-semibold">
@@ -3826,7 +3927,8 @@ export default function QuanLyPage() {
                 </table>
               </div>
             </div>
-          </div>
+          </Frame>
+        </div>
         )}
 
         {/* TAB 2: QUẢN LÝ ĐỀ THI & CHẤM BÀI TEST (EXCEL + SHEET) */}
@@ -3905,7 +4007,7 @@ export default function QuanLyPage() {
 
             {/* Top Scorecard */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+              <Frame variant="default" padding="sm" className="space-y-1.5 hover:border-slate-300 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">Chỉ số Chất lượng TB</span>
                   <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium border border-slate-200">⭐ Xuất sắc</span>
@@ -3914,9 +4016,9 @@ export default function QuanLyPage() {
                   4.85<span className="text-xs text-slate-400 font-normal">/5.0</span>
                 </div>
                 <p className="text-[11px] text-slate-400">Chuẩn hóa Design System MB</p>
-              </div>
+              </Frame>
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+              <Frame variant="default" padding="sm" className="space-y-1.5 hover:border-slate-300 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">SLA Đúng hạn bàn giao</span>
                   <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium border border-slate-200">+4.2% MoM</span>
@@ -3925,9 +4027,9 @@ export default function QuanLyPage() {
                   96.4<span className="text-xs text-slate-400 font-normal">%</span>
                 </div>
                 <p className="text-[11px] text-slate-400">Tỷ lệ nghiệm thu đúng hạn</p>
-              </div>
+              </Frame>
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+              <Frame variant="default" padding="sm" className="space-y-1.5 hover:border-slate-300 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">First-Time-Right (FTR)</span>
                   <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium border border-slate-200">Ít sửa đổi</span>
@@ -3936,9 +4038,9 @@ export default function QuanLyPage() {
                   92.8<span className="text-xs text-slate-400 font-normal">%</span>
                 </div>
                 <p className="text-[11px] text-slate-400">Duyệt ngay sau review 1</p>
-              </div>
+              </Frame>
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+              <Frame variant="default" padding="sm" className="space-y-1.5 hover:border-slate-300 transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">Tổng nhân sự active</span>
                   <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium border border-slate-200">{teamMembers.length} thành viên</span>
@@ -3948,11 +4050,11 @@ export default function QuanLyPage() {
                   <span className="text-xs text-slate-400 font-normal"> đang làm việc</span>
                 </div>
                 <p className="text-[11px] text-slate-400">Phủ kín 6 UX Squads</p>
-              </div>
+              </Frame>
             </div>
 
             {/* Member Performance & Competency Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
@@ -3965,27 +4067,34 @@ export default function QuanLyPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-medium text-xs">
-                      <th className="py-3 px-4 font-medium">Nhân sự</th>
-                      <th className="py-3 px-4 font-medium">Vai trò & Squads</th>
-                      <th className="py-3 px-4 font-medium">Tải trọng hiện tại</th>
-                      <th className="py-3 px-4 font-medium">Điểm chất lượng</th>
-                      <th className="py-3 px-4 font-medium">Đúng hạn SLA</th>
-                      <th className="py-3 px-4 font-medium">Năng lực nổi bật</th>
-                      <th className="py-3 px-4 font-medium text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[240px] pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[800px] border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="h-9">
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Nhân sự</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Vai trò & Squads</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Tải trọng hiện tại</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Điểm chất lượng</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Đúng hạn SLA</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Năng lực nổi bật</th>
+                        <th className="py-2.5 px-3 text-right font-medium w-[90px] min-w-[90px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
                     {teamMembers.map((mem) => {
                       const utilPct = Math.min(100, Math.round((mem.activeTasks / (mem.capacityLimit || 5)) * 100))
                       const status = utilPct >= 90 ? "Quá tải" : utilPct >= 65 ? "Đang bận" : "Sẵn sàng"
 
                       return (
-                        <tr key={mem.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-3 px-4">
+                        <tr key={mem.id} className="transition-colors hover:bg-slate-50/80 even:bg-slate-50/40 group">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
                             <div className="flex items-center gap-3">
                               <UserAvatar name={mem.name} size="md" />
                               <div>
@@ -3995,7 +4104,7 @@ export default function QuanLyPage() {
                             </div>
                           </td>
 
-                          <td className="py-3 px-4 space-y-1">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70 space-y-1">
                             <span className="px-2 py-0.5 rounded-md font-medium text-xs border bg-slate-100 text-slate-800 border-slate-200 inline-block">
                               {mem.role}
                             </span>
@@ -4004,11 +4113,11 @@ export default function QuanLyPage() {
                             </p>
                           </td>
 
-                          <td className="py-3 px-4">
-                            <div className="space-y-1 min-w-[130px]">
-                              <div className="flex justify-between text-[11px]">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
+                            <div className="space-y-1.5 min-w-[130px]">
+                              <div className="flex items-center justify-between text-[11px]">
                                 <span className="font-medium text-slate-700">{mem.activeTasks}/{mem.capacityLimit || 5} tasks</span>
-                                <span className="font-mono text-slate-500">{utilPct}%</span>
+                                <StatusPill status={status} size="xs">{status}</StatusPill>
                               </div>
                               <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                                 <div
@@ -4021,7 +4130,7 @@ export default function QuanLyPage() {
                             </div>
                           </td>
 
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
                             <div className="flex items-center gap-1">
                               <span className="text-slate-400 font-bold">★</span>
                               <span className="font-mono font-semibold text-slate-900 text-xs">
@@ -4031,11 +4140,11 @@ export default function QuanLyPage() {
                             </div>
                           </td>
 
-                          <td className="py-3 px-4 font-mono font-medium text-slate-800">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70 font-mono font-medium text-slate-800">
                             {mem.role === "Design Owner" ? "98.5%" : "95.0%"}
                           </td>
 
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-4 align-middle border-b border-slate-200/70">
                             <div className="flex items-center gap-1.5 flex-wrap max-w-[200px]">
                               <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200">
                                 {mem.role === "PO" ? "PRD Specs" : "Design Tokens"}
@@ -4046,7 +4155,7 @@ export default function QuanLyPage() {
                             </div>
                           </td>
 
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-3 px-3 text-right align-middle w-[90px] min-w-[90px] sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 group-even:bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">
                             <Button
                               type="button"
                               variant="outline"
@@ -4064,7 +4173,8 @@ export default function QuanLyPage() {
                 </table>
               </div>
             </div>
-          </div>
+          </Frame>
+        </div>
         )}
 
         {/* TAB 3: QUY TRÌNH & KHÂU UX (SLA & DELIVERABLES) */}
@@ -4220,7 +4330,7 @@ export default function QuanLyPage() {
             </div>
 
             {/* Dynamic Status Automation Rules Tool */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-slate-50/70 via-white to-indigo-50/30">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2.5">
@@ -4247,6 +4357,7 @@ export default function QuanLyPage() {
                 <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
                   <Button
                     type="button"
+                    variant="primary"
                     size="sm"
                     onClick={() => {
                       const newRule: StatusAutomationRule = {
@@ -4267,7 +4378,7 @@ export default function QuanLyPage() {
                       setStatusRules([...statusRules, newRule])
                       setEditingStatusRule(newRule)
                     }}
-                    className="rounded-lg text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer h-8 shadow-xs"
+                    className="rounded-xl text-xs gap-1.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer h-8 shadow-xs"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Thêm trạng thái</span>
@@ -4288,31 +4399,35 @@ export default function QuanLyPage() {
               </div>
 
               {/* Statuses Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-medium text-xs">
-                      <th className="py-3 px-4 font-medium min-w-[140px]">Trạng thái</th>
-                      <th className="py-3 px-4 font-medium min-w-[240px]">Điều kiện Trigger Tự động</th>
-                      <th className="py-3 px-4 font-medium min-w-[180px]">Ánh xạ Khâu UX</th>
-                      <th className="py-3 px-4 font-medium min-w-[180px]">Hành vi SLA</th>
-                      <th className="py-3 px-4 font-medium text-center min-w-[90px]">Tự động</th>
-                      <th className="py-3 px-4 font-medium text-right min-w-[110px]">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[240px] pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[800px] border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="h-9">
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70 min-w-[140px]">Trạng thái</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70 min-w-[240px]">Điều kiện Trigger Tự động</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70 min-w-[180px]">Ánh xạ Khâu UX</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70 min-w-[180px]">Hành vi SLA</th>
+                        <th className="py-2.5 px-4 font-medium text-center border-b border-slate-200/70 min-w-[90px]">Tự động</th>
+                        <th className="py-2.5 px-4 font-medium text-right min-w-[110px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
                     {statusRules.map((rule) => {
                       return (
-                        <tr key={rule.id} className="hover:bg-slate-50/70 transition-colors">
+                        <tr key={rule.id} className="transition-colors hover:bg-slate-50/80 even:bg-slate-50/40 group">
                           {/* Trạng thái */}
-                          <td className="py-3 px-4 align-top">
+                          <td className="py-3 px-4 align-top border-b border-slate-200/70">
                             <div className="space-y-1">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-medium text-[11px] border h-[22px] ${rule.badgeClass}`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${rule.dotClass}`} />
+                              <StatusPill status={rule.name} size="xs" dot dotColor={rule.dotClass} className={rule.badgeClass}>
                                 {rule.name}
-                              </span>
+                              </StatusPill>
                               <p className="text-[11px] text-slate-500 line-clamp-2 leading-tight">
                                 {rule.desc}
                               </p>
@@ -4320,7 +4435,7 @@ export default function QuanLyPage() {
                           </td>
 
                           {/* Trigger */}
-                          <td className="py-3 px-4 align-top">
+                          <td className="py-3 px-4 align-top border-b border-slate-200/70">
                             <div className="space-y-1">
                               <div className="flex items-start gap-1.5">
                                 <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
@@ -4335,7 +4450,7 @@ export default function QuanLyPage() {
                           </td>
 
                           {/* Ánh xạ Khâu UX */}
-                          <td className="py-3 px-4 align-top">
+                          <td className="py-3 px-4 align-top border-b border-slate-200/70">
                             <div className="space-y-1">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-800 border border-slate-200">
                                 <Workflow className="w-3 h-3 text-slate-500" />
@@ -4350,7 +4465,7 @@ export default function QuanLyPage() {
                           </td>
 
                           {/* Hành vi SLA */}
-                          <td className="py-3 px-4 align-top">
+                          <td className="py-3 px-4 align-top border-b border-slate-200/70">
                             <div className="flex items-center gap-1.5">
                               {rule.slaAction === "start" && <Play className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
                               {rule.slaAction === "run" && <RefreshCw className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
@@ -4364,7 +4479,7 @@ export default function QuanLyPage() {
                           </td>
 
                           {/* Toggle Tự động */}
-                          <td className="py-3 px-4 align-top text-center">
+                          <td className="py-3 px-4 align-top text-center border-b border-slate-200/70">
                             <button
                               type="button"
                               onClick={() => handleToggleStatusRuleAuto(rule.id)}
@@ -4385,7 +4500,7 @@ export default function QuanLyPage() {
                           </td>
 
                           {/* Thao tác */}
-                          <td className="py-3 px-4 align-top text-right">
+                          <td className="py-3 px-4 align-top text-right sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 group-even:bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 type="button"
@@ -4421,6 +4536,7 @@ export default function QuanLyPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
 
               {/* Sync Guidance Alert */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-start gap-3 text-xs text-slate-600">
@@ -4438,7 +4554,7 @@ export default function QuanLyPage() {
                   </p>
                 </div>
               </div>
-            </div>
+            </Frame>
           </div>
         )}
 
@@ -4482,9 +4598,10 @@ export default function QuanLyPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     type="button"
+                    variant="primary"
                     size="sm"
                     onClick={() => setShowAddProductModal(true)}
-                    className="rounded-lg text-xs font-medium gap-1.5 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs"
+                    className="rounded-xl text-xs font-medium gap-1.5 bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs"
                   >
                     <Package className="w-3.5 h-3.5" />
                     <span>Thêm Sản phẩm</span>
@@ -5159,7 +5276,7 @@ export default function QuanLyPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <Frame variant="default" padding="none" className="overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Nhật ký Quản trị Hệ thống (Admin Audit Trail)</h3>
@@ -5168,35 +5285,43 @@ export default function QuanLyPage() {
                 <span className="text-xs font-mono text-slate-400">Tổng cộng: {auditLogs.length} bản ghi</span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 text-slate-500 text-xs font-medium border-b border-slate-200">
-                      <th className="py-3 px-4 font-medium">Thời gian</th>
-                      <th className="py-3 px-4 font-medium">Người thực hiện</th>
-                      <th className="py-3 px-4 font-medium">Hành động</th>
-                      <th className="py-3 px-4 font-medium">Đối tượng</th>
-                      <th className="py-3 px-4 font-medium">Chi tiết</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {auditLogs.map((log, idx) => (
-                      <tr key={log.id ? `log-row-${log.id}-${idx}` : `log-${idx}`} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{log.timestamp}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-900">{log.actor}</td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-medium text-[11px] border border-slate-200 font-mono">
-                            {log.action}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-slate-800">{log.target}</td>
-                        <td className="py-3 px-4 text-slate-500">{log.details}</td>
+              <div data-slot="data-grid" className="w-full select-none">
+                <div
+                  className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[240px] pb-1"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <table
+                    data-slot="data-grid-table"
+                    className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full border-separate border-spacing-0"
+                  >
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="h-9">
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Thời gian</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Người thực hiện</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Hành động</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Đối tượng</th>
+                        <th className="py-2.5 px-4 font-medium border-b border-slate-200/70">Chi tiết</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody data-slot="data-grid-table-body" className="text-slate-700">
+                      {auditLogs.map((log, idx) => (
+                        <tr key={log.id ? `log-row-${log.id}-${idx}` : `log-${idx}`} className="transition-colors hover:bg-slate-50/80 even:bg-slate-50/40">
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-400 border-b border-slate-200/70 align-middle">{log.timestamp}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-900 border-b border-slate-200/70 align-middle">{log.actor}</td>
+                          <td className="py-3 px-4 border-b border-slate-200/70 align-middle">
+                            <Badge variant="outline" size="xs" className="font-mono bg-slate-50 text-slate-700 border-slate-200">
+                              {log.action}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-800 border-b border-slate-200/70 align-middle">{log.target}</td>
+                          <td className="py-3 px-4 text-slate-500 border-b border-slate-200/70 align-middle">{log.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </Frame>
           </div>
         )}
 
@@ -5269,7 +5394,7 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs font-medium text-slate-700 block mb-1">Họ và tên:</label>
                     <Input
@@ -5280,13 +5405,31 @@ export default function QuanLyPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Email Teams:</label>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Email Teams (Nhận OTP):</label>
                     <Input
                       required
                       type="email"
-                      value={editingMember.email}
-                      onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
+                      value={editingMember.teamsEmail || editingMember.email || ""}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setEditingMember({
+                          ...editingMember,
+                          teamsEmail: val,
+                          email: val,
+                        })
+                      }}
                       className="text-xs rounded-lg border-slate-200 font-mono"
+                      placeholder="vd: maianhpkk@gmail.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Email cá nhân (Đăng nhập):</label>
+                    <Input
+                      type="email"
+                      value={editingMember.personalEmail || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, personalEmail: e.target.value })}
+                      className="text-xs rounded-lg border-slate-200 font-mono"
+                      placeholder="vd: anhptm.os@mbbank.com.vn"
                     />
                   </div>
                 </div>
@@ -5928,7 +6071,9 @@ export default function QuanLyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs h-8"
+                    variant="primary"
+                    tactile
+                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
                   >
                     Tạo Squad
                   </Button>
@@ -6153,7 +6298,9 @@ export default function QuanLyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs h-8"
+                    variant="primary"
+                    tactile
+                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
                   >
                     Lưu thay đổi
                   </Button>
@@ -6249,7 +6396,9 @@ export default function QuanLyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs h-8"
+                    variant="primary"
+                    tactile
+                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
                   >
                     Thêm Sản phẩm
                   </Button>
@@ -6348,7 +6497,9 @@ export default function QuanLyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs h-8"
+                    variant="primary"
+                    tactile
+                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
                   >
                     Lưu thay đổi
                   </Button>
@@ -6702,7 +6853,9 @@ export default function QuanLyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-xs h-8 gap-1.5"
+                    variant="primary"
+                    tactile
+                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8 gap-1.5"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>Lưu cấu hình quy tắc</span>

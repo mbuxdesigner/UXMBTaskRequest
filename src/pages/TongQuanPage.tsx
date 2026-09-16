@@ -63,25 +63,21 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
-import { DashboardSkeleton } from "@/components/common/ReuiSkeletons"
-import { Squad, UXRequest } from "../data/mockData"
+import { springs } from "@/lib/motion"
+import { Squad, UXRequest, mockRequests, mockSquads } from "../data/mockData"
 import { fetchSquads, fetchRequests } from "../api/api"
+import { getStoredSession, UserSession } from "../services/otpAuthService"
+import { canUserAccessRequest, generateMaskedTitle } from "@/lib/accessControl"
 import SquadDetailModal from "../components/squad/SquadDetailModal"
 import RequestDetail from "../components/track/RequestDetail"
-import ProductFilter, { ProductFilterKey, matchesProductCategory } from "@/components/dashboard/ProductFilter"
-import Block1PendingOverview from "@/components/dashboard/Block1PendingOverview"
-import Block2InProgressWorkload from "@/components/dashboard/Block2InProgressWorkload"
-import Block3CompletedSLA from "@/components/dashboard/Block3CompletedSLA"
-import Block4ProductionReleases from "@/components/dashboard/Block4ProductionReleases"
-import Block5SquadActivity from "@/components/dashboard/Block5SquadActivity"
-import Block6GanttRoadmap from "@/components/dashboard/Block6GanttRoadmap"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import PageHeader from "@/components/common/PageHeader"
-import { RefreshCw } from "lucide-react"
+import AiOpsKpiCards from "@/components/dashboard/ai-ops/AiOpsKpiCards"
+import ReleaseNewsfeedTimeline from "@/components/dashboard/ai-ops/ReleaseNewsfeedTimeline"
+import SquadTrendingChart from "@/components/dashboard/ai-ops/SquadTrendingChart"
+import TrackTaskGanttFrame from "@/components/dashboard/ai-ops/TrackTaskGanttFrame"
+import { getAdminIAProducts, IAProductInfo } from "@/data/iaMockData"
+import { cn } from "@/lib/utils"
 
 export default function TongQuanPage() {
   const [squads, setSquads] = useState<Squad[]>(() => {
@@ -89,24 +85,10 @@ export default function TongQuanPage() {
       const cached = localStorage.getItem("mbbank_admin_squads")
       if (cached) {
         const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((s: any) => ({
-            squad_id: s.squad_id || s.id || `sq-${s.name || ""}`,
-            squad_name: s.squad_name || s.name || "Squad",
-            product_id: s.product_id || s.productId || "",
-            product_name: s.product_name || s.productName || "",
-            domain: s.domain || "",
-            active_tasks: s.active_tasks || s.taskCount || 0,
-            queued_tasks: s.queued_tasks || 0,
-            capacity_threshold: s.capacity_threshold || s.capacityThreshold || 6,
-            ux_owner: s.ux_owner || s.leadDesigner || "",
-            active_task_titles: s.active_task_titles || [],
-            queued_task_titles: s.queued_task_titles || [],
-          }))
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
     } catch {}
-    return []
+    return mockSquads || []
   })
 
   const [requests, setRequests] = useState<UXRequest[]>(() => {
@@ -117,329 +99,292 @@ export default function TongQuanPage() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
     } catch {}
+    if (mockRequests && mockRequests.length > 0) return mockRequests
     return []
   })
 
-  const [loading, setLoading] = useState<boolean>(() => {
-    try {
-      const cachedReqs = localStorage.getItem("ux_portal_real_requests")
-      if (cachedReqs) {
-        const parsed = JSON.parse(cachedReqs)
-        if (Array.isArray(parsed) && parsed.length > 0) return false
-      }
-    } catch {}
-    return true
-  })
-
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  // Modals & Drawers State
+  const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
   const selectedRequestRef = useRef<UXRequest | null>(null)
-  useEffect(() => {
-    selectedRequestRef.current = selectedRequest
-  }, [selectedRequest])
   const [selectedSquad, setSelectedSquad] = useState<Squad | null>(null)
-  const [selectedProduct, setSelectedProduct] = useState<ProductFilterKey>("ALL")
-  const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
-    const now = new Date()
-    return now.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    })
-  })
-
-  const handleRefresh = () => {
-    loadData(true)
-  }
-
-  const loadData = async (forceRefresh = false) => {
-    if (requests.length === 0) setLoading(true)
-    if (forceRefresh) setRefreshing(true)
-    setError(null)
-    const startTime = Date.now()
-    try {
-      const [squadsData, requestsData] = await Promise.all([
-        fetchSquads(forceRefresh),
-        fetchRequests(forceRefresh),
-      ])
-      if (loading) {
-        const elapsed = Date.now() - startTime
-        if (elapsed < 350) {
-          await new Promise((r) => setTimeout(r, 350 - elapsed))
-        }
-      }
-      setSquads(squadsData)
-      setRequests(requestsData)
-      setLastSyncTime(
-        new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-      )
-    } catch (err: any) {
-      setError(err?.message || "Không thể tải dữ liệu bài toán từ hệ thống.")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
+  const [hoveredProduct, setHoveredProduct] = useState<string | null>(null)
 
   useEffect(() => {
-    const hasCache = requests.length > 0
-    loadData(!hasCache)
+    const handleAuthChange = () => {
+      setSession(getStoredSession())
+    }
+    window.addEventListener("auth_session_changed", handleAuthChange)
+    window.addEventListener("storage", handleAuthChange)
+    const interval = setInterval(() => {
+      const current = getStoredSession()
+      setSession((prev) => {
+        if (!prev && !current) return prev
+        if (
+          prev?.sessionToken === current?.sessionToken &&
+          prev?.role === current?.role &&
+          prev?.teamsEmail === current?.teamsEmail &&
+          prev?.displayName === current?.displayName
+        ) {
+          return prev
+        }
+        return current
+      })
+    }, 1200)
+    return () => {
+      window.removeEventListener("auth_session_changed", handleAuthChange)
+      window.removeEventListener("storage", handleAuthChange)
+      clearInterval(interval)
+    }
   }, [])
 
-  // Derived filtered requests by selected product
-  const filteredRequests = useMemo(
-    () => requests.filter((r) => matchesProductCategory(r, selectedProduct)),
-    [requests, selectedProduct]
-  )
+  useEffect(() => {
+    // Background sync from Google Sheets without blocking UI render
+    Promise.all([fetchSquads(false), fetchRequests(false)])
+      .then(([squadsData, requestsData]) => {
+        if (Array.isArray(squadsData) && squadsData.length > 0) setSquads(squadsData)
+        if (Array.isArray(requestsData) && requestsData.length > 0) setRequests(requestsData)
+      })
+      .catch(() => {
+        // Quiet fallback to empty/real data
+      })
+  }, [])
 
-  // =========================================================================
-  // REUI AI-OPS DASHBOARD ARCHITECTURAL METRICS & MOTION SYSTEM
-  // =========================================================================
-  /**
-   * Architectural Overview:
-   * The UXMB Executive Dashboard adheres to the Tempo Tasks ReUI AI-Ops standard.
-   * All 6 blocks are organized into a cohesive, responsive multi-tiered layout:
-   *
-   * 1. Top Command Bar & Product Filter:
-   *    - Breadcrumb navigation and live synchronization status indicator.
-   *    - Reactive ProductFilter pill bar with animated shared-layout active pill.
-   *    - Zero-latency synchronous data filtering matching tasks across 5 categories.
-   *
-   * 2. Row 1: KPI Bento Triplet (Block 1, Block 2, Block 3):
-   *    - Block 1 (Pending & Blockers): Identifies bottlenecks, PO delays > 24h, unassigned.
-   *    - Block 2 (In Progress Workload): 5 UX design stages breakdown and delivery tempo.
-   *    - Block 3 (Completed & SLA): Evaluates on-time SLA rate against 96.4% benchmark.
-   *
-   * 3. Row 2: Asymmetric Production & Squad Grid (Block 4, Block 5):
-   *    - Block 4 (Production Releases): Vertical release timeline feed to App/Web channels.
-   *    - Block 5 (Squad Activity): Capacity utilization meters & key priority tasks.
-   *
-   * 4. Row 3: Full-Width Gantt Roadmap (Block 6):
-   *    - Block 6 (Gantt Schedule): Comprehensive timeline roadmap with Today milestone.
-   *
-   * Motion & Frame Performance Invariants:
-   * - AnimatePresence mode="wait" ensures sequential skeleton fade-out before cards enter.
-   * - Stagger cascading reveals items progressively with 45ms micro-interval.
-   * - All Framer Motion variants consume composite properties exclusively (opacity, y).
-   * - Zero layout thrashing: strictly 0 runtime reflows on window resize or filter switches.
-   * - Interactive drilldown: clicking any task item opens the slide-over RequestDetail.
-   */
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  // Bảo mật bài toán cho PO / Business trên Dashboard:
+  // - Vẫn hiển thị đầy đủ bài toán trên Gantt để phục vụ điều phối, thống kê chung
+  // - Những task KHÔNG do PO/Business đó tạo sẽ bị mã hóa tiêu đề thành '********' ngẫu nhiên
+  // - Gắn cờ isRestricted: true để khi mở Drawer chi tiết sẽ hiển thị cảnh báo không có quyền
+  const displayRequests = useMemo(() => {
+    const rawList = requests && requests.length > 0 ? requests : []
+    if (!rawList || rawList.length === 0) return []
+    const isPoOrBusiness = session?.role === "PO" || session?.role === "Business"
+    if (!isPoOrBusiness) return rawList
+
+    return rawList.map((req) => {
+      const canAccess = canUserAccessRequest(req, session)
+      if (canAccess) return { ...req, isRestricted: false }
+      return {
+        ...req,
+        title: generateMaskedTitle(req.request_id || req.id, req.title),
+        isRestricted: true,
+      }
+    })
+  }, [requests, session])
+
+  // Lấy danh sách sản phẩm động từ Admin setting kết hợp các sản phẩm đang có trong requests
+  const products = useMemo(() => {
+    const adminProds = getAdminIAProducts()
+    const result: Array<{ id: string; name: string }> = []
+    const seenRoots = new Set<string>()
+
+    const getRootKey = (name: string) => {
+      const n = name.toLowerCase().replace(/[^a-z0-9]/g, "")
+      if (n.includes("appmb") || n.includes("mbapp")) return "appmb"
+      if (n.includes("digi") || n.includes("invest")) return "digi"
+      if (n.includes("baas")) return "baas"
+      if (n.includes("biz")) return "biz"
+      if (n.includes("web")) return "web"
+      return n
+    }
+
+    // Ưu tiên sản phẩm từ Admin setting
+    adminProds.forEach((p) => {
+      const root = getRootKey(p.name)
+      if (!seenRoots.has(root)) {
+        seenRoots.add(root)
+        result.push({ id: p.id, name: p.name })
+      }
+    })
+
+    // Bổ sung các sản phẩm thực tế có trong requests nếu chưa có trong Admin
+    requests.forEach((r) => {
+      const prodName = (r.product || "").trim()
+      if (prodName) {
+        const root = getRootKey(prodName)
+        if (!seenRoots.has(root)) {
+          seenRoots.add(root)
+          result.push({ id: `prod-${root}`, name: prodName })
+        }
+      }
+    })
+
+    return result
+  }, [requests])
+
+  const [selectedProduct, setSelectedProduct] = useState<string>("all")
+
+  // Helper kiểm tra task có thuộc sản phẩm đang chọn hay không
+  const isRequestMatchingProduct = (r: UXRequest, targetName: string) => {
+    if (!targetName || targetName === "all") return true
+    const normTarget = targetName.toLowerCase().replace(/[^a-z0-9]/g, "")
+    const p = (r.product || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+    const fj = (r.feature_journey || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+    const s = (r.squad_name || r.squad || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+
+    if (p === normTarget || p.includes(normTarget) || normTarget.includes(p)) return true
+    if (fj.includes(normTarget) || normTarget.includes(fj)) return true
+    if (s.includes(normTarget) || normTarget.includes(s)) return true
+
+    if ((normTarget.includes("appmb") || normTarget.includes("appmbbank")) && (p.includes("appmb") || p.includes("mbapp"))) return true
+    if (normTarget.includes("digi") && (p.includes("digi") || p.includes("invest") || fj.includes("digi"))) return true
+    if (normTarget.includes("baas") && (p.includes("baas") || s.includes("baas"))) return true
+
+    return false
+  }
+
+  const filteredRequests = useMemo(() => {
+    if (selectedProduct === "all") return displayRequests
+    const prodObj = products.find((p) => p.id === selectedProduct || p.name.toLowerCase() === selectedProduct.toLowerCase())
+    const targetName = prodObj?.name || selectedProduct
+    return displayRequests.filter((r) => isRequestMatchingProduct(r, targetName))
+  }, [displayRequests, selectedProduct, products])
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 text-slate-900 animate-in fade-in-50 duration-200 pb-8 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-4 text-slate-900 animate-in fade-in-50 duration-200 pb-8 outline-none">
       {/* =========================================================================
-          REUI HEADER BREADCRUMB & COMMAND BAR
+          PRODUCT NAVIGATION TABS (Admin-configured products)
           ========================================================================= */}
-      <PageHeader
-        breadcrumb={{
-          parent: "MBBank UX Platform",
-          current: "Executive Dashboard",
-        }}
-        title="Bảng Điều Hành & Lộ Trình UX"
-        badge={
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live Sync</span>
-            <span className="text-emerald-300">•</span>
-            <span className="font-mono text-[11px] text-emerald-600 font-normal">{lastSyncTime}</span>
+      <div 
+        role="tablist"
+        aria-label="Lọc bài toán theo sản phẩm"
+        aria-orientation="horizontal"
+        onMouseLeave={() => setHoveredProduct(null)}
+        className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 select-none"
+      >
+        <button
+          role="tab"
+          type="button"
+          id="product-tab-all"
+          aria-selected={selectedProduct === "all"}
+          tabIndex={selectedProduct === "all" ? 0 : -1}
+          onClick={() => setSelectedProduct("all")}
+          onMouseEnter={() => setHoveredProduct("all")}
+          className={cn(
+            "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
+            selectedProduct === "all"
+              ? "text-white font-semibold border-transparent shadow-xs"
+              : "bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
+          )}
+        >
+          {selectedProduct === "all" && (
+            <motion.div
+              layoutId="tongquan-product-pill"
+              className="absolute inset-0 bg-slate-900 rounded-xl shadow-xs -z-10"
+              transition={springs.indicator}
+            />
+          )}
+          {hoveredProduct === "all" && selectedProduct !== "all" && (
+            <motion.div
+              layoutId="tongquan-product-hover-pill"
+              className="absolute inset-0 bg-slate-100 rounded-xl -z-10"
+              transition={springs.snappy}
+            />
+          )}
+          <span className="relative z-10">Tất cả</span>
+          <span
+            className={cn(
+              "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold tabular-nums transition-colors",
+              selectedProduct === "all"
+                ? "bg-slate-800 text-slate-200"
+                : "bg-slate-100 text-slate-500"
+            )}
+          >
+            {displayRequests.length}
           </span>
-        }
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            aria-label="Làm mới dữ liệu bảng điều hành"
-            className="h-10 px-4 text-xs font-bold rounded-xl bg-white border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            <span>Làm mới</span>
-          </Button>
-        }
-      />
+        </button>
 
-      {error && (
-        <Alert variant="destructive" onDismiss={() => setError(null)}>
-          <AlertTitle>Lỗi kết nối</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+        {products.map((prod) => {
+          const count = displayRequests.filter((r) => isRequestMatchingProduct(r, prod.name)).length
+          const isSelected = selectedProduct === prod.id || selectedProduct === prod.name
+          const isHovered = hoveredProduct === prod.id
 
+          return (
+            <button
+              key={prod.id}
+              role="tab"
+              type="button"
+              id={`product-tab-${prod.id}`}
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => setSelectedProduct(prod.id)}
+              onMouseEnter={() => setHoveredProduct(prod.id)}
+              className={cn(
+                "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
+                isSelected
+                  ? "text-white font-semibold border-transparent shadow-xs"
+                  : "bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
+              )}
+            >
+              {isSelected && (
+                <motion.div
+                  layoutId="tongquan-product-pill"
+                  className="absolute inset-0 bg-slate-900 rounded-xl shadow-xs -z-10"
+                  transition={springs.indicator}
+                />
+              )}
+              {isHovered && !isSelected && (
+                <motion.div
+                  layoutId="tongquan-product-hover-pill"
+                  className="absolute inset-0 bg-slate-100 rounded-xl -z-10"
+                  transition={springs.snappy}
+                />
+              )}
+              <span className="relative z-10">{prod.name}</span>
+              <span
+                className={cn(
+                  "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold tabular-nums transition-colors",
+                  isSelected
+                    ? "bg-slate-800 text-slate-200"
+                    : "bg-slate-100 text-slate-500"
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* =========================================================================
+          6 REUI FRAMES (Bento KPI + Asymmetric Workload + Gantt Roadmap)
+          Cross-fade transition when switching products via AnimatePresence mode="wait"
+          ========================================================================= */}
       <AnimatePresence mode="wait">
-        {loading ? (
-          <motion.div
-            key="dashboard-skeleton"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: durations.skeletonExit, ease: "easeInOut" }}
-            className="w-full"
-          >
-            <DashboardSkeleton />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="dashboard-content"
-            variants={staggerContainerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="space-y-6"
-          >
-            {/* =========================================================================
-                PRODUCT FILTER PILL BAR
-                ========================================================================= */}
-            <motion.div variants={staggerItemVariants}>
-              <ProductFilter
-                value={selectedProduct}
-                onChange={setSelectedProduct}
-                requests={requests}
-              />
-            </motion.div>
+        <motion.div
+          key={selectedProduct}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-4"
+        >
+          {/* ROW 1: 3 REUI KPI CARDS (Backlog & Pending, Đang thực hiện, Đã hoàn thành) */}
+          <AiOpsKpiCards requests={filteredRequests} />
 
-            {/* =========================================================================
-                ROW 1: REUI FRAME 3-COLUMN METRICS & WORKLOAD GRID (ReUI AI-Ops Standard)
-                Block 1: Đang chờ & Điểm nghẽn (Pending & Blocker Overview)
-                Block 2: Đang thực hiện & 5 Khâu UX (In Progress Workload)
-                Block 3: Hoàn thành & Tuân thủ SLA (Completed & SLA Compliance)
-                ========================================================================= */}
-            <motion.div
-              variants={staggerItemVariants}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch"
-            >
-              <Block1PendingOverview
+          {/* ROW 2: ASYMMETRIC 2-COLUMN GRID (NewsFeed + Squad Trending) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch">
+            <div className="lg:col-span-1 h-full min-w-0">
+              <ReleaseNewsfeedTimeline
                 requests={filteredRequests}
-                onSelectRequest={setSelectedRequest}
-                className="h-full"
+                onSelectRequest={(req) => setSelectedRequest(req)}
               />
-              <Block2InProgressWorkload
-                requests={filteredRequests}
-                onSelectRequest={setSelectedRequest}
-                className="h-full"
-              />
-              <Block3CompletedSLA
-                requests={filteredRequests}
-                onSelectRequest={setSelectedRequest}
-                className="h-full md:col-span-2 lg:col-span-1"
-              />
-            </motion.div>
-
-            {/* =========================================================================
-                ROW 2: ASYMMETRIC 2-COLUMN WORKLOAD GRID (ReUI AI-Ops Standard)
-                Block 4: Tính năng đã Go-live / Release (1 col on desktop lg:col-span-1)
-                Block 5: Trending Task & Hoạt động Squad (2 cols on desktop lg:col-span-2)
-                ========================================================================= */}
-            <motion.div
-              variants={staggerItemVariants}
-              className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch"
-            >
-              <Block4ProductionReleases
-                requests={filteredRequests}
-                onSelectRequest={setSelectedRequest}
-                className="h-full lg:col-span-1"
-              />
-              <Block5SquadActivity
+            </div>
+            <div className="lg:col-span-2 h-full min-w-0">
+              <SquadTrendingChart
                 requests={filteredRequests}
                 squads={squads}
-                onSelectRequest={setSelectedRequest}
-                onSelectSquad={setSelectedSquad}
-                className="h-full lg:col-span-2"
+                currentProduct={selectedProduct}
               />
-            </motion.div>
+            </div>
+          </div>
 
-            {/* =========================================================================
-                ROW 3: FULL-WIDTH REUI GANTT ROADMAP FRAME (ReUI AI-Ops Standard)
-                Block 6: Lộ trình Gantt toàn diện (Gantt Schedule Roadmap)
-                ========================================================================= */}
-            <motion.div variants={staggerItemVariants} className="w-full">
-              <Block6GanttRoadmap
-                requests={filteredRequests}
-                onSelectRequest={setSelectedRequest}
-                selectedProduct={selectedProduct}
-              />
-            </motion.div>
-          </motion.div>
-        )}
+          {/* ROW 3: FULL-WIDTH TRACK TASK GANTT ROADMAP */}
+          <div className="w-full">
+            <TrackTaskGanttFrame
+              requests={filteredRequests}
+              onSelectRequest={(req) => setSelectedRequest(req)}
+            />
+          </div>
+        </motion.div>
       </AnimatePresence>
 
       {/* =========================================================================
@@ -450,25 +395,8 @@ export default function TongQuanPage() {
       <RequestDetail
         open={Boolean(selectedRequest)}
         request={selectedRequest}
-        onClose={() => {
-          selectedRequestRef.current = null
-          setSelectedRequest(null)
-        }}
-        onUpdated={async () => {
-          await loadData(true)
-          const allReqs = await fetchRequests()
-          // CHỈ cập nhật bài toán NẾU người dùng VẪN ĐANG MỞ bài toán đó.
-          // Nếu người dùng đã đóng bài toán (selectedRequestRef.current === null),
-          // TUYỆT ĐỐI KHÔNG gọi setSelectedRequest để tránh tự động mở lại!
-          if (selectedRequestRef.current) {
-            const activeId = selectedRequestRef.current.request_id
-            const found = allReqs.find((r) => r.request_id === activeId)
-            if (found && selectedRequestRef.current?.request_id === activeId) {
-              selectedRequestRef.current = found
-              setSelectedRequest(found)
-            }
-          }
-        }}
+        onClose={() => setSelectedRequest(null)}
+        onUpdated={() => {}}
       />
     </main>
   )

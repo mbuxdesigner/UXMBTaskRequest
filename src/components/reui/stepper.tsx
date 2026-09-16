@@ -5,6 +5,13 @@ import { cn } from "@/lib/utils"
 
 export type StepStatus = "complete" | "current" | "upcoming" | "error"
 
+export interface StepDef {
+  id: string
+  title: string
+  description?: string
+  status: StepStatus
+}
+
 export interface StepItem {
   id: string | number
   title: string
@@ -134,7 +141,7 @@ export function Step({
             currentStatus === "complete" &&
               "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-500/20",
             currentStatus === "current" &&
-              "bg-[#1B3A6B] border-[#1B3A6B] text-white shadow-md shadow-[#1B3A6B]/25 ring-4 ring-[#1B3A6B]/15",
+              "bg-slate-900 border-slate-900 text-white shadow-md shadow-slate-900/25 ring-4 ring-slate-900/15",
             currentStatus === "upcoming" &&
               "bg-slate-50 border-slate-200 text-slate-400 group-hover:border-slate-300 group-hover:text-slate-600",
             currentStatus === "error" &&
@@ -157,7 +164,7 @@ export function Step({
           <span
             className={cn(
               "text-xs font-semibold tracking-tight transition-colors",
-              currentStatus === "current" && "text-[#1B3A6B] font-bold",
+              currentStatus === "current" && "text-slate-900 font-bold",
               currentStatus === "complete" && "text-slate-900",
               currentStatus === "upcoming" && "text-slate-500 group-hover:text-slate-700",
               currentStatus === "error" && "text-rose-600 font-bold"

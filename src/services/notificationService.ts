@@ -71,8 +71,37 @@ function syncFromStorage() {
             typeof item.id === "string" &&
             !item.id.startsWith("notif-seed-")
         );
+        const prevIds = new Set(memoryStore.map((n) => n.id));
+        const newUnread = cleaned.filter((n) => !prevIds.has(n.id) && !n.read);
+
         memoryStore = cleaned;
         notifyListeners();
+
+        // Tự động kích hoạt Toast ReUI Sonner cho các thông báo mới từ tab khác hoặc sync
+        if (newUnread.length > 0 && prevIds.size > 0) {
+          newUnread.slice(0, 3).forEach((item) => {
+            const toastType = mapNotificationTypeToToast(item.type);
+            const action = item.requestId
+              ? {
+                  label: "Xem chi tiết",
+                  onClick: () => {
+                    sessionStorage.setItem("ux_pending_open_task", item.requestId!);
+                    window.location.hash = `#track?requestId=${item.requestId}`;
+                    window.dispatchEvent(
+                      new CustomEvent("app_navigate", {
+                        detail: { page: "track", requestId: item.requestId },
+                      })
+                    );
+                  },
+                }
+              : undefined;
+
+            toast[toastType](item.title, item.message, {
+              duration: 4500,
+              action,
+            });
+          });
+        }
         return;
       }
     }
@@ -396,4 +425,52 @@ export function useNotifications() {
     clearAllNotifications: handleClearAll,
     dispatch: dispatchNotification,
   };
+}
+
+/**
+ * Hàm kích hoạt bộ thông báo mẫu xếp chồng (Stacked Toasts)
+ * Giúp người dùng trải nghiệm trực tiếp tính năng thông báo xếp chồng Sonner ReUI
+ */
+export function triggerTestStackedNotifications() {
+  const reqId = "UXMB-20260908-004";
+  
+  // 1. Thông báo Thành công
+  dispatchNotification({
+    type: "task_approved",
+    title: "Đã phê duyệt bàn giao UI Design",
+    message: "Product Owner đã duyệt luồng trải nghiệm vay món linh hoạt.",
+    requestId: reqId,
+    taskTitle: "Thiết kế trải nghiệm vay món cho sản phẩm vay linh hoạt",
+    actorName: "Lương Thị Hường",
+    actorRole: "PO",
+    showToast: true,
+  });
+
+  // 2. Thông báo Thông tin & Nhắc tên (xếp chồng lên trên)
+  setTimeout(() => {
+    dispatchNotification({
+      type: "comment_mention",
+      title: "Bạn được nhắc đến trong trao đổi",
+      message: "Mạnh ơi, kiểm tra lại màu sắc nút bấm Dark Navy trên mobile giùm team nhé.",
+      requestId: reqId,
+      taskTitle: "Thiết kế trải nghiệm vay món cho sản phẩm vay linh hoạt",
+      actorName: "Đoàn Thị Phương Thảo",
+      actorRole: "Designer",
+      showToast: true,
+    });
+  }, 300);
+
+  // 3. Thông báo Cảnh báo Deadline (xếp chồng tạo thành bộ 3 thẻ 3D)
+  setTimeout(() => {
+    dispatchNotification({
+      type: "deadline_changed",
+      title: "Cập nhật thời hạn cam kết kinh doanh",
+      message: "Hạn nghiệm thu UX đã được điều chỉnh sang 2026-09-25.",
+      requestId: reqId,
+      taskTitle: "Thiết kế trải nghiệm vay món cho sản phẩm vay linh hoạt",
+      actorName: "Trưởng nhóm UX",
+      actorRole: "Design Owner",
+      showToast: true,
+    });
+  }, 600);
 }

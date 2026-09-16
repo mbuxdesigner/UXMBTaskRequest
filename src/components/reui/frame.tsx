@@ -11,7 +11,7 @@ const frameVariants = cva(
         elevated: "shadow-md hover:shadow-lg border-slate-200/60",
         flat: "border-slate-200 shadow-none bg-slate-50/50",
         glass: "bg-white/90 backdrop-blur-md border-white/40 shadow-sm",
-        accent: "border-l-4 border-l-[#1B3A6B] shadow-xs",
+        accent: "border-l-4 border-l-slate-900 shadow-xs",
         teal: "border-l-4 border-l-[#0D9B97] shadow-xs",
         dashed: "border-dashed border-2 border-slate-200 hover:border-slate-300 bg-slate-50/30",
       },

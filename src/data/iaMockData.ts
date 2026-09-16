@@ -1,4 +1,5 @@
 import { IANode, IAProductInfo } from "@/types/ia"
+export type { IAProductInfo } from "@/types/ia"
 
 /**
  * Danh mục 4 sản phẩm số trọng điểm của MBBank

@@ -572,7 +572,7 @@ export default function SolutionAgentsTable({
 
   return (
     <div data-slot="data-grid" className="w-full select-none rounded-b-2xl">
-      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
         <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
           <colgroup>
             <col className="w-[32%]" />
@@ -582,7 +582,7 @@ export default function SolutionAgentsTable({
             <col className="w-[12%]" />
             <col className="w-[7.5%]" />
             <col className="w-[8.5%]" />
-            <col className="w-[44px]" />
+            <col className="w-[48px]" />
           </colgroup>
           <thead className="bg-slate-50/60 border-b border-slate-200/70 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
             <tr className="h-9">
@@ -593,7 +593,7 @@ export default function SolutionAgentsTable({
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Trạng thái</th>
               <th className="px-3 sm:px-4 py-2 text-right font-medium">Priority</th>
               <th className="px-3 sm:px-4 py-2 text-right font-medium whitespace-nowrap">Release</th>
-              <th className="px-2 sm:px-3 py-2 text-right font-medium w-[44px]" />
+              <th className="px-2 sm:px-3 py-2 text-right font-medium w-[48px] min-w-[48px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70" />
             </tr>
           </thead>
           <AnimatePresence mode="wait">
@@ -862,7 +862,7 @@ export default function SolutionAgentsTable({
                                   </td>
 
                                   {/* 8. Action */}
-                                  <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                  <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] ${cellBorderClass}`}>
                                     <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
                                   </td>
                                 </>
@@ -1047,7 +1047,21 @@ export default function SolutionAgentsTable({
                               </td>
 
                               {/* 8. Action Menu */}
-                              <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right relative ${cellBorderClass}`} onClick={(e) => e.stopPropagation()}>
+                              <td
+                                className={cn(
+                                  "px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]",
+                                  actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-10",
+                                  isHighlighted
+                                    ? "bg-blue-50/95"
+                                    : isIncoming
+                                    ? "bg-blue-50/40"
+                                    : isMutating
+                                    ? "bg-slate-50/70"
+                                    : "bg-white/95 group-hover/run-row:bg-slate-50/95",
+                                  cellBorderClass
+                                )}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {isMutating && (
                                   <div
                                     className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"

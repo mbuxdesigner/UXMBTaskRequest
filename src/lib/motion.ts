@@ -61,6 +61,16 @@ export const springs = {
   } as const,
 
   /**
+   * Animate UI standard sliding tab indicator spring
+   * stiffness: 400, damping: 30 produces a responsive 60fps sliding glide with ~5% subtle overshoot
+   */
+  indicator: {
+    type: "spring",
+    stiffness: 400,
+    damping: 30,
+  } as const,
+
+  /**
    * Modal and sheet spring dynamics
    */
   modal: {

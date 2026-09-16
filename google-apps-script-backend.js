@@ -123,6 +123,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu("🚀 Tiện ích UX Portal")
     .addItem("🔄 Phân tách & Đồng bộ toàn bộ dữ liệu ra bảng báo cáo", "syncAllProjections")
+    .addItem("👥 Đồng bộ 2 chiều Nhân sự (USERS ↔ RAW_SETTINGS)", "syncTwoWayUsers")
     .addItem("⚙️ Khởi tạo cấu trúc 2 Bảng JSON Core (RAW_TASKS & RAW_SETTINGS)", "initCoreSheets")
     .addItem("⏱️ Cài đặt tự động đồng bộ ngầm (Mỗi 15 phút)", "setupAutoProjectionTrigger")
     .addSeparator()
@@ -135,6 +136,34 @@ function onOpen() {
     .addItem("ℹ️ Xem hướng dẫn bảo mật Teams OTP & Phân quyền", "showHelpDialog")
     .addToUi();
 }
+
+/**
+ * Tự động đồng bộ 2 chiều ngay khi Admin chỉnh sửa trên Sheet USERS
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    const sheet = e.range.getSheet();
+    if (!sheet || sheet.getName() !== SHEET_USERS_NAME) return;
+    const row = e.range.getRow();
+    if (row < 2) return; // Bỏ qua header
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    getOrInitTeamMembers(ss);
+  } catch (err) {
+    Logger.log("Lỗi onEdit: " + err);
+  }
+}
+
+/**
+ * Hàm thủ công trong Menu: Đồng bộ 2 chiều USERS ↔ RAW_SETTINGS
+ */
+function syncTwoWayUsers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const members = getOrInitTeamMembers(ss);
+  SpreadsheetApp.getUi().alert("✅ Đã đồng bộ thành công " + (members.length || 0) + " nhân sự giữa sheet USERS và RAW_SETTINGS!");
+}
+
 
 /**
  * Handle GET requests
@@ -276,6 +305,7 @@ function doGet(e) {
           }
         }
       }
+      const members = getOrInitTeamMembers(ss);
       return createJsonResponse({
         status: "success",
         master_data: masterData,
@@ -287,7 +317,7 @@ function doGet(e) {
         rbac: masterData["RBAC_CONFIG"] || null,
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
-        team_members: masterData["USERS_LIST"] || null,
+        team_members: members,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
         timestamp: new Date().toISOString()
@@ -405,6 +435,7 @@ function doPost(e) {
           }
         }
       }
+      const members = getOrInitTeamMembers(ss);
       return createJsonResponse({
         status: "success",
         master_data: masterData,
@@ -416,7 +447,7 @@ function doPost(e) {
         rbac: masterData["RBAC_CONFIG"] || null,
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
-        team_members: masterData["USERS_LIST"] || null,
+        team_members: members,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
         timestamp: new Date().toISOString()
@@ -2495,62 +2526,128 @@ function testAvatarDrive() {
 /**
  * Lấy danh sách nhân sự từ RAW_SETTINGS (USERS_LIST) hoặc USERS sheet
  */
+/**
+ * Lấy danh sách nhân sự - HỢP NHẤT 2 CHIỀU THÔNG MINH (TWO-WAY MERGE):
+ * 1. Đọc sheet USERS (nơi Admin chỉnh sửa trực tiếp trên Google Sheet)
+ * 2. Đọc RAW_SETTINGS (nơi lưu mảng Squads, Products, Permissions JSON)
+ * 3. Hợp nhất: Ưu tiên thông tin hiển thị và mail từ sheet USERS (Display Name, Avatar, Personal Email, Teams Email, Role, Status)
+ * 4. Cập nhật lại RAW_SETTINGS để 2 bảng luôn nhất quán 100%!
+ */
 function getOrInitTeamMembers(ss) {
-  // 1. ƯU TIÊN SỐ 1: Đọc từ RAW_SETTINGS (Key: USERS_LIST) vì đây là nơi lưu đầy đủ 100% cấu hình JSON nhân sự (Squads, Products, Permissions, Avatar...)
-  try {
-    const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
-    if (rawSettings && rawSettings.getLastRow() > 1) {
+  // 1. Đọc danh sách chi tiết từ RAW_SETTINGS (Key: USERS_LIST) nếu có
+  const rawMap = {};
+  let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+  if (!rawSettings) {
+    initCoreSheets();
+    rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+  }
+
+  if (rawSettings && rawSettings.getLastRow() > 1) {
+    try {
       const dataRows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 2).getValues();
       for (let i = 0; i < dataRows.length; i++) {
         if (dataRows[i][0] === "USERS_LIST" && dataRows[i][1]) {
           const parsed = JSON.parse(dataRows[i][1]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+          if (Array.isArray(parsed)) {
+            parsed.forEach(function(u) {
+              const k1 = String(u.teamsEmail || "").trim().toLowerCase();
+              const k2 = String(u.personalEmail || "").trim().toLowerCase();
+              const k3 = String(u.email || "").trim().toLowerCase();
+              const k4 = String(u.name || u.displayName || "").trim().toLowerCase();
+              if (k1) rawMap[k1] = u;
+              if (k2) rawMap[k2] = u;
+              if (k3) rawMap[k3] = u;
+              if (k4) rawMap[k4] = u;
+            });
           }
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
-  // 2. DỰ PHÒNG: Đọc từ sheet USERS nếu RAW_SETTINGS chưa có cấu hình
+  // 2. Đọc sheet USERS (Bảng trực quan của người dùng)
   const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
   if (userSheet && userSheet.getLastRow() > 1) {
     const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
-    const list = [];
-    for (let i = 0; i < data.length; i++) {
-      if (data[i][0] || data[i][2] || data[i][3]) {
-        var rawRole = String(data[i][5] || "Designer").trim();
-        var role = "Designer";
-        if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
-        else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
-        else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
-        else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
-        else role = "Designer";
+    const mergedList = [];
 
-        list.push({
-          id: "mem-" + (i + 1),
-          name: String(data[i][0] || "Thành viên UX"),
-          avatarUrl: String(data[i][1] || ""),
-          email: String(data[i][3] || data[i][2] || ""),
-          personalEmail: String(data[i][2] || ""),
-          teamsEmail: String(data[i][3] || ""),
-          status: String(data[i][4] || "Active"),
-          role: role,
-          squad: "All Squads",
-          squads: ["All Squads"],
-          products: ["Toàn hàng"],
-          capacityLimit: 8,
-          activeTasks: 0,
-          permissions: {
-            canAssign: role === "Admin" || role === "Design Owner",
-            canApprovePo: true,
-            canExport: true,
-            canManageSystem: role === "Admin"
-          }
-        });
-      }
+    for (let i = 0; i < data.length; i++) {
+      const rowName = String(data[i][0] || "").trim();
+      const rowAvatar = String(data[i][1] || "").trim();
+      const rowPersonalEmail = String(data[i][2] || "").trim();
+      const rowTeamsEmail = String(data[i][3] || "").trim();
+      const rowStatus = String(data[i][4] || "Active").trim();
+      const rawRole = String(data[i][5] || "Designer").trim();
+
+      if (!rowName && !rowPersonalEmail && !rowTeamsEmail) continue;
+
+      let role = "Designer";
+      if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
+      else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
+      else if (rawRole.toLowerCase().indexOf("po") !== -1) role = "PO";
+      else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
+      else role = "Designer";
+
+      const key1 = rowTeamsEmail.toLowerCase();
+      const key2 = rowPersonalEmail.toLowerCase();
+      const key4 = rowName.toLowerCase();
+      const existing = (key1 && rawMap[key1]) || (key2 && rawMap[key2]) || (key4 && rawMap[key4]) || null;
+
+      const userObj = {
+        id: existing && existing.id ? existing.id : ("mem-" + (i + 1)),
+        name: rowName || (existing ? (existing.name || existing.displayName) : "Thành viên UX"),
+        displayName: rowName || (existing ? (existing.displayName || existing.name) : "Thành viên UX"),
+        avatarUrl: rowAvatar || (existing ? existing.avatarUrl : ""),
+        personalEmail: rowPersonalEmail || (existing ? existing.personalEmail : ""),
+        teamsEmail: rowTeamsEmail || (existing ? existing.teamsEmail : ""),
+        email: rowTeamsEmail || rowPersonalEmail || (existing ? existing.email : ""),
+        status: rowStatus || (existing ? existing.status : "Active"),
+        role: role,
+        squad: existing && existing.squad ? existing.squad : "All Squads",
+        squads: existing && Array.isArray(existing.squads) && existing.squads.length > 0 ? existing.squads : ["All Squads"],
+        products: existing && Array.isArray(existing.products) && existing.products.length > 0 ? existing.products : ["Toàn hàng"],
+        capacityLimit: existing && existing.capacityLimit ? existing.capacityLimit : 8,
+        activeTasks: existing && existing.activeTasks ? existing.activeTasks : 0,
+        permissions: existing && existing.permissions ? existing.permissions : {
+          canAssign: role === "Admin" || role === "Design Owner",
+          canApprovePo: true,
+          canExport: true,
+          canManageSystem: role === "Admin"
+        }
+      };
+
+      mergedList.push(userObj);
     }
-    if (list.length > 0) return list;
+
+    if (mergedList.length > 0) {
+      // Tự động lưu bản hợp nhất vào RAW_SETTINGS để đảm bảo 2 bảng luôn đồng bộ
+      try {
+        if (rawSettings) {
+          const lastRow = rawSettings.getLastRow();
+          let foundRow = -1;
+          if (lastRow > 1) {
+            const keys = rawSettings.getRange(2, 1, lastRow - 1, 1).getValues();
+            for (let k = 0; k < keys.length; k++) {
+              if (keys[k][0] === "USERS_LIST") {
+                foundRow = k + 2;
+                break;
+              }
+            }
+          }
+          const nowStr = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+          const payload = JSON.stringify(mergedList, null, 2);
+          if (foundRow > 0) {
+            rawSettings.getRange(foundRow, 2).setValue(payload);
+            rawSettings.getRange(foundRow, 3).setValue(nowStr);
+            rawSettings.getRange(foundRow, 4).setValue("Auto-Merge from USERS");
+          } else {
+            rawSettings.appendRow(["USERS_LIST", payload, nowStr, "Auto-Merge from USERS"]);
+          }
+        }
+      } catch (e) {}
+
+      return mergedList;
+    }
   }
 
   // 3. Fallback mặc định ban đầu nếu cả 2 bảng đều chưa có dữ liệu
@@ -2654,10 +2751,10 @@ function handleSyncTeamMembers(data) {
 
   if (userSheet) {
     const userRows = members.map(function(m) {
-      const emailKey = String(m.email || m.teamsEmail || m.personalEmail || "").trim().toLowerCase();
+      const teamsEmail = String(m.teamsEmail || m.email || "").trim();
+      const personalEmail = String(m.personalEmail || m.email || teamsEmail).trim();
+      const emailKey = String(teamsEmail || personalEmail || m.email || "").trim().toLowerCase();
       const tokenInfo = existingTokens[emailKey] || {};
-      const teamsEmail = m.teamsEmail || (m.email && m.email.includes("@mbbank.com.vn") ? m.email : ((m.email ? m.email.split("@")[0] : "user") + "@mbbank.com.vn"));
-      const personalEmail = m.personalEmail || m.email || teamsEmail;
       return [
         m.name || m.displayName || "Thành viên UX",
         m.avatarUrl || "",
@@ -2683,6 +2780,7 @@ function handleSyncTeamMembers(data) {
   try {
     projectSettingsToHumanSheets();
   } catch (e) {}
+
 
   // 4. Ghi Audit Log vào sheet LOGS
   logActionToSheet(ss, {

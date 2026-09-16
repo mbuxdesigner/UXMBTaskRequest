@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Check, X, AlertTriangle, Loader2, Info, Sparkles } from "lucide-react"
+"use client"
+
+import React from "react"
+import { toast as sonnerToast, Toaster as SonnerToaster } from "@/components/reui/sonner"
 
 export interface ToastItem {
   id: string
@@ -11,265 +12,139 @@ export interface ToastItem {
   onClick?: () => void
 }
 
-type ToastListener = (toasts: ToastItem[]) => void
+export interface ToastOptions {
+  id?: string | number
+  duration?: number
+  action?: {
+    label: React.ReactNode
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+  }
+  cancel?: {
+    label: React.ReactNode
+    onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  }
+  onClick?: () => void
+  onDismiss?: () => void
+  onAutoClose?: () => void
+  description?: React.ReactNode
+  icon?: React.ReactNode
+  important?: boolean
+  closeButton?: boolean
+}
 
-let toasts: ToastItem[] = []
-const listeners = new Set<ToastListener>()
-
-let lastToastSignature = ""
+let lastToastSig = ""
 let lastToastTime = 0
 
 function isRecentDuplicate(title: string, type: string): boolean {
   const now = Date.now()
   const sig = `${type}::${title}`
-  if (sig === lastToastSignature && now - lastToastTime < 500) {
+  if (sig === lastToastSig && now - lastToastTime < 300) {
     return true
   }
-  lastToastSignature = sig
+  lastToastSig = sig
   lastToastTime = now
   return false
 }
 
-function notify() {
-  listeners.forEach((listener) => listener([...toasts]))
-}
-
-export const toast = {
-  loading: (title: string, description?: string, options?: { id?: string }) => {
-    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "loading", title, description }
-
-    if (existingIndex >= 0) {
-      toasts[existingIndex] = newToast
-    } else {
-      toasts.push(newToast)
-    }
-    notify()
-    return id
-  },
-
-  success: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
-    // Deduplication check
-    if (isRecentDuplicate(title, "success")) {
-      return lastToastSignature
-    }
-
-    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const duration = options?.duration ?? 3500
-    const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "success", title, description, duration, onClick: options?.onClick }
-
-    if (existingIndex >= 0) {
-      toasts[existingIndex] = newToast
-    } else {
-      toasts.push(newToast)
-    }
-    notify()
-
-    if (duration > 0) {
-      setTimeout(() => {
-        toast.dismiss(id)
-      }, duration)
-    }
-    return id
-  },
-
-  error: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
-    if (isRecentDuplicate(title, "error")) {
-      return lastToastSignature
-    }
-
-    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const duration = options?.duration ?? 4500
-    const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "error", title, description, duration, onClick: options?.onClick }
-
-    if (existingIndex >= 0) {
-      toasts[existingIndex] = newToast
-    } else {
-      toasts.push(newToast)
-    }
-    notify()
-
-    if (duration > 0) {
-      setTimeout(() => {
-        toast.dismiss(id)
-      }, duration)
-    }
-    return id
-  },
-
-  warning: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
-    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const duration = options?.duration ?? 4000
-    const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "warning", title, description, duration, onClick: options?.onClick }
-
-    if (existingIndex >= 0) {
-      toasts[existingIndex] = newToast
-    } else {
-      toasts.push(newToast)
-    }
-    notify()
-
-    if (duration > 0) {
-      setTimeout(() => {
-        toast.dismiss(id)
-      }, duration)
-    }
-    return id
-  },
-
-  info: (title: string, description?: string, options?: { id?: string; duration?: number; onClick?: () => void }) => {
-    const id = options?.id || `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const duration = options?.duration ?? 3500
-    const existingIndex = toasts.findIndex((t) => t.id === id)
-    const newToast: ToastItem = { id, type: "info", title, description, duration, onClick: options?.onClick }
-
-    if (existingIndex >= 0) {
-      toasts[existingIndex] = newToast
-    } else {
-      toasts.push(newToast)
-    }
-    notify()
-
-    if (duration > 0) {
-      setTimeout(() => {
-        toast.dismiss(id)
-      }, duration)
-    }
-    return id
-  },
-
-  dismiss: (id: string) => {
-    toasts = toasts.filter((t) => t.id !== id)
-    notify()
-  },
-
-  clear: () => {
-    toasts = []
-    notify()
+function normalizeOptions(
+  descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+  options?: ToastOptions
+): ToastOptions {
+  if (descriptionOrOptions === undefined || descriptionOrOptions === null) {
+    return options || {}
   }
+  if (
+    typeof descriptionOrOptions === "string" ||
+    React.isValidElement(descriptionOrOptions)
+  ) {
+    const merged: ToastOptions = {
+      description: descriptionOrOptions,
+      ...options,
+    }
+    if (options?.onClick && !merged.action) {
+      merged.action = {
+        label: "Xem chi tiết",
+        onClick: () => options.onClick!(),
+      }
+    }
+    return merged
+  }
+  const opts = descriptionOrOptions as ToastOptions
+  if (opts.onClick && !opts.action) {
+    return {
+      ...opts,
+      action: {
+        label: "Xem chi tiết",
+        onClick: () => opts.onClick!(),
+      },
+    }
+  }
+  return opts
 }
 
-/**
- * Premium ReUI / Sonner-Grade Toast Notification Container
- */
-export function Toaster() {
-  const [activeToasts, setActiveToasts] = useState<ToastItem[]>([])
+export const toast = Object.assign(
+  (message: React.ReactNode, options?: ToastOptions) => {
+    return sonnerToast(message, options as any)
+  },
+  {
+    success: (
+      title: string | React.ReactNode,
+      descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+      options?: ToastOptions
+    ) => {
+      const titleStr = typeof title === "string" ? title : ""
+      if (titleStr && isRecentDuplicate(titleStr, "success")) {
+        return lastToastSig
+      }
+      const opts = normalizeOptions(descriptionOrOptions, options)
+      return sonnerToast.success(title, opts as any)
+    },
 
-  useEffect(() => {
-    const handleUpdate = (updated: ToastItem[]) => {
-      setActiveToasts(updated)
-    }
-    listeners.add(handleUpdate)
-    return () => {
-      listeners.delete(handleUpdate)
-    }
-  }, [])
+    error: (
+      title: string | React.ReactNode,
+      descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+      options?: ToastOptions
+    ) => {
+      const titleStr = typeof title === "string" ? title : ""
+      if (titleStr && isRecentDuplicate(titleStr, "error")) {
+        return lastToastSig
+      }
+      const opts = normalizeOptions(descriptionOrOptions, options)
+      return sonnerToast.error(title, opts as any)
+    },
 
-  return (
-    <div
-      aria-live="polite"
-      className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"
-    >
-      <AnimatePresence mode="popLayout">
-        {activeToasts.map((item) => {
-          const isSuccess = item.type === "success"
-          const isLoading = item.type === "loading"
-          const isError = item.type === "error"
-          const isWarning = item.type === "warning"
+    warning: (
+      title: string | React.ReactNode,
+      descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+      options?: ToastOptions
+    ) => {
+      const opts = normalizeOptions(descriptionOrOptions, options)
+      return sonnerToast.warning(title, opts as any)
+    },
 
-          return (
-            <motion.div
-              key={item.id}
-              layout
-              initial={{ opacity: 0, y: 24, scale: 0.92 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.88, y: 12, transition: { duration: 0.18, ease: "easeOut" } }}
-              transition={{ type: "spring", stiffness: 420, damping: 28 }}
-              onClick={() => {
-                if (item.onClick) {
-                  item.onClick()
-                  toast.dismiss(item.id)
-                }
-              }}
-              className={`pointer-events-auto relative group flex items-start gap-3 p-3.5 bg-[#0F172A]/95 text-slate-100 rounded-2xl border border-slate-700/60 shadow-2xl shadow-slate-950/60 backdrop-blur-xl ring-1 ring-white/10 select-none overflow-hidden ${
-                item.onClick ? "cursor-pointer hover:border-blue-500/70 hover:bg-slate-900 transition-all" : ""
-              }`}
-            >
-              {/* Subtle Top Glow Gradient */}
-              <div 
-                className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${
-                  isLoading
-                    ? "from-transparent via-blue-400 to-transparent"
-                    : isSuccess
-                    ? "from-transparent via-emerald-400 to-transparent"
-                    : isError
-                    ? "from-transparent via-rose-400 to-transparent"
-                    : isWarning
-                    ? "from-transparent via-amber-400 to-transparent"
-                    : "from-transparent via-indigo-400 to-transparent"
-                }`} 
-              />
+    info: (
+      title: string | React.ReactNode,
+      descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+      options?: ToastOptions
+    ) => {
+      const opts = normalizeOptions(descriptionOrOptions, options)
+      return sonnerToast.info(title, opts as any)
+    },
 
-              {/* Status Icon with Glow Backlight */}
-              <div className="shrink-0 mt-0.5">
-                {isLoading && (
-                  <div className="w-6 h-6 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-xs shadow-blue-500/20">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  </div>
-                )}
-                {isSuccess && (
-                  <div className="w-6 h-6 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shadow-xs shadow-emerald-500/20">
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  </div>
-                )}
-                {isError && (
-                  <div className="w-6 h-6 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center justify-center shadow-xs shadow-rose-500/20">
-                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </div>
-                )}
-                {isWarning && (
-                  <div className="w-6 h-6 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-xs shadow-amber-500/20">
-                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </div>
-                )}
-                {!isLoading && !isSuccess && !isError && !isWarning && (
-                  <div className="w-6 h-6 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shadow-xs shadow-indigo-500/20">
-                    <Info className="w-3.5 h-3.5" />
-                  </div>
-                )}
-              </div>
+    loading: (
+      title: string | React.ReactNode,
+      descriptionOrOptions?: string | React.ReactNode | ToastOptions,
+      options?: ToastOptions
+    ) => {
+      const opts = normalizeOptions(descriptionOrOptions, options)
+      return sonnerToast.loading(title, opts as any)
+    },
 
-              {/* Text Content */}
-              <div className="flex-1 min-w-0 pr-1">
-                <p className="text-xs font-semibold text-slate-100 leading-snug tracking-tight">
-                  {item.title}
-                </p>
-                {item.description && (
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-normal">
-                    {item.description}
-                  </p>
-                )}
-              </div>
+    promise: sonnerToast.promise,
+    custom: sonnerToast.custom,
+    dismiss: (id?: string | number) => sonnerToast.dismiss(id),
+    clear: () => sonnerToast.dismiss(),
+  }
+)
 
-              {/* Dismiss Close Button */}
-              {!isLoading && (
-                <button
-                  type="button"
-                  onClick={() => toast.dismiss(item.id)}
-                  className="shrink-0 -mr-1 -mt-0.5 w-5 h-5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Đóng thông báo"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </motion.div>
-          )
-        })}
-      </AnimatePresence>
-    </div>
-  )
-}
+export { Toaster } from "@/components/reui/sonner"

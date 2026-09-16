@@ -24,6 +24,7 @@ import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import { Dialog, DialogBody } from "@/components/ui/dialog"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { EmptyState } from "@/components/reui/empty-state"
@@ -808,29 +809,26 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         actions={
           <div className="flex items-center gap-2">
             {/* Nút Làm mới với hiệu ứng xoay icon & tap spring */}
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.94 }}
-              transition={springs.snappy}
+            <Button
+              variant="outline"
+              size="sm"
+              tactile
               onClick={() => loadData(true, true)}
               disabled={loading || isRefreshing}
               aria-label="Làm mới dữ liệu bài toán"
-              className={`h-9 px-3.5 text-xs font-medium rounded-xl border shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0 select-none ${
-                isRefreshing
-                  ? "bg-indigo-50/70 border-indigo-200 text-[#1057FB]"
-                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-              }`}
+              className={cn(
+                "cursor-pointer shrink-0 select-none",
+                isRefreshing && "bg-slate-50 border-slate-300 text-slate-900"
+              )}
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 transition-transform ${
-                  isRefreshing ? "animate-spin text-[#1057FB]" : "text-slate-500"
-                }`}
+                className={cn(
+                  "w-3.5 h-3.5 text-slate-500 transition-transform",
+                  isRefreshing && "animate-spin text-slate-900"
+                )}
               />
-              <span className={isRefreshing ? "font-semibold text-[#1057FB]" : ""}>
-                {isRefreshing ? "Đang làm mới..." : "Làm mới"}
-              </span>
-            </motion.button>
+              <span>{isRefreshing ? "Đang làm mới..." : "Làm mới"}</span>
+            </Button>
           </div>
         }
       />
@@ -880,6 +878,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
             {/* View Mode Switcher: Bảng | Kanban | Lưới | Gantt */}
             <div 
+              role="tablist"
+              aria-label="Chế độ hiển thị"
               className="flex items-center rounded-lg bg-slate-100/90 p-0.5 border border-slate-200/80 text-xs select-none"
               onMouseLeave={() => setHoveredViewMode(null)}
             >
@@ -891,7 +891,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 return (
                   <button
                     key={item.id}
+                    role="tab"
                     type="button"
+                    title={item.label}
+                    aria-selected={isActive}
+                    tabIndex={isActive ? 0 : -1}
                     onClick={() => setViewMode(item.id)}
                     onMouseEnter={() => setHoveredViewMode(item.id)}
                     className={`relative isolate h-7 px-2.5 rounded-md font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
@@ -904,7 +908,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                       <motion.div
                         layoutId="view-mode-pill"
                         className="absolute inset-0 bg-white rounded-md shadow-2xs -z-10"
-                        transition={springs.floating}
+                        transition={springs.indicator}
                       />
                     )}
                     {isHovered && !isActive && (
@@ -915,7 +919,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                       />
                     )}
                     <Icon className="size-3.5 relative z-10" />
-                    <span className="relative z-10">{item.label}</span>
+                    <span className="relative z-10 hidden sm:inline">{item.label}</span>
                   </button>
                 )
               })}
@@ -935,17 +939,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
 
             {/* Tạo task mới */}
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
+              tactile
               onClick={() => {
                 if (onNavigateToCreate) onNavigateToCreate()
                 else window.location.hash = "#create"
               }}
-              className="h-8 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
+              className="cursor-pointer"
             >
               <Plus className="size-3.5" />
               <span>Tạo task</span>
-            </button>
+            </Button>
           </div>
         </div>
 

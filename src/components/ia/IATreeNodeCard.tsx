@@ -43,6 +43,7 @@ interface IATreeNodeCardProps {
   isWireDropTarget?: boolean
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
+  onOpenNodeDetail?: (node: IANode) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
   onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
   isSelected?: boolean
@@ -54,6 +55,7 @@ interface IATreeNodeCardProps {
   readOnly?: boolean
   isAnyDragging?: boolean
   onDragStateChange?: (isDragging: boolean) => void
+  snapToGrid?: boolean
 }
 
 function getTouchpointIcon(type?: IATouchpointType) {
@@ -195,6 +197,7 @@ function IATreeNodeCardComponent({
   isWireDropTarget = false,
   onEditNode,
   onDeleteNode,
+  onOpenNodeDetail,
   onNodeDrag,
   onNodeDragEnd,
   isSelected = false,
@@ -206,7 +209,9 @@ function IATreeNodeCardComponent({
   readOnly = false,
   isAnyDragging = false,
   onDragStateChange,
+  snapToGrid = false,
 }: IATreeNodeCardProps) {
+  const snapCoord = (v: number) => (snapToGrid ? Math.round(v / 20) * 20 : v)
   const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null)
@@ -373,14 +378,14 @@ function IATreeNodeCardComponent({
             for (const [sId, sPos] of snapshotPositions.entries()) {
               batchPositions.push({
                 nodeId: sId,
-                x: Math.round(sPos.x + dx),
-                y: Math.round(sPos.y + dy),
+                x: snapCoord(Math.round(sPos.x + dx)),
+                y: snapCoord(Math.round(sPos.y + dy)),
               })
             }
             onMultiNodeDrag?.(batchPositions, false)
           } else {
-            const nextX = Math.round(activeDrag.initX + dx)
-            const nextY = Math.round(activeDrag.initY + dy)
+            const nextX = snapCoord(Math.round(activeDrag.initX + dx))
+            const nextY = snapCoord(Math.round(activeDrag.initY + dy))
             onNodeDrag?.(node.id, nextX, nextY)
           }
         })
@@ -408,14 +413,14 @@ function IATreeNodeCardComponent({
           for (const [sId, sPos] of snapshotPositions.entries()) {
             batchPositions.push({
               nodeId: sId,
-              x: Math.round(sPos.x + dx),
-              y: Math.round(sPos.y + dy),
+              x: snapCoord(Math.round(sPos.x + dx)),
+              y: snapCoord(Math.round(sPos.y + dy)),
             })
           }
           onMultiNodeDrag?.(batchPositions, true)
         } else {
-          const finalX = Math.round(endDrag.initX + dx)
-          const finalY = Math.round(endDrag.initY + dy)
+          const finalX = snapCoord(Math.round(endDrag.initX + dx))
+          const finalY = snapCoord(Math.round(endDrag.initY + dy))
           onNodeDragEnd?.(node.id, finalX, finalY)
         }
       }
@@ -492,9 +497,17 @@ function IATreeNodeCardComponent({
     if (isSelected && selectedNodePositions && selectedNodePositions.size > 1) {
       return
     }
-    if (linkedRequest && onOpenDetail) {
-      e.stopPropagation()
+    onCardSelect?.(node.id, e as unknown as React.PointerEvent)
+  }
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (onOpenNodeDetail) {
+      onOpenNodeDetail(node)
+    } else if (linkedRequest && onOpenDetail) {
       onOpenDetail(linkedRequest)
+    } else if (!readOnly && onEditNode) {
+      onEditNode(node)
     }
   }
 
@@ -514,7 +527,7 @@ function IATreeNodeCardComponent({
     : ""
 
   const draggingClass = readOnly
-    ? "cursor-default"
+    ? "cursor-pointer"
     : isDragging
     ? "shadow-2xl ring-2 ring-blue-400 opacity-95 scale-[1.02] cursor-grabbing z-40"
     : "cursor-grab"
@@ -548,6 +561,7 @@ function IATreeNodeCardComponent({
       }}
       className={`group relative rounded-xl border bg-white p-3.5 pt-4 text-left flex flex-col justify-between ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
+      onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
     >
       {/* Selected Indicator Badge */}
@@ -568,14 +582,15 @@ function IATreeNodeCardComponent({
 
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
+      {/* CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN (Selection-Driven)                    */}
       {/* ───────────────────────────────────────────────────────────────── */}
-      {!readOnly && (
+      {!readOnly && isSelected && (
         <>
           {/* TOP PORT */}
           <div
             data-testid={`ia-port-top-${node.id}`}
             data-port="top"
-            className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
             <button
               type="button"
@@ -592,7 +607,7 @@ function IATreeNodeCardComponent({
                 }
               }}
               title="Kéo mũi tên nối node hoặc click để thêm node phía trên"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
             >
               <Plus className="w-2.5 h-2.5 stroke-[3]" />
             </button>
@@ -602,7 +617,7 @@ function IATreeNodeCardComponent({
           <div
             data-testid={`ia-port-bottom-${node.id}`}
             data-port="bottom"
-            className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30"
+            className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
             <button
               type="button"
@@ -619,7 +634,7 @@ function IATreeNodeCardComponent({
                 }
               }}
               title="Kéo mũi tên nối node hoặc click để thêm node phía dưới"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
             >
               <Plus className="w-2.5 h-2.5 stroke-[3]" />
             </button>
@@ -629,7 +644,7 @@ function IATreeNodeCardComponent({
           <div
             data-testid={`ia-port-left-${node.id}`}
             data-port="left"
-            className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30"
+            className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
             <button
               type="button"
@@ -646,7 +661,7 @@ function IATreeNodeCardComponent({
                 }
               }}
               title="Kéo mũi tên nối node hoặc click để thêm node bên trái"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
             >
               <Plus className="w-2.5 h-2.5 stroke-[3]" />
             </button>
@@ -656,7 +671,7 @@ function IATreeNodeCardComponent({
           <div
             data-testid={`ia-port-right-${node.id}`}
             data-port="right"
-            className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30"
+            className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
             <button
               type="button"
@@ -673,7 +688,7 @@ function IATreeNodeCardComponent({
                 }
               }}
               title="Kéo mũi tên nối node hoặc click để thêm node bên phải"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-125 transition-all opacity-0 group-hover:opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
             >
               <Plus className="w-2.5 h-2.5 stroke-[3]" />
             </button>
@@ -718,9 +733,9 @@ function IATreeNodeCardComponent({
           )}
         </div>
 
-        {/* Cụm Action Icons - Unified subtle slate buttons like TrackTask */}
-        {!readOnly && (
-          <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
+        {/* Cụm Action Icons - CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN (Selection-Driven) */}
+        {!readOnly && isSelected && (
+          <div className="flex items-center gap-0.5 opacity-100 shrink-0 animate-in fade-in zoom-in-90 duration-150">
             {effectiveFigmaUrl && (
               <button
                 type="button"

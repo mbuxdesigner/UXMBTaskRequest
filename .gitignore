@@ -16,3 +16,5 @@ lh-*.json
 scratch/
 .agents/
 ORIGINAL_REQUEST.md
+/test-*.mjs
+/*.webp

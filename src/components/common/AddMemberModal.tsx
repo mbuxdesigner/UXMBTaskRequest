@@ -245,10 +245,13 @@ export default function AddMemberModal({
       const finalProducts = selectedProducts.length > 0 ? selectedProducts : [defaultPr]
       const finalSquads = selectedSquads.length > 0 ? selectedSquads : [defaultSq]
 
+      const cleanEmail = email.trim().toLowerCase()
       const newMem: TeamMember = {
         id: `mem-${Date.now()}`,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
+        teamsEmail: cleanEmail,
+        personalEmail: cleanEmail,
         role: role,
         squad: finalSquads[0] || defaultSq,
         squads: finalSquads,

@@ -29,7 +29,19 @@ import { updateTaskProgress } from "../../api/api"
 import { canUserAccessRequest, isUserInViewers, normalizeVietnameseString } from "@/lib/accessControl"
 import { capitalizeFirstLetter } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
+import { Stepper, Step, type StepDef, type StepStatus } from "@/components/reui/stepper"
+import {
+  Timeline,
+  TimelineItem,
+  TimelineIcon,
+  TimelineContent,
+  TimelineHeader,
+  TimelineTitle,
+  TimelineTime,
+  TimelineDescription,
+} from "@/components/reui/timeline"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
+import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
 import { 
   X, 
@@ -37,6 +49,9 @@ import {
   Send, 
   PauseCircle, 
   ExternalLink, 
+  ShieldAlert,
+  TriangleAlert,
+  Mail,
   Target, 
   FileText, 
   Paperclip, 
@@ -492,20 +507,28 @@ export default function RequestDetail({
   }
   const request = rawRequest || lastValidRequestRef.current
 
-  const [isClosing, setIsClosing] = useState(false)
-
   const handleDismiss = useCallback(() => {
-    if (isClosing) return
-    setIsClosing(true)
     onClose?.()
     onBack?.()
-    setTimeout(() => {
-      setIsClosing(false)
-    }, 300)
-  }, [isClosing, onClose, onBack])
+  }, [onClose, onBack])
 
-  const isVisible = Boolean(open && rawRequest) && !isClosing
+  const isVisible = Boolean(open && request)
+
+  // Lock body scroll when drawer is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden"
+    }
+    return () => {
+      document.body.style.overflow = "unset"
+    }
+  }, [open])
   const session = getStoredSession()
+  const isRestrictedAccess = Boolean(
+    (session?.role === "PO" || session?.role === "Business")
+      ? !canUserAccessRequest(request, session)
+      : request?.isRestricted
+  )
 
   // Local state for immediate optimistic update of Assignee (Hỗ trợ chọn nhiều người)
   const [localAssignee, setLocalAssignee] = useState<string>(() => {
@@ -3159,8 +3182,11 @@ export default function RequestDetail({
   return createPortal(
     <AnimatePresence>
       {isVisible && request && (
-        <div 
+        <motion.div 
           key="request-detail-root"
+          initial="initial"
+          animate="animate"
+          exit="exit"
           className="fixed inset-0 z-50 overflow-hidden select-none" 
           onClick={() => {
             setOpenDropdown(null)
@@ -3181,7 +3207,7 @@ export default function RequestDetail({
           <div className={`fixed z-50 pointer-events-none ${
             isFullScreen 
               ? "inset-0 sm:inset-3 md:inset-4 flex items-center justify-center" 
-              : "inset-0 sm:inset-y-3 sm:right-3 sm:left-auto flex justify-end"
+              : "inset-0 sm:inset-y-3 sm:right-3 sm:left-3 flex justify-end"
           }`}>
             <motion.aside 
               key="request-detail-drawer"
@@ -3192,7 +3218,7 @@ export default function RequestDetail({
               className={`pointer-events-auto bg-white rounded-none sm:rounded-2xl lg:rounded-3xl border-0 sm:border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden h-full transform-gpu will-change-transform ${
                 isFullScreen
                   ? "w-full max-w-none"
-                  : "w-full sm:w-[680px] md:w-[780px] lg:w-[1020px] xl:w-[1200px]"
+                  : "w-full sm:w-[600px] md:w-[720px] lg:w-[980px] xl:w-[1180px] sm:max-w-[calc(100vw-24px)]"
               }`}
               role="dialog"
               aria-modal="true"
@@ -3202,7 +3228,7 @@ export default function RequestDetail({
                 {/* Left: Breadcrumbs [Squad / Task ID] */}
                 <div className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
                   <span className="text-slate-600 font-bold truncate max-w-[120px] sm:max-w-none">
-                    {localProduct || request.product || "App MBBank"}
+                    {isRestrictedAccess ? "Yêu cầu tư vấn trải nghiệm" : (localProduct || request.product || "App MBBank")}
                   </span>
 
                   <span className="text-slate-300 font-light">/</span>
@@ -3268,73 +3294,76 @@ export default function RequestDetail({
                 </div>
               </div>
 
-              {/* 2. ReUI Checkout-1 Style Dynamic UX Progression Stepper Bar */}
-              <div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
-                <div className="flex items-center justify-between min-w-[620px] lg:min-w-full">
-                  {adminPhases.map((step, idx) => {
-                    const isPassed = idx < currentPhaseIndex
-                    const isCurrent = idx === currentPhaseIndex
-                    const isLast = idx === adminPhases.length - 1
-                    const stepNum = idx + 1
-                    const stepTitle = step.label.includes(". ") ? step.label.split(". ")[1] : step.label
+              {isRestrictedAccess ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 text-center bg-slate-50/60 overflow-y-auto">
+                  <div className="mb-4 flex items-center justify-center">
+                    <IconStackLarge
+                      icon={<TriangleAlert className="size-7 text-amber-500 stroke-[2.25]" />}
+                      stackClassName="h-28 w-24"
+                    />
+                  </div>
 
-                    return (
-                      <React.Fragment key={step.key}>
-                        {/* Step Item */}
-                        <button
-                          type="button"
-                          onClick={() => handleUpdatePhase(step.key, step.progress)}
-                          className="flex items-center gap-2 group cursor-pointer transition-opacity hover:opacity-85 shrink-0 select-none"
-                          title={`Chuyển sang khâu: ${step.label}`}
-                        >
-                          {/* Step Badge */}
-                          {isCurrent ? (
-                            <span className="relative w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100/90 flex items-center justify-center shrink-0">
-                              <span
-                                className="absolute inset-0 rounded-full border border-dashed border-slate-600 animate-spin"
-                                style={{ animationDuration: "6s" }}
-                              />
-                              <span className="relative z-10 text-[11px] sm:text-xs font-bold text-slate-900 select-none">
-                                {stepNum}
-                              </span>
-                            </span>
-                          ) : isPassed ? (
-                            <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-900 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                              {stepNum}
-                            </span>
-                          ) : (
-                            <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 text-slate-400 font-medium text-[11px] sm:text-xs flex items-center justify-center shrink-0">
-                              {stepNum}
-                            </span>
-                          )}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-slate-600 text-xs font-semibold mb-3 border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500">Yêu cầu tư vấn trải nghiệm:</span>
+                    <span className="font-mono font-bold text-slate-800">{request.request_id}</span>
+                  </span>
 
-                          {/* Step Label */}
-                          <span
-                            className={`text-xs whitespace-nowrap transition-colors ${
-                              isCurrent
-                                ? "text-slate-900 font-bold"
-                                : isPassed
-                                ? "text-slate-700 font-medium"
-                                : "text-slate-400 font-normal"
-                            }`}
-                          >
-                            {stepTitle}
-                          </span>
-                        </button>
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight mb-2">
+                    Không có quyền truy cập
+                  </h2>
 
-                        {/* Connecting Line between steps */}
-                        {!isLast && (
-                          <div
-                            className={`flex-1 h-px mx-2 sm:mx-3 transition-colors ${
-                              idx < currentPhaseIndex ? "bg-slate-300" : "bg-slate-200/90"
-                            }`}
-                          />
-                        )}
-                      </React.Fragment>
-                    )
-                  })}
+                  <p className="text-xs sm:text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+                    Bài toán này thuộc quyền quản lý của đơn vị khác. Vui lòng liên hệ <strong className="text-slate-700 font-semibold">Quản trị viên (Admin)</strong> để được cấp quyền theo dõi hoặc phê duyệt.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={handleDismiss}
+                      className="px-5 py-2 text-xs font-bold rounded-xl border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Đóng cửa sổ
+                    </Button>
+                    <a
+                      href={`mailto:admin@mbbank.com.vn?subject=Yêu cầu quyền truy cập bài toán ${request.request_id}`}
+                      className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-[#1057FB] text-white hover:bg-blue-700 shadow-xs transition-colors"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Liên hệ Admin</span>
+                    </a>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <React.Fragment>
+                  {/* 2. ReUI Checkout-1 Style Dynamic UX Progression Stepper Bar */}
+                  <div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
+                    <Stepper
+                      activeStep={currentPhaseIndex}
+                      orientation="horizontal"
+                      onStepClick={(stepIdx) => {
+                        const target = adminPhases[stepIdx]
+                        if (target) {
+                          handleUpdatePhase(target.key, target.progress)
+                        }
+                      }}
+                      className="min-w-[640px] lg:min-w-full"
+                    >
+                      {adminPhases.map((step, idx) => {
+                        const stepTitle = step.label.includes(". ") ? step.label.split(". ")[1] : step.label
+                        const status: StepStatus = idx < currentPhaseIndex ? "complete" : idx === currentPhaseIndex ? "current" : "upcoming"
+                        return (
+                          <Step
+                            key={step.key}
+                            step={idx}
+                            title={stepTitle}
+                            description={`${step.progress}%`}
+                            state={status}
+                            className="cursor-pointer"
+                          />
+                        )
+                      })}
+                    </Stepper>
+                  </div>
 
               {/* Mobile / Tablet Tab Switcher (< lg) */}
               <div className="lg:hidden flex border-b border-slate-200 bg-slate-50/90 px-3 sm:px-6 pt-2 gap-2 shrink-0">
@@ -4683,7 +4712,8 @@ export default function RequestDetail({
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
-                          className="pt-1"
+                          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                          className="overflow-hidden pt-1"
                         >
                           <input
                             type="text"
@@ -4823,7 +4853,7 @@ export default function RequestDetail({
                           )
                         }
 
-                        const renderSingleActivity = (event: ActivityEvent, keyPrefix: string | number) => {
+                        const renderSingleActivity = (event: ActivityEvent, keyPrefix: string | number, isLatest: boolean = false) => {
                           const evtAvatar = getDesignerAvatar(event.author)
                           const reactions = commentReactions[event.id] || {}
                           const eventKey = event.id ? `evt-${event.id}-${keyPrefix}` : `evt-act-${keyPrefix}`
@@ -4831,13 +4861,18 @@ export default function RequestDetail({
                           // USER COMMENT CARD (ClickUp / Linear Modern Comment Card)
                           if (event.type === "comment") {
                             return (
-                              <div key={eventKey} className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 group hover:border-[#1057FB]/40 transition-all">
-                                <div className="flex items-start gap-3">
-                                  <UserAvatar name={event.author} avatarUrl={evtAvatar} size="md" className="shrink-0 mt-0.5 ring-2 ring-slate-100 shadow-2xs" />
-                                  <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <TimelineItem key={eventKey} status={isLatest ? "current" : "completed"} className="items-start">
+                                <TimelineIcon
+                                  status={isLatest ? "current" : "completed"}
+                                  className="w-8 h-8 ring-2 ring-white shrink-0 p-0 overflow-hidden"
+                                >
+                                  <UserAvatar name={event.author} avatarUrl={evtAvatar} size="sm" className="w-full h-full" />
+                                </TimelineIcon>
+                                <TimelineContent className="flex-1 min-w-0">
+                                  <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 group hover:border-[#1057FB]/40 transition-all">
+                                    <TimelineHeader>
                                       <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium text-slate-900">{event.author}</span>
+                                        <TimelineTitle className="text-sm font-semibold text-slate-900">{event.author}</TimelineTitle>
                                         {event.authorRole && (
                                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                                             event.authorRole === "PO" 
@@ -4850,8 +4885,8 @@ export default function RequestDetail({
                                           </span>
                                         )}
                                       </div>
-                                      <span className="text-xs text-slate-400 font-normal whitespace-nowrap">{event.timestamp}</span>
-                                    </div>
+                                      <TimelineTime className="text-xs text-slate-400 font-normal whitespace-nowrap">{event.timestamp}</TimelineTime>
+                                    </TimelineHeader>
 
                                     <div className="text-[13.5px] sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-normal">
                                       {renderRichCommentContent(event.content)}
@@ -4887,139 +4922,141 @@ export default function RequestDetail({
                                       )
                                     })()}
                                   </div>
-                                </div>
-                              </div>
+                                </TimelineContent>
+                              </TimelineItem>
                             )
                           }
 
                           // SYSTEM EVENT ROW (Dạng text ngắn gọn, thanh lịch)
-                          const getDotColor = () => {
-                            if (event.type === "create") return "bg-emerald-500 ring-2 ring-emerald-100"
-                            if (event.type === "assignment") return "bg-blue-500 ring-2 ring-blue-100"
-                            if (event.type === "phase_change") return "bg-indigo-500 ring-2 ring-indigo-100"
-                            if (event.type === "deliverable") return "bg-purple-500 ring-2 ring-purple-100"
-                            const val = (event.toValue || "").toLowerCase()
-                            if (val.includes("người theo dõi") || val.includes("viewer")) return "bg-blue-500 ring-2 ring-blue-100"
-                            if (val.includes("hạn thiết kế") || val.includes("design end date")) return "bg-amber-500 ring-2 ring-amber-100"
-                            if (val.includes("đầu bài") || val.includes("po")) return "bg-purple-500 ring-2 ring-purple-100"
-                            if (val.includes("hoàn thành") || val.includes("duyệt")) return "bg-emerald-500 ring-2 ring-emerald-100"
-                            if (val.includes("tiến độ") || val.includes("khâu")) return "bg-blue-500 ring-2 ring-blue-100"
-                            return "bg-slate-400 ring-2 ring-slate-100"
-                          }
-
                           return (
-                            <div key={eventKey} className="flex items-start justify-between gap-2 py-1.5 px-2 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors">
-                              <div className="flex items-start gap-2 min-w-0 flex-1">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${getDotColor()}`} />
-                                <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-normal">
-                                  {event.type === "create" && (
-                                    <>
-                                      <span className="font-medium text-slate-800">{event.author || "PO"}</span>
-                                      <span>đã khởi tạo yêu cầu cho</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-200/90">
-                                        {localProduct || request.product || "App MBBank"}
-                                      </span>
-                                    </>
-                                  )}
-                                  {event.type === "assignment" && (
-                                    <>
-                                      {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
-                                      <span>đã phân công Designer</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                        {event.toValue}
-                                      </span>
-                                    </>
-                                  )}
-                                  {event.type === "phase_change" && (
-                                    <>
-                                      {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
-                                      <span>đã chuyển khâu từ</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                        {event.fromValue || "Chờ xác nhận"}
-                                      </span>
-                                      <span>sang</span>
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-200/80">
-                                        {event.toValue}
-                                      </span>
-                                    </>
-                                  )}
-                                  {event.type === "deliverable" && (
-                                    <>
-                                      {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
-                                      <span>đã đính kèm</span>
-                                      <a
-                                        href={event.link}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[11px] font-semibold border border-purple-200/80 hover:underline"
-                                      >
-                                        <Paperclip className="w-3 h-3" />
-                                        <span>{event.title || "Tài liệu bàn giao"}</span>
-                                      </a>
-                                    </>
-                                  )}
-                                  {event.type === "status_change" && (
-                                    <>
-                                      {event.fromValue ? (
-                                        <>
-                                          {event.author && <span className="font-bold text-slate-800">{event.author}:</span>}
-                                          <span>Đã cập nhật trạng thái từ</span>
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200">
-                                            {event.fromValue}
-                                          </span>
-                                          <span>sang</span>
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80">
-                                            {event.toValue}
-                                          </span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          {(() => {
-                                            const val = event.toValue || ""
-                                            const valLower = val.toLowerCase()
-                                            if (valLower.includes("người theo dõi") || valLower.includes("viewer")) {
-                                              const countMatch = val.match(/\(([^)]+)\)/)
+                            <TimelineItem key={eventKey} status={isLatest ? "current" : "completed"} className="items-start">
+                              <TimelineIcon
+                                status={isLatest ? "current" : "completed"}
+                                className="w-7 h-7 text-xs shrink-0"
+                              >
+                                {event.type === "create" && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                                {event.type === "assignment" && <UserCheck className="w-3.5 h-3.5" />}
+                                {event.type === "phase_change" && <Layers className="w-3.5 h-3.5" />}
+                                {event.type === "deliverable" && <Paperclip className="w-3.5 h-3.5" />}
+                                {event.type === "status_change" && <Activity className="w-3.5 h-3.5" />}
+                                {!["create", "assignment", "phase_change", "deliverable", "status_change"].includes(event.type) && (
+                                  <Activity className="w-3.5 h-3.5" />
+                                )}
+                              </TimelineIcon>
+                              <TimelineContent className="flex-1 min-w-0 pt-0.5">
+                                <TimelineHeader className="text-xs">
+                                  <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-normal">
+                                    {event.type === "create" && (
+                                      <>
+                                        <span className="font-medium text-slate-800">{event.author || "PO"}</span>
+                                        <span>đã khởi tạo yêu cầu cho</span>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-200/90">
+                                          {localProduct || request.product || "App MBBank"}
+                                        </span>
+                                      </>
+                                    )}
+                                    {event.type === "assignment" && (
+                                      <>
+                                        {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
+                                        <span>đã phân công Designer</span>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                          {event.toValue}
+                                        </span>
+                                      </>
+                                    )}
+                                    {event.type === "phase_change" && (
+                                      <>
+                                        {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
+                                        <span>đã chuyển khâu từ</span>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                          {event.fromValue || "Chờ xác nhận"}
+                                        </span>
+                                        <span>sang</span>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-200/80">
+                                          {event.toValue}
+                                        </span>
+                                      </>
+                                    )}
+                                    {event.type === "deliverable" && (
+                                      <>
+                                        {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
+                                        <span>đã đính kèm</span>
+                                        <a
+                                          href={event.link}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[11px] font-semibold border border-purple-200/80 hover:underline"
+                                        >
+                                          <Paperclip className="w-3 h-3" />
+                                          <span>{event.title || "Tài liệu bàn giao"}</span>
+                                        </a>
+                                      </>
+                                    )}
+                                    {event.type === "status_change" && (
+                                      <>
+                                        {event.fromValue ? (
+                                          <>
+                                            {event.author && <span className="font-bold text-slate-800">{event.author}:</span>}
+                                            <span>Đã cập nhật trạng thái từ</span>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200">
+                                              {event.fromValue}
+                                            </span>
+                                            <span>sang</span>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80">
+                                              {event.toValue}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            {(() => {
+                                              const val = event.toValue || ""
+                                              const valLower = val.toLowerCase()
+                                              if (valLower.includes("người theo dõi") || valLower.includes("viewer")) {
+                                                const countMatch = val.match(/\(([^)]+)\)/)
+                                                return (
+                                                  <>
+                                                    {event.author && (
+                                                      <span className="font-medium text-slate-800">{event.author}</span>
+                                                    )}
+                                                    <span>đã cập nhật danh sách</span>
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                                      Người theo dõi
+                                                    </span>
+                                                    {countMatch && (
+                                                      <span className="text-slate-500 font-normal">({countMatch[1]})</span>
+                                                    )}
+                                                  </>
+                                                )
+                                              }
+                                              const hasAuthor = event.author && val.toLowerCase().includes(event.author.toLowerCase())
                                               return (
                                                 <>
-                                                  {event.author && (
-                                                    <span className="font-medium text-slate-800">{event.author}</span>
+                                                  {event.author && !hasAuthor && (
+                                                    <span className="font-medium text-slate-800">{event.author}:</span>
                                                   )}
-                                                  <span>đã cập nhật danh sách</span>
-                                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                                    Người theo dõi
-                                                  </span>
-                                                  {countMatch && (
-                                                    <span className="text-slate-500 font-normal">({countMatch[1]})</span>
-                                                  )}
+                                                  <span className="text-slate-700 font-normal">{val}</span>
                                                 </>
                                               )
-                                            }
-                                            const hasAuthor = event.author && val.toLowerCase().includes(event.author.toLowerCase())
-                                            return (
-                                              <>
-                                                {event.author && !hasAuthor && (
-                                                  <span className="font-medium text-slate-800">{event.author}:</span>
-                                                )}
-                                                <span className="text-slate-700 font-normal">{val}</span>
-                                              </>
-                                            )
-                                          })()}
-                                        </>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="text-[11px] text-slate-400 shrink-0 font-mono pl-2 pt-0.5 whitespace-nowrap self-start">{event.timestamp}</span>
-                            </div>
+                                            })()}
+                                          </>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                  <TimelineTime className="text-[11px] text-slate-400 shrink-0 font-mono pl-2 pt-0.5 whitespace-nowrap self-start">
+                                    {event.timestamp}
+                                  </TimelineTime>
+                                </TimelineHeader>
+                              </TimelineContent>
+                            </TimelineItem>
                           )
                         }
 
                         return (
-                          <div className="space-y-2.5">
+                          <Timeline className="before:left-3.5 space-y-4">
                             {/* Older Activities Accordion (Show more) */}
                             {hasOlder && (
-                              <div className="pb-1 border-b border-slate-100">
+                              <div className="pb-2 border-b border-slate-100">
                                 <button
                                   type="button"
                                   onClick={() => setShowOlderActivities(!showOlderActivities)}
@@ -5035,9 +5072,12 @@ export default function RequestDetail({
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: "auto" }}
                                       exit={{ opacity: 0, height: 0 }}
-                                      className="space-y-2.5 pt-2"
+                                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                                      className="overflow-hidden"
                                     >
-                                      {olderItems.map((item, idx) => renderSingleActivity(item, `older-${idx}`))}
+                                      <div className="space-y-4 pt-2">
+                                        {olderItems.map((item, idx) => renderSingleActivity(item, `older-${idx}`, false))}
+                                      </div>
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
@@ -5045,10 +5085,13 @@ export default function RequestDetail({
                             )}
 
                             {/* Recent Activities */}
-                            <div className="space-y-2.5">
-                              {recentItems.map((item, idx) => renderSingleActivity(item, `recent-${idx}`))}
+                            <div className="space-y-4">
+                              {recentItems.map((item, idx) => {
+                                const isLatest = idx === recentItems.length - 1
+                                return renderSingleActivity(item, `recent-${idx}`, isLatest)
+                              })}
                             </div>
-                          </div>
+                          </Timeline>
                         )
                       })()
                     )}
@@ -5102,9 +5145,11 @@ export default function RequestDetail({
                   )}
                 </div>
               </div>
-            </motion.aside>
+            </React.Fragment>
+          )}
+        </motion.aside>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Modal Cập nhật Tiến độ */}

@@ -97,10 +97,10 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
         onDragLeave={() => setDragging(false)}
         onClick={() => inputRef.current?.click()}
         onPaste={onPaste}
-        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 select-none outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 ${
+        className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 select-none outline-none focus-visible:ring-2 focus-visible:ring-slate-900/10 ${
           dragging
-            ? "border-[#1B3A6B] bg-[#1B3A6B]/5 scale-[0.99]"
-            : "border-slate-200 hover:border-[#1B3A6B]/50 hover:bg-slate-50/70"
+            ? "border-slate-900 bg-slate-900/5 scale-[0.99]"
+            : "border-slate-200 hover:border-slate-400 hover:bg-slate-50/70"
         }`}
       >
         <input
@@ -113,8 +113,8 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
         />
         <div className="flex flex-col items-center gap-3">
           <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-              dragging ? "bg-[#1B3A6B] text-white shadow-md" : "bg-slate-100 text-slate-500"
+            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+              dragging ? "bg-slate-900 text-white shadow-md" : "bg-slate-100 text-slate-500"
             }`}
           >
             <UploadCloud className="w-6 h-6" />
@@ -122,7 +122,7 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
           <div>
             <p className="text-sm font-bold text-slate-800">
               Kéo thả tài liệu vào đây hoặc{" "}
-              <span className="text-[#1B3A6B] underline underline-offset-4 font-extrabold">duyệt từ thiết bị</span>
+              <span className="text-slate-900 underline underline-offset-4 font-extrabold">duyệt từ thiết bị</span>
             </p>
             <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
               <span>Hỗ trợ PDF, DOCX, PPTX, XLSX, PNG, JPG (Tối đa 25MB)</span>

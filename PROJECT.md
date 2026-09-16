@@ -1,173 +1,106 @@
-# Project: UXMB Information Architecture (IA) Interactive Mindmap Canvas
+# Project: UXMB Task Request UI & Motion Standardization
 
 ## Architecture
-The Information Architecture (IA) system provides an interactive, hardware-accelerated mindmap canvas for visualizing and managing the 4-tier banking information architecture across MBBank's digital products (App MBBank, Biz MB, Web Portal, BaaS Open API).
-
-```
-User Navigation (Sidebar / App.tsx: page = "ia")
-  │
-  ▼
-IAPage.tsx (Main Layout & Coordination Frame)
-  ├── IAToolbar.tsx (Product Switcher, Count Badges, Quick Search, Zoom/Fit Controls, Reset)
-  └── IACanvasViewport.tsx (60+ FPS Viewport: Pan, Zoom, Grid Background, Wheel Invariance)
-        ├── IABezierConnectors.tsx (SVG Cubic Bezier Paths with Zero Drift)
-        └── IATreeNodeCard.tsx (4-Tier Cards: Badges, Avatars, Progress, Figma Button, Expand/Collapse)
-              │
-              ├── RequestDetail.tsx (Drawer drilldown for linked UXRequest)
-              └── IANodeEditorModal.tsx (Inline Add Child / Edit Title / Delete Node)
-```
-
-- **State Management & Persistence**:
-  - `useIATreeState.ts`: Manages the 4-tier tree hierarchy, node mutations (CRUD), search matching, ancestor path expansion, and `localStorage` synchronization (`ux_portal_ia_tree_data_v1`).
-  - `useCanvasTransform.ts`: Hardware-accelerated canvas pan/zoom engine with cursor-centric invariance, rAF animation, boundary clamping (25%–200%), and bounding-box Fit-to-View calculation.
-- **Motion & Accessibility**:
-  - Root `<MotionConfig reducedMotion="user">` compliance.
-  - Motion tokens from `src/lib/motion.ts`: `springs.snappy` (buttons, toggles), `springs.gentle` (drawer, Fit-to-View), `drawerVariants`.
+- **Tech Stack**: React 19, TypeScript 5.7, Vite 8.2 (Rolldown runtime), Tailwind CSS v4, Framer Motion v13.
+- **Design System Standards**:
+  - Reference Screens: 4 production sample layouts (Track task, Task detail, Request form, Admin settings).
+  - Component System: Keenthemes reUI component architecture (Stepper, Grouped Data Table, Timeline, Frame, Filter Popover, Drawer/Sheet).
+  - Animation & Micro-Interactions: Animate UI & Framer Motion (60fps spring physics, sliding indicators, origin-aware popovers, CLS = 0).
+- **Core Visual Tokens**:
+  - Primary Button: Dark Navy `#0F172A` (Slate 900, text white, uniform radius) across 100% of screens.
+  - Secondary/Outline Button: `bg-white border-slate-200 text-slate-700 hover:bg-slate-50`.
+  - Status Pills: Soft pastel background + matching colored indicator dot (Define đầu bài: purple, Chờ xác nhận/tiếp nhận: amber, UI Design: emerald green, Wireframe: blue, Overload/Bị chặn: red/rose).
+  - Priority Badges: Distinct tiered badges (Lv1: rose, Lv2: amber, Lv3: blue, Lv4: slate).
+  - Breakpoints: Mobile (375px), Tablet (768px), Small Desktop (1024px), Wide Desktop (1440px).
 
 ---
 
 ## Feature Inventory
-Every feature extracted during the Survey phase is enumerated here and assigned to a milestone.
-
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Sidebar IA Nav Item | Add "Kiến trúc Thông tin" (`page = "ia"`) to `Sidebar.tsx` with Network icon and floating indicator | M1 | Survey |
-| 2 | App Routing & Headers | Add `#ia` route to `App.tsx`, `AppHeader.tsx`, and `pageTitles` with breadcrumbs | M1 | Survey |
-| 3 | RBAC & Nav Visibility | Configure role permissions in `navVisibilityConfig.ts` & `QuanLyPage.tsx` matrix | M1 | Survey |
-| 4 | Product Switcher Bar | Top toolbar switcher for 4 products (App MBBank, Biz MB, Web Portal, BaaS Open API) | M1 | Survey |
-| 5 | Screen/Feature Metrics Badge | Display dynamic count badge `[X luồng · Y màn hình]` per product | M1 | Survey |
-| 6 | 4-Tier IA Data Schema | Type definitions (`IATier`, `IANode`, `IAProductInfo`, `IALocalStorageData`) in `ia.ts` | M1 | Survey |
-| 7 | Realistic Seed Mock Data | Rich 4-tier tree datasets for all 4 products in `iaMockData.ts` | M1 | Survey |
-| 8 | 60+ FPS Canvas Viewport | GPU-accelerated pan/zoom canvas container (`translate3d`, `scale`) | M2 | Survey |
-| 9 | Cursor-Centric Zoom | Mouse wheel and button zoom (25%–200%) with cursor coordinate invariance | M2 | Survey |
-| 10 | Fit-to-View Engine | Automatic bounding-box calculation and camera centering with padding | M2 | Survey |
-| 11 | Expand/Collapse Branches | Animated subtree toggle with tidy tree height clamping via Framer Motion | M2 | Survey |
-| 12 | SVG Cubic Bezier Connectors | Smooth hardware-accelerated cubic bezier connector paths connecting nodes | M2 | Survey |
-| 13 | 4-Tier Card Component | Visual distinction for Root (L1), Module (L2), Feature (L3), Screen (L4) | M2 | Survey |
-| 14 | Task Association & Badges | Map nodes to `UXRequest`, display Designer avatar, status badge, progress % | M2 | Survey |
-| 15 | RequestDetail Drawer Drilldown | Clicking linked task node opens `RequestDetail` drawer with live synchronization | M2 | Survey |
-| 16 | Direct Figma Linkage | Dedicated Figma action button opening design file/prototype in new tab | M2 | Survey |
-| 17 | Inline Add Child Node | Add child node at next tier (Tiers 1-3) with validation and auto-expand | M2 | Survey |
-| 18 | Inline Edit Node | Modal/popover to edit node title, description, code, figmaUrl, and task ID | M2 | Survey |
-| 19 | Inline Delete Node | Delete node with confirmation dialog; protect Tier 1 Product Root from deletion | M2 | Survey |
-| 20 | LocalStorage Persistence | Automatic persistence to `localStorage` key `ux_portal_ia_tree_data_v1` | M2 | Survey |
-| 21 | Reset to Default | Reset to pristine seed data with confirmation modal and toast notification | M2 | Survey |
-| 22 | Quick Search & Highlight Path | Search bar matching title/task/code/designer; auto-expand ancestor path & glow ring | M2 | Survey |
-| 23 | E2E Test Suite (Tiers 1-4) | Opaque-box test suite verifying all 22 features across 4 tiers | E2E-Track | Survey |
-| 24 | Adversarial Hardening (Tier 5) | White-box edge-case and stress test hardening | M3 | Survey |
+| 1 | Primary Button Dark Navy Token | Unify Button default & primary variant to Dark Navy `#0F172A` (Slate 900) across 100% of pages | M1 | Survey 1, ORIGINAL_REQUEST |
+| 2 | Status Color Correction | Align `statusConfig.ts` semantic tokens (UI Design -> emerald green, Wireframe -> blue) | M1 | Survey 1, ORIGINAL_REQUEST |
+| 3 | Status Pills & Priority Badge Primitives | Uniform pill padding, rounded-full, colored dot indicator, tiered priority tags | M1 | Survey 1, ORIGINAL_REQUEST |
+| 4 | ReUI Stepper, Timeline & Frame Primitives | Standardize `reui/stepper.tsx`, `reui/timeline.tsx`, `reui/frame.tsx`, and new `reui/drawer.tsx` | M1 | Survey 2 |
+| 5 | TypeScript Baseline Fix | Fix 2 TS errors in `ReleaseNewsfeedTimeline.tsx:200` to ensure `npx tsc --noEmit` passes cleanly | M1 | Survey 3 |
+| 6 | Track Screen Table & Controls Alignment | Grouped table with sticky right-0 action column, responsive toolbar, uniform status pills | M2 | Survey 1 & 3 |
+| 7 | Detail Screen ReUI Stepper & Timeline | Replace hand-rolled stepper and activity feed in `RequestDetail.tsx` with ReUI components | M2 | Survey 2 |
+| 8 | Detail Screen Tablet Drawer Width Fix | Fix `RequestDetail.tsx` drawer container width to prevent 24px overflow on 768px tablet | M2 | Survey 3 |
+| 9 | Detail Accordion CLS Elimination | Add `overflow-hidden` to expandable activity list and detail accordion | M2 | Survey 2 |
+| 10 | Request Form 2-Column & Sticky Summary | Standardize 2-column form + sticky summary card, responsive stack on <=1024px | M3 | Survey 1 & 3 |
+| 11 | Admin 6-Table ReUI Standardization | Standardize 6 raw HTML tables in `QuanLyPage.tsx` with ReUI styled tables and filters | M3 | Survey 2 |
+| 12 | Admin Metrics Cards & 1024px Layout | Use ReUI `Frame` for Admin metric cards; resolve double sidebar squeeze on 1024px | M3 | Survey 2 & 3 |
+| 13 | IA Canvas & Dashboard Token Alignment | Harmonize buttons, frames, status pills, and modals in `TongQuanPage.tsx` and `IAPage.tsx` | M3 | Survey 1 |
+| 14 | Responsive Breakpoint Hardening (375/768/1024/1440) | Eliminate unwanted horizontal scroll, text wrapping deformation, fix base padding in `App.tsx` | M4 | Survey 3, ORIGINAL_REQUEST |
+| 15 | Animate UI Micro-Interactions & Transitions | Sliding indicators with `layoutId`, modal enter/exit without premature unmount, 60fps | M4 | Survey 2, ORIGINAL_REQUEST |
+| 16 | Design System Guidelines Documentation | Author complete `doc/UI_DESIGN_SYSTEM.md` with tokens, guidelines, and code snippets | M5 | ORIGINAL_REQUEST R4 |
+| 17 | Final E2E Test Suite & Build Verification | Pass 100% of E2E test suite, `npm run build`, and verify zero TypeScript regressions | M5 | Acceptance Criteria |
+| 18 | E2E Opaque-Box Test Suite (Tiers 1-4) | Comprehensive test suite verifying tokens, responsive layouts, components, and interactions | E2E Track | Dual Track |
 
 ---
 
 ## Milestones
-
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| E2E | E2E Testing Suite | Create `TEST_INFRA.md`, runner `test-e2e-ia-suite.mjs` (Tiers 1-4), publish `TEST_READY.md` | none | DONE |
-| M1 | Navigation & Product Selector | Sidebar `page="ia"`, App routing, AppHeader, RBAC, Product Switcher, Metric Badges, IA Types & Mock Data | none | DONE |
-| M2 | Interactive Mindmap Canvas & Management | 60+ FPS Viewport, Pan/Zoom, Cursor Invariance, Fit-to-View, 4-Tier Cards, Bezier Connectors, Task Badges, RequestDetail Drawer, Figma Link, Inline CRUD, LocalStorage Persistence, Reset to Default, Quick Search & Path Glow | M1 | DONE |
-| M3 | Final Verification & Hardening | Pass 100% E2E tests (194/194), Tier 5 Adversarial Hardening, `npm run build`, `npm run test` (100%), 60+ FPS verification | M2, E2E | DONE |
+| M1 | Core Tokens & Base ReUI Primitives | Standardize Button (#0F172A), Status Colors, Badge, Stepper, Timeline, Drawer, fix TS error | none | DONE (Gate Passed: 8/8 unit, 114/114 E2E, 0 errors) |
+| M2 | Track Task & Task Detail Alignment | Standardize Track table (sticky action col), Filter popover, Detail Stepper, Timeline, Tablet drawer width | M1 | DONE (Gate Passed: 19/19 unit, 114/114 E2E, 24/24 & 22/22 adv, Auditor CLEAN) |
+| M3 | Form, Admin & Dashboard Alignment | Standardize Request Form (2-col + summary), Admin 6 tables & Frame cards, Dashboard & IA tokens | M1 | DONE (Gate Passed: 25/25 unit, 114/114 E2E, 43/43 & 48/48 adv, Auditor CLEAN) |
+| M4 | Responsive Hardening & Animate UI | Fix responsive issues across 375px/768px/1024px/1440px, sliding indicators, modal animations | M2, M3 | IN_PROGRESS (Worker M4 executing) |
+| M5 | Documentation & Final Verification | Author `doc/UI_DESIGN_SYSTEM.md`, run full E2E test suite, verify build & test passing | M4, E2E | PLANNED |
+| E2E | E2E Testing Track | Independent opaque-box test suite for design tokens, components, responsive layouts | none | DONE (TEST_READY.md published, 114/114 tests) |
 
 ---
 
 ## Interface Contracts
 
-### 1. Navigation & App Routing Contract
-- `Sidebar.tsx`:
-  - `export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia"`
-  - Add `{ id: "ia", label: "Kiến trúc Thông tin", icon: Network, section: "platform" }`
-- `App.tsx`:
-  - `validPages` includes `"ia"`
-  - `pageTitles.ia = "Kiến trúc Thông tin (IA) — MB UX Request Portal"`
-  - Renders `<IAPage />` within `<AnimatePresence mode="wait">`
-- `AppHeader.tsx`:
-  - `PAGE_METADATA.ia = { title: "Kiến trúc Thông tin", section: "Platform" }`
-
-### 2. IA Data Model Contract (`src/types/ia.ts`)
+### Button Component (`src/components/ui/button.tsx`)
 ```typescript
-export type IATier = 1 | 2 | 3 | 4
-export type IATouchpointType = "screen" | "modal" | "bottom_sheet" | "push_notification" | "webview" | "action_sheet"
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "default" | "primary" | "secondary" | "outline" | "ghost" | "destructive" | "teal" | "blue"
+  size?: "default" | "sm" | "lg" | "icon" | "iconSm"
+  asChild?: boolean
+  loading?: boolean
+  tactile?: boolean
+}
+// Default & Primary MUST resolve to bg-slate-900 (#0F172A) text-white hover:bg-slate-800
+// Outline MUST resolve to border border-slate-200 bg-white text-slate-700 hover:bg-slate-50
+```
 
-export interface IANode {
+### Status Configuration (`src/config/statusConfig.ts`)
+```typescript
+export interface StatusColorDef {
+  label: string
+  color: string        // Tailwind text color
+  bgColor: string      // Tailwind bg pastel
+  borderColor: string  // Tailwind border color
+  dotColor: string     // Tailwind bg dot color
+  dotPulse?: boolean
+}
+// "UI Design" -> bg-emerald-50 text-emerald-700 border-emerald-200 dot: bg-emerald-500
+// "Wireframe" -> bg-blue-50 text-blue-700 border-blue-200 dot: bg-blue-500
+// "Define đầu bài" -> bg-purple-50 text-purple-700 border-purple-200 dot: bg-purple-500
+// "Chờ xác nhận" -> bg-amber-50 text-amber-700 border-amber-200 dot: bg-amber-500
+// "Quá tải" / "Bị chặn" -> bg-rose-50 text-rose-700 border-rose-200 dot: bg-rose-500
+```
+
+### Stepper Component (`src/components/reui/stepper.tsx`)
+```typescript
+export interface StepDef {
   id: string
-  tier: IATier
-  name: string
-  code?: string
+  title: string
   description?: string
-  parentId?: string | null
-  children?: IANode[]
-  requestId?: string
-  figmaUrl?: string
-  touchpointType?: IATouchpointType
-  status?: string
-  progress?: number
-  assignedDesigner?: string
-  colorTheme?: string
-  isCriticalPath?: boolean
-  collapsed?: boolean
-  createdAt?: string
-  updatedAt?: string
+  status: "complete" | "current" | "upcoming" | "error"
 }
-
-export interface IAProductInfo {
-  id: string
-  name: string
-  code: string
-  description: string
-  color: string
-  iconName: string
-}
-
-export interface IALocalStorageData {
-  version: number
-  lastUpdated: string
-  trees: Record<string, IANode>
-}
-```
-
-### 3. Canvas Engine Contract (`src/hooks/useCanvasTransform.ts`)
-```typescript
-export interface CanvasTransform {
-  x: number
-  y: number
-  scale: number
-}
-export function zoomAtPoint(current: CanvasTransform, cursor: { x: number; y: number }, factor: number): CanvasTransform
-export function computeFitToView(viewport: { width: number; height: number }, bounds: { minX: number; minY: number; maxX: number; maxY: number }, padding?: number): CanvasTransform
-```
-
-### 4. Tree Layout & CRUD Contract (`src/hooks/useIATreeState.ts`)
-```typescript
-export interface UseIATreeStateReturn {
-  activeTree: IANode
-  products: IAProductInfo[]
-  selectedProductId: string
-  setSelectedProductId: (id: string) => void
-  toggleCollapse: (nodeId: string) => void
-  addChildNode: (parentId: string, nodeData: Partial<IANode>) => void
-  updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
-  deleteNode: (nodeId: string) => void
-  resetToDefault: () => void
-  searchQuery: string
-  setSearchQuery: (query: string) => void
-  searchResult: { matchedIds: Set<string>; ancestorIdsToExpand: Set<string>; matchCount: number }
-}
+// Current step uses Dark Navy #0F172A indicator
 ```
 
 ---
 
 ## Code Layout
-- `src/types/ia.ts` — IA data types, tier definitions, touchpoints, persistence schema
-- `src/data/iaMockData.ts` — Pristine seed datasets for App MBBank, Biz MB, Web Portal, BaaS Open API
-- `src/hooks/useCanvasTransform.ts` — High-performance pan/zoom and viewport math
-- `src/hooks/useIATreeState.ts` — State management for tree hierarchy, CRUD, search, and persistence
-- `src/components/ia/IACanvasViewport.tsx` — Pan/Zoom viewport container with dot-grid canvas
-- `src/components/ia/IABezierConnectors.tsx` — Hardware-accelerated SVG cubic bezier connector curves
-- `src/components/ia/IATreeNodeCard.tsx` — Interactive card components for Tiers 1–4
-- `src/components/ia/IAToolbar.tsx` — Header toolbar (Product tabs, count badges, search, zoom/fit controls)
-- `src/components/ia/IASettingsModal.tsx` — Diagram layout settings modal (gap configuration, wire styles)
-- `src/components/ia/IANodeEditorModal.tsx` — Inline Add/Edit/Delete node dialog
-- `src/pages/IAPage.tsx` — Main IA page assembling toolbar, canvas, and drawer
-- `src/services/googleSheetService.ts` — 2-way cloud synchronization service with Google Apps Script
-- `google-apps-script-backend.js` — GAS backend with `saveIATreeData` / `getIATreeData` handlers
-- `test-e2e-ia-suite.mjs` — Comprehensive E2E test suite covering Tiers 1–4
-- `TEST_INFRA.md` — E2E test suite documentation and coverage matrix
+- `src/components/ui/`: Atomic UI primitives (`button.tsx`, `badge.tsx`, `dialog.tsx`, `tabs.tsx`, etc.)
+- `src/components/reui/`: Complex ReUI components (`stepper.tsx`, `timeline.tsx`, `frame.tsx`, `task-filter-popover.tsx`, `gantt-chart.tsx`)
+- `src/config/`: System-wide configurations (`statusConfig.ts`, `navVisibilityConfig.ts`)
+- `src/components/track/`: Track screen components (`SolutionAgentsTable.tsx`, `RequestDetail.tsx`, `RequestCard.tsx`)
+- `src/pages/`: Main screen pages (`TrackRequestPage.tsx`, `CreateRequestPage.tsx`, `QuanLyPage.tsx`, `TongQuanPage.tsx`, `IAPage.tsx`)
+- `doc/`: Design system guidelines (`doc/UI_DESIGN_SYSTEM.md`)
+- `tests/` / root `test-*.mjs`: Automated verification suites

@@ -610,10 +610,10 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
           className="space-y-8 pb-16"
         >
       {/* 2-Column Responsive Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
         {/* LEFT COLUMN: Main Form Content (8 Cols) */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="w-full xl:col-span-8 space-y-8">
           
           {/* Main Title Đồng Bộ */}
           <PageHeader
@@ -643,7 +643,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                   value={form.title}
                   onChange={(e) => set("title")(e.target.value)}
                   placeholder={getFieldPlaceholder("title", "VD: Thiết kế lại màn hình chuyển tiền quốc tế")}
-                  className="h-12 bg-white rounded-xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
+                  className="h-12 bg-white rounded-xl border-slate-200 text-sm px-4"
                   error={Boolean(errors.title)}
                 />
                 {errors.title && <p className="text-sm text-rose-500 font-medium">{errors.title}</p>}
@@ -651,7 +651,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
             )}
 
             {/* 3-Column: Sản phẩm số, Squad nghiệp vụ trực thuộc & Loại yêu cầu */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {/* Cột 1: Sản phẩm số */}
               {isFieldEnabled("product") && (
                 <div className="space-y-1.5">
@@ -708,7 +708,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
               {/* Cột 3: Loại yêu cầu */}
               {isFieldEnabled("request_type") && (
-                <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                <div className="space-y-1.5 sm:col-span-2 xl:col-span-1">
                   <label className="block text-sm font-medium text-slate-700">
                     {getFieldLabel("request_type", "Loại yêu cầu")}{" "}
                     {isFieldRequired("request_type") && <span className="text-rose-500">*</span>}
@@ -747,7 +747,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                   onChange={(e) => set("description")(e.target.value)}
                   placeholder={getFieldPlaceholder("description", "Mô tả chi tiết nhu cầu cần UX team hỗ trợ...")}
                   rows={5}
-                  className="bg-white rounded-xl border-slate-200/90 p-4 text-sm focus:border-[#1E5AF6]"
+                  className="bg-white rounded-xl border-slate-200 p-4 text-sm"
                   error={Boolean(errors.description)}
                 />
                 {errors.description && <p className="text-sm text-rose-500 font-medium">{errors.description}</p>}
@@ -767,7 +767,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                     onChange={(e) => set("business_need")(e.target.value)}
                     placeholder={getFieldPlaceholder("business_need", "Vấn đề kinh doanh bạn đang muốn giải quyết là gì?")}
                     rows={3}
-                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                    className="bg-white rounded-xl border-slate-200 p-3.5 text-sm"
                   />
                   {errors.business_need && <p className="text-sm text-rose-500 font-medium">{errors.business_need}</p>}
                 </div>
@@ -784,7 +784,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                     onChange={(e) => set("user_problem")(e.target.value)}
                     placeholder={getFieldPlaceholder("user_problem", "Điểm đau hoặc nhu cầu chưa được đáp ứng của người dùng...")}
                     rows={3}
-                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                    className="bg-white rounded-xl border-slate-200 p-3.5 text-sm"
                   />
                   {errors.user_problem && <p className="text-sm text-rose-500 font-medium">{errors.user_problem}</p>}
                 </div>
@@ -803,7 +803,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                   value={form.target_user}
                   onChange={(e) => set("target_user")(e.target.value)}
                   placeholder={getFieldPlaceholder("target_user", "VD: Khách hàng retail banking, độ tuổi 25-45")}
-                  className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm px-4 focus:border-[#1E5AF6]"
+                  className="h-12 bg-white rounded-xl border-slate-200 text-sm px-4"
                 />
                 {errors.target_user && <p className="text-sm text-rose-500 font-medium">{errors.target_user}</p>}
               </div>
@@ -857,7 +857,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                           onChange={(e) => handleLinkChange(index, e.target.value)}
                           placeholder="https://docs.google.com/..."
                           startIcon={<LinkIcon className="w-4 h-4 text-slate-400" />}
-                          className="h-12 bg-white rounded-2xl border-slate-200/90 text-sm pl-10 focus:border-[#1E5AF6]"
+                          className="h-12 bg-white rounded-xl border-slate-200 text-sm pl-10"
                         />
                       </div>
                       {form.doc_links.length > 1 && (
@@ -879,7 +879,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                     variant="outline"
                     size="sm"
                     onClick={handleAddLink}
-                    className="gap-1.5 text-xs sm:text-sm font-semibold rounded-xl border-dashed border-slate-300 hover:border-[#1E5AF6] hover:text-[#1E5AF6] bg-white h-9 px-3"
+                    className="gap-1.5 text-xs sm:text-sm font-semibold rounded-xl border-dashed border-slate-300 hover:border-slate-900 hover:text-slate-900 bg-white h-9 px-3"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Thêm liên kết tài liệu khác</span>
@@ -894,9 +894,10 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         </div>
 
         {/* RIGHT COLUMN: KẾ HOẠCH Floating Card with Joly UI SpotlightCard & BorderBeam */}
-        <div className="lg:col-span-4 sticky top-6">
+        <div className="w-full xl:col-span-4 xl:sticky xl:top-20">
           <SpotlightCard
-            className="bg-white border border-slate-200/90 rounded-2xl shadow-xl shadow-slate-900/5 relative"
+            mode="afterglow"
+            className="bg-white border border-slate-200/90 rounded-xl shadow-xl shadow-slate-900/5 relative"
           >
             <BorderBeam colorFrom="#1057FB" colorTo="#0D9B97" duration={7} />
             
@@ -956,16 +957,19 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                     onChange={(e) => set("leader_report_note")(e.target.value)}
                     placeholder={getFieldPlaceholder("leader_report_note", "VD: Báo cáo sếp Mai Anh vào ngày 01/06")}
                     rows={4}
-                    className="bg-white rounded-xl border-slate-200/90 p-3.5 text-sm focus:border-[#1E5AF6]"
+                    className="bg-white rounded-xl border-slate-200 p-3.5 text-sm"
                   />
                   {errors.leader_report_note && <p className="text-sm text-rose-500 font-medium">{errors.leader_report_note}</p>}
                 </div>
               )}
 
-              {/* Submit Button -> ShimmerButton từ Joly UI */}
+              {/* Submit Button -> ReUI Primary Dark Navy Button */}
               <Button
                 type="submit"
-                className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-base rounded-lg shadow-md cursor-pointer"
+                variant="primary"
+                size="lg"
+                tactile
+                className="w-full h-12 bg-slate-900 text-white hover:bg-slate-800 text-base font-semibold rounded-xl shadow-xs cursor-pointer"
               >
                 {formConfig.sections?.submitButtonText || "Gửi yêu cầu UX"}
               </Button>

@@ -1,6 +1,23 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { motion } from "framer-motion"
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw, MousePointer, Hand, LayoutGrid } from "lucide-react"
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  RotateCcw,
+  MousePointer,
+  Hand,
+  LayoutGrid,
+  Grid,
+  Map as MapIcon,
+  Maximize,
+  Minimize,
+  MoreHorizontal,
+  Copy,
+  FileCode,
+  CheckSquare,
+  Check,
+} from "lucide-react"
 import { tactileProps } from "@/lib/motion"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
 import { LayoutNode, LayoutConnector } from "@/hooks/useIATreeState"
@@ -8,9 +25,12 @@ import { IANode, IAPortPosition, IAPortDragState } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
 import IABezierConnectors from "./IABezierConnectors"
 import IATreeNodeCard from "./IATreeNodeCard"
+import IAMinimap from "./IAMinimap"
+import IANodeFloatingToolbar from "./IANodeFloatingToolbar"
 
 interface IACanvasViewportProps {
   transform: CanvasTransform
+  setTransform?: React.Dispatch<React.SetStateAction<CanvasTransform>>
   isPanning: boolean
   layoutNodes: LayoutNode[]
   connectors: LayoutConnector[]
@@ -32,7 +52,8 @@ interface IACanvasViewportProps {
   onCreateConnectedNodeAt?: (
     sourceNodeId: string,
     position: { x: number; y: number },
-    sourcePort: IAPortPosition
+    sourcePort: IAPortPosition,
+    nodeData?: Partial<IANode>
   ) => void
   onEditNode: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
@@ -45,6 +66,12 @@ interface IACanvasViewportProps {
   onTrunkDrag?: (nodeId: string, offset: number, persist?: boolean) => void
   onAutoAlign?: () => void
   readOnly?: boolean
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number }
+  onCopyJson?: () => void
+  onOpenImportJson?: () => void
+  onSelectNode?: (node: IANode | null) => void
+  onAddNodeAtPosition?: (position: { x: number; y: number }, nodeData: Partial<IANode>) => void
+  onOpenNodeDetail?: (node: IANode) => void
 }
 
 export default function IACanvasViewport({
@@ -78,9 +105,63 @@ export default function IACanvasViewport({
   onNodeResizeEnd,
   onTrunkDrag,
   onAutoAlign,
+  setTransform,
+  bounds,
+  onCopyJson,
+  onOpenImportJson,
+  onSelectNode,
+  onAddNodeAtPosition,
+  onOpenNodeDetail,
   readOnly = false,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Fullscreen Mode state
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  // Snap to Grid state (20px interval, default: true)
+  const [snapToGrid, setSnapToGrid] = useState(true)
+  // Minimap state (default: false)
+  const [showMinimap, setShowMinimap] = useState(false)
+  // Canvas Menu dropdown state (...)
+  const [isCanvasMenuOpen, setIsCanvasMenuOpen] = useState(false)
+  const canvasMenuRef = useRef<HTMLDivElement>(null)
+
+  // Fullscreen toggle handler
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen().catch(() => {
+          setIsFullscreen((prev) => !prev)
+        })
+      } else {
+        setIsFullscreen((prev) => !prev)
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {})
+      }
+      setIsFullscreen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener("fullscreenchange", handleFsChange)
+    return () => document.removeEventListener("fullscreenchange", handleFsChange)
+  }, [])
+
+  // Close canvas menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (canvasMenuRef.current && !canvasMenuRef.current.contains(e.target as Node)) {
+        setIsCanvasMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Canvas Tool Mode: "select" (Marquee selection box) or "pan" (Hand pan)
   const [toolMode, setToolMode] = useState<"select" | "pan">("select")
@@ -92,6 +173,17 @@ export default function IACanvasViewport({
   const handleCardDragStateChange = useCallback((isDragging: boolean) => {
     setIsDraggingNodes(isDragging)
   }, [])
+
+  // Notify parent of selected node
+  useEffect(() => {
+    if (selectedNodeIds.size === 1) {
+      const sId = Array.from(selectedNodeIds)[0]
+      const target = layoutNodes.find((l) => l.node.id === sId)
+      onSelectNode?.(target ? target.node : null)
+    } else {
+      onSelectNode?.(null)
+    }
+  }, [selectedNodeIds, layoutNodes, onSelectNode])
 
   // Marquee Box state in canvas-space coordinates
   const [marqueeBox, setMarqueeBox] = useState<{
@@ -208,6 +300,33 @@ export default function IACanvasViewport({
           "[data-node-id], [data-port-action], [data-resize-handle], button, a, input, textarea, [data-testid='ia-canvas-floating-controls'], [data-testid='ia-canvas-selection-pill']"
         )
       ) {
+        return
+      }
+
+      // In readOnly mode: Dragging empty canvas pans canvas. Clicking without dragging clears selection.
+      if (readOnly) {
+        if (e.button === 0) {
+          const startX = e.clientX
+          const startY = e.clientY
+          let hasMoved = false
+          const handleWindowMove = (moveEvt: PointerEvent) => {
+            if (Math.hypot(moveEvt.clientX - startX, moveEvt.clientY - startY) > 3) {
+              hasMoved = true
+            }
+          }
+          const handleWindowUp = () => {
+            window.removeEventListener("pointermove", handleWindowMove)
+            window.removeEventListener("pointerup", handleWindowUp)
+            window.removeEventListener("pointercancel", handleWindowUp)
+            if (!hasMoved) {
+              setSelectedNodeIds(new Set())
+            }
+          }
+          window.addEventListener("pointermove", handleWindowMove)
+          window.addEventListener("pointerup", handleWindowUp)
+          window.addEventListener("pointercancel", handleWindowUp)
+        }
+        onPointerDown(e)
         return
       }
 
@@ -474,7 +593,35 @@ export default function IACanvasViewport({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={onPointerUp}
-      className={`relative flex-1 w-full h-full min-h-[640px] overflow-hidden select-none bg-slate-50/50 rounded-2xl border border-slate-200/80 shadow-inner ${cursorClass}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        try {
+          const raw = e.dataTransfer.getData("application/json")
+          if (!raw) return
+          const data = JSON.parse(raw)
+          const container = containerRef.current
+          if (!container) return
+          const rect = container.getBoundingClientRect()
+          const dropCanvasX = Number(((e.clientX - rect.left - transform.x) / transform.scale).toFixed(2))
+          const dropCanvasY = Number(((e.clientY - rect.top - transform.y) / transform.scale).toFixed(2))
+
+          const finalX = snapToGrid ? Math.round(dropCanvasX / 20) * 20 : dropCanvasX
+          const finalY = snapToGrid ? Math.round(dropCanvasY / 20) * 20 : dropCanvasY
+
+          onAddNodeAtPosition?.({ x: finalX, y: finalY }, data)
+        } catch (err) {
+          console.warn("Drop error:", err)
+        }
+      }}
+      className={`${
+        isFullscreen
+          ? "fixed inset-0 z-50 w-screen h-screen rounded-none"
+          : "relative flex-1 w-full h-full min-h-[640px] rounded-2xl border border-slate-200/80 shadow-inner"
+      } overflow-hidden select-none bg-slate-50/50 ${cursorClass}`}
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px)",
         backgroundSize: "28px 28px",
@@ -530,7 +677,8 @@ export default function IACanvasViewport({
               isHighlighted={layoutNode.isHighlighted}
               isSelected={selectedNodeIds.has(layoutNode.node.id)}
               selectedNodePositions={selectedNodePositions}
-              onCardSelect={readOnly ? undefined : handleCardSelect}
+              onCardSelect={handleCardSelect}
+              onOpenNodeDetail={onOpenNodeDetail}
               onMultiNodeDrag={readOnly ? undefined : onMultipleNodesDrag}
               isWireDropTarget={activeWireDrag?.hoveredTargetNodeId === layoutNode.node.id}
               scale={transform.scale}
@@ -548,13 +696,79 @@ export default function IACanvasViewport({
               readOnly={readOnly}
               isAnyDragging={isDraggingNodes}
               onDragStateChange={readOnly ? undefined : handleCardDragStateChange}
+              snapToGrid={snapToGrid}
             />
           )
         })}
+
+        {/* Floating Contextual Action Toolbar for Selected Node (Requirement 7) */}
+        {selectedNodeIds.size === 1 && (() => {
+          const selectedId = Array.from(selectedNodeIds)[0]
+          const target = layoutNodes.find((ln) => ln.node.id === selectedId)
+          if (!target) return null
+          const linkedReq = target.node.requestId ? requestsMap.get(target.node.requestId) : undefined
+          return (
+            <IANodeFloatingToolbar
+              node={target.node}
+              x={target.x}
+              y={target.y}
+              nodeWidth={target.width}
+              scale={transform.scale}
+              onAddChild={onAddChild}
+              onEditNode={onEditNode}
+              onDeleteNode={onDeleteNode}
+              onViewDetail={onOpenNodeDetail || onEditNode}
+              onOpenTask={onOpenDetail}
+              linkedRequest={linkedReq}
+              onCenterNode={() => {
+                const vpWidth = containerRef.current ? containerRef.current.clientWidth : 1200
+                const vpHeight = containerRef.current ? containerRef.current.clientHeight : 700
+                const nodeCenterX = target.x + target.width / 2
+                const nodeCenterY = target.y + target.height / 2
+                const newPanX = vpWidth / 2 - nodeCenterX * transform.scale
+                const newPanY = vpHeight / 2 - nodeCenterY * transform.scale
+                if (setTransform) {
+                  setTransform((prev) => ({
+                    ...prev,
+                    x: Number(newPanX.toFixed(2)),
+                    y: Number(newPanY.toFixed(2)),
+                  }))
+                }
+              }}
+              readOnly={readOnly}
+            />
+          )
+        })()}
       </div>
 
-      {/* Floating Bottom Selection Status Pill */}
-      {selectedNodeIds.size > 0 && (
+      {/* Interactive Minimap Layer (Chỉ hiển thị khi có quyền Edit, view-only ẩn) */}
+      {!readOnly && bounds && (
+        <IAMinimap
+          isOpen={showMinimap}
+          onToggle={() => setShowMinimap(!showMinimap)}
+          layoutNodes={layoutNodes}
+          bounds={bounds}
+          transform={transform}
+          viewportWidth={containerRef.current?.clientWidth || 1200}
+          viewportHeight={containerRef.current?.clientHeight || 700}
+          onPanTo={(tx, ty) => {
+            const vpW = containerRef.current?.clientWidth || 1200
+            const vpH = containerRef.current?.clientHeight || 700
+            const newX = vpW / 2 - tx * transform.scale
+            const newY = vpH / 2 - ty * transform.scale
+            if (setTransform) {
+              setTransform((prev) => ({
+                ...prev,
+                x: Number(newX.toFixed(2)),
+                y: Number(newY.toFixed(2)),
+              }))
+            }
+          }}
+        />
+      )}
+
+      {/* Floating Bottom Selection Status Pill (Chỉ hiển thị khi có quyền Edit) */}
+      {!readOnly && selectedNodeIds.size > 0 && (
         <div
           data-testid="ia-canvas-selection-pill"
           className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-4 py-2 bg-slate-900/90 text-white backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200 select-none"
@@ -588,61 +802,81 @@ export default function IACanvasViewport({
         data-testid="ia-canvas-floating-controls"
         className="absolute bottom-5 right-5 z-30 flex items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-lg text-slate-700"
       >
-        {/* Tool Mode Switcher: Select (V) vs Pan (H) */}
-        <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl mr-1">
-          <button
-            type="button"
-            data-testid="ia-tool-select-btn"
-            onClick={() => setToolMode("select")}
-            title="Công cụ quét chọn thẻ (Phím V)"
-            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-              toolMode === "select"
-                ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-            {...tactileProps.button}
-          >
-            <MousePointer className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            data-testid="ia-tool-pan-btn"
-            onClick={() => setToolMode("pan")}
-            title="Công cụ bàn tay kéo nền (Phím H / Giữ Space)"
-            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-              toolMode === "pan"
-                ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-            {...tactileProps.button}
-          >
-            <Hand className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+        {/* Tool Mode Switcher: Select (V) vs Pan (H) - Ẩn khi ở chế độ xem */}
+        {!readOnly && (
+          <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl mr-1">
+            <button
+              type="button"
+              data-testid="ia-tool-select-btn"
+              onClick={() => setToolMode("select")}
+              title="Công cụ quét chọn thẻ (Phím V)"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                toolMode === "select"
+                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              {...tactileProps.button}
+            >
+              <MousePointer className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="ia-tool-pan-btn"
+              onClick={() => setToolMode("pan")}
+              title="Công cụ bàn tay kéo nền (Phím H / Giữ Space)"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                toolMode === "pan"
+                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              {...tactileProps.button}
+            >
+              <Hand className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        {!readOnly && onAutoAlign && (
+        {/* Snap to Grid button (Requirement 6) - Ẩn khi ở chế độ xem */}
+        {!readOnly && (
           <>
             <button
               type="button"
-              data-testid="ia-auto-align-btn"
-              onClick={onAutoAlign}
-              title="Căn chuẩn tự động vị trí các nhánh sitemap dạng cột"
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
+              data-testid="ia-snap-grid-btn"
+              onClick={() => setSnapToGrid(!snapToGrid)}
+              title={snapToGrid ? "Đang bật hít lưới 20px (Click để tắt)" : "Đang tắt hít lưới (Click để bật)"}
+              className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                snapToGrid
+                  ? "bg-blue-50 text-[#1057FB] border border-blue-200/80 font-semibold"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              }`}
               {...tactileProps.button}
             >
-              <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
-              <span>Căn chuẩn</span>
+              <Grid className="w-4 h-4" />
             </button>
             <div className="w-px h-4 bg-slate-200 mx-0.5" />
           </>
+        )}
+
+        {/* Auto Align / Reset Layout (Requirement 6) */}
+        {!readOnly && onAutoAlign && (
+          <button
+            type="button"
+            data-testid="ia-auto-align-btn"
+            onClick={onAutoAlign}
+            title="Căn chuẩn tự động vị trí các nhánh sitemap dạng cột"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
+            {...tactileProps.button}
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
+            <span>Căn chuẩn</span>
+          </button>
         )}
 
         <button
           type="button"
           data-testid="ia-zoom-in-btn"
           onClick={zoomIn}
-          title="Phóng to (Zoom In)"
+          title="Phóng to tỉ lệ (Zoom In)"
           className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
           {...tactileProps.button}
         >
@@ -653,7 +887,7 @@ export default function IACanvasViewport({
           type="button"
           data-testid="ia-zoom-out-btn"
           onClick={zoomOut}
-          title="Thu nhỏ (Zoom Out)"
+          title="Thu nhỏ tỉ lệ (Zoom Out)"
           className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
           {...tactileProps.button}
         >
@@ -684,6 +918,161 @@ export default function IACanvasViewport({
           <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
           <span>Căn giữa</span>
         </button>
+
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+
+        {/* Fullscreen Button (Requirement 3: Nút phóng to toàn màn hình) */}
+        <button
+          type="button"
+          data-testid="ia-fullscreen-btn"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Thu nhỏ (Thoát toàn màn hình)" : "Phóng to toàn màn hình (Fullscreen)"}
+          className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+            isFullscreen
+              ? "bg-blue-50 text-blue-600 font-semibold"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+          {...tactileProps.button}
+        >
+          {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
+        </button>
+
+        {/* Minimap Toggle Button (Requirement 6: Bản đồ nhỏ) - Ẩn khi ở chế độ xem */}
+        {!readOnly && (
+          <button
+            type="button"
+            data-testid="ia-toggle-minimap-btn"
+            onClick={() => setShowMinimap(!showMinimap)}
+            title="Bật/tắt bản đồ nhỏ (Minimap)"
+            className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+              showMinimap
+                ? "bg-blue-50 text-blue-600 font-semibold"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+            {...tactileProps.button}
+          >
+            <MapIcon className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Canvas Menu Dropdown (...) Khớp Mockup Ảnh 5 - Ẩn khi ở chế độ xem */}
+        {!readOnly && (
+          <div className="relative" ref={canvasMenuRef}>
+            <button
+              type="button"
+              data-testid="ia-canvas-more-menu-btn"
+              onClick={() => setIsCanvasMenuOpen(!isCanvasMenuOpen)}
+              title="Tùy chọn Canvas khác"
+              className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+              {...tactileProps.button}
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+
+            {isCanvasMenuOpen && (
+              <div className="absolute right-0 bottom-full mb-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                  Canvas
+                </div>
+                <button
+                  type="button"
+                  data-testid="ia-menu-snap-grid"
+                  onClick={() => {
+                    setSnapToGrid(!snapToGrid)
+                    setIsCanvasMenuOpen(false)
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Grid className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Snap to grid</span>
+                  </div>
+                  {snapToGrid && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                </button>
+
+                {onAutoAlign && (
+                  <button
+                    type="button"
+                    data-testid="ia-menu-reset-layout"
+                    onClick={() => {
+                      onAutoAlign()
+                      setIsCanvasMenuOpen(false)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Reset layout</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  data-testid="ia-menu-minimap"
+                  onClick={() => {
+                    setShowMinimap(!showMinimap)
+                    setIsCanvasMenuOpen(false)
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <MapIcon className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Bản đồ nhỏ</span>
+                  </div>
+                  {showMinimap && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                </button>
+
+                <div className="h-px bg-slate-100 my-1" />
+
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                  Sơ đồ & JSON
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="ia-menu-select-all"
+                  onClick={() => {
+                    setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
+                    setIsCanvasMenuOpen(false)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Select all steps</span>
+                </button>
+
+                {onCopyJson && (
+                  <button
+                    type="button"
+                    data-testid="ia-menu-copy-json"
+                    onClick={() => {
+                      onCopyJson()
+                      setIsCanvasMenuOpen(false)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Copy as JSON</span>
+                  </button>
+                )}
+
+                {onOpenImportJson && (
+                  <button
+                    type="button"
+                    data-testid="ia-menu-import-json"
+                    onClick={() => {
+                      onOpenImportJson()
+                      setIsCanvasMenuOpen(false)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-600 font-semibold hover:bg-blue-50 transition-colors cursor-pointer text-left"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Nhập JSON / Đẩy map</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -102,6 +102,7 @@ export interface UXRequest {
   sent_to_po_at?: string
   pending_reason?: string
   viewers?: string[]
+  isRestricted?: boolean
 }
 
 export function evaluatePoPendingStatus(request: UXRequest): UXRequest {

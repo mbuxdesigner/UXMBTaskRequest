@@ -12,7 +12,8 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { springs, tactileProps } from "@/lib/motion"
-import { IAProductInfo } from "@/types/ia"
+import { getProductColorDef } from "@/lib/colorUtils"
+import { IANode, IAProductInfo } from "@/types/ia"
 
 interface IAToolbarProps {
   products: IAProductInfo[]
@@ -28,6 +29,7 @@ interface IAToolbarProps {
   onResetToDefault?: () => void
   readOnly?: boolean
   className?: string
+  trees?: Record<string, IANode>
 }
 
 function getProductIcon(iconName: string) {
@@ -56,19 +58,56 @@ export default function IAToolbar({
   onNextMatch,
   onPrevMatch,
   className = "",
+  trees,
 }: IAToolbarProps) {
+  // Count nodes in each product's tree
+  const productNodeCounts = React.useMemo(() => {
+    const map: Record<string, number> = {}
+    if (!trees) return map
+
+    function countNodes(root: IANode): number {
+      let count = 0
+      function dfs(n: IANode) {
+        count++
+        if (n.children) {
+          for (const c of n.children) dfs(c)
+        }
+      }
+      dfs(root)
+      if (root.siblingRoots) {
+        for (const sr of root.siblingRoots) dfs(sr)
+      }
+      return count
+    }
+
+    for (const prod of products) {
+      const tree =
+        trees[prod.id] ||
+        (prod.code === "APP_MB" ? trees["app-mbbank"] : prod.code === "BIZ_MB" ? trees["biz-mb"] : undefined)
+      if (tree) {
+        map[prod.id] = countNodes(tree)
+      } else {
+        map[prod.id] = 0
+      }
+    }
+    return map
+  }, [products, trees])
+
   return (
     <div
       data-slot="ia-command-bar"
       className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white px-3.5 sm:px-4 py-2.5 rounded-2xl border border-slate-200/90 shadow-2xs ${className}`}
     >
-      {/* Product Switcher Pills */}
+      {/* Product Switcher Chips with Admin Setting Colors (Khớp Mockup Ảnh 3) */}
       <nav
         aria-label="Chọn sản phẩm IA"
-        className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 overflow-x-auto max-w-full"
+        className="flex items-center gap-2 overflow-x-auto max-w-full py-0.5"
       >
         {products.map((prod) => {
           const isSelected = prod.id === selectedProductId
+          const colorDef = getProductColorDef(prod.name, prod.color)
+          const nodeCount = productNodeCounts[prod.id] ?? 0
+
           return (
             <button
               key={prod.id}
@@ -76,22 +115,34 @@ export default function IAToolbar({
               data-testid={`ia-product-tab-${prod.id}`}
               onClick={() => onSelectProduct(prod.id)}
               aria-pressed={isSelected}
-              className={`relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer select-none shrink-0 ${
+              style={
                 isSelected
-                  ? "text-slate-900 font-semibold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/40"
+                  ? {
+                      borderColor: colorDef.hex,
+                      backgroundColor: `${colorDef.hex}12`,
+                    }
+                  : undefined
+              }
+              className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer select-none shrink-0 border ${
+                isSelected
+                  ? "shadow-2xs font-semibold text-slate-900"
+                  : "border-slate-200/90 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/80"
               }`}
               {...tactileProps.button}
             >
-              {isSelected && (
-                <motion.div
-                  layoutId="ia-product-active-pill"
-                  className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10 border border-slate-200/60"
-                  transition={springs.floating}
-                />
-              )}
-              {getProductIcon(prod.iconName)}
-              <span>{prod.name}</span>
+              {/* Chấm tròn màu tương ứng đã setting trong quản trị */}
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: colorDef.hex }}
+              />
+              <span className="font-semibold">{prod.name}</span>
+              <span
+                className={`text-[11px] font-normal transition-colors ${
+                  isSelected ? "opacity-80 font-medium" : "text-slate-400"
+                }`}
+              >
+                ({nodeCount})
+              </span>
             </button>
           )
         })}

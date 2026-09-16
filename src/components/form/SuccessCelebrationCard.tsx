@@ -116,9 +116,11 @@ export default function SuccessCelebrationCard({
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Button
             type="button"
+            variant="primary"
             size="lg"
+            tactile
             onClick={onGoToTrack}
-            className="w-full sm:w-auto h-11 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md gap-2 text-xs cursor-pointer"
+            className="w-full sm:w-auto h-11 px-6 bg-slate-900 text-white hover:bg-slate-800 font-bold rounded-xl shadow-xs gap-2 text-xs cursor-pointer"
           >
             <span>Theo dõi trong Task của tôi</span>
             <ArrowRight className="w-4 h-4" />

@@ -106,13 +106,13 @@ export function TabsTrigger({
         variant === "segmented" && [
           "py-1.5 px-3 rounded-lg text-center",
           isSelected
-            ? "text-[#1B3A6B] font-bold"
+            ? "text-slate-900 font-bold"
             : "text-slate-600 hover:text-slate-900",
         ],
         variant === "line" && [
           "py-3 -mb-px px-1 font-medium",
           isSelected
-            ? "text-[#1B3A6B] font-bold"
+            ? "text-slate-900 font-bold"
             : "text-slate-500 hover:text-slate-800",
         ],
         variant === "pills" && [
@@ -132,21 +132,21 @@ export function TabsTrigger({
             <motion.span
               layoutId={layoutId}
               className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10"
-              transition={springs.floating}
+              transition={springs.indicator}
             />
           )}
           {variant === "line" && (
             <motion.span
               layoutId={layoutId}
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1B3A6B]"
-              transition={springs.floating}
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900"
+              transition={springs.indicator}
             />
           )}
           {variant === "pills" && (
             <motion.span
               layoutId={layoutId}
-              className="absolute inset-0 bg-[#1B3A6B] rounded-xl shadow-xs -z-10"
-              transition={springs.floating}
+              className="absolute inset-0 bg-slate-900 rounded-xl shadow-xs -z-10"
+              transition={springs.indicator}
             />
           )}
         </>
@@ -161,7 +161,7 @@ export function TabsTrigger({
             isSelected
               ? variant === "pills"
                 ? "bg-white/20 text-white"
-                : "bg-[#1B3A6B]/10 text-[#1B3A6B]"
+                : "bg-slate-900/10 text-slate-900"
               : "bg-slate-200 text-slate-600"
           )}
         >

@@ -1709,16 +1709,20 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
             else if (rawRole.toLowerCase().includes("business") || rawRole.toLowerCase().includes("biz")) role = "Business"
             else role = "Designer"
 
-            const email = (r[3] || r[2] || "").trim()
+            const rawEmail = (r[3] || r[2] || "").trim()
             const name = (r[0] || "Thành viên UX").trim()
-            const existing = existingMap.get(email.toLowerCase()) || existingMap.get(name.toLowerCase())
+            const existing = existingMap.get(rawEmail.toLowerCase()) || existingMap.get(name.toLowerCase())
+
+            const teamsEmail = (r[3] && String(r[3]).trim()) ? String(r[3]).trim() : (existing?.teamsEmail || "").trim()
+            const personalEmail = (r[2] && String(r[2]).trim()) ? String(r[2]).trim() : (existing?.personalEmail || "").trim()
+            const email = teamsEmail || personalEmail || rawEmail || ""
 
             members.push({
               id: existing?.id || `mem-${i}`,
               name: name,
               avatarUrl: r[1] || existing?.avatarUrl || "",
-              personalEmail: r[2] || existing?.personalEmail || "",
-              teamsEmail: r[3] || existing?.teamsEmail || "",
+              personalEmail: personalEmail,
+              teamsEmail: teamsEmail,
               email: email,
               status: r[4] || existing?.status || "Active",
               role: role,
