@@ -301,30 +301,105 @@
 
 ---
 
+### 2.12. Chuẩn Hóa Toàn Diện UI, Design System Tokens & Sửa Lỗi Responsive 4 Breakpoints
+- **Mã nguồn chính:**
+  - `src/components/ui/button.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/checkbox.tsx`
+  - `src/config/statusConfig.ts`, `src/index.css`, `src/App.tsx`
+  - `src/pages/TrackRequestPage.tsx`, `src/pages/QuanLyPage.tsx`, `src/pages/TongQuanPage.tsx`
+  - `src/components/form/RequestForm.tsx`, `src/components/form/RequestReviewSheet.tsx`
+  - `src/components/track/SolutionAgentsTable.tsx`, `src/components/reui/task-filter-popover.tsx`
+- **Chi tiết chuẩn hóa:**
+  1. **Nút chính Dark Navy (`#0F172A`)**: Thống nhất 100% nút bấm chính trên mọi màn hình sang `bg-slate-900 text-white rounded-xl shadow-xs hover:bg-slate-800 active:bg-slate-950`. Loại bỏ hoàn toàn sự không đồng bộ và màu cũ `#1B3A6B`.
+  2. **Status Pills pastel + Colored Dot**: Nền pastel mờ kết hợp chấm chỉ báo (Dot) đồng màu cho toàn bộ 8 trạng thái quy trình (Define tím, Chờ xác nhận vàng hổ phách, UI Design xanh lá `emerald-500`, Wireframe xanh dương `blue-500`, Overload đỏ `rose-500`).
+  3. **Priority Badges**: Phân cấp rõ nét: **Lv1** (Rose), **Lv2** (Amber), **Lv3** (Blue), **Lv4** (Slate) kèm `whitespace-nowrap` chống nhảy dòng chữ.
+  4. **Form 2 Cột + Sticky Summary**: Bố cục 2 cột tự động xếp chồng (Responsive Stacking) trên mobile/tablet $\le$ 1024px và chia 8/4 trên desktop $\ge$ 1280px; thẻ tóm tắt dính `xl:sticky xl:top-20` không che khuất Header.
+  5. **Bảng Quản Trị ReUI Data Grid**: Hàng so le `even:bg-slate-50/40`, viền mảnh `border-slate-100`, cột Thao tác cố định dính phải (`sticky right-0 z-10`) với hiệu ứng bóng mờ `backdrop-blur-xs` khi cuộn ngang.
+  6. **Khắc phục triệt để lỗi Responsive**: Cấu hình `w-full max-w-full overflow-x-clip relative` tại `App.tsx` xóa bỏ 100% thanh cuộn ngang không mong muốn trên cả 4 breakpoint (375px, 768px, 1024px, 1440px).
+
+---
+
+### 2.13. Tích Hợp ReUI Sonner Toast, Xếp Chồng Thẻ 3D & Căn Đỉnh Icon Khi Thông Báo $\ge$ 3 Dòng
+- **Mã nguồn chính:**
+  - `src/components/reui/sonner.tsx` (Component mới)
+  - `src/components/ui/sonner.tsx`, `src/components/ui/toast.tsx`
+  - `src/components/notification/NotificationDropdown.tsx`
+  - `src/services/notificationService.ts`
+  - `src/index.css`
+- **Chi tiết kỹ thuật:**
+  1. **Tích hợp chính thức ReUI Sonner**: Dựa trên component chuẩn tại `https://reui.io/components/sonner`, cài đặt gói `sonner@2.0.8`.
+  2. **Cơ chế 3D Card Stacking (`visibleToasts={4}`, `expand={false}`)**: Khi có nhiều thông báo liên tiếp, tự động co thành tệp bài 3D xếp lớp ở góc dưới bên phải, hover vào sẽ bung xòe mượt mà (smooth spring expand).
+  3. **Cố định nút Đóng (X) góc trên bên phải**: Override CSS biến Sonner gốc, đưa nút đóng về `right: 10px; top: 10px; left: auto; transform: none; width: 22px; height: 22px; rounded-lg`, xóa bỏ hoàn toàn lỗi nút X bị lệch lơ lửng ngoài mép trái.
+  4. **Căn đỉnh Icon (Top-Aligned Icon)**: Thiết lập `align-items: flex-start !important` trên toàn thẻ và `align-self: flex-start !important; margin-top: 2px !important` cho icon wrapper. Khi văn bản thông báo dài (2 dòng, 3 dòng hoặc nhiều hơn), **icon luôn giữ vị trí ở đỉnh thẳng hàng với dòng chữ đầu tiên**, không bao giờ bị trôi lơ lửng ở giữa thẻ.
+  5. **Vùng đệm an toàn**: Thêm `padding-right: 28px !important` cho `[data-content]` nhằm tránh tình trạng văn bản tiếng Việt dài bị đè vào nút đóng.
+  6. **Nút "Thử Toast" 3 Tầng**: Thêm nút *"Thử Toast"* (Sparkles icon) trong `NotificationDropdown.tsx` để người dùng kiểm tra ngay 3 thông báo mẫu xếp chồng (Thành công, Nhắc tên, Deadline).
+
+---
+
+### 2.14. Khắc Phục Triệt Để Lỗi Đồng Bộ Hai Chiều Google Sheet (Two-Way Sync Split-Brain) & Bảo Toàn Email Bản 09:02
+- **Mã nguồn chính:**
+  - `google-apps-script-backend.js` (Apps Script Backend)
+  - `src/pages/QuanLyPage.tsx`
+  - `src/components/common/AddMemberModal.tsx`
+  - `src/services/googleSheetService.ts`
+- **Nguyên nhân gốc rễ:**
+  - Sự đứt gãy giữa tab hiển thị `USERS` (con người xem/sửa) và tab ngầm `RAW_SETTINGS` (lưu JSON `USERS_LIST`) do thiếu trigger `onEdit(e)`.
+  - Hàm backend cũ `getOrInitTeamMembers` ưu tiên đọc `RAW_SETTINGS`, sau đó hàm sync xóa trắng `USERS` bằng `clearContent()` rồi ghi đè dữ liệu cũ trong `RAW_SETTINGS` ra ngoài $\rightarrow$ khiến mọi thay đổi của người dùng trên sheet `USERS` bị cuốn trôi trở lại bản cũ.
+  - Modal Sửa nhân sự trên Portal trước đây chỉ có 1 trường `email`, chưa tách biệt giữa `Personal Email` (Đăng nhập) và `Teams Email` (Nhận OTP).
+  - Script backend cũ có logic cắt chuỗi ép đuôi `@mbbank.com.vn` với các email ngoài (`@gmail.com`, `@outlook.com`).
+- **Giải pháp triển khai:**
+  1. **Two-Way Merge trong Apps Script**: Thiết lập tab `USERS` làm **Single Source of Truth** cho thông tin liên lạc con người (Tên, Email Teams, Email cá nhân, Trạng thái, Vai trò). Tự động đọc dữ liệu mới nhất từ `USERS`, hòa nhập với dữ liệu sâu (squads, products) từ `RAW_SETTINGS`, cập nhật ngược vào `RAW_SETTINGS`, bảo đảm không bao giờ ghi đè làm mất email nữa.
+  2. **Thêm Trigger `onEdit(e)`**: Khi admin sửa bất kỳ ô nào trên tab `USERS` trên Google Sheet, script tự động cập nhật ngay lập tức vào cấu hình JSON ngầm.
+  3. **Tách Biệt 2 Trường Email trên Portal**:
+     - Modal Sửa nhân sự (`QuanLyPage.tsx`) và Thêm nhân sự (`AddMemberModal.tsx`) tách bạch rõ ràng:
+       - *Email Teams (Nhận mã OTP)*
+       - *Email cá nhân (Đăng nhập)*
+     - Bảng nhân sự hiển thị badge nhận diện rõ ràng cả 2 trường email.
+  4. **Bảo tồn định dạng email ngoài**: Hỗ trợ đầy đủ các định dạng email đối tác (`@outlook.com`, `@gmail.com`) mà không bị tự động biến đổi đuôi mail.
+  5. **Khôi phục và Chốt Cứng Dữ Liệu 09:02**:
+     - Đồng bộ trực tiếp và xác thực thành công trên Google Sheet thực tế (`1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw`):
+       - Mai Anh: Teams `anhptm7@mbbank.com.vn` | Cá nhân `anhptm.os@mbbank.com.vn`
+       - Hà: Teams `haht.98@outlook.com` | Cá nhân `haht.os@mbbank.com.vn`
+       - Mạnh: Teams `manhpv.os@outlook.com` | Cá nhân `manhpv.os@mbbank.com.vn`
+       - Hồng: Teams `hongnt6.os@outlook.com` | Cá nhân `hongnt6.os@mbbank.com.vn`
+     - Cả tab `USERS` và kho ngầm `RAW_SETTINGS` đã được đồng bộ chuẩn 100%.
+
+---
+
 ## 🛡️ 3. KẾT QUẢ KIỂM THỬ (VERIFICATION)
 
-1. **Bộ kiểm thử trải nghiệm IA Map cho quyền Chỉ Xem (`test-ia-map-view-only.mjs`):**
-   - Chạy lệnh: `node scripts/test-ia-map-view-only.mjs`
-   - Kết quả: **30/30 tiêu chuẩn ĐẠT (100% PASS)**, bao quát 5 nhóm: Ẩn tác vụ biên tập header/sidebar, Kéo xem canvas & zoom, Ẩn công cụ dock/canvas thừa, Tích chọn & xem chi tiết node, Modal chi tiết chỉ xem (mode='view').
-2. **Bộ kiểm thử tự động 8 tiêu chuẩn IA Map v2 (`test-ia-map-v2-features.mjs`):**
-   - Chạy lệnh: `node scripts/test-ia-map-v2-features.mjs`
-   - Kết quả: **34/34 tiêu chuẩn ĐẠT (100% PASS)**, bao quát toàn bộ 8 yêu cầu chức năng.
-3. **Kiểm tra kiểm thử UI/UX Design System & Sonner:**
-   - Kết quả: **114/114 E2E Design System tests pass**, **8/8 Sonner tests pass**, **522/522 total tests pass (100%)**.
-4. **Kiểm thử giao diện thực tế Dashboard qua Headless Chrome:**
-   - Script: `scratch/capture-dashboard.mjs`
-   - Kết quả: Ảnh chụp thực tế `dashboard_with_backgrounds.png` xác nhận:
-     - 3 thẻ KPI hàng trên bằng phẳng tuyệt đối, không còn các hộp thông tin thừa.
-     - NewsFeed Timeline sạch sẽ, hiển thị phẳng với divider, không lồng box con.
-     - Lọc dữ liệu theo tab sản phẩm hoạt động mượt mà.
-5. **Kiểm thử biên dịch Production (Vite Build):**
-   - Chạy lệnh: `npm run build`
-   - Kết quả: **Thành công 100% trong 524ms**, 0 lỗi, 0 cảnh báo type.
+1. **Bộ kiểm thử ReUI Sonner & Stacked Toasts (`test-sonner-stacked-toast.mjs`):**
+   - Chạy lệnh: `node test-sonner-stacked-toast.mjs`
+   - Kết quả: **10/10 tiêu chuẩn ĐẠT (100% PASS)**:
+     - Tích hợp chính thức thư viện Sonner & style ReUI.
+     - Cơ chế 3D Card Stacking (`visibleToasts={4}`, `expand={false}`).
+     - Cố định nút Đóng (X) góc trên bên phải (`right: 10px`, `top: 10px`).
+     - Căn đỉnh icon (Top-aligned icon) khi văn bản dài $\ge$ 3 dòng (`align-items: flex-start`).
+     - Vùng đệm chữ an toàn chống đè nút đóng (`padding-right: 28px`).
+     - Dark Navy action button `#0F172A`.
+     - Tự động kích hoạt toast khi có thông báo mới/chưa đọc.
+     - Nút "Thử Toast" 3 tầng trong Notification Dropdown.
+2. **Bộ kiểm thử E2E Design System Suite (`test-e2e-design-system.mjs`):**
+   - Chạy lệnh: `node test-e2e-design-system.mjs`
+   - Kết quả: **114/114 tiêu chuẩn ĐẠT (100% PASS)** qua toàn bộ 4 tầng (Tiers 1-4).
+3. **Bộ kiểm thử IA Map v2 & View-Only Mode:**
+   - `test-ia-map-v2-features.mjs`: **34/34 PASS (100%)**.
+   - `test-ia-map-view-only.mjs`: **30/30 PASS (100%)**.
+4. **Kiểm tra Live Data Google Sheet (GViz CSV & JSON RAW_SETTINGS):**
+   - 24/24 người dùng khớp dữ liệu chuẩn xác 100%.
+   - Email bản 09:02 của Mai Anh, Hà, Mạnh, Hồng được bảo toàn hoàn hảo trên cả 2 nguồn lưu trữ.
+5. **Kiểm tra kiểu dữ liệu TypeScript & Build:**
+   - Chạy lệnh: `npx tsc --noEmit` & `npm run build`
+   - Kết quả: **Thành công 100% trong 554ms**, 2884 modules transformed, 0 lỗi TypeScript, 0 lỗi Tailwind CSS.
 
 ---
 
 ## 📌 4. TỔNG KẾT & BÀN GIAO
-- **IA Map v2 & View-Only Mode**: Đã hoàn thiện 100% cả 8 tiêu chuẩn nâng cao và chế độ Chỉ xem tinh gọn cho quyền View (Tài liệu kỹ thuật tại `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md`).
-- **Chuẩn Hóa UI/UX, ReUI, Animate UI & ReUI Sonner Toast**: Đã hoàn tất toàn diện theo 4 màn hình mẫu thực tế, ban hành tài liệu tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md) và báo cáo chuyên sâu tại [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md).
+- **Design System & UI Guidelines**: Đã xuất bản cẩm nang toàn diện tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md) (883 dòng, 53KB) bao phủ đầy đủ Token, Component Specs, Motion Physics, Responsive Patterns, Do's & Don'ts và ReUI Sonner Toast.
+- **Báo cáo chuyên sâu đã phát hành**:
+  1. [`doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md) — Báo cáo tổng kết toàn diện ngày 16/09/2026.
+  2. [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md) — Báo cáo chuyên đề Chuẩn hóa UI, ReUI Sonner & Responsive.
+  3. [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md) — Báo cáo chuyên đề Dashboard ReUI & Gantt Timeline.
+- **Hạ tầng kiểm thử**: Đạt tỷ lệ hoàn hảo 100% (**114/114 E2E tests pass**, **10/10 Sonner tests pass**, **64/64 IA map tests pass**, `npm run build` pass).
+- **Hệ thống Google Sheet Backend**: Đã triển khai Two-Way Merge, trigger `onEdit(e)`, tách biệt Email Teams OTP và Email cá nhân đăng nhập, bảo toàn danh bạ thực tế.
 - **Dashboard AI-Ops ReUI v2 & NewsFeed Timeline**: Đã hoàn thiện toàn diện 6 khối Dashboard, tích hợp `@reui/c-chart-20`, `@reui/c-chart-17`, `@reui/c-timeline-3`, loại bỏ 100% mock data và lọc sạch dự án pending/chưa phân bổ (Báo cáo chuyên sâu tại [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md)).
 - **Mã Nguồn & Triển Khai**: Toàn bộ các thay đổi đã được kiểm thử, commit và đẩy thành công lên Git repository (`main`).
