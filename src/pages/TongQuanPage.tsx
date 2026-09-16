@@ -78,6 +78,11 @@ import SquadTrendingChart from "@/components/dashboard/ai-ops/SquadTrendingChart
 import TrackTaskGanttFrame from "@/components/dashboard/ai-ops/TrackTaskGanttFrame"
 import { getAdminIAProducts, IAProductInfo } from "@/data/iaMockData"
 import { cn } from "@/lib/utils"
+import PageHeader from "@/components/common/PageHeader"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
+import { toast } from "@/components/ui/toast"
+import { OverviewContentSkeleton } from "@/components/common/ReuiSkeletons"
 
 export default function TongQuanPage() {
   const [squads, setSquads] = useState<Squad[]>(() => {
@@ -102,6 +107,10 @@ export default function TongQuanPage() {
     if (mockRequests && mockRequests.length > 0) return mockRequests
     return []
   })
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isFiltering, setIsFiltering] = useState(false)
 
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [selectedRequest, setSelectedRequest] = useState<UXRequest | null>(null)
@@ -138,6 +147,7 @@ export default function TongQuanPage() {
   }, [])
 
   useEffect(() => {
+    setIsLoading(true)
     // Background sync from Google Sheets without blocking UI render
     Promise.all([fetchSquads(false), fetchRequests(false)])
       .then(([squadsData, requestsData]) => {
@@ -146,6 +156,11 @@ export default function TongQuanPage() {
       })
       .catch(() => {
         // Quiet fallback to empty/real data
+      })
+      .finally(() => {
+        setTimeout(() => {
+          setIsLoading(false)
+        }, 450)
       })
   }, [])
 
@@ -238,8 +253,79 @@ export default function TongQuanPage() {
     return displayRequests.filter((r) => isRequestMatchingProduct(r, targetName))
   }, [displayRequests, selectedProduct, products])
 
+  const handleRefresh = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    const startTime = Date.now()
+    try {
+      const [squadsData, requestsData] = await Promise.all([
+        fetchSquads(true),
+        fetchRequests(true),
+      ])
+      const elapsed = Date.now() - startTime
+      if (elapsed < 650) {
+        await new Promise((r) => setTimeout(r, 650 - elapsed))
+      }
+      if (Array.isArray(squadsData) && squadsData.length > 0) setSquads(squadsData)
+      if (Array.isArray(requestsData) && requestsData.length > 0) setRequests(requestsData)
+      toast.success("Đã làm mới dữ liệu Overview thành công!")
+    } catch (err) {
+      console.warn("Could not refresh dashboard data:", err)
+      toast.error("Lỗi làm mới dữ liệu", "Không thể tải dữ liệu mới nhất từ máy chủ.")
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleSelectProduct = (prodId: string) => {
+    if (selectedProduct === prodId && !isFiltering) return
+    setSelectedProduct(prodId)
+    setIsFiltering(true)
+    setTimeout(() => {
+      setIsFiltering(false)
+    }, 380)
+  }
+
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-4 text-slate-900 animate-in fade-in-50 duration-200 pb-8 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-5 text-slate-900 pb-8 outline-none">
+      {/* 1. Page Header Synchronized with Track Task & Design System */}
+      <PageHeader
+        breadcrumb={{
+          parent: "Dashboards",
+          current: "Overview",
+        }}
+        title="Overview"
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Live Sync
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              tactile
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              aria-label="Làm mới dữ liệu Overview"
+              className={cn(
+                "cursor-pointer shrink-0 select-none",
+                isRefreshing && "bg-slate-50 border-slate-300 text-slate-900"
+              )}
+            >
+              <RefreshCw
+                className={cn(
+                  "w-3.5 h-3.5 mr-1.5 text-slate-500",
+                  isRefreshing && "animate-spin text-slate-900"
+                )}
+              />
+              <span>Làm mới</span>
+            </Button>
+          </div>
+        }
+      />
       {/* =========================================================================
           PRODUCT NAVIGATION TABS (Admin-configured products)
           ========================================================================= */}
@@ -256,7 +342,7 @@ export default function TongQuanPage() {
           id="product-tab-all"
           aria-selected={selectedProduct === "all"}
           tabIndex={selectedProduct === "all" ? 0 : -1}
-          onClick={() => setSelectedProduct("all")}
+          onClick={() => handleSelectProduct("all")}
           onMouseEnter={() => setHoveredProduct("all")}
           className={cn(
             "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
@@ -282,7 +368,7 @@ export default function TongQuanPage() {
           <span className="relative z-10">Tất cả</span>
           <span
             className={cn(
-              "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold tabular-nums transition-colors",
+              "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold font-mono tabular-nums transition-colors",
               selectedProduct === "all"
                 ? "bg-slate-800 text-slate-200"
                 : "bg-slate-100 text-slate-500"
@@ -305,7 +391,7 @@ export default function TongQuanPage() {
               id={`product-tab-${prod.id}`}
               aria-selected={isSelected}
               tabIndex={isSelected ? 0 : -1}
-              onClick={() => setSelectedProduct(prod.id)}
+              onClick={() => handleSelectProduct(prod.id)}
               onMouseEnter={() => setHoveredProduct(prod.id)}
               className={cn(
                 "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
@@ -331,7 +417,7 @@ export default function TongQuanPage() {
               <span className="relative z-10">{prod.name}</span>
               <span
                 className={cn(
-                  "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold tabular-nums transition-colors",
+                  "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold font-mono tabular-nums transition-colors",
                   isSelected
                     ? "bg-slate-800 text-slate-200"
                     : "bg-slate-100 text-slate-500"
@@ -346,46 +432,61 @@ export default function TongQuanPage() {
 
       {/* =========================================================================
           6 REUI FRAMES (Bento KPI + Asymmetric Workload + Gantt Roadmap)
-          Cross-fade transition when switching products via AnimatePresence mode="wait"
+          Smooth cross-fade grid stack (No blank gap, zero vertical jerk, seamless morph)
           ========================================================================= */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={selectedProduct}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          className="space-y-4"
-        >
-          {/* ROW 1: 3 REUI KPI CARDS (Backlog & Pending, Đang thực hiện, Đã hoàn thành) */}
-          <AiOpsKpiCards requests={filteredRequests} />
+      <div className="grid grid-cols-1 grid-rows-1 w-full min-w-0 isolate">
+        <AnimatePresence initial={false}>
+          {isLoading || isRefreshing || isFiltering ? (
+            <motion.div
+              key="overview-content-skeleton-frame"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="col-start-1 row-start-1 w-full min-w-0 pointer-events-none z-10"
+            >
+              <OverviewContentSkeleton />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`overview-content-${selectedProduct}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
+              className="col-start-1 row-start-1 w-full min-w-0 space-y-4 z-20"
+            >
+              {/* ROW 1: 3 REUI KPI CARDS (Backlog & Pending, Đang thực hiện, Đã hoàn thành) */}
+              <AiOpsKpiCards requests={filteredRequests} />
 
-          {/* ROW 2: ASYMMETRIC 2-COLUMN GRID (NewsFeed + Squad Trending) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch">
-            <div className="lg:col-span-1 h-full min-w-0">
-              <ReleaseNewsfeedTimeline
-                requests={filteredRequests}
-                onSelectRequest={(req) => setSelectedRequest(req)}
-              />
-            </div>
-            <div className="lg:col-span-2 h-full min-w-0">
-              <SquadTrendingChart
-                requests={filteredRequests}
-                squads={squads}
-                currentProduct={selectedProduct}
-              />
-            </div>
-          </div>
+              {/* ROW 2: ASYMMETRIC 2-COLUMN GRID (NewsFeed + Squad Trending) */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch">
+                <div className="lg:col-span-1 h-full min-w-0">
+                  <ReleaseNewsfeedTimeline
+                    requests={filteredRequests}
+                    onSelectRequest={(req) => setSelectedRequest(req)}
+                  />
+                </div>
+                <div className="lg:col-span-2 h-full min-w-0">
+                  <SquadTrendingChart
+                    requests={filteredRequests}
+                    squads={squads}
+                    currentProduct={selectedProduct}
+                  />
+                </div>
+              </div>
 
-          {/* ROW 3: FULL-WIDTH TRACK TASK GANTT ROADMAP */}
-          <div className="w-full">
-            <TrackTaskGanttFrame
-              requests={filteredRequests}
-              onSelectRequest={(req) => setSelectedRequest(req)}
-            />
-          </div>
-        </motion.div>
-      </AnimatePresence>
+              {/* ROW 3: FULL-WIDTH TRACK TASK GANTT ROADMAP */}
+              <div className="w-full">
+                <TrackTaskGanttFrame
+                  requests={filteredRequests}
+                  onSelectRequest={(req) => setSelectedRequest(req)}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* =========================================================================
           MODALS & DRAWERS

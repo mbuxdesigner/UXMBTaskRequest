@@ -723,7 +723,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const completedCount = groupCounts.completed
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 text-slate-900 animate-in fade-in-50 duration-200 pb-8 outline-none">
+    <main id="main-content" tabIndex={-1} className="w-full space-y-6 text-slate-900 pb-8 outline-none">
       {/* 1. Page Header Synchronized with Dashboard */}
       <PageHeader
         breadcrumb={{

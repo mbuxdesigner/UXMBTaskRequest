@@ -7,6 +7,25 @@ import {
   fetchSelectionsFromSheet,
 } from "./googleSheetService"
 
+export type SessionPolicyType = "fixed_8h" | "sliding_24h"
+export type UserSessionPolicyOverride = "inherit" | "fixed_8h" | "sliding_24h"
+export type RoleSessionPolicies = Record<UserRole, SessionPolicyType>
+
+export const ROLE_SESSION_POLICIES_KEY = "mbbank_role_session_policies"
+export const DEFAULT_ROLE_SESSION_POLICIES: RoleSessionPolicies = {
+  Admin: "fixed_8h",
+  "Design Owner": "sliding_24h",
+  Designer: "sliding_24h",
+  PO: "sliding_24h",
+  Business: "sliding_24h",
+}
+
+export const SESSION_DURATION_HOURS = 8
+export const SESSION_DURATION_SECONDS = SESSION_DURATION_HOURS * 3600 // 8 tiếng = 28,800s
+export const SESSION_DURATION_SLIDING_HOURS = 24
+export const SESSION_DURATION_SLIDING_SECONDS = SESSION_DURATION_SLIDING_HOURS * 3600 // 24 tiếng = 86,400s
+export const INACTIVITY_LIMIT_24H_MS = SESSION_DURATION_SLIDING_HOURS * 3600 * 1000 // 86,400,000ms
+
 export interface UserSession {
   sessionToken: string
   personalEmail: string
@@ -18,16 +37,17 @@ export interface UserSession {
   squads?: string[] // Danh sách các Squads được phân công (1 Designer -> nhiều Squad, 1 PO -> nhiều Squad)
   products?: string[] // Danh sách các Sản phẩm phụ trách (1 PO -> nhiều Sản phẩm)
   expiresAt: number // Timestamp in ms
+  sessionPolicy: SessionPolicyType // "fixed_8h" | "sliding_24h"
+  loginAt: number // Timestamp in ms when authenticated
+  lastActiveAt: number // Timestamp in ms of last user activity/app exit
   isImpersonating?: boolean
   originalRole?: UserRole
   originalDisplayName?: string
 }
 
-// Lưu trong sessionStorage: Tắt tab là tự động xóa phiên!
-const SESSION_STORAGE_KEY = "ux_portal_session_auth"
+// Lưu trong sessionStorage & localStorage
+export const SESSION_STORAGE_KEY = "ux_portal_session_auth"
 export const ORIGINAL_SESSION_BACKUP_KEY = "ux_portal_admin_original_session"
-export const SESSION_DURATION_HOURS = 8
-export const SESSION_DURATION_SECONDS = SESSION_DURATION_HOURS * 3600 // 8 tiếng = 28,800s
 
 export const DEMO_ACCOUNTS: Array<{
   name: string
@@ -108,19 +128,281 @@ export function getUserInitials(name?: string): string {
 }
 
 /**
- * Lấy thông tin phiên làm việc hiện tại từ sessionStorage
- * (Tắt tab tự động mất, hoặc quá 8 tiếng tự hết hạn)
+ * Lấy cấu hình chính sách phiên theo vai trò (Role Session Policies)
+ */
+export function getRoleSessionPolicies(): RoleSessionPolicies {
+  try {
+    const raw = localStorage.getItem(ROLE_SESSION_POLICIES_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return {
+          ...DEFAULT_ROLE_SESSION_POLICIES,
+          ...parsed,
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Could not load role session policies:", e)
+  }
+  return { ...DEFAULT_ROLE_SESSION_POLICIES }
+}
+
+/**
+ * Lưu cấu hình chính sách phiên theo vai trò vào localStorage
+ */
+export function saveRoleSessionPolicies(policies: RoleSessionPolicies): void {
+  try {
+    localStorage.setItem(ROLE_SESSION_POLICIES_KEY, JSON.stringify(policies))
+    window.dispatchEvent(new CustomEvent("role_session_policies_changed", { detail: policies }))
+    window.dispatchEvent(new Event("storage"))
+  } catch (e) {
+    console.warn("Could not save role session policies:", e)
+  }
+}
+
+/**
+ * Tra cứu chính sách phiên hiệu lực cho một người dùng:
+ * Ưu tiên override cá nhân (nếu khác "inherit"), fallback về vai trò tương ứng trong RBAC
+ */
+export function resolveEffectiveSessionPolicy(
+  email?: string,
+  role?: UserRole,
+  directOverride?: UserSessionPolicyOverride
+): SessionPolicyType {
+  if (directOverride && directOverride !== "inherit") {
+    return directOverride
+  }
+  const targetRole = role || "Designer"
+  if (email) {
+    const clean = email.trim().toLowerCase()
+    try {
+      const rawMembers =
+        localStorage.getItem("mbbank_admin_team") ||
+        localStorage.getItem("mbbank_team_members")
+      if (rawMembers) {
+        const members: any[] = JSON.parse(rawMembers)
+        if (Array.isArray(members)) {
+          const found = members.find((m) => {
+            const pEmail = (m.personalEmail || "").trim().toLowerCase()
+            const tEmail = (m.teamsEmail || "").trim().toLowerCase()
+            const mEmail = (m.email || "").trim().toLowerCase()
+            return pEmail === clean || tEmail === clean || mEmail === clean
+          })
+          if (found && found.sessionPolicy && found.sessionPolicy !== "inherit") {
+            return found.sessionPolicy as SessionPolicyType
+          }
+        }
+      }
+    } catch {}
+  }
+  const rolePolicies = getRoleSessionPolicies()
+  return rolePolicies[targetRole] || "fixed_8h"
+}
+
+/**
+ * Làm tươi mốc hoạt động gần nhất (Touch lastActiveAt) của phiên làm việc
+ */
+export function touchSessionActivity(forceSave = false): boolean {
+  try {
+    // localStorage là nguồn dữ liệu chuẩn (single source of truth) dùng chung giữa các tab
+    let raw: string | null = null
+    let isLocalStorageAccessible = true
+    try {
+      raw = localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem("ux_portal_session")
+    } catch {
+      isLocalStorageAccessible = false
+      try {
+        raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+      } catch {}
+    }
+
+    if (!raw) {
+      // Nếu localStorage trống nhưng sessionStorage còn dữ liệu -> phiên đã bị đăng xuất ở tab khác
+      if (isLocalStorageAccessible) {
+        try {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY)
+          sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+        } catch {}
+      }
+      return false
+    }
+
+    const session: UserSession = JSON.parse(raw)
+    if (!session || typeof session !== "object" || !session.sessionToken) {
+      clearSession()
+      return false
+    }
+
+    const now = Date.now()
+    const SKEW_THRESHOLD_MS = 15 * 60 * 1000 // 15 phút tối đa sai lệch đồng hồ tương lai
+
+    // Bỏ qua ghi đĩa liên tục nếu không bắt buộc (forceSave) và mới ghi gần đây (< 5 giây)
+    const prevLastActive = Number(session.lastActiveAt) || Number(session.loginAt) || 0
+    if (!forceSave && prevLastActive > 0 && now - prevLastActive < 5000 && now >= prevLastActive) {
+      return true
+    }
+
+    // Tự động kiểm tra và thích ứng theo chính sách phiên hiệu lực (RBAC hoặc User Override)
+    const effectivePolicy = resolveEffectiveSessionPolicy(
+      session.teamsEmail || session.personalEmail,
+      session.role
+    )
+    if (session.sessionPolicy !== effectivePolicy) {
+      session.sessionPolicy = effectivePolicy
+    }
+
+    if (session.sessionPolicy === "sliding_24h") {
+      let lastActive = Number(session.lastActiveAt) || Number(session.loginAt) || now
+
+      // Phát hiện lệch đồng hồ nghiêm trọng về quá khứ (lastActive nằm sâu trong tương lai)
+      if (lastActive > now + SKEW_THRESHOLD_MS) {
+        clearSession()
+        return false
+      }
+      if (lastActive > now) {
+        lastActive = now
+      }
+
+      if (now - lastActive > INACTIVITY_LIMIT_24H_MS) {
+        clearSession()
+        return false
+      }
+      session.lastActiveAt = now
+      session.expiresAt = now + INACTIVITY_LIMIT_24H_MS
+    } else {
+      const loginAt = Number(session.loginAt) || 0
+      if (loginAt > now + SKEW_THRESHOLD_MS) {
+        clearSession()
+        return false
+      }
+      if (now > session.expiresAt || (loginAt > 0 && now - loginAt > SESSION_DURATION_SECONDS * 1000)) {
+        clearSession()
+        return false
+      }
+      session.lastActiveAt = now
+    }
+
+    const serialized = JSON.stringify(session)
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, serialized)
+      localStorage.setItem("ux_portal_session", serialized)
+    } catch {}
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
+    } catch {}
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Lấy thông tin phiên làm việc hiện tại từ localStorage / sessionStorage
+ * Áp dụng logic 2 cơ chế:
+ * 1. Fixed 8h: Hết hạn sau đúng 8 giờ kể từ lúc xác thực OTP
+ * 2. Sliding 24h: Duy trì nếu thời gian vắng mặt (inactivity) < 24 giờ kể từ lastActiveAt
  */
 export function getStoredSession(): UserSession | null {
   try {
-    let raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
-    if (!raw) {
+    // Ưu tiên đọc từ localStorage để đồng bộ tức thì giữa tất cả tab và sau khi tắt trình duyệt
+    let raw: string | null = null
+    let isLocalStorageAccessible = true
+    try {
       raw = localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem("ux_portal_session")
+    } catch {
+      isLocalStorageAccessible = false
+      try {
+        raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+      } catch {}
     }
-    if (!raw) return null
+
+    if (!raw) {
+      // Nếu localStorage đã bị xóa (do tab khác logout), dọn dẹp sessionStorage mồ côi
+      if (isLocalStorageAccessible) {
+        try {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY)
+          sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+        } catch {}
+      }
+      return null
+    }
+
     const session: UserSession = JSON.parse(raw)
-    // Kiểm tra quá 8 tiếng (expiresAt)
-    if (Date.now() > session.expiresAt) {
+    if (!session || typeof session !== "object" || !session.sessionToken) {
+      clearSession()
+      return null
+    }
+
+    const now = Date.now()
+    const SKEW_THRESHOLD_MS = 15 * 60 * 1000 // 15 phút tối đa
+
+    // Điền và chuẩn hóa an toàn các mốc thời gian (phòng chống giá trị NaN / rỗng)
+    let loginAt = Number(session.loginAt)
+    let lastActiveAt = Number(session.lastActiveAt)
+    let expiresAt = Number(session.expiresAt)
+
+    if (isNaN(expiresAt) || expiresAt <= 0) {
+      expiresAt = now + (session.sessionPolicy === "sliding_24h" ? INACTIVITY_LIMIT_24H_MS : SESSION_DURATION_SECONDS * 1000)
+    }
+    if (isNaN(loginAt) || loginAt <= 0) {
+      loginAt = expiresAt - (session.sessionPolicy === "sliding_24h" ? INACTIVITY_LIMIT_24H_MS : SESSION_DURATION_SECONDS * 1000)
+    }
+    if (isNaN(lastActiveAt) || lastActiveAt <= 0) {
+      lastActiveAt = loginAt
+    }
+
+    // Kiểm tra sai lệch đồng hồ hệ thống nghiêm trọng (clock skew / tampering)
+    if (lastActiveAt > now + SKEW_THRESHOLD_MS || loginAt > now + SKEW_THRESHOLD_MS) {
+      clearSession()
+      return null
+    }
+    // Lệch nhẹ theo NTP (vài giây): nắn lại về now
+    if (lastActiveAt > now) {
+      lastActiveAt = now
+    }
+
+    session.loginAt = loginAt
+    session.lastActiveAt = lastActiveAt
+    session.expiresAt = expiresAt
+
+    // Tự động làm mới chính sách phiên hiệu lực nếu cấu hình RBAC hoặc override thay đổi
+    const effectivePolicy = resolveEffectiveSessionPolicy(
+      session.teamsEmail || session.personalEmail,
+      session.role
+    )
+    if (session.sessionPolicy !== effectivePolicy) {
+      session.sessionPolicy = effectivePolicy
+      if (effectivePolicy === "sliding_24h") {
+        session.expiresAt = session.lastActiveAt + INACTIVITY_LIMIT_24H_MS
+      } else {
+        session.expiresAt = session.loginAt + SESSION_DURATION_SECONDS * 1000
+      }
+    }
+
+    // 1. Kiểm tra cơ chế trượt 24 tiếng khi thoát (Sliding Inactivity 24h)
+    if (session.sessionPolicy === "sliding_24h") {
+      const inactivityMs = now - session.lastActiveAt
+      if (inactivityMs > INACTIVITY_LIMIT_24H_MS) {
+        // Vắng mặt quá 24h -> Buộc hết hạn phiên
+        clearSession()
+        return null
+      }
+      // Quay lại trong vòng 24h -> Phiên tự động duy trì hợp lệ, làm mới mốc 24h
+      session.lastActiveAt = now
+      session.expiresAt = now + INACTIVITY_LIMIT_24H_MS
+      try {
+        const serialized = JSON.stringify(session)
+        sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
+        localStorage.setItem(SESSION_STORAGE_KEY, serialized)
+        localStorage.setItem("ux_portal_session", serialized)
+      } catch {}
+      return session
+    }
+
+    // 2. Kiểm tra cơ chế cố định 8 tiếng (Fixed 8h)
+    const totalElapsedMs = now - session.loginAt
+    if (now > session.expiresAt || totalElapsedMs > SESSION_DURATION_SECONDS * 1000) {
       clearSession()
       return null
     }
@@ -132,7 +414,7 @@ export function getStoredSession(): UserSession | null {
 }
 
 /**
- * Lưu phiên làm việc mới (Mặc định 8 tiếng, trong sessionStorage & localStorage)
+ * Lưu phiên làm việc mới (hỗ trợ Dual Session Policy: Fixed 8h & Sliding 24h)
  */
 export function saveSession(
   sessionToken: string,
@@ -142,11 +424,18 @@ export function saveSession(
   squad?: string,
   displayName?: string,
   avatarUrl?: string,
-  expiresInSeconds = SESSION_DURATION_SECONDS,
+  expiresInSeconds?: number,
   squads?: string[],
-  products?: string[]
+  products?: string[],
+  sessionPolicy?: SessionPolicyType
 ): UserSession {
   const finalDisplayName = displayName || (teamsEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+  const resolvedPolicy: SessionPolicyType = sessionPolicy || resolveEffectiveSessionPolicy(teamsEmail || personalEmail, role)
+  const now = Date.now()
+  const durationSeconds = resolvedPolicy === "sliding_24h"
+    ? SESSION_DURATION_SLIDING_SECONDS
+    : (expiresInSeconds || SESSION_DURATION_SECONDS)
+
   const session: UserSession = {
     sessionToken,
     personalEmail,
@@ -157,16 +446,28 @@ export function saveSession(
     squad: squad || (squads && squads.length > 0 ? squads[0] : undefined),
     squads: squads || (squad ? [squad] : undefined),
     products: products,
-    expiresAt: Date.now() + expiresInSeconds * 1000,
+    sessionPolicy: resolvedPolicy,
+    loginAt: now,
+    lastActiveAt: now,
+    expiresAt: now + durationSeconds * 1000,
   }
   try {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
-    localStorage.setItem("ux_portal_session", JSON.stringify(session))
+    const serialized = JSON.stringify(session)
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, serialized)
+      localStorage.setItem("ux_portal_session", serialized)
+    } catch (lsErr) {
+      console.warn("Could not save session to localStorage:", lsErr)
+    }
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
+    } catch (ssErr) {
+      console.warn("Could not save session to sessionStorage:", ssErr)
+    }
     window.dispatchEvent(new Event("auth_session_changed"))
     window.dispatchEvent(new Event("storage"))
   } catch (err) {
-    console.warn("Could not save session to storage:", err)
+    console.warn("Could not serialize session:", err)
   }
   return session
 }
@@ -414,6 +715,7 @@ export async function verifyTeamsOtp(
 
     // Chế độ mô phỏng local
     if (cleanOtp === "123456" || cleanOtp === "583921" || cleanOtp.length === 6) {
+      const effectivePolicy = resolveEffectiveSessionPolicy(cleanEmail, role)
       const mockSession = saveSession(
         "MOCK_TOKEN_" + Date.now(),
         cleanEmail,
@@ -422,13 +724,14 @@ export async function verifyTeamsOtp(
         squad,
         displayName,
         avatarUrl,
-        SESSION_DURATION_SECONDS,
+        undefined,
         matchedAccount?.squads,
-        matchedAccount?.products
+        matchedAccount?.products,
+        effectivePolicy
       )
       return {
         success: true,
-        message: `Xác thực thành công với vai trò: ${role}!`,
+        message: `Xác thực thành công với vai trò: ${role}! (Chính sách: ${effectivePolicy === "sliding_24h" ? "Trượt 24h" : "Cố định 8h"})`,
         session: mockSession,
       }
     }
@@ -457,6 +760,9 @@ export async function verifyTeamsOtp(
       const role: UserRole = data.role || "Designer"
       const displayName = data.display_name || data.full_name || cleanEmail.split("@")[0]
       const avatarUrl = data.avatar_url || ""
+      const serverPolicy = (data.session_policy === "sliding_24h" || data.session_policy === "fixed_8h")
+        ? data.session_policy
+        : resolveEffectiveSessionPolicy(cleanEmail, role)
       let session = saveSession(
         data.session_token,
         data.personal_email || cleanEmail,
@@ -465,7 +771,10 @@ export async function verifyTeamsOtp(
         data.squad,
         displayName,
         avatarUrl,
-        data.expires_in || SESSION_DURATION_SECONDS
+        data.expires_in,
+        undefined,
+        undefined,
+        serverPolicy
       )
 
       // Luôn kiểm tra đối chiếu trực tiếp với tab USERS trên Sheet để đảm bảo Role đúng 100%
@@ -645,11 +954,20 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
         else if (rawRole.includes("biz") || rawRole.includes("business")) newRole = "Business"
         else newRole = "Designer"
 
+        const rawPolicy = (cols[12] || "").toLowerCase().trim()
+        let resolvedPolicy: SessionPolicyType = currentSession.sessionPolicy
+        if (rawPolicy === "fixed_8h" || rawPolicy === "sliding_24h") {
+          resolvedPolicy = rawPolicy
+        } else {
+          resolvedPolicy = getRoleSessionPolicies()[newRole] || "fixed_8h"
+        }
+
         const newDisplayName = cols[0] || currentSession.displayName
         const newAvatar = cols[1] || currentSession.avatarUrl
 
         if (
           newRole !== currentSession.role ||
+          resolvedPolicy !== currentSession.sessionPolicy ||
           (newAvatar && newAvatar !== currentSession.avatarUrl) ||
           (newDisplayName && newDisplayName !== currentSession.displayName)
         ) {
@@ -663,7 +981,8 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
             newAvatar,
             Math.max(300, Math.floor((currentSession.expiresAt - Date.now()) / 1000)),
             currentSession.squads,
-            currentSession.products
+            currentSession.products,
+            resolvedPolicy
           )
           return updated
         }
@@ -759,4 +1078,63 @@ export async function refreshAllDataOnLogin(): Promise<void> {
     console.warn("Lỗi khi tải dữ liệu mới nhất sau đăng nhập:", err)
   }
 }
+
+// Tự động theo dõi mốc hoạt động người dùng (User Inactivity Tracking cho Sliding 24h) & Đồng bộ đa Tab
+if (typeof window !== "undefined") {
+  // 1. Đồng bộ đa Tab (Cross-Tab Session Sync): Lắng nghe storage event từ trình duyệt
+  window.addEventListener("storage", (e: StorageEvent) => {
+    if (e.key === SESSION_STORAGE_KEY || e.key === "ux_portal_session" || e.key === null) {
+      if (!e.newValue) {
+        // Tab khác đã bấm Đăng xuất -> Ngay lập tức dọn sạch sessionStorage của tab hiện tại
+        try {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY)
+          sessionStorage.removeItem("ux_portal_session")
+          sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+        } catch {}
+        window.dispatchEvent(new Event("auth_session_changed"))
+      } else {
+        // Tab khác đã đăng nhập mới hoặc làm mới phiên -> Đồng bộ sang sessionStorage
+        try {
+          sessionStorage.setItem(SESSION_STORAGE_KEY, e.newValue)
+        } catch {}
+        window.dispatchEvent(new Event("auth_session_changed"))
+      }
+    } else if (e.key === ROLE_SESSION_POLICIES_KEY) {
+      // Khi cấu hình chính sách phiên thay đổi từ tab quản trị
+      window.dispatchEvent(new Event("auth_session_changed"))
+    }
+  })
+
+  // 2. Khi người dùng đóng ứng dụng / chuyển tab ẩn / đóng ứng dụng mobile -> cập nhật ngay lập tức lastActiveAt
+  const handleExitOrHide = () => {
+    touchSessionActivity(true)
+  }
+  window.addEventListener("beforeunload", handleExitOrHide)
+  window.addEventListener("pagehide", handleExitOrHide)
+  // W3C Page Lifecycle API: Hỗ trợ đóng băng app trên Mobile (iOS Safari & Android Chrome)
+  window.addEventListener("freeze", handleExitOrHide)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      touchSessionActivity(true)
+    } else if (document.visibilityState === "visible") {
+      touchSessionActivity(false)
+    }
+  })
+
+  // 3. Thao tác người dùng định kỳ làm tươi lastActiveAt (throttled 30s)
+  let lastTouch = 0
+  const throttledTouch = () => {
+    const now = Date.now()
+    if (now - lastTouch > 30000) {
+      lastTouch = now
+      touchSessionActivity(false)
+    }
+  }
+  window.addEventListener("mousemove", throttledTouch, { passive: true })
+  window.addEventListener("keydown", throttledTouch, { passive: true })
+  window.addEventListener("click", throttledTouch, { passive: true })
+  window.addEventListener("touchstart", throttledTouch, { passive: true })
+  window.addEventListener("scroll", throttledTouch, { passive: true })
+}
+
 

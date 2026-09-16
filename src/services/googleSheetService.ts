@@ -1387,6 +1387,7 @@ export async function syncMasterDataToSheet(params: {
   nav_items?: any
   form_config?: any
   ia_trees?: any
+  session_policies?: any
   actorEmail?: string
 }): Promise<{ success: boolean; message: string }> {
   const config = getGoogleSheetConfig()
@@ -1458,6 +1459,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
     team_members?: any[]
     form_config?: any
     ia_trees?: any
+    session_policies?: any
   }
 }> {
   const config = getGoogleSheetConfig()
@@ -1495,6 +1497,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
             team_members: json.team_members || json.master_data?.USERS_LIST,
             form_config: json.form_config || json.master_data?.FORM_CONFIG,
             ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
+            session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
           },
         }
       }
@@ -1534,6 +1537,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
           team_members: json.team_members || json.master_data?.USERS_LIST,
           form_config: json.form_config || json.master_data?.FORM_CONFIG,
           ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
+          session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
         },
       }
     }
@@ -1737,6 +1741,9 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
                 canExport: true,
                 canManageSystem: role === "Admin",
               },
+              sessionPolicy: (r[12] && (r[12] === "sliding_24h" || r[12] === "fixed_8h" || r[12] === "inherit"))
+                ? r[12]
+                : (existing?.sessionPolicy || "inherit"),
             })
           }
           if (members.length > 0) {

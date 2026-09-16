@@ -34,8 +34,9 @@ export function Toaster({
       className={className}
       style={{
         '--toast-close-button-start': 'unset',
-        '--toast-close-button-end': '10px',
+        '--toast-close-button-end': '12px',
         '--toast-close-button-transform': 'none',
+        '--width': '390px',
       } as React.CSSProperties}
       icons={{
         success: (
@@ -67,15 +68,15 @@ export function Toaster({
       toastOptions={{
         classNames: {
           toast:
-            "group toast font-sans rounded-2xl border border-slate-200/90 bg-white text-slate-900 shadow-xl shadow-slate-950/10 p-3.5 !flex !items-start gap-3 select-none transition-all duration-300 data-[styled=true]:bg-white data-[styled=true]:text-slate-900 hover:shadow-2xl hover:border-slate-300",
+            "group toast font-sans rounded-2xl border border-slate-200/90 bg-white text-slate-900 shadow-xl shadow-slate-950/10 p-3.5 !flex !flex-wrap !items-start select-none transition-all duration-300 data-[styled=true]:bg-white data-[styled=true]:text-slate-900 hover:shadow-2xl hover:border-slate-300",
           title: "text-xs font-semibold text-slate-900 leading-snug tracking-tight",
           description: "text-[11px] text-slate-500 mt-0.5 leading-relaxed font-normal",
           actionButton:
-            "inline-flex items-center justify-center font-semibold text-xs h-7 px-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors cursor-pointer shrink-0 active:scale-95",
+            "inline-flex items-center justify-center font-semibold text-xs h-7.5 px-3.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors cursor-pointer shrink-0 active:scale-95",
           cancelButton:
-            "inline-flex items-center justify-center font-medium text-xs h-7 px-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer shrink-0 active:scale-95",
+            "inline-flex items-center justify-center font-medium text-xs h-7.5 px-3 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer shrink-0 active:scale-95",
           closeButton:
-            "!w-6 !h-6 !rounded-lg !border !border-slate-200 !bg-white !text-slate-400 hover:!text-slate-900 hover:!bg-slate-100 !shadow-xs !transition-colors cursor-pointer !top-2.5 !right-2.5 !left-auto !transform-none",
+            "!w-[22px] !h-[22px] !rounded-lg !border !border-slate-300 !bg-white !text-slate-700 hover:!text-slate-900 hover:!bg-slate-100 !shadow-xs !opacity-100 cursor-pointer !top-3 !right-3 !left-auto !transform-none",
           success: "!border-emerald-200/90 !bg-white",
           error: "!border-rose-200/90 !bg-white",
           warning: "!border-amber-200/90 !bg-white",

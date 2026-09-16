@@ -89,6 +89,7 @@ export default function App() {
       const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
       return canView && Boolean(visibility.ia)
     }
+    if (targetPage === "test") return true
     const navConfig = getRoleNavConfig()
     const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
     if (targetPage === "manage") return Boolean(visibility.manage)
@@ -193,6 +194,7 @@ export default function App() {
     }
 
     window.addEventListener("auth_session_changed", handleAuthChange)
+    window.addEventListener("storage", handleAuthChange)
 
     const interval = setInterval(() => {
       const current = getStoredSession()
@@ -204,6 +206,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener("auth_session_changed", handleAuthChange)
+      window.removeEventListener("storage", handleAuthChange)
 
       clearInterval(interval)
     }
@@ -366,13 +369,13 @@ export default function App() {
           {/* Main Content View */}
           <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
             <ErrorBoundary>
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={page}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: "easeInOut" }}
                   className="w-full min-w-0 max-w-full"
                 >
                   {page === "overview" && <TongQuanPage />}

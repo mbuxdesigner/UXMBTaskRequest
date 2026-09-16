@@ -388,7 +388,7 @@ export default function IAPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 animate-in fade-in-50 duration-200 min-w-0 max-w-full outline-none">
+    <main id="main-content" tabIndex={-1} className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 min-w-0 max-w-full outline-none">
       {/* 1. Page Header Synchronized with Track Task & System Style */}
       <PageHeader
         breadcrumb={{

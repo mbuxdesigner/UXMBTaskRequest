@@ -362,7 +362,7 @@ export default function ReleaseNewsfeedTimeline({
         {/* Scrollable Container */}
         <div
           ref={containerRef}
-          className="w-full flex-1 overflow-y-auto pr-1.5 space-y-4 max-h-[250px] min-h-[240px] scrollbar-thin scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300"
+          className="w-full flex-1 overflow-y-auto pl-1 pr-1.5 space-y-4 max-h-[250px] min-h-[240px] scrollbar-thin scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300"
         >
           {timelineGroups.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center p-4">
@@ -384,43 +384,73 @@ export default function ReleaseNewsfeedTimeline({
               <div
                 key={group.dateKey}
                 ref={isCurrent ? activeNodeRef : undefined}
-                className="relative flex items-start gap-3.5 group/timeline-node"
+                className="relative flex items-start gap-2.5 group/timeline-node"
               >
-                {/* Đường nối dọc separator */}
-                {!isLast && (
-                  <div
-                    className={`absolute left-[11px] top-6 bottom-0 w-[1.5px] -mb-4 z-0 ${
-                      isPast ? "bg-neutral-900" : "bg-neutral-200"
-                    }`}
-                    aria-hidden="true"
-                  />
-                )}
-
-                {/* Indicator Node */}
-                <div className="relative z-10 shrink-0 mt-0.5">
-                  {isCurrent ? (
-                    // Ngày sắp tới gần hiện tại: node đen với spinner xoay tròn
+                {/* Cột Timeline Indicator & Đường nối dọc separator liên tục */}
+                <div className="relative flex flex-col items-center shrink-0 w-7 self-stretch">
+                  {/* Đường nối dọc separator liên tục chạm vào node tiếp theo */}
+                  {!isLast && (
                     <div
-                      className="size-5.5 rounded-full bg-neutral-900 text-white flex items-center justify-center ring-4 ring-neutral-900/15 shadow-sm"
-                      title="Mốc ngày sắp tới gần hiện tại"
-                    >
-                      <Loader2 className="size-3 animate-spin text-white stroke-[2.5]" />
-                    </div>
-                  ) : isPast ? (
-                    // Ngày đã qua: node đen với dấu checkmark
-                    <div
-                      className="size-5.5 rounded-full bg-neutral-900 text-white flex items-center justify-center shadow-2xs"
-                      title="Đã qua / Đã hoàn thành"
-                    >
-                      <Check className="size-3 stroke-[2.5]" />
-                    </div>
-                  ) : (
-                    // Ngày xa hơn trong tương lai: node tròn viền xám rỗng
-                    <div
-                      className="size-5.5 rounded-full border-2 border-neutral-300 bg-white"
-                      title="Kế hoạch tương lai"
+                      className={`absolute top-3 -bottom-6 w-[1.5px] left-1/2 -translate-x-1/2 z-0 ${
+                        isPast ? "bg-neutral-900" : "bg-neutral-200"
+                      }`}
+                      aria-hidden="true"
                     />
                   )}
+
+                  {/* Indicator Node */}
+                  <div className="relative z-10 flex items-center justify-center">
+                    {isCurrent ? (
+                      // Ngày sắp tới gần hiện tại: node đen với spinner xoay tròn đồng trục tuyệt đối
+                      <div
+                        className="w-[22px] h-[22px] shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center ring-4 ring-neutral-900/15 shadow-sm"
+                        title="Mốc ngày sắp tới gần hiện tại"
+                      >
+                        <svg
+                          className="w-3 h-3 animate-spin text-white block shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          style={{ transformOrigin: "center" }}
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="8.5"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          />
+                          <circle
+                            className="opacity-100"
+                            cx="12"
+                            cy="12"
+                            r="8.5"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeDasharray="53.4"
+                            strokeDashoffset="35"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    ) : isPast ? (
+                      // Ngày đã qua: node đen với dấu checkmark
+                      <div
+                        className="w-[22px] h-[22px] shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center shadow-2xs"
+                        title="Đã qua / Đã hoàn thành"
+                      >
+                        <Check className="w-3 h-3 stroke-[2.5]" />
+                      </div>
+                    ) : (
+                      // Ngày xa hơn trong tương lai: node tròn viền xám rỗng
+                      <div
+                        className="w-[22px] h-[22px] shrink-0 rounded-full border-2 border-neutral-300 bg-white flex items-center justify-center"
+                        title="Kế hoạch tương lai"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-neutral-300" />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Nội dung bên phải */}

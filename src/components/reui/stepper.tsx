@@ -124,49 +124,49 @@ export function Step({
   return (
     <div
       className={cn(
-        "relative flex items-center group",
+        "relative flex items-center",
         orientation === "horizontal" ? "flex-1 last:flex-none" : "w-full",
-        isClickable && "cursor-pointer",
+        isClickable && "cursor-pointer group",
         className
       )}
       onClick={handleClick}
       {...props}
     >
-      <div className="flex items-center gap-3">
-        {/* Step Indicator / Node */}
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        {/* ReUI Checkout-style Circle Indicator */}
         <div
           className={cn(
-            "relative flex items-center justify-center rounded-xl transition-all duration-200 font-semibold text-xs",
-            "w-9 h-9 border",
+            "relative flex items-center justify-center rounded-full transition-all duration-200 font-mono font-medium text-xs select-none shrink-0",
+            "size-6 sm:size-6.5",
             currentStatus === "complete" &&
-              "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-500/20",
+              "bg-neutral-900 border border-neutral-900 text-white shadow-2xs",
             currentStatus === "current" &&
-              "bg-slate-900 border-slate-900 text-white shadow-md shadow-slate-900/25 ring-4 ring-slate-900/15",
+              "bg-neutral-100/80 border border-dashed border-neutral-400 text-neutral-900 font-bold shadow-2xs ring-2 ring-neutral-900/10",
             currentStatus === "upcoming" &&
-              "bg-slate-50 border-slate-200 text-slate-400 group-hover:border-slate-300 group-hover:text-slate-600",
+              "bg-neutral-100/90 border border-neutral-200/60 text-neutral-400 group-hover:border-neutral-300 group-hover:text-neutral-600",
             currentStatus === "error" &&
-              "bg-rose-500 border-rose-500 text-white shadow-sm shadow-rose-500/20"
+              "bg-rose-500 border border-rose-500 text-white shadow-2xs"
           )}
         >
           {currentStatus === "complete" ? (
-            <Check className="w-4 h-4 stroke-[2.5]" />
+            <Check className="size-3.5 stroke-[2.5]" />
           ) : currentStatus === "error" ? (
-            <AlertCircle className="w-4 h-4" />
+            <AlertCircle className="size-3.5" />
           ) : icon ? (
             icon
           ) : (
-            <span>{step + 1}</span>
+            <span className="tabular-nums">{step + 1}</span>
           )}
         </div>
 
-        {/* Step Title & Subtitle */}
+        {/* Step Title (Only content, no %) */}
         <div className="flex flex-col text-left">
           <span
             className={cn(
-              "text-xs font-semibold tracking-tight transition-colors",
-              currentStatus === "current" && "text-slate-900 font-bold",
-              currentStatus === "complete" && "text-slate-900",
-              currentStatus === "upcoming" && "text-slate-500 group-hover:text-slate-700",
+              "text-xs sm:text-[13px] tracking-tight transition-colors whitespace-nowrap",
+              currentStatus === "current" && "text-neutral-900 font-bold",
+              currentStatus === "complete" && "text-neutral-900 font-semibold",
+              currentStatus === "upcoming" && "text-neutral-500 font-medium group-hover:text-neutral-800",
               currentStatus === "error" && "text-rose-600 font-bold"
             )}
           >
@@ -176,7 +176,7 @@ export function Step({
             <span
               className={cn(
                 "text-[11px] leading-tight transition-colors hidden sm:block",
-                currentStatus === "current" ? "text-slate-600" : "text-slate-400"
+                currentStatus === "current" ? "text-neutral-600" : "text-neutral-400"
               )}
             >
               {description}
@@ -185,13 +185,13 @@ export function Step({
         </div>
       </div>
 
-      {/* Step Separator Line for horizontal */}
+      {/* Step Separator Line for horizontal matching ReUI Checkout */}
       {orientation === "horizontal" && !isLast && (
-        <div className="flex-1 mx-3 hidden md:block">
+        <div className="flex-1 min-w-3 sm:min-w-6 mx-2 sm:mx-3">
           <div
             className={cn(
-              "h-0.5 w-full rounded-full transition-all duration-300",
-              step < activeStep ? "bg-emerald-500" : "bg-slate-200"
+              "h-[1.5px] w-full transition-all duration-300",
+              step < activeStep ? "bg-neutral-900" : "bg-neutral-200"
             )}
           />
         </div>

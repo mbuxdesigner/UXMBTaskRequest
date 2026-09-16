@@ -22,11 +22,12 @@ Deploy App/doc/
 │   ├── 📋 2026-09-15_DAILY_UPDATE_REPORT.md  <-- Báo cáo Toàn diện: Information Architecture & Mindmap Canvas, Đồng nhất Header Style Track Task, Phân quyền RBAC IA, Đồng bộ Sản phẩm Quản trị, Bảo mật OTP
 │   ├── 📋 2026-09-16_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 16/09: Format Due Date Gantt DD/MM/YYYY, Component Kbd ReUI, Dynamic Email Lookup, Masking Task PO/Business, IA Map v2 (8 tiêu chuẩn vượt ReUI Flow) & Chế độ View-Only tinh gọn
 │   ├── 📋 2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md  <-- Báo cáo: Tích hợp chuẩn @reui/c-chart-20 (Donut), @reui/c-chart-17 (Trending), @reui/c-timeline-3 (Reverse Timeline, Spinner, Card Ảnh 4), Đồng bộ Tab Sản phẩm Admin
-│   └── 📋 2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md  <-- Báo cáo: Chuẩn hóa 4 layout mẫu thực tế, Nút Dark Navy #0F172A, Status Pills dot đồng màu, ReUI Sonner Toast 3D Stacking, Fix Responsive 375-1440px
+│   ├── 📋 2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md  <-- Báo cáo: Chuẩn hóa 4 layout mẫu thực tế, Nút Dark Navy #0F172A, Status Pills dot đồng màu, ReUI Sonner Toast 3D Stacking, Fix Responsive 375-1440px
+│   └── 📋 2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo: Cơ chế Phiên song song (Fixed 8h & Sliding 24h khi thoát), W3C Page Lifecycle, Cấu hình Quản trị 2 tầng (RBAC & Nhân sự), Đồng bộ Backend GAS 14 cột
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
-│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Quản lý phiên (Session 8h), Tự động đồng bộ vai trò từ Sheet USERS, Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất, Chính sách an toàn OTP.
+│   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Cơ chế Phiên song song (Dual Session: Cố định 8h & Trượt 24h khi thoát app), Cấu hình Quản trị phiên 2 tầng (Role & User Override), Tự động đồng bộ vai trò từ Sheet USERS (14 cột), Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất, Chính sách an toàn OTP.
 │   │
 │   ├── 📊 02_TASK_MANAGEMENT_AND_TRACKING.md
 │   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending, format DD/MM/YYYY), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.

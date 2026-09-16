@@ -39,7 +39,17 @@ const SHEET_TASK_UPDATES_NAME = "TASK_UPDATES";
 
 // Hằng số cấu hình
 const OTP_EXPIRY_MINUTES = 3;        // 3 phút hiệu lực mã OTP
-const SESSION_EXPIRY_MINUTES = 480;  // 8 tiếng hiệu lực phiên làm việc (480 phút)
+const SESSION_EXPIRY_MINUTES = 480;  // 8 tiếng hiệu lực phiên làm việc mặc định (480 phút)
+const SESSION_EXPIRY_MINUTES_8H = 480;   // 8 tiếng = 480 phút (Fixed 8h)
+const SESSION_EXPIRY_MINUTES_24H = 1440; // 24 tiếng = 1440 phút (Sliding Inactivity 24h)
+const INACTIVITY_LIMIT_24H_MS = 24 * 60 * 60 * 1000; // 86,400,000 ms (24 giờ)
+const DEFAULT_ROLE_SESSION_POLICIES = {
+  "Admin": "fixed_8h",
+  "Design Owner": "sliding_24h",
+  "Designer": "sliding_24h",
+  "PO": "sliding_24h",
+  "Business": "sliding_24h"
+};
 const OTP_MAX_ATTEMPTS = 5;          // Tối đa 5 lần nhập sai
 const OTP_RESEND_COOLDOWN = 60;      // 60 giây chờ gửi lại
 
@@ -250,7 +260,7 @@ function doGet(e) {
       });
     }
 
-    if (action === "check_session") {
+    if (action === "check_session" || action === "touch_session" || action === "refresh_session") {
       const sessionToken = e.parameter.session_token;
       if (!sessionToken) {
         return createJsonResponse({ status: "invalid", message: "Thiếu session token" });
@@ -263,6 +273,10 @@ function doGet(e) {
       return createJsonResponse({
         status: "success",
         valid: true,
+        session_policy: user.sessionPolicy || "fixed_8h",
+        last_active_at: user.lastActiveAt || Date.now(),
+        expires_at: user.expiresAt,
+        role: user.role,
         user: {
           personalEmail: user.personalEmail,
           teamsEmail: user.teamsEmail,
@@ -320,6 +334,7 @@ function doGet(e) {
         team_members: members,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
+        session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -450,6 +465,7 @@ function doPost(e) {
         team_members: members,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
+        session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -461,6 +477,50 @@ function doPost(e) {
         status: "success",
         members: members,
         timestamp: new Date().toISOString()
+      });
+    }
+
+    // ACTION: TOUCH / REFRESH SESSION (SLIDING 24H ACTIVITY UPDATE)
+    if (action === "touch_session" || action === "refresh_session" || action === "check_session") {
+      const sessionToken = String(data.session_token || "").trim();
+      if (!sessionToken) {
+        return createJsonResponse({ status: "unauthorized", message: "Thiếu session token" });
+      }
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const user = findUserBySessionToken(ss, sessionToken);
+      if (!user) {
+        return createJsonResponse({ status: "unauthorized", message: "Phiên đăng nhập đã hết hạn hoặc không hợp lệ." });
+      }
+      if ((data.force_save || action === "touch_session") && user.sessionPolicy === "sliding_24h") {
+        try {
+          const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+          if (userSheet && userSheet.getLastRow() > 1) {
+            const lastRow = userSheet.getLastRow();
+            const tokenColData = userSheet.getRange(2, 10, lastRow - 1, 1).getValues();
+            for (let ti = 0; ti < tokenColData.length; ti++) {
+              if (String(tokenColData[ti][0] || "").trim() === sessionToken) {
+                userSheet.getRange(ti + 2, 14).setValue(Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss"));
+                break;
+              }
+            }
+          }
+        } catch (ue) {}
+      }
+
+      return createJsonResponse({
+        status: "success",
+        valid: true,
+        session_policy: user.sessionPolicy || "fixed_8h",
+        last_active_at: user.lastActiveAt || Date.now(),
+        expires_at: user.expiresAt,
+        role: user.role,
+        user: {
+          personalEmail: user.personalEmail,
+          teamsEmail: user.teamsEmail,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          role: user.role
+        }
       });
     }
 
@@ -1497,6 +1557,116 @@ function handleRequestOtpFast(data) {
 }
 
 /**
+ * Tra cứu chính sách phiên hiệu lực của người dùng:
+ * 1. Kiểm tra ghi đè cá nhân trong Sheet USERS (cột 13) hoặc RAW_SETTINGS (USERS_LIST)
+ * 2. Kế thừa từ vai trò trong SESSION_POLICIES_CONFIG (hoặc DEFAULT_ROLE_SESSION_POLICIES)
+ */
+function resolveUserSessionPolicy(ss, userEmail, userRole) {
+  const cleanEmail = String(userEmail || "").trim().toLowerCase();
+  const targetRole = String(userRole || "Designer").trim();
+
+  // 1. Kiểm tra ghi đè cá nhân trong Sheet USERS (cột 13)
+  try {
+    const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+    if (userSheet && userSheet.getLastRow() > 1) {
+      const lastRow = userSheet.getLastRow();
+      const lastCol = Math.max(14, userSheet.getLastColumn());
+      const data = userSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const pEmail = String(data[i][2] || "").trim().toLowerCase();
+        const tEmail = String(data[i][3] || "").trim().toLowerCase();
+        if (pEmail === cleanEmail || tEmail === cleanEmail || (cleanEmail && (pEmail.includes(cleanEmail.split("@")[0]) || tEmail.includes(cleanEmail.split("@")[0])))) {
+          const userPolicy = String(data[i][12] || "").trim().toLowerCase();
+          if (userPolicy === "fixed_8h" || userPolicy === "sliding_24h") {
+            return userPolicy;
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Kiểm tra ghi đè cá nhân trong RAW_SETTINGS (Key USERS_LIST) & cấu hình vai trò
+  try {
+    const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+    if (rawSettings && rawSettings.getLastRow() > 1) {
+      const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 2).getValues();
+      for (let r = 0; r < rows.length; r++) {
+        if (rows[r][0] === "USERS_LIST" && rows[r][1]) {
+          try {
+            const members = JSON.parse(rows[r][1]);
+            if (Array.isArray(members)) {
+              const found = members.find(function(m) {
+                const p = String(m.personalEmail || "").trim().toLowerCase();
+                const t = String(m.teamsEmail || "").trim().toLowerCase();
+                const e = String(m.email || "").trim().toLowerCase();
+                return p === cleanEmail || t === cleanEmail || e === cleanEmail;
+              });
+              if (found && (found.sessionPolicy === "fixed_8h" || found.sessionPolicy === "sliding_24h")) {
+                return found.sessionPolicy;
+              }
+            }
+          } catch (pe) {}
+        }
+        if (rows[r][0] === "SESSION_POLICIES_CONFIG" && rows[r][1]) {
+          try {
+            const policies = JSON.parse(rows[r][1]);
+            if (policies && policies[targetRole]) {
+              return policies[targetRole];
+            }
+          } catch (pe) {}
+        }
+      }
+    }
+  } catch (e) {}
+
+  return DEFAULT_ROLE_SESSION_POLICIES[targetRole] || "fixed_8h";
+}
+
+/**
+ * Chuyển đổi định dạng ngày tháng sang millisecond timestamp
+ */
+function parseVnDateToMs(ts) {
+  if (!ts) return 0;
+  if (ts instanceof Date) return ts.getTime();
+  const str = String(ts).trim();
+  const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (dmy) {
+    return new Date(
+      Number(dmy[3]),
+      Number(dmy[2]) - 1,
+      Number(dmy[1]),
+      dmy[4] ? Number(dmy[4]) : 0,
+      dmy[5] ? Number(dmy[5]) : 0,
+      dmy[6] ? Number(dmy[6]) : 0
+    ).getTime();
+  }
+  const parsed = new Date(str).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Xóa session token trong sheet USERS khi hết hạn
+ */
+function clearUserSessionInSheet(ss, sessionToken, reason) {
+  try {
+    const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+    if (!userSheet || userSheet.getLastRow() <= 1) return;
+    const lastRow = userSheet.getLastRow();
+    const data = userSheet.getRange(2, 10, lastRow - 1, 1).getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0] || "").trim() === sessionToken) {
+        userSheet.getRange(i + 2, 10).setValue("");
+        userSheet.getRange(i + 2, 11).setValue("");
+        userSheet.getRange(i + 2, 12).setValue(reason + " (" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM") + ")");
+        userSheet.getRange(i + 2, 14).setValue("");
+        break;
+      }
+    }
+  } catch (e) {}
+}
+
+/**
  * Xử lý xác thực OTP
  */
 function handleVerifyOtpFast(data) {
@@ -1550,14 +1720,11 @@ function handleVerifyOtpFast(data) {
 
     cache.remove("otp_" + emailInput);
 
-    const sessionToken = "ST_" + Utilities.getUuid().replace(/-/g, "").slice(0, 16);
-    const sessionExpiresDate = new Date(nowMs + SESSION_EXPIRY_MINUTES * 60 * 1000);
-    const sessionExpiresStr = Utilities.formatDate(sessionExpiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     let finalRole = otpObj.role || "Designer";
+
     if (otpObj.rowIndex) {
       try {
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
         const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
         if (userSheet && userSheet.getLastRow() >= otpObj.rowIndex) {
           const rawRoleVal = String(userSheet.getRange(otpObj.rowIndex, 6).getValue() || "").trim();
@@ -1565,40 +1732,67 @@ function handleVerifyOtpFast(data) {
             if (rawRoleVal.toLowerCase().indexOf("admin") !== -1) finalRole = "Admin";
             else if (rawRoleVal.toLowerCase().indexOf("owner") !== -1) finalRole = "Design Owner";
             else if (rawRoleVal.toLowerCase().indexOf("po") !== -1) finalRole = "PO";
-            else if (rawRoleVal.toLowerCase().indexOf("biz") !== -1 || rawRoleVal.toLowerCase().indexOf("business") !== -1) finalRole = "Business";
+            else if (rawRoleVal.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) finalRole = "Business";
             else finalRole = rawRoleVal;
           }
-          userSheet.getRange(otpObj.rowIndex, 7, 1, 6).setValues([[
+        }
+      } catch (e) {}
+    }
+
+    const sessionPolicy = resolveUserSessionPolicy(ss, emailInput, finalRole);
+    const durationMinutes = sessionPolicy === "sliding_24h" ? SESSION_EXPIRY_MINUTES_24H : SESSION_EXPIRY_MINUTES_8H;
+    const sessionToken = "ST_" + Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+    const sessionExpiresDate = new Date(nowMs + durationMinutes * 60 * 1000);
+    const sessionExpiresStr = Utilities.formatDate(sessionExpiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+    const nowStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+    const noteStr = sessionPolicy === "sliding_24h"
+      ? "Xác thực OTP (Trượt 24h) thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")
+      : "Xác thực OTP (Cố định 8h) thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM");
+
+    if (otpObj.rowIndex) {
+      try {
+        const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
+        if (userSheet && userSheet.getLastRow() >= otpObj.rowIndex) {
+          userSheet.getRange(otpObj.rowIndex, 7, 1, 8).setValues([[
             "VERIFIED (" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss") + ")",
             "",
             0,
             sessionToken,
             sessionExpiresStr,
-            "Xác thực OTP thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")
+            noteStr,
+            sessionPolicy,
+            nowStr
           ]]);
         }
       } catch (e) {}
     }
 
+    // Lưu RAM Cache (giới hạn tối đa 21,600s = 6h của Google Apps Script CacheService)
+    const cacheTtlSeconds = Math.min(21600, durationMinutes * 60);
     cache.put("session_" + sessionToken, JSON.stringify({
       personalEmail: otpObj.personalEmail || emailInput,
       teamsEmail: otpObj.teamsEmail,
       displayName: otpObj.displayName || otpObj.teamsEmail.split("@")[0],
       avatarUrl: otpObj.avatarUrl || "",
       role: finalRole,
+      sessionPolicy: sessionPolicy,
+      loginAt: nowMs,
+      lastActiveAt: nowMs,
       expiresAt: sessionExpiresDate.getTime()
-    }), SESSION_EXPIRY_MINUTES * 60);
+    }), cacheTtlSeconds);
 
     return createJsonResponse({
       status: "success",
       message: "Xác thực thành công!",
       session_token: sessionToken,
+      session_policy: sessionPolicy,
       personal_email: otpObj.personalEmail || emailInput,
       teams_email: otpObj.teamsEmail,
       display_name: otpObj.displayName || otpObj.teamsEmail.split("@")[0],
       avatar_url: otpObj.avatarUrl || "",
       role: finalRole,
-      expires_in: SESSION_EXPIRY_MINUTES * 60
+      expires_in: durationMinutes * 60,
+      last_active_at: nowMs
     });
   }
 
@@ -1625,38 +1819,55 @@ function handleVerifyOtpFast(data) {
     });
   }
 
-  const sessionToken = "ST_" + Utilities.getUuid().replace(/-/g, "").slice(0, 16);
-  const sessionExpiresDate = new Date(nowMs + SESSION_EXPIRY_MINUTES * 60 * 1000);
-  const sessionExpiresStr = Utilities.formatDate(sessionExpiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+  const sessionPolicy = userRowInfo.sessionPolicy && userRowInfo.sessionPolicy !== "inherit"
+    ? userRowInfo.sessionPolicy
+    : resolveUserSessionPolicy(ss, emailInput, userRowInfo.role);
 
+  const durationMinutes = sessionPolicy === "sliding_24h" ? SESSION_EXPIRY_MINUTES_24H : SESSION_EXPIRY_MINUTES_8H;
+  const sessionToken = "ST_" + Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+  const sessionExpiresDate = new Date(nowMs + durationMinutes * 60 * 1000);
+  const sessionExpiresStr = Utilities.formatDate(sessionExpiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+  const nowStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+  const noteStr = sessionPolicy === "sliding_24h"
+    ? "Xác thực OTP (Trượt 24h) thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")
+    : "Xác thực OTP (Cố định 8h) thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM");
+
+  const cacheTtlSeconds = Math.min(21600, durationMinutes * 60);
   cache.put("session_" + sessionToken, JSON.stringify({
     personalEmail: userRowInfo.personalEmail,
     teamsEmail: userRowInfo.teamsEmail,
     displayName: userRowInfo.displayName,
     avatarUrl: userRowInfo.avatarUrl,
     role: userRowInfo.role,
+    sessionPolicy: sessionPolicy,
+    loginAt: nowMs,
+    lastActiveAt: nowMs,
     expiresAt: sessionExpiresDate.getTime()
-  }), SESSION_EXPIRY_MINUTES * 60);
+  }), cacheTtlSeconds);
 
-  userSheet.getRange(userRowInfo.rowIndex, 7, 1, 6).setValues([[
+  userSheet.getRange(userRowInfo.rowIndex, 7, 1, 8).setValues([[
     "VERIFIED (" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss") + ")",
     "",
     0,
     sessionToken,
     sessionExpiresStr,
-    "Xác thực OTP thành công lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")
+    noteStr,
+    sessionPolicy,
+    nowStr
   ]]);
 
   return createJsonResponse({
     status: "success",
     message: "Xác thực thành công!",
     session_token: sessionToken,
+    session_policy: sessionPolicy,
     personal_email: userRowInfo.personalEmail,
     teams_email: userRowInfo.teamsEmail,
     display_name: userRowInfo.displayName,
     avatar_url: userRowInfo.avatarUrl,
     role: userRowInfo.role,
-    expires_in: SESSION_EXPIRY_MINUTES * 60
+    expires_in: durationMinutes * 60,
+    last_active_at: nowMs
   });
 }
 
@@ -1733,19 +1944,7 @@ function handleLogout(data) {
   const sessionToken = String(data.session_token || "").trim();
   if (sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const userSheet = getOrInitUsersSheet(ss);
-    const lastRow = userSheet.getLastRow();
-    if (lastRow > 1) {
-      const dataRows = userSheet.getRange(2, 1, lastRow - 1, 12).getValues();
-      for (let i = 0; i < dataRows.length; i++) {
-        if (String(dataRows[i][9] || "").trim() === sessionToken) {
-          userSheet.getRange(i + 2, 10).setValue("");
-          userSheet.getRange(i + 2, 11).setValue("");
-          userSheet.getRange(i + 2, 12).setValue("Đã đăng xuất lúc " + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM"));
-          break;
-        }
-      }
-    }
+    clearUserSessionInSheet(ss, sessionToken, "Đã đăng xuất");
     const cache = CacheService.getScriptCache();
     cache.remove("session_" + sessionToken);
   }
@@ -1901,7 +2100,8 @@ function findUserRowByPersonalEmail(userSheet, email) {
 
   // 1. Ưu tiên đọc trực tiếp từ sheet USERS (Nơi Admin trực tiếp quản lý phân quyền và nhân sự)
   if (userSheet && userSheet.getLastRow() > 1) {
-    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 12).getValues();
+    const lastCol = Math.max(14, userSheet.getLastColumn());
+    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, lastCol).getValues();
     for (let i = 0; i < data.length; i++) {
       const pEmail = String(data[i][2] || "").trim().toLowerCase();
       const tEmail = String(data[i][3] || "").trim().toLowerCase();
@@ -1927,7 +2127,9 @@ function findUserRowByPersonalEmail(userSheet, email) {
           otpAttempts: data[i][8],
           sessionToken: data[i][9],
           sessionExpiresAt: data[i][10],
-          notes: data[i][11]
+          notes: data[i][11],
+          sessionPolicy: String(data[i][12] || "").trim(),
+          lastActiveAt: data[i][13] || ""
         };
       }
     }
@@ -1958,7 +2160,9 @@ function findUserRowByPersonalEmail(userSheet, email) {
                 otpAttempts: 0,
                 sessionToken: "",
                 sessionExpiresAt: "",
-                notes: "From RAW_SETTINGS"
+                notes: "From RAW_SETTINGS",
+                sessionPolicy: String(users[u].sessionPolicy || users[u].session_policy || "").trim(),
+                lastActiveAt: ""
               };
             }
           }
@@ -1986,7 +2190,9 @@ function findUserRowByPersonalEmail(userSheet, email) {
         otpAttempts: 0,
         sessionToken: "",
         sessionExpiresAt: "",
-        notes: "From DEFAULT_INITIAL_USERS"
+        notes: "From DEFAULT_INITIAL_USERS",
+        sessionPolicy: String(def.sessionPolicy || "").trim(),
+        lastActiveAt: ""
       };
     }
   }
@@ -1996,20 +2202,71 @@ function findUserRowByPersonalEmail(userSheet, email) {
 
 /**
  * Tìm kiếm User bằng Session Token
+ * Kiểm tra tính hợp lệ theo chính sách tương ứng của từng người dùng (Fixed 8h hoặc Sliding 24h)
+ * Đảm bảo cơ chế dự phòng hoạt động khi RAM Cache hết hạn (Fallback tra cứu Sheet USERS)
  */
 function findUserBySessionToken(ss, sessionToken) {
   if (!sessionToken) return null;
 
-  // 1. Ưu tiên tra cứu trực tiếp từ sheet USERS để luôn nhận vai trò mới nhất nếu Admin đã đổi
+  const now = new Date();
+  const nowMs = now.getTime();
+  const cache = CacheService.getScriptCache();
+  const SKEW_THRESHOLD_MS = 15 * 60 * 1000; // 15 phút tối đa sai lệch đồng hồ tương lai
+
+  // 1. Kiểm tra bộ nhớ RAM Cache trước (Fast in-memory path)
+  try {
+    const cached = cache.get("session_" + sessionToken);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.sessionPolicy === "sliding_24h") {
+        const lastActive = parsed.lastActiveAt || (parsed.expiresAt ? parsed.expiresAt - INACTIVITY_LIMIT_24H_MS : nowMs);
+        // Kiểm tra bất thường đồng hồ nằm sâu trong tương lai
+        if (lastActive > nowMs + SKEW_THRESHOLD_MS) {
+          cache.remove("session_" + sessionToken);
+          clearUserSessionInSheet(ss, sessionToken, "Phát hiện sai lệch đồng hồ bất thường");
+          return null;
+        }
+        if (nowMs - lastActive <= INACTIVITY_LIMIT_24H_MS) {
+          // Vẫn hợp lệ trong 24h vắng mặt -> Làm mới mốc hoạt động
+          parsed.lastActiveAt = nowMs;
+          parsed.expiresAt = nowMs + INACTIVITY_LIMIT_24H_MS;
+          try {
+            cache.put("session_" + sessionToken, JSON.stringify(parsed), 21600);
+          } catch (ce) {}
+          return parsed;
+        } else {
+          // Đã vắng mặt quá 24h -> Xóa cache và xóa trên sheet
+          cache.remove("session_" + sessionToken);
+          clearUserSessionInSheet(ss, sessionToken, "Phiên trượt 24h đã hết hạn");
+          return null;
+        }
+      } else {
+        // Fixed 8h
+        if (nowMs <= parsed.expiresAt) {
+          return parsed;
+        } else {
+          cache.remove("session_" + sessionToken);
+          clearUserSessionInSheet(ss, sessionToken, "Phiên cố định 8h đã hết hạn");
+          return null;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Dự phòng khi RAM Cache hết hạn: Tra cứu trực tiếp từ sheet USERS
+  // Tối ưu hóa: Chỉ đọc Cột 10 (Session Token) để tìm đúng dòng rowIndex, tránh tải toàn bộ 14 cột của tất cả dòng
   try {
     const userSheet = getOrInitUsersSheet(ss);
     const lastRow = userSheet.getLastRow();
     if (lastRow > 1) {
-      const data = userSheet.getRange(2, 1, lastRow - 1, 12).getValues();
-      for (let i = 0; i < data.length; i++) {
-        const tokenInSheet = String(data[i][9] || "").trim();
+      const tokenColData = userSheet.getRange(2, 10, lastRow - 1, 1).getValues();
+      for (let i = 0; i < tokenColData.length; i++) {
+        const tokenInSheet = String(tokenColData[i][0] || "").trim();
         if (tokenInSheet === sessionToken) {
-          var rawRole = String(data[i][5] || "Designer").trim();
+          const rowIndex = i + 2;
+          const rowData = userSheet.getRange(rowIndex, 1, 1, 14).getValues()[0];
+
+          var rawRole = String(rowData[5] || "Designer").trim();
           var role = "Designer";
           if (rawRole.toLowerCase().indexOf("admin") !== -1) role = "Admin";
           else if (rawRole.toLowerCase().indexOf("owner") !== -1) role = "Design Owner";
@@ -2017,36 +2274,99 @@ function findUserBySessionToken(ss, sessionToken) {
           else if (rawRole.toLowerCase().indexOf("biz") !== -1 || rawRole.toLowerCase().indexOf("business") !== -1) role = "Business";
           else role = rawRole;
 
-          const freshUser = {
-            displayName: String(data[i][0] || ""),
-            avatarUrl: String(data[i][1] || ""),
-            personalEmail: String(data[i][2] || ""),
-            teamsEmail: String(data[i][3] || ""),
-            role: role
-          };
-          try {
-            CacheService.getScriptCache().put("session_" + sessionToken, JSON.stringify({
-              ...freshUser,
-              expiresAt: Date.now() + 30 * 60 * 1000
-            }), 30 * 60);
-          } catch (ce) {}
-          return freshUser;
+          const pEmail = String(rowData[2] || "").trim();
+          const tEmail = String(rowData[3] || "").trim();
+
+          // Xác định chính sách phiên: Cột 13 -> fallback vai trò
+          var sessionPolicy = String(rowData[12] || "").trim().toLowerCase();
+          if (sessionPolicy !== "fixed_8h" && sessionPolicy !== "sliding_24h") {
+            sessionPolicy = resolveUserSessionPolicy(ss, pEmail || tEmail, role);
+          }
+
+          if (sessionPolicy === "sliding_24h") {
+            // Tra cứu mốc lastActiveAt từ Cột 14
+            const rawLastActive = rowData[13];
+            let lastActiveMs = parseVnDateToMs(rawLastActive);
+            if (!lastActiveMs) {
+              const rawExp = rowData[10];
+              lastActiveMs = parseVnDateToMs(rawExp);
+              if (lastActiveMs) lastActiveMs -= INACTIVITY_LIMIT_24H_MS;
+              else lastActiveMs = nowMs;
+            }
+
+            // Phát hiện lệch đồng hồ nghiêm trọng
+            if (lastActiveMs > nowMs + SKEW_THRESHOLD_MS) {
+              userSheet.getRange(rowIndex, 10).setValue("");
+              userSheet.getRange(rowIndex, 11).setValue("");
+              userSheet.getRange(rowIndex, 12).setValue("Phiên bị hủy do lệch đồng hồ bất thường lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM"));
+              userSheet.getRange(rowIndex, 14).setValue("");
+              return null;
+            }
+
+            // Kiểm tra thời hạn 24 giờ vắng mặt
+            if (nowMs - lastActiveMs <= INACTIVITY_LIMIT_24H_MS) {
+              // Phiên hợp lệ! Cập nhật mốc hoạt động mới lên Sheet USERS (Cột 14)
+              const nowStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+              userSheet.getRange(rowIndex, 14).setValue(nowStr);
+
+              const freshUser = {
+                displayName: String(rowData[0] || ""),
+                avatarUrl: String(rowData[1] || ""),
+                personalEmail: pEmail,
+                teamsEmail: tEmail,
+                role: role,
+                sessionPolicy: "sliding_24h",
+                lastActiveAt: nowMs,
+                expiresAt: nowMs + INACTIVITY_LIMIT_24H_MS
+              };
+
+              // Khôi phục nạp lại RAM Cache (TTL tối đa 21,600s = 6h)
+              try {
+                cache.put("session_" + sessionToken, JSON.stringify(freshUser), 21600);
+              } catch (ce) {}
+
+              return freshUser;
+            } else {
+              // Đã vắng mặt quá 24h -> Xóa token phiên trên sheet USERS
+              userSheet.getRange(rowIndex, 10).setValue("");
+              userSheet.getRange(rowIndex, 11).setValue("");
+              userSheet.getRange(rowIndex, 12).setValue("Phiên trượt 24h đã hết hạn lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM"));
+              userSheet.getRange(rowIndex, 14).setValue("");
+              return null;
+            }
+          } else {
+            // Fixed 8h: Kiểm tra thời hạn hết hạn từ Cột 11
+            const rawExp = rowData[10];
+            const expMs = parseVnDateToMs(rawExp);
+
+            if (expMs && nowMs <= expMs) {
+              const freshUser = {
+                displayName: String(rowData[0] || ""),
+                avatarUrl: String(rowData[1] || ""),
+                personalEmail: pEmail,
+                teamsEmail: tEmail,
+                role: role,
+                sessionPolicy: "fixed_8h",
+                expiresAt: expMs
+              };
+              const remSec = Math.min(21600, Math.max(60, Math.floor((expMs - nowMs) / 1000)));
+              try {
+                cache.put("session_" + sessionToken, JSON.stringify(freshUser), remSec);
+              } catch (ce) {}
+              return freshUser;
+            } else {
+              // Đã quá 8 tiếng -> Xóa token phiên trên sheet USERS
+              userSheet.getRange(rowIndex, 10).setValue("");
+              userSheet.getRange(rowIndex, 11).setValue("");
+              userSheet.getRange(rowIndex, 12).setValue("Phiên cố định 8h đã hết hạn lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM"));
+              userSheet.getRange(rowIndex, 14).setValue("");
+              return null;
+            }
+          }
         }
       }
     }
   } catch (e) {}
-
-  // 2. Dự phòng tra cứu Script Cache
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get("session_" + sessionToken);
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (Date.now() <= parsed.expiresAt) {
-        return parsed;
-      }
-    } catch (e) {}
-  }
 
   return null;
 }
@@ -2074,7 +2394,7 @@ function logActionToSheet(ss, logData) {
 }
 
 /**
- * Khởi tạo sheet USERS
+ * Khởi tạo sheet USERS (hỗ trợ 14 cột gồm Session Policy & Last Active At)
  */
 function getOrInitUsersSheet(ss) {
   let sheet = ss.getSheetByName(SHEET_USERS_NAME);
@@ -2092,7 +2412,9 @@ function getOrInitUsersSheet(ss) {
       "OTP Attempts",
       "Session Token",
       "Session Expires At",
-      "Ghi chú / Cập nhật gần nhất"
+      "Ghi chú / Cập nhật gần nhất",
+      "Session Policy (inherit/fixed_8h/sliding_24h)",
+      "Last Active At (Mốc hoạt động gần nhất)"
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length)
@@ -2102,8 +2424,8 @@ function getOrInitUsersSheet(ss) {
       .setHorizontalAlignment("center");
     sheet.setFrozenRows(1);
 
-    sheet.appendRow(["Admin MB UX", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150", "admin@gmail.com", "admin@mbbank.com.vn", "Active", "Admin", "", "", 0, "", "", "Tài khoản Quản trị"]);
-    sheet.appendRow(["Trần Mai Lan", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150", "lan.po@gmail.com", "lan.po@mbbank.com.vn", "Active", "PO", "", "", 0, "", "", "Product Owner"]);
+    sheet.appendRow(["Admin MB UX", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150", "admin@gmail.com", "admin@mbbank.com.vn", "Active", "Admin", "", "", 0, "", "", "Tài khoản Quản trị", "fixed_8h", ""]);
+    sheet.appendRow(["Trần Mai Lan", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150", "lan.po@gmail.com", "lan.po@mbbank.com.vn", "Active", "PO", "", "", 0, "", "", "Product Owner", "sliding_24h", ""]);
 
     sheet.setColumnWidth(1, 180);
     sheet.setColumnWidth(2, 220);
@@ -2117,6 +2439,31 @@ function getOrInitUsersSheet(ss) {
     sheet.setColumnWidth(10, 160);
     sheet.setColumnWidth(11, 170);
     sheet.setColumnWidth(12, 250);
+    sheet.setColumnWidth(13, 190);
+    sheet.setColumnWidth(14, 190);
+  } else {
+    // Nâng cấp bổ sung cột 13 và 14 nếu sheet đã tồn tại
+    try {
+      const lastCol = sheet.getLastColumn();
+      if (lastCol < 13) {
+        sheet.getRange(1, 13).setValue("Session Policy (inherit/fixed_8h/sliding_24h)");
+        sheet.getRange(1, 13)
+          .setBackground("#1B3A6B")
+          .setFontColor("#FFFFFF")
+          .setFontWeight("bold")
+          .setHorizontalAlignment("center");
+        sheet.setColumnWidth(13, 190);
+      }
+      if (lastCol < 14) {
+        sheet.getRange(1, 14).setValue("Last Active At (Mốc hoạt động gần nhất)");
+        sheet.getRange(1, 14)
+          .setBackground("#1B3A6B")
+          .setFontColor("#FFFFFF")
+          .setFontWeight("bold")
+          .setHorizontalAlignment("center");
+        sheet.setColumnWidth(14, 190);
+      }
+    } catch (ue) {}
   }
   return sheet;
 }
@@ -2568,7 +2915,8 @@ function getOrInitTeamMembers(ss) {
   // 2. Đọc sheet USERS (Bảng trực quan của người dùng)
   const userSheet = ss.getSheetByName(SHEET_USERS_NAME);
   if (userSheet && userSheet.getLastRow() > 1) {
-    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 6).getValues();
+    const colCount = Math.max(14, userSheet.getLastColumn());
+    const data = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, colCount).getValues();
     const mergedList = [];
 
     for (let i = 0; i < data.length; i++) {
@@ -2578,6 +2926,7 @@ function getOrInitTeamMembers(ss) {
       const rowTeamsEmail = String(data[i][3] || "").trim();
       const rowStatus = String(data[i][4] || "Active").trim();
       const rawRole = String(data[i][5] || "Designer").trim();
+      const rowPolicy = String(data[i][12] || "").trim();
 
       if (!rowName && !rowPersonalEmail && !rowTeamsEmail) continue;
 
@@ -2603,6 +2952,7 @@ function getOrInitTeamMembers(ss) {
         email: rowTeamsEmail || rowPersonalEmail || (existing ? existing.email : ""),
         status: rowStatus || (existing ? existing.status : "Active"),
         role: role,
+        sessionPolicy: rowPolicy || (existing ? (existing.sessionPolicy || existing.session_policy) : "inherit"),
         squad: existing && existing.squad ? existing.squad : "All Squads",
         squads: existing && Array.isArray(existing.squads) && existing.squads.length > 0 ? existing.squads : ["All Squads"],
         products: existing && Array.isArray(existing.products) && existing.products.length > 0 ? existing.products : ["Toàn hàng"],
@@ -2728,7 +3078,8 @@ function handleSyncTeamMembers(data) {
   // Giữ lại các token/OTP hiện tại để không làm gián đoạn phiên
   const existingTokens = {};
   if (userSheet && userSheet.getLastRow() > 1) {
-    const oldData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 12).getValues();
+    const colCount = Math.max(14, userSheet.getLastColumn());
+    const oldData = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, colCount).getValues();
     for (let i = 0; i < oldData.length; i++) {
       const emailKey = String(oldData[i][3] || oldData[i][2] || "").trim().toLowerCase();
       if (emailKey) {
@@ -2738,7 +3089,9 @@ function handleSyncTeamMembers(data) {
           otpAttempts: oldData[i][8],
           sessionToken: oldData[i][9],
           sessionExpires: oldData[i][10],
-          notes: oldData[i][11]
+          notes: oldData[i][11],
+          sessionPolicy: oldData[i][12] || "",
+          lastActiveAt: oldData[i][13] || ""
         };
       }
     }
@@ -2746,7 +3099,7 @@ function handleSyncTeamMembers(data) {
 
   // Xóa nội dung dữ liệu cũ trong USERS (giữ hàng header 1)
   if (userSheet && userSheet.getLastRow() > 1) {
-    userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 12).clearContent();
+    userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 14).clearContent();
   }
 
   if (userSheet) {
@@ -2755,6 +3108,11 @@ function handleSyncTeamMembers(data) {
       const personalEmail = String(m.personalEmail || m.email || teamsEmail).trim();
       const emailKey = String(teamsEmail || personalEmail || m.email || "").trim().toLowerCase();
       const tokenInfo = existingTokens[emailKey] || {};
+      const memberPolicy = (m.sessionPolicy !== undefined && m.sessionPolicy !== null && m.sessionPolicy !== "")
+        ? m.sessionPolicy
+        : ((m.session_policy !== undefined && m.session_policy !== null && m.session_policy !== "")
+          ? m.session_policy
+          : (tokenInfo.sessionPolicy || ""));
       return [
         m.name || m.displayName || "Thành viên UX",
         m.avatarUrl || "",
@@ -2767,12 +3125,14 @@ function handleSyncTeamMembers(data) {
         tokenInfo.otpAttempts || 0,
         tokenInfo.sessionToken || "",
         tokenInfo.sessionExpires || "",
-        "Đồng bộ từ Portal lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")
+        tokenInfo.notes || ("Đồng bộ từ Portal lúc " + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH:mm:ss dd/MM")),
+        memberPolicy,
+        tokenInfo.lastActiveAt || ""
       ];
     });
 
     if (userRows.length > 0) {
-      userSheet.getRange(2, 1, userRows.length, 12).setValues(userRows);
+      userSheet.getRange(2, 1, userRows.length, 14).setValues(userRows);
     }
   }
 
@@ -2825,6 +3185,7 @@ function handleSyncMasterData(data) {
   if (data.status_rules) configsToSave["STATUS_RULES_CONFIG"] = data.status_rules;
   if (data.audit_logs) configsToSave["AUDIT_LOGS_CONFIG"] = data.audit_logs;
   if (data.rbac) configsToSave["RBAC_CONFIG"] = data.rbac;
+  if (data.session_policies || data.sessionPolicies) configsToSave["SESSION_POLICIES_CONFIG"] = data.session_policies || data.sessionPolicies;
   if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
   if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
   if (data.form_config || data.formConfig) configsToSave["FORM_CONFIG"] = data.form_config || data.formConfig;

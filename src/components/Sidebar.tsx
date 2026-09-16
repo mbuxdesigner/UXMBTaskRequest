@@ -207,7 +207,7 @@ export default function Sidebar({
   const canSwitchRoles = userRole === "Admin" || Boolean(session?.isImpersonating) || session?.originalRole === "Admin"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
   const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || (currentRoleVisibility.ia && canViewIa)
-  const hasResourceItems = currentRoleVisibility.compressor || currentRoleVisibility.test
+  const hasResourceItems = Boolean(currentRoleVisibility.compressor) || (currentRoleVisibility.test ?? true) || isAdmin
 
   const renderSidebarContent = (isMobile = false) => {
     const activeLayoutId = `sidebar-active-indicator${isMobile ? "-mobile" : ""}`
@@ -471,7 +471,7 @@ export default function Sidebar({
                   )
                 }
 
-                if (itemKey === "test" && currentRoleVisibility.test) {
+                if (itemKey === "test" && (currentRoleVisibility.test !== false || isAdmin)) {
                   const isActive = currentPage === "test"
                   const isHovered = hoveredNav === "test"
                   return (

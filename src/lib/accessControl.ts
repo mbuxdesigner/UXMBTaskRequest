@@ -369,7 +369,7 @@ export function filterRequestsByRole(requests: UXRequest[], session: UserSession
 
 export const DEFAULT_RBAC_PERMISSIONS: Record<string, string[]> = {
   "cap-approve": ["Admin", "Design Owner"],
-  "cap-test": ["Admin", "Design Owner"],
+  "cap-test": ["Admin", "Design Owner", "Designer", "PO", "Business"],
   "cap-capacity": ["Admin", "Design Owner"],
   "cap-invite": ["Admin", "Design Owner"],
   "cap-workflow": ["Admin"],

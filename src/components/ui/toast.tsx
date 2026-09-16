@@ -147,4 +147,8 @@ export const toast = Object.assign(
   }
 )
 
+if (typeof window !== "undefined") {
+  (window as any).appToast = toast
+}
+
 export { Toaster } from "@/components/reui/sonner"

@@ -39,6 +39,13 @@
 >    - **Bỏ lồng box con & phân tách bằng Divider:** Các task trong ngày xếp thành hàng phẳng, phân cách bằng đường divider `divide-y divide-neutral-200/80`.
 >    - **Bộ lọc Tab Sản Phẩm Quản Trị Động:** Nạp danh sách từ Admin, nhấp chọn tab nào thì toàn bộ 6 khối Dashboard đồng bộ lọc chính xác theo sản phẩm đó.
 >    - **Zero Mock Data:** Xóa bỏ 100% dữ liệu test tự thêm (`fallbackMilestones`, `DEFAULT_GANTT_TASKS` và các số cứng).
+> 15. **Triển Khai Cơ Chế Quản Lý Phiên Song Song (Dual Session Policy) & Cấu Hình Quản Trị 2 Tầng:**
+>    - **Cơ chế 8h cố định (Fixed 8h):** Phiên hết hạn đúng 8 giờ tính từ lúc xác thực OTP (`loginAt + 28.800.000ms`); tương tác không làm kéo dài thời hạn; áp dụng mặc định cho Admin.
+>    - **Cơ chế trượt 24h khi thoát ứng dụng (Sliding Inactivity 24h):** Lưu bền vững trong `localStorage`; mốc 24h chỉ bắt đầu đếm khi thoát app / ngừng thao tác (`lastActiveAt`); quay lại trong 24h tự động duy trì phiên và làm mới mốc 24h; vắng mặt quá 24h tự động hủy phiên và yêu cầu OTP.
+>    - **Tích hợp W3C Page Lifecycle & Mobile Lifecycle:** Lắng nghe toàn diện `freeze`, `pagehide`, `beforeunload`, `visibilitychange`, `touchstart` với passive listener để ghi mốc thoát tức thì 100% trên cả Desktop và Mobile (iOS Safari / Android Chrome).
+>    - **Cấu hình Quản trị 2 tầng (2-Tier Admin Config):** Tầng 1 cấu hình chính sách mặc định theo 5 vai trò tại Tab Phân quyền (RBAC); Tầng 2 cấu hình ghi đè theo từng cá nhân tại Modal Thêm/Sửa nhân sự (`AddMemberModal.tsx`) với huy hiệu `(Riêng)` trên danh sách.
+>    - **Nâng cấp Backend Google Apps Script (14 cột):** Mở rộng bảng `USERS` trên Sheet lên 14 cột (`Session Policy`, `Last Active At`); bổ sung API `touch_session`, `refresh_session`, `check_session`; cơ chế RAM Cache + Sheet Fallback duy trì phiên 24h vượt ngưỡng RAM Cache.
+>    - **Kiểm thử đối kháng khép kín 3 vòng:** Vượt qua 31/31 bài test tự động (100% PASS) và biên dịch Production (`npm run build`) thành công 0 lỗi.
 
 ---
 
@@ -60,6 +67,7 @@
 | **12** | **Tích Hợp ReUI Sonner Toast, Xếp Chồng 3D & Căn Đỉnh Icon** | ✅ Hoàn thành 100% | Cài đặt ReUI Sonner, hiệu ứng 3D Card Stacking khi có nhiều noti, nút đóng (X) cố định góc trên phải, căn đỉnh icon khi văn bản $\ge$ 3 dòng, tự động bắn toast khi có thông báo mới, nút "Thử Toast" 3 thẻ mẫu. |
 | **13** | **Khắc Phục Lỗi Đồng Bộ Hai Chiều Google Sheet & Bảo Toàn Email 09:02** | ✅ Hoàn thành 100% | Khắc phục xung đột Split-Brain giữa `USERS` và `RAW_SETTINGS`, thêm trigger `onEdit(e)`, tách 2 trường Teams Email & Personal Email trên Portal, bảo toàn 100% danh bạ chuẩn 09:02 trên Google Sheet thực tế. |
 | **14** | **Nâng Cấp Toàn Diện Dashboard AI-Ops ReUI v2 & NewsFeed Timeline** | ✅ Hoàn thành 100% | Tích hợp c-chart-20 (Donut ngang), c-chart-17 (Trending line sọc stripe), c-timeline-3 (Reverse timeline + divider không lồng box), lọc bỏ pending/chưa phân bổ, làm sạch 100% mock data. |
+| **15** | **Triển Khai Cơ Chế Phiên Song Song (Fixed 8h & Sliding 24h) & Cấu Hình Quản Trị 2 Tầng** | ✅ Hoàn thành 100% | Triển khai Dual Session Policy trong `otpAuthService.ts`, W3C Page Lifecycle API, cấu hình RBAC & User Override 2 tầng trong `QuanLyPage.tsx` và `AddMemberModal.tsx`, nâng cấp Google Apps Script backend 14 cột, 31/31 bài test tự động PASS, `npm run build` PASS. |
 
 ---
 
@@ -365,6 +373,30 @@
 
 ---
 
+### 2.15. Triển Khai Cơ Chế Quản Lý Phiên Song Song (Dual Session Policy: Fixed 8h & Sliding 24h Khi Thoát App) & Cấu Hình Quản Trị 2 Tầng
+- **Mã nguồn chính:**
+  - `src/services/otpAuthService.ts`
+  - `src/services/googleSheetService.ts`
+  - `src/pages/QuanLyPage.tsx`
+  - `src/components/common/AddMemberModal.tsx`
+  - `google-apps-script-backend.js`
+- **Nghiệp vụ & Chi tiết kỹ thuật:**
+  1. **Dual Session Policy (`otpAuthService.ts`):**
+     - **Cố định 8h (`fixed_8h`):** Hết hạn đúng 8 giờ tính từ lúc xác thực OTP (`loginAt + 28.800.000ms`); tương tác không kéo dài phiên. Khuyến nghị cho vai trò Admin và thiết bị dùng chung.
+     - **Trượt 24h khi thoát app (`sliding_24h`):** Lưu trữ bền vững trong `localStorage`. Thời gian 24h **chỉ bắt đầu đếm ngược từ mốc thời gian người dùng đóng ứng dụng hoặc ngừng thao tác (`lastActiveAt`)**. Quay lại trong 24h tự động duy trì phiên và làm mới chu kỳ 24h từ mốc thoát mới nhất. Vắng mặt $> 24$h tự động hủy phiên và chuyển về màn hình xác thực OTP.
+     - **W3C Page Lifecycle & Mobile Lifecycle:** Lắng nghe toàn diện các sự kiện `freeze`, `pagehide`, `beforeunload`, `visibilitychange` và `touchstart` (passive listener). Cam kết ghi nhận mốc `lastActiveAt` tức thì 100% khi vuốt đóng app trên iOS Safari hay Android Chrome.
+     - **Đồng bộ Đăng xuất Đa tab:** Sự kiện `storage` listener phát lệnh hủy phiên đồng thời trên tất cả các tab đang mở ngay khi bấm Đăng xuất ở 1 tab bất kỳ, triệt tiêu lỗi "hồi sinh" phiên cũ.
+  2. **Cấu Hình Quản Trị 2 Tầng (`QuanLyPage.tsx` & `AddMemberModal.tsx`):**
+     - **Tầng 1 (Role Policy):** Bảng thẻ Toggle Pills tại Tab Phân quyền (RBAC) cho 5 vai trò (`Admin`, `Design Owner`, `Designer`, `PO`, `Business`) với nút *"Khôi phục mặc định"*.
+     - **Tầng 2 (User Override):** Dropdown tại Modal Thêm/Sửa nhân sự chọn chính sách cá nhân (*Kế thừa theo Vai trò*, *Cố định 8 tiếng*, *Trượt 24 tiếng khi thoát*), hiển thị huy hiệu `(Riêng)` trên danh sách nhân sự.
+     - **Thứ tự ưu tiên:** $\text{User Override (Tầng 2)} > \text{Role Policy (Tầng 1)} > \text{System Default}$ (`Admin`: Fixed 8h, khác: Sliding 24h).
+  3. **Nâng Cấp Backend Google Apps Script (14 Cột):**
+     - Mở rộng bảng `USERS` trên Sheet lên 14 cột (bổ sung Cột 13: `Session Policy`, Cột 14: `Last Active At`).
+     - RAM Cache + Sheet Fallback đảm bảo phiên 24h sống bền vững khi RAM Cache của Apps Script (tối đa 6h) hết hạn.
+     - Bổ sung đầy đủ các endpoint `touch_session`, `refresh_session`, `check_session` trên cả 2 phương thức `doGet` và `doPost`.
+
+---
+
 ## 🛡️ 3. KẾT QUẢ KIỂM THỬ (VERIFICATION)
 
 1. **Bộ kiểm thử ReUI Sonner & Stacked Toasts (`test-sonner-stacked-toast.mjs`):**
@@ -390,16 +422,21 @@
 5. **Kiểm tra kiểu dữ liệu TypeScript & Build:**
    - Chạy lệnh: `npx tsc --noEmit` & `npm run build`
    - Kết quả: **Thành công 100% trong 554ms**, 2884 modules transformed, 0 lỗi TypeScript, 0 lỗi Tailwind CSS.
+6. **Kiểm thử Cơ chế Quản lý Phiên song song (Dual Session Policy & GAS Backend):**
+   - Chạy các bộ test: `test-dual-session-policy.mjs`, `test-gas-session-backend.mjs`, `test-reviewer-adversarial-verification.mjs`, `test-reviewer-r2-verification.mjs`, `test-reviewer-r3-adversarial.mjs`, `independent-audit.mjs`.
+   - Kết quả: **31/31 bài test ĐẠT TUYỆT ĐỐI (100% PASS)** qua 4 vòng kiểm thử đối kháng và thẩm định độc lập từ Victory Auditor (`VICTORY CONFIRMED`).
 
 ---
 
 ## 📌 4. TỔNG KẾT & BÀN GIAO
-- **Design System & UI Guidelines**: Đã xuất bản cẩm nang toàn diện tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md) (883 dòng, 53KB) bao phủ đầy đủ Token, Component Specs, Motion Physics, Responsive Patterns, Do's & Don'ts và ReUI Sonner Toast.
+- **Design System & UI Guidelines**: Đã xuất bản cẩm nang toàn diện tại [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/Working/TaskUXTeam/Deploy%20App/doc/UI_DESIGN_SYSTEM.md) bao phủ đầy đủ Token, Component Specs, Motion Physics, Responsive Patterns, Do's & Don'ts và ReUI Sonner Toast.
 - **Báo cáo chuyên sâu đã phát hành**:
-  1. [`doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md) — Báo cáo tổng kết toàn diện ngày 16/09/2026.
-  2. [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md) — Báo cáo chuyên đề Chuẩn hóa UI, ReUI Sonner & Responsive.
-  3. [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md) — Báo cáo chuyên đề Dashboard ReUI & Gantt Timeline.
-- **Hạ tầng kiểm thử**: Đạt tỷ lệ hoàn hảo 100% (**114/114 E2E tests pass**, **10/10 Sonner tests pass**, **64/64 IA map tests pass**, `npm run build` pass).
-- **Hệ thống Google Sheet Backend**: Đã triển khai Two-Way Merge, trigger `onEdit(e)`, tách biệt Email Teams OTP và Email cá nhân đăng nhập, bảo toàn danh bạ thực tế.
-- **Dashboard AI-Ops ReUI v2 & NewsFeed Timeline**: Đã hoàn thiện toàn diện 6 khối Dashboard, tích hợp `@reui/c-chart-20`, `@reui/c-chart-17`, `@reui/c-timeline-3`, loại bỏ 100% mock data và lọc sạch dự án pending/chưa phân bổ (Báo cáo chuyên sâu tại [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md)).
-- **Mã Nguồn & Triển Khai**: Toàn bộ các thay đổi đã được kiểm thử, commit và đẩy thành công lên Git repository (`main`).
+  1. [`doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md`](file:///d:/Working/TaskUXTeam/Deploy%20App/doc/reports/2026-09-16_DAILY_UPDATE_REPORT.md) — Báo cáo tổng kết toàn diện ngày 16/09/2026.
+  2. [`doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md`](file:///d:/Working/TaskUXTeam/Deploy%20App/doc/reports/2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md) — Báo cáo chuyên đề Chuẩn hóa UI, ReUI Sonner & Responsive.
+  3. [`doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md`](file:///d:/Working/TaskUXTeam/Deploy%20App/doc/reports/2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md) — Báo cáo chuyên đề Dashboard ReUI & Gantt Timeline.
+  4. [`doc/reports/2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md`](file:///d:/Working/TaskUXTeam/Deploy%20App/doc/reports/2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md) — Báo cáo chuyên đề Cơ chế Phiên song song (Fixed 8h & Sliding 24h) & Cấu hình Quản trị 2 tầng.
+- **Hạ tầng kiểm thử**: Đạt tỷ lệ hoàn hảo 100% (**114/114 E2E tests pass**, **10/10 Sonner tests pass**, **64/64 IA map tests pass**, **31/31 Dual Session Policy tests pass**, `npm run build` pass 0 lỗi).
+- **Hệ thống Google Sheet Backend**: Đã triển khai Two-Way Merge, trigger `onEdit(e)`, nâng cấp Sheet `USERS` lên 14 cột, tách biệt Email Teams OTP và Email cá nhân đăng nhập, bảo toàn danh bạ thực tế.
+- **Cơ chế Quản lý Phiên song song & Cấu hình Quản trị 2 tầng**: Đã hoàn thiện 100% chế độ Fixed 8h & Sliding 24h khi thoát app, chuẩn W3C Page Lifecycle API, cấu hình RBAC Tầng 1 & User Override Tầng 2.
+- **Dashboard AI-Ops ReUI v2 & NewsFeed Timeline**: Đã hoàn thiện toàn diện 6 khối Dashboard, tích hợp `@reui/c-chart-20`, `@reui/c-chart-17`, `@reui/c-timeline-3`, loại bỏ 100% mock data và lọc sạch dự án pending/chưa phân bổ.
+- **Mã Nguồn & Triển Khai**: Toàn bộ các thay đổi đã được kiểm thử và xác minh tính toàn vẹn 100%.

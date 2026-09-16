@@ -97,14 +97,22 @@ Mỗi bài toán là 1 hàng duy nhất. Cột `Payload` chứa toàn bộ objec
 - `?action=sync`: Lấy toàn bộ danh sách bài toán từ `RAW_REQUESTS` và cấu hình từ `RAW_SETTINGS`.
 - `?action=query&request_id=...`: Tra cứu chi tiết một bài toán theo ID.
 - `?action=get_master_data`: Kéo toàn bộ Dữ liệu chủ (Squads, Products, Phases, Status Rules, Audit Logs, RBAC, Selections) từ `RAW_SETTINGS`.
-- `?action=get_team_members`: Trả về danh sách nhân sự từ tab `USERS`.
+- `?action=get_team_members`: Trả về danh sách nhân sự từ tab `USERS` (14 cột).
 - `?action=get_selections`: Lấy danh mục chọn phục vụ Request Form.
+- `?action=check_session&session_token=...`: Kiểm tra tính hợp lệ và thời hạn của phiên làm việc (Fixed 8h hoặc Sliding 24h).
+- `?action=touch_session&session_token=...`: Cập nhật mốc thời gian thoát/tương tác cuối (`last_active_at`) cho phiên Sliding 24h.
 
 ### 4.2. Phương thức `POST` (`doPost`):
+- `action: "request_otp"`: Yêu cầu mã OTP xác thực qua Microsoft Teams Webhook.
+- `action: "verify_otp"`: Xác thực mã OTP 6 số, cấp `session_token` và trả về thông tin User Profile kèm `session_policy`.
+- `action: "touch_session"`: Cập nhật mốc `last_active_at` trên Sheet `USERS` và CacheService.
+- `action: "refresh_session"`: Làm tươi phiên làm việc và gia hạn thời gian hết hạn theo chính sách tương ứng.
+- `action: "check_session"`: Kiểm tra trạng thái phiên làm việc từ client.
+- `action: "logout"`: Hủy phiên làm việc trên server, xóa session token trong Cache và Sheet `USERS`.
 - `action: "create"`: Tạo một task mới và ghi vào `RAW_REQUESTS` (kèm cập nhật `Requests_View`).
 - `action: "update_task_progress"`: Cập nhật khâu UX, tiến độ %, trạng thái, mức độ ưu tiên, sản phẩm, squad, ngày hạn chót, ngày phát hành, ghi chú tiến độ, URL Figma và gán Designer.
 - `action: "sync_master_data"`: Đồng bộ toàn bộ Master Data từ Web App lên bảng `RAW_SETTINGS` trên Google Sheet.
-- `action: "sync_team_members"`: Đẩy danh sách nhân sự cập nhật lên bảng `USERS`.
+- `action: "sync_team_members"`: Đẩy danh sách nhân sự cập nhật lên bảng `USERS` (14 cột bao gồm `Session Policy` và `Last Active At`).
 - `action: "upload_file"`: Nhận chuỗi Base64 của file tài liệu, lưu vào folder `UX_Portal_Attachments` trên Drive và trả về link tải.
 - `action: "upload_avatar"`: Lưu ảnh đại diện người dùng vào thư mục `UX_Portal_Avatars` trên Drive.
 

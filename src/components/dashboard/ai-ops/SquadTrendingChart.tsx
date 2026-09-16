@@ -120,11 +120,11 @@ export default function SquadTrendingChart({
           {requests.length > 0 ? (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
               <TrendingUp className="size-3" />
-              <span>{requests.length} bài toán thực tế</span>
+              <span><span className="font-mono font-bold tabular-nums">{requests.length}</span> bài toán thực tế</span>
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200/60">
-              <span>0 bài toán</span>
+              <span><span className="font-mono font-bold tabular-nums">0</span> bài toán</span>
             </span>
           )}
         </div>
@@ -200,10 +200,10 @@ export default function SquadTrendingChart({
                 content={
                   <ChartTooltipContent
                     indicator="dot"
-                    className="min-w-44 gap-2.5"
+                    className="min-w-44 gap-2.5 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xl text-slate-800"
                     labelFormatter={(value) => (
-                      <div className="border-border/50 mb-0.5 border-b pb-2">
-                        <span className="text-xs font-medium text-foreground">{value} - Task Trending</span>
+                      <div className="border-slate-100 mb-0.5 border-b pb-2">
+                        <span className="text-xs font-semibold text-slate-900">{value} - Task Trending</span>
                       </div>
                     )}
                     formatter={(value, name) => (
@@ -218,11 +218,11 @@ export default function SquadTrendingChart({
                               } as CSSProperties
                             }
                           />
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-slate-600 text-xs">
                             {chartConfig[name as keyof typeof chartConfig]?.label || name}
                           </span>
                         </div>
-                        <span className="text-foreground font-semibold tabular-nums text-xs">
+                        <span className="text-slate-900 font-bold font-mono tabular-nums text-xs">
                           {value != null ? `${Number(value).toLocaleString()} tasks` : "—"}
                         </span>
                       </div>

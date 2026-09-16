@@ -67,7 +67,7 @@ interface AppHeaderProps {
 }
 
 const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
-  overview: { title: "Dashboard", section: "Dashboards" },
+  overview: { title: "Overview", section: "Dashboards" },
   track: { title: "Track Task", section: "Dashboards" },
   create: { title: "Tạo task mới", section: "Workspace" },
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
@@ -450,10 +450,10 @@ export default function AppHeader({
       list.push({
         kind: "action",
         id: "action-overview",
-        title: "Báo cáo tổng quan (Dashboard)",
+        title: "Báo cáo tổng quan (Overview)",
         subtitle: "Số liệu KPI, tiến độ và tải công việc đội ngũ",
         icon: Home,
-        badge: "Dashboard",
+        badge: "Overview",
         onSelect: () => onNavigate("overview"),
       })
     }
@@ -764,7 +764,7 @@ export default function AppHeader({
     const items: { id: Page; title: string; subtitle: string; icon: React.ElementType }[] = []
 
     if (visibility.overview) {
-      items.push({ id: "overview", title: "Dashboard", subtitle: "Bảng điều hành", icon: Home })
+      items.push({ id: "overview", title: "Overview", subtitle: "Bảng điều hành", icon: Home })
     }
     if (visibility.track) {
       items.push({ id: "track", title: "Track Task", subtitle: "Bảng theo dõi tiến độ", icon: CheckSquare })

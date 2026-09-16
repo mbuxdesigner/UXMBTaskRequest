@@ -36,14 +36,15 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
 ├── 📂 NHÓM 1: TỔ CHỨC & PHÂN QUYỀN
 │   ├── 👥 Tab 1: team - Nhân sự UX & Phân bổ Đa-Squad
 │   │   ├── 4 Scorecard thống kê nhanh số lượng nhân sự
-│   │   ├── Bảng nhân sự ReUI: Avatar, Tên, Email, Vai trò, Squads, Sản phẩm, Tải việc
+│   │   ├── Bảng nhân sự ReUI: Avatar, Tên, Email, Vai trò, Squads, Sản phẩm, Tải việc, Badge Chính sách phiên (Riêng)
 │   │   ├── Nút "Tải từ Sheet" (Pull from Sheet) & "Đồng bộ lên Sheet" (Push)
 │   │   ├── Nút "Xuất CSV" (Chuẩn UTF-8 BOM tải về mở trực tiếp bằng Excel)
-│   │   └── Modal Thêm / Sửa nhân sự (phân bổ đa Squad & đa Sản phẩm)
+│   │   └── Modal Thêm / Sửa nhân sự (phân bổ đa Squad, đa Sản phẩm & Chọn chính sách phiên cá nhân: Kế thừa / Cố định 8h / Trượt 24h)
 │   │
-│   ├── 🛡️ Tab 2: rbac - Phân quyền (RBAC) & Ma trận Menu
+│   ├── 🛡️ Tab 2: rbac - Phân quyền (RBAC), Ma trận Menu & Chính sách Phiên (Session Policy)
 │   │   ├── Bảng quy chuẩn năng lực hệ thống (Duyệt đề bài, Chấm test, Tải việc, SLA, Audit)
 │   │   ├── Tích hợp 2 Năng lực Kiến trúc Thông tin: cap-ia-view (Xem IA) & cap-ia-edit (Biên tập IA)
+│   │   ├── Khối cấu hình Chính sách Phiên & Thời hạn Đăng nhập cho 5 vai trò (Cố định 8h / Trượt 24h khi thoát)
 │   │   ├── Ma trận bật/tắt hiển thị menu Sidebar cho từng Role
 │   │   └── Kéo thả GripVertical hoặc bấm ⬆️/⬇️ đổi thứ tự Menu Platform & Resources
 │   │

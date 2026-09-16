@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/chart"
 import type { UXRequest } from "@/data/mockData"
 import { getRequestPendingClassification } from "@/config/statusConfig"
+import { NumberTicker, useCountUp } from "@/components/jolyui/number-ticker"
 
 interface BacklogPendingDonutCardProps {
   requests?: UXRequest[]
@@ -20,7 +21,7 @@ const chartConfig = {
   count: { label: "Tasks" },
   cho_tiep_nhan: { label: "Chờ tiếp nhận", color: "var(--chart-2)" },
   po_pending: { label: "PO pending", color: "var(--chart-3)" },
-  designer_pending: { label: "Designer/Khác", color: "var(--chart-4)" },
+  designer_pending: { label: "Khác", color: "var(--chart-4)" },
 } satisfies ChartConfig
 
 export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendingDonutCardProps) {
@@ -57,6 +58,8 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
     return { choTiepNhan, poPending, designerPending, total, overdueCount }
   }, [requests])
 
+  const animatedTotal = useCountUp(stats.total, 800)
+
   const chartData = useMemo(
     () => [
       { status: "cho_tiep_nhan", count: stats.choTiepNhan, fill: "var(--color-cho_tiep_nhan)" },
@@ -73,30 +76,25 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
     >
       {/* Header on gray background */}
       <div className="flex items-center justify-between px-3 py-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-neutral-500">Backlog & Pending</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/70">
-            {stats.total} chờ
-          </span>
-        </div>
+        <span className="text-sm font-medium text-neutral-500">Backlog & Pending</span>
         <Clock className="size-4 text-neutral-400 stroke-[1.5]" />
       </div>
 
       {/* Inner White Card */}
-      <div className="rounded-xl border border-neutral-200/70 bg-white p-4 shadow-2xs flex flex-col flex-1 justify-between">
+      <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between">
         {/* Horizontal Layout: Donut Chart nhỏ bên trái + Danh sách trạng thái bên phải */}
-        <div className="w-full flex-1 flex items-center justify-between gap-3 py-1">
+        <div className="w-full flex-1 flex items-center justify-between gap-3 py-0.5">
           {/* Cột trái: Donut chart compact với cụm số nhỏ vừa vặn */}
-          <div className="w-[105px] h-[105px] shrink-0 relative flex items-center justify-center">
+          <div className="w-[98px] h-[98px] shrink-0 relative flex items-center justify-center">
             <ChartContainer
               config={chartConfig}
-              className="w-[105px] h-[105px] aspect-square"
+              className="w-[98px] h-[98px] aspect-square"
             >
-              <PieChart accessibilityLayer width={105} height={105} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <PieChart accessibilityLayer width={98} height={98} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <ChartTooltip
                   content={
                     <ChartTooltipContent
-                      className="min-w-36 gap-2"
+                      className="min-w-36 gap-2 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xl text-slate-800"
                       formatter={(value, name) => (
                         <div className="flex w-full items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
@@ -108,11 +106,11 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                                 } as CSSProperties
                               }
                             />
-                            <span className="text-muted-foreground text-xs">
+                            <span className="text-slate-600 text-xs">
                               {chartConfig[name as keyof typeof chartConfig]?.label || name}
                             </span>
                           </div>
-                          <span className="text-foreground font-semibold tabular-nums text-xs">
+                          <span className="text-slate-900 font-bold font-mono tabular-nums text-xs">
                             {Number(value).toLocaleString()}
                           </span>
                         </div>
@@ -124,8 +122,8 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                 <Pie
                   data={[{ value: 1 }]}
                   dataKey="value"
-                  innerRadius={33}
-                  outerRadius={45}
+                  innerRadius={30}
+                  outerRadius={42}
                   fill="#f1f5f9"
                   stroke="none"
                   isAnimationActive={false}
@@ -136,12 +134,15 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                   data={chartData}
                   dataKey="count"
                   nameKey="status"
-                  innerRadius={33}
-                  outerRadius={45}
+                  innerRadius={30}
+                  outerRadius={42}
                   cornerRadius={4}
                   paddingAngle={3}
                   stroke="var(--background)"
                   strokeWidth={2.5}
+                  isAnimationActive={true}
+                  animationDuration={800}
+                  animationEasing="ease-out"
                 >
                   <Label
                     content={({ viewBox }) => {
@@ -155,10 +156,10 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                           >
                             <tspan
                               x={viewBox.cx}
-                              y={viewBox.cy}
-                              className="fill-foreground text-xl font-bold tabular-nums"
+                              y={(viewBox.cy || 0) - 1}
+                              className="fill-foreground text-2xl font-black font-mono tabular-nums"
                             >
-                              {stats.total.toLocaleString()}
+                              {animatedTotal.toLocaleString()}
                             </tspan>
                             <tspan
                               x={viewBox.cx}
@@ -177,44 +178,44 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
             </ChartContainer>
           </div>
 
-          {/* Cột phải: Danh sách chỉ số các trạng thái với màu nền tinh tế */}
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <div className="flex items-center justify-between text-xs px-2 py-1 rounded-lg bg-emerald-50/70 border border-emerald-100/90 text-emerald-950 transition-colors">
-              <div className="flex items-center gap-1.5 min-w-0">
+          {/* Cột phải: Danh sách chỉ số các trạng thái sạch sẽ, không khung viền và không nền hộp */}
+          <div className="flex-1 min-w-0 space-y-2 py-0.5">
+            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+              <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="size-2 rounded-xs shrink-0"
                   style={{ backgroundColor: "var(--chart-2)" }}
                 />
-                <span className="text-emerald-900 truncate text-[11px] font-medium">Chờ tiếp nhận</span>
+                <span className="text-neutral-600 truncate text-xs font-normal">Chờ tiếp nhận</span>
               </div>
-              <span className="font-semibold text-emerald-900 tabular-nums shrink-0 ml-1 text-xs">
-                {stats.choTiepNhan}
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+                <NumberTicker value={stats.choTiepNhan} />
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs px-2 py-1 rounded-lg bg-purple-50/70 border border-purple-100/90 text-purple-950 transition-colors">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <div
-                  className="size-2 rounded-xs shrink-0"
-                  style={{ backgroundColor: "var(--chart-4)" }}
-                />
-                <span className="text-purple-900 truncate text-[11px] font-medium">Designer/Khác</span>
-              </div>
-              <span className="font-semibold text-purple-900 tabular-nums shrink-0 ml-1 text-xs">
-                {stats.designerPending}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs px-2 py-1 rounded-lg bg-amber-50/70 border border-amber-100/90 text-amber-950 transition-colors">
-              <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+              <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="size-2 rounded-xs shrink-0"
                   style={{ backgroundColor: "var(--chart-3)" }}
                 />
-                <span className="text-amber-900 truncate text-[11px] font-medium">PO pending</span>
+                <span className="text-neutral-600 truncate text-xs font-normal">PO pending</span>
               </div>
-              <span className="font-semibold text-amber-900 tabular-nums shrink-0 ml-1 text-xs">
-                {stats.poPending}
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+                <NumberTicker value={stats.poPending} />
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="size-2 rounded-xs shrink-0"
+                  style={{ backgroundColor: "var(--chart-4)" }}
+                />
+                <span className="text-neutral-600 truncate text-xs font-normal">Khác</span>
+              </div>
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+                <NumberTicker value={stats.designerPending} />
               </span>
             </div>
           </div>

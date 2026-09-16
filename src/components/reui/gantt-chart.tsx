@@ -1753,13 +1753,13 @@ export default function ReUIGanttChart({
               opacity: 0,
               scale: 0.95,
               x: Math.min(window.innerWidth - 304, Math.max(12, hoveredTooltip.clientX - 140)),
-              y: hoveredTooltip.clientY > 170 ? hoveredTooltip.clientY - 148 : hoveredTooltip.clientY + 18,
+              y: hoveredTooltip.clientY > 170 ? hoveredTooltip.clientY - 156 : hoveredTooltip.clientY + 18,
             }}
             animate={{
               opacity: 1,
               scale: 1,
               x: Math.min(window.innerWidth - 304, Math.max(12, hoveredTooltip.clientX - 140)),
-              y: hoveredTooltip.clientY > 170 ? hoveredTooltip.clientY - 148 : hoveredTooltip.clientY + 18,
+              y: hoveredTooltip.clientY > 170 ? hoveredTooltip.clientY - 156 : hoveredTooltip.clientY + 18,
             }}
             exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.1 } }}
             transition={{
@@ -1773,47 +1773,52 @@ export default function ReUIGanttChart({
               top: 0,
               left: 0,
             }}
-            className="w-72 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-3.5 shadow-2xl z-50 pointer-events-none border border-slate-700/80 space-y-2.5 will-change-transform"
+            className="w-72 bg-white/98 backdrop-blur-md text-slate-800 rounded-2xl p-3.5 shadow-xl shadow-slate-900/15 z-50 pointer-events-none border border-slate-200/90 space-y-2.5 will-change-transform select-none"
           >
             {/* Tooltip Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-mono font-bold">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100/90 text-slate-700 text-[10px] font-mono font-bold border border-slate-200/80">
                 {hoveredTooltip.request.preferred_squad || hoveredTooltip.request.product || "MBBank"}
               </span>
               {(() => {
                 const sInfo = getTaskStageStatusInfo(hoveredTooltip.request)
                 return (
-                  <span className={`text-[11px] font-bold ${sInfo.isPending ? "text-amber-400" : "text-blue-400"}`}>
-                    {sInfo.text}
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                    sInfo.isPending 
+                      ? "bg-amber-50 text-amber-800 border-amber-200" 
+                      : "bg-blue-50 text-[#1057FB] border-blue-200"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${sInfo.isPending ? "bg-amber-500" : "bg-[#1057FB]"} shrink-0`} />
+                    <span>{sInfo.text}</span>
                   </span>
                 )
               })()}
             </div>
 
             {/* Full Task Title */}
-            <p className="text-xs font-bold text-white leading-snug">
+            <p className="text-xs font-bold text-slate-900 leading-snug">
               {hoveredTooltip.request.title}
             </p>
 
             {/* Details Grid */}
-            <div className="space-y-1.5 text-[11px] text-slate-300">
+            <div className="space-y-1.5 text-[11px] text-slate-600">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Phụ trách:</span>
-                <span className="font-semibold text-white">
+                <span className="text-slate-500">Phụ trách:</span>
+                <span className="font-semibold text-slate-900">
                   {hoveredTooltip.request.assigned_designer || "Chưa gán"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Release / Hạn:</span>
-                <span className="font-mono text-emerald-400 font-bold">
+                <span className="text-slate-500">Release / Hạn:</span>
+                <span className="font-mono text-emerald-700 font-bold tabular-nums">
                   {formatDueDate(hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline) || "Chưa hạn"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Tiến độ tổng:</span>
-                <span className="font-mono text-white font-bold">
+                <span className="text-slate-500">Tiến độ tổng:</span>
+                <span className="font-mono text-slate-900 font-bold tabular-nums">
                   {hoveredTooltip.request.progress || 0}%
                 </span>
               </div>
@@ -1821,9 +1826,9 @@ export default function ReUIGanttChart({
               {(() => {
                 const sInfo = getTaskStageStatusInfo(hoveredTooltip.request)
                 return sInfo.isPending ? (
-                  <div className="flex items-center justify-between text-amber-300 pt-1 border-t border-slate-800">
-                    <span className="text-slate-400">Lý do Pending:</span>
-                    <span className="font-medium text-amber-300 truncate max-w-[150px]" title={sInfo.title}>
+                  <div className="flex items-center justify-between text-amber-900 pt-1.5 border-t border-amber-100 bg-amber-50/70 -mx-1 px-1.5 py-0.5 rounded-md">
+                    <span className="text-amber-700 font-medium">Lý do Pending:</span>
+                    <span className="font-bold text-amber-900 truncate max-w-[150px]" title={sInfo.title}>
                       {sInfo.title}
                     </span>
                   </div>
@@ -1832,8 +1837,8 @@ export default function ReUIGanttChart({
             </div>
 
             {/* Hint */}
-            <div className={`pt-1 text-[10px] font-medium text-center ${
-              hoveredTooltip.request.isRestricted ? "text-amber-400/90" : "text-slate-500"
+            <div className={`pt-1.5 border-t border-slate-100 text-[10px] font-medium text-center ${
+              hoveredTooltip.request.isRestricted ? "text-amber-600 font-semibold" : "text-slate-400"
             }`}>
               {hoveredTooltip.request.isRestricted 
                 ? "🔒 Không có quyền truy cập bài toán này (Liên hệ Admin)" 

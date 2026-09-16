@@ -8,7 +8,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
-import { getStoredSession, startRolePreview, stopRolePreview } from "@/services/otpAuthService"
+import {
+  getStoredSession,
+  startRolePreview,
+  stopRolePreview,
+  getRoleSessionPolicies,
+  saveRoleSessionPolicies,
+  resolveEffectiveSessionPolicy,
+  DEFAULT_ROLE_SESSION_POLICIES,
+  type RoleSessionPolicies,
+  type UserSessionPolicyOverride,
+} from "@/services/otpAuthService"
 import {
   uploadAvatarToDrive,
   syncTeamMembersToSheet,
@@ -118,6 +128,7 @@ export interface TeamMember {
   teamsEmail?: string // Email Teams (Nhận OTP)
   personalEmail?: string // Email cá nhân (Đăng nhập)
   role: UserRole
+  sessionPolicy?: UserSessionPolicyOverride // "inherit" | "fixed_8h" | "sliding_24h"
   squad?: string // Legacy fallback
   squads: string[] // 1 Designer -> nhiều Squads, 1 PO -> nhiều Squads
   products?: string[] // 1 PO -> nhiều Sản phẩm phụ trách
@@ -1671,6 +1682,84 @@ export default function QuanLyPage() {
     syncMasterDataToSheet({ rbac: updated })
   }
 
+  // Cấu hình Chính sách Phiên đăng nhập theo Vai trò (Dual Session Policy: Fixed 8h & Sliding 24h)
+  const [roleSessionPolicies, setRoleSessionPolicies] = useState<RoleSessionPolicies>(() => {
+    return getRoleSessionPolicies()
+  })
+
+  const handleRolePolicyChange = (role: keyof RoleSessionPolicies, policy: "fixed_8h" | "sliding_24h") => {
+    const updated: RoleSessionPolicies = {
+      ...roleSessionPolicies,
+      [role]: policy,
+    }
+    setRoleSessionPolicies(updated)
+    saveRoleSessionPolicies(updated)
+    toast.success(`Đã cập nhật chính sách phiên cho vai trò ${role}: ${policy === "sliding_24h" ? "Trượt 24h khi thoát" : "Cố định 8 tiếng"}!`)
+    logAdminAction(
+      "Chính sách Phiên đăng nhập",
+      `Vai trò: ${role}`,
+      `Chuyển sang: ${policy === "sliding_24h" ? "Trượt 24h khi thoát (Sliding Inactivity)" : "Cố định 8h (Fixed 8h)"}`,
+      "security"
+    )
+    syncMasterDataToSheet({ session_policies: updated })
+
+    // Cập nhật phiên người dùng đang đăng nhập nếu chịu ảnh hưởng từ thay đổi vai trò
+    try {
+      const sess = getStoredSession()
+      if (sess && sess.role === role) {
+        const effective = resolveEffectiveSessionPolicy(sess.teamsEmail || sess.personalEmail, sess.role)
+        if (effective !== sess.sessionPolicy) {
+          sess.sessionPolicy = effective
+          if (effective === "sliding_24h") {
+            sess.expiresAt = (sess.lastActiveAt || Date.now()) + 24 * 3600 * 1000
+          } else {
+            sess.expiresAt = (sess.loginAt || Date.now()) + 8 * 3600 * 1000
+          }
+          const serialized = JSON.stringify(sess)
+          sessionStorage.setItem("ux_portal_session_auth", serialized)
+          localStorage.setItem("ux_portal_session_auth", serialized)
+          localStorage.setItem("ux_portal_session", serialized)
+          window.dispatchEvent(new Event("auth_session_changed"))
+          window.dispatchEvent(new Event("storage"))
+        }
+      }
+    } catch {}
+  }
+
+  const handleResetRolePolicies = () => {
+    setRoleSessionPolicies(DEFAULT_ROLE_SESSION_POLICIES)
+    saveRoleSessionPolicies(DEFAULT_ROLE_SESSION_POLICIES)
+    toast.success("Đã khôi phục chính sách phiên làm việc theo vai trò về mặc định!")
+    logAdminAction(
+      "Chính sách Phiên đăng nhập",
+      "Tất cả vai trò",
+      "Khôi phục chính sách phiên mặc định",
+      "security"
+    )
+    syncMasterDataToSheet({ session_policies: DEFAULT_ROLE_SESSION_POLICIES })
+
+    try {
+      const sess = getStoredSession()
+      if (sess) {
+        const effective = resolveEffectiveSessionPolicy(sess.teamsEmail || sess.personalEmail, sess.role)
+        if (effective !== sess.sessionPolicy) {
+          sess.sessionPolicy = effective
+          if (effective === "sliding_24h") {
+            sess.expiresAt = (sess.lastActiveAt || Date.now()) + 24 * 3600 * 1000
+          } else {
+            sess.expiresAt = (sess.loginAt || Date.now()) + 8 * 3600 * 1000
+          }
+          const serialized = JSON.stringify(sess)
+          sessionStorage.setItem("ux_portal_session_auth", serialized)
+          localStorage.setItem("ux_portal_session_auth", serialized)
+          localStorage.setItem("ux_portal_session", serialized)
+          window.dispatchEvent(new Event("auth_session_changed"))
+          window.dispatchEvent(new Event("storage"))
+        }
+      }
+    } catch {}
+  }
+
   // State Data with localStorage sync
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
     let list = INITIAL_TEAM_MEMBERS
@@ -1846,6 +1935,10 @@ export default function QuanLyPage() {
           if (Array.isArray(d.status_rules) && d.status_rules.length > 0) {
             setStatusRules(d.status_rules)
             localStorage.setItem("mbbank_admin_status_rules", JSON.stringify(d.status_rules))
+          }
+          if (d.session_policies && typeof d.session_policies === "object") {
+            setRoleSessionPolicies(d.session_policies)
+            saveRoleSessionPolicies(d.session_policies)
           }
           if (d.nav_items) {
             setNavConfig(d.nav_items)
@@ -2315,6 +2408,7 @@ export default function QuanLyPage() {
             canExport: false,
             canManageSystem: false,
           },
+          sessionPolicy: m.sessionPolicy || "inherit",
         }))
         const cleaned = formatted.filter((m) => !isMockDesigner(m.name, m.email))
         setTeamMembers(cleaned)
@@ -2355,6 +2449,11 @@ export default function QuanLyPage() {
         if (res.data.rbac && typeof res.data.rbac === "object") {
           setRbacRolesPermissions(res.data.rbac)
           localStorage.setItem("mbbank_admin_rbac", JSON.stringify(res.data.rbac))
+          updatedCount++
+        }
+        if (res.data.session_policies && typeof res.data.session_policies === "object") {
+          setRoleSessionPolicies(res.data.session_policies)
+          saveRoleSessionPolicies(res.data.session_policies)
           updatedCount++
         }
         if (res.data.nav_items && typeof res.data.nav_items === "object") {
@@ -2489,6 +2588,8 @@ export default function QuanLyPage() {
     if (res.success && res.avatarUrl) {
       const updated = teamMembers.map((m) => (m.id === memberId ? { ...m, avatarUrl: res.avatarUrl! } : m))
       setTeamMembers(updated)
+      localStorage.setItem("mbbank_admin_team", JSON.stringify(updated))
+      localStorage.setItem("mbbank_team_members", JSON.stringify(updated))
       syncTeamMembersToSheet(updated)
       
       const sess = getStoredSession()
@@ -2557,6 +2658,7 @@ export default function QuanLyPage() {
       email: finalPrimaryEmail,
       teamsEmail: finalTeamsEmail,
       personalEmail: finalPersonalEmail,
+      sessionPolicy: editingMember.sessionPolicy || "inherit",
       squads: cleanSquads.length > 0 ? cleanSquads : (allAvailableSquadNames[0] ? [allAvailableSquadNames[0]] : []),
       products: cleanProducts.length > 0 ? cleanProducts : (allAvailableProductNames[0] ? [allAvailableProductNames[0]] : []),
       squad: cleanSquads[0] || allAvailableSquadNames[0] || "eSaving",
@@ -2564,6 +2666,8 @@ export default function QuanLyPage() {
 
     const updatedList = teamMembers.map((m) => (m.id === sanitizedMember.id ? sanitizedMember : m))
     setTeamMembers(updatedList)
+    localStorage.setItem("mbbank_admin_team", JSON.stringify(updatedList))
+    localStorage.setItem("mbbank_team_members", JSON.stringify(updatedList))
 
     // Đồng bộ ngược lại vào danh sách Squads
     const memName = sanitizedMember.name.trim()
@@ -2620,12 +2724,25 @@ export default function QuanLyPage() {
 
     // Cập nhật session nếu trùng email tài khoản đang đăng nhập
     const sess = getStoredSession()
-    if (sess && (sess.teamsEmail?.toLowerCase() === sanitizedMember.email.toLowerCase() || sess.personalEmail?.toLowerCase() === sanitizedMember.email.toLowerCase())) {
+    const matchEmail = (e1?: string, e2?: string) => Boolean(e1 && e2 && e1.trim().toLowerCase() === e2.trim().toLowerCase())
+    if (
+      sess &&
+      (matchEmail(sess.teamsEmail, sanitizedMember.teamsEmail) ||
+        matchEmail(sess.personalEmail, sanitizedMember.personalEmail) ||
+        matchEmail(sess.teamsEmail, sanitizedMember.email) ||
+        matchEmail(sess.personalEmail, sanitizedMember.email))
+    ) {
       sess.displayName = sanitizedMember.name
       sess.role = sanitizedMember.role
       sess.avatarUrl = sanitizedMember.avatarUrl
       sess.squads = sanitizedMember.squads
       sess.products = sanitizedMember.products
+      sess.sessionPolicy = resolveEffectiveSessionPolicy(sanitizedMember.email, sanitizedMember.role, sanitizedMember.sessionPolicy)
+      if (sess.sessionPolicy === "sliding_24h") {
+        sess.expiresAt = (sess.lastActiveAt || Date.now()) + 24 * 3600 * 1000
+      } else {
+        sess.expiresAt = (sess.loginAt || Date.now()) + 8 * 3600 * 1000
+      }
       sessionStorage.setItem("ux_portal_session_auth", JSON.stringify(sess))
       localStorage.setItem("ux_portal_session_auth", JSON.stringify(sess))
       localStorage.setItem("ux_portal_session", JSON.stringify(sess))
@@ -3435,22 +3552,45 @@ export default function QuanLyPage() {
                             </div>
                           </td>
 
-                          {/* Role */}
+                          {/* Role & Session Policy */}
                           <td className="py-3 px-4 align-middle border-b border-slate-200/70">
-                            <span className={`px-2 py-0.5 rounded-md font-medium text-xs border ${
-                            member.role === "Admin"
-                              ? "bg-slate-900 text-white border-slate-900"
-                              : member.role === "Design Owner"
-                              ? "bg-slate-100 text-slate-900 border-slate-300 font-semibold"
-                              : member.role === "PO"
-                              ? "bg-purple-50 text-purple-700 border-purple-200 font-semibold"
-                              : member.role === "Business"
-                              ? "bg-amber-50 text-amber-800 border-amber-300 font-semibold"
-                              : "bg-blue-50 text-blue-700 border-blue-200 font-medium"
-                          }`}>
-                            {member.role}
-                          </span>
-                        </td>
+                            <div className="flex flex-col items-start gap-1">
+                              <span className={`px-2 py-0.5 rounded-md font-medium text-xs border ${
+                                member.role === "Admin"
+                                  ? "bg-slate-900 text-white border-slate-900"
+                                  : member.role === "Design Owner"
+                                  ? "bg-slate-100 text-slate-900 border-slate-300 font-semibold"
+                                  : member.role === "PO"
+                                  ? "bg-purple-50 text-purple-700 border-purple-200 font-semibold"
+                                  : member.role === "Business"
+                                  ? "bg-amber-50 text-amber-800 border-amber-300 font-semibold"
+                                  : "bg-blue-50 text-blue-700 border-blue-200 font-medium"
+                              }`}>
+                                {member.role}
+                              </span>
+                              {(() => {
+                                const hasOverride = Boolean(member.sessionPolicy && member.sessionPolicy !== "inherit");
+                                const effective = hasOverride
+                                  ? (member.sessionPolicy as "fixed_8h" | "sliding_24h")
+                                  : (roleSessionPolicies[member.role as keyof RoleSessionPolicies] || "fixed_8h");
+                                const isSliding = effective === "sliding_24h";
+                                return (
+                                  <span
+                                    title={hasOverride ? `Chính sách riêng: ${isSliding ? "Trượt 24h" : "Cố định 8h"}` : `Kế thừa vai trò ${member.role}: ${isSliding ? "Trượt 24h" : "Cố định 8h"}`}
+                                    className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium border ${
+                                      isSliding
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200/80"
+                                        : "bg-amber-50 text-amber-700 border-amber-200/80"
+                                    }`}
+                                  >
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>{isSliding ? "Trượt 24h" : "Cố định 8h"}</span>
+                                    {hasOverride && <span className="text-[9px] font-bold text-blue-600">(Riêng)</span>}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          </td>
 
                         {/* Multi-Squads */}
                         <td className="py-3 px-4 align-middle border-b border-slate-200/70 max-w-[220px]">
@@ -3653,6 +3793,159 @@ export default function QuanLyPage() {
                           })}
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Frame>
+
+            {/* Card 1b: Chính sách Phiên đăng nhập theo Vai trò (Dual Session Policy) */}
+            <Frame variant="default" padding="none" className="overflow-hidden">
+              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-base font-semibold text-slate-900">
+                      Chính sách Phiên đăng nhập theo Vai trò (Session Policy)
+                    </h3>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-500">
+                    Cấu hình thời hạn phiên làm việc mặc định cho từng vai trò trên hệ thống MB UX Portal.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetRolePolicies}
+                    className="h-8 text-xs gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Khôi phục mặc định</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Explanatory Banner */}
+              <div className="p-4 bg-slate-50/60 border-b border-slate-200/70 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="flex items-start gap-2.5 p-3 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="p-1.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-slate-900 mb-0.5">Cơ chế Cố định 8 tiếng (Fixed 8h)</div>
+                    <p className="text-slate-500 leading-relaxed text-[11.5px]">
+                      Phiên hết hạn chính xác sau 8 giờ kể từ lúc đăng nhập OTP thành công, bắt buộc xác thực lại sau 8h bất kể người dùng còn hoạt động hay không. Phù hợp vai trò quản trị viên cấp cao.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-3 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0 mt-0.5">
+                    <RefreshCw className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-slate-900 mb-0.5">Cơ chế Trượt 24 tiếng khi thoát (Sliding 24h)</div>
+                    <p className="text-slate-500 leading-relaxed text-[11.5px]">
+                      Phiên duy trì liên tục và lưu trong bộ nhớ máy. Khi người dùng quay lại trong vòng 24 giờ kể từ lần thao tác cuối, phiên được tự động gia hạn thêm 24h. Chỉ hết hạn nếu vắng mặt &gt; 24h.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Policy Matrix Table */}
+              <div data-slot="data-grid" className="w-full select-none">
+                <div className="overflow-x-auto w-full">
+                  <table className="text-slate-900 caption-bottom text-left align-middle text-xs sm:text-sm font-normal w-full min-w-[640px] border-separate border-spacing-0">
+                    <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                      <tr className="border-b border-slate-200/70">
+                        <th className="py-3 px-6 w-[35%] border-b border-slate-200/70">Vai trò hệ thống (Role)</th>
+                        <th className="py-3 px-4 w-[25%] border-b border-slate-200/70">Khuyến nghị áp dụng</th>
+                        <th className="py-3 px-6 text-right w-[40%] border-b border-slate-200/70">Chính sách phiên áp dụng</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-700 divide-y divide-slate-100">
+                      {[
+                        {
+                          role: "Admin" as const,
+                          desc: "Quản trị toàn quyền hệ thống, phân quyền & cấu hình bảo mật",
+                          recommendation: "Cố định 8h (Bảo mật tối đa)",
+                          colorClass: "bg-slate-900 text-white border-slate-900",
+                        },
+                        {
+                          role: "Design Owner" as const,
+                          desc: "Quản lý tiến độ toàn bộ squad, duyệt yêu cầu và điều phối",
+                          recommendation: "Trượt 24h (Làm việc liên tục)",
+                          colorClass: "bg-slate-100 text-slate-900 border-slate-300 font-semibold",
+                        },
+                        {
+                          role: "Designer" as const,
+                          desc: "Thực thi thiết kế UX/UI đa squad, cập nhật task hàng ngày",
+                          recommendation: "Trượt 24h (Trải nghiệm liền mạch)",
+                          colorClass: "bg-blue-50 text-blue-700 border-blue-200 font-medium",
+                        },
+                        {
+                          role: "PO" as const,
+                          desc: "Product Owner gửi bài toán, theo dõi tiến độ và nhận bàn giao",
+                          recommendation: "Trượt 24h (Tiện lợi không gián đoạn)",
+                          colorClass: "bg-purple-50 text-purple-700 border-purple-200 font-semibold",
+                        },
+                        {
+                          role: "Business" as const,
+                          desc: "Nghiệp vụ / Khối kinh doanh đặt hàng và theo dõi yêu cầu",
+                          recommendation: "Trượt 24h (Tiện lợi không gián đoạn)",
+                          colorClass: "bg-amber-50 text-amber-800 border-amber-300 font-semibold",
+                        },
+                      ].map((item) => {
+                        const currentPolicy = roleSessionPolicies[item.role] || "fixed_8h"
+                        return (
+                          <tr key={`role-policy-${item.role}`} className="transition-colors hover:bg-slate-50/80">
+                            <td className="py-3.5 px-6 align-middle">
+                              <div className="flex items-center gap-2.5">
+                                <span className={`px-2 py-0.5 rounded-md text-xs border shrink-0 ${item.colorClass}`}>
+                                  {item.role}
+                                </span>
+                                <span className="text-xs text-slate-500 hidden sm:inline">{item.desc}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 align-middle">
+                              <span className="text-xs text-slate-600 font-medium">{item.recommendation}</span>
+                            </td>
+                            <td className="py-3.5 px-6 align-middle text-right">
+                              <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200/80">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRolePolicyChange(item.role, "fixed_8h")}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                                    currentPolicy === "fixed_8h"
+                                      ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                                      : "text-slate-500 hover:text-slate-900"
+                                  }`}
+                                  title="Phiên kết thúc sau đúng 8 giờ kể từ lúc đăng nhập"
+                                >
+                                  <Clock className="w-3 h-3" />
+                                  <span>Cố định 8 tiếng</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRolePolicyChange(item.role, "sliding_24h")}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                                    currentPolicy === "sliding_24h"
+                                      ? "bg-emerald-600 text-white shadow-2xs font-semibold"
+                                      : "text-slate-500 hover:text-slate-900"
+                                  }`}
+                                  title="Phiên duy trì 24 giờ tính từ lần cuối thao tác / thoát ứng dụng"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                  <span>Trượt 24h khi thoát</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -5476,6 +5769,45 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
+                {/* Session Policy Selection */}
+                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Chính sách Phiên đăng nhập (Session Policy):</span>
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      Đang áp dụng: <strong className="text-slate-800 font-semibold">
+                        {(editingMember.sessionPolicy && editingMember.sessionPolicy !== "inherit")
+                          ? (editingMember.sessionPolicy === "sliding_24h" ? "Trượt 24h khi thoát (Riêng)" : "Cố định 8 tiếng (Riêng)")
+                          : `Kế thừa vai trò (${roleSessionPolicies[editingMember.role as keyof RoleSessionPolicies] === "sliding_24h" ? "Trượt 24h" : "Cố định 8h"})`}
+                      </strong>
+                    </span>
+                  </div>
+                  <DropdownMenu
+                    className="w-full"
+                    value={editingMember.sessionPolicy || "inherit"}
+                    onChange={(val) => setEditingMember({ ...editingMember, sessionPolicy: val as UserSessionPolicyOverride })}
+                    options={[
+                      {
+                        value: "inherit",
+                        label: `Kế thừa từ vai trò (${editingMember.role}: ${roleSessionPolicies[editingMember.role as keyof RoleSessionPolicies] === "sliding_24h" ? "Trượt 24h khi thoát" : "Cố định 8 tiếng"})`,
+                      },
+                      {
+                        value: "fixed_8h",
+                        label: "Cố định 8 tiếng (Fixed 8h - Hết hạn đúng 8h sau khi nhập OTP)",
+                      },
+                      {
+                        value: "sliding_24h",
+                        label: "Trượt 24 tiếng khi thoát (Sliding 24h - Tự động gia hạn khi truy cập)",
+                      },
+                    ]}
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Cấu hình cơ chế phiên riêng biệt cho cá nhân này hoặc chọn "Kế thừa" để theo chính sách chung của vai trò.
+                  </p>
+                </div>
+
                 {/* HIERARCHICAL PRODUCT -> SQUADS SELECTION */}
                 <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between">
@@ -5663,10 +5995,15 @@ export default function QuanLyPage() {
         products={products}
         squads={squads}
         onSuccess={(newMem) => {
-          setTeamMembers((prev) => [
-            newMem,
-            ...prev.filter((m) => m.email.toLowerCase() !== newMem.email.toLowerCase()),
-          ])
+          setTeamMembers((prev) => {
+            const next = [
+              newMem,
+              ...prev.filter((m) => m.email.toLowerCase() !== newMem.email.toLowerCase()),
+            ]
+            localStorage.setItem("mbbank_admin_team", JSON.stringify(next))
+            localStorage.setItem("mbbank_team_members", JSON.stringify(next))
+            return next
+          })
           logAdminAction(
             "Thêm nhân sự",
             newMem.name,

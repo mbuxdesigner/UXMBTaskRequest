@@ -12,7 +12,8 @@ import {
   UserCheck, 
   Mail, 
   Activity,
-  Sliders
+  Sliders,
+  Clock
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +59,7 @@ export default function AddMemberModal({
   const [role, setRole] = useState<TeamMember["role"]>((initialRole as any) || "Designer")
   const [status, setStatus] = useState<TeamMember["status"]>("Active")
   const [capacity, setCapacity] = useState<number>(5)
+  const [sessionPolicy, setSessionPolicy] = useState<"inherit" | "fixed_8h" | "sliding_24h">("inherit")
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
   const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({})
@@ -143,6 +145,7 @@ export default function AddMemberModal({
       setRole((initialRole as any) || "Designer")
       setStatus("Active")
       setCapacity(5)
+      setSessionPolicy("inherit")
 
       // Default: select first product and expand it
       const firstProd = availableProducts[0] || "App MBBank"
@@ -253,6 +256,7 @@ export default function AddMemberModal({
         teamsEmail: cleanEmail,
         personalEmail: cleanEmail,
         role: role,
+        sessionPolicy: sessionPolicy,
         squad: finalSquads[0] || defaultSq,
         squads: finalSquads,
         products: finalProducts,
@@ -436,6 +440,24 @@ export default function AddMemberModal({
                   className="text-xs rounded-xl border-slate-200 text-center font-medium h-9"
                 />
               </div>
+            </div>
+
+            {/* Session Policy Selection */}
+            <div>
+              <label className="text-xs font-normal text-slate-700 block mb-1">
+                Chính sách Phiên đăng nhập (Session Policy):
+              </label>
+              <DropdownMenu
+                className="w-full"
+                buttonClassName="w-full h-9 bg-white border-slate-200 rounded-xl px-3 justify-between font-normal text-xs text-slate-800 shadow-2xs"
+                value={sessionPolicy}
+                onChange={(val) => setSessionPolicy(val as "inherit" | "fixed_8h" | "sliding_24h")}
+                options={[
+                  { value: "inherit", label: "Kế thừa theo Vai trò (Khuyên dùng)" },
+                  { value: "fixed_8h", label: "Cố định 8 tiếng (Fixed 8h - Bắt buộc sau 8h)" },
+                  { value: "sliding_24h", label: "Trượt 24 tiếng khi thoát (Sliding 24h - Gia hạn khi truy cập)" },
+                ]}
+              />
             </div>
 
             {/* Row 3: HIERARCHICAL PRODUCT -> SQUADS SELECTION */}

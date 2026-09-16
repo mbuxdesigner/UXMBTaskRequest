@@ -42,7 +42,7 @@ export default function TrackTaskGanttFrame({
       </div>
 
       {/* Inner White Card */}
-      <div className="rounded-xl border border-neutral-200/70 bg-white p-4 shadow-2xs overflow-x-auto">
+      <div className="rounded-xl border border-neutral-200/70 bg-white shadow-2xs overflow-hidden">
         {displayRequests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="size-10 rounded-full bg-neutral-100 flex items-center justify-center mb-2">
@@ -55,6 +55,7 @@ export default function TrackTaskGanttFrame({
           </div>
         ) : (
           <ReUIGanttChart
+            borderless
             requests={displayRequests}
             onSelectRequest={onSelectRequest}
           />

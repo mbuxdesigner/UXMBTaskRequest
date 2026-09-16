@@ -965,8 +965,43 @@ export default function RequestDetail({
 
   // Interactive Property Edit States
   const [openDropdown, setOpenDropdown] = useState<"status" | "assignee" | "date" | "priority" | "estimate" | "phase" | "tags" | "viewers" | null>(null)
-  const [viewerPlacement, setViewerPlacement] = useState<"top" | "bottom">("top")
+  const [viewerPlacement, setViewerPlacement] = useState<"top" | "bottom">("bottom")
+  const [viewerMaxHeight, setViewerMaxHeight] = useState<number>(350)
   const [assigneePlacement, setAssigneePlacement] = useState<"top" | "bottom">("bottom")
+  const [assigneeMaxHeight, setAssigneeMaxHeight] = useState<number>(350)
+
+  // Hàm tính toán thông minh vị trí bung (top/bottom) và chiều cao tối đa (maxHeight)
+  // để popover không bao giờ bị cắt trên màn hình có chiều cao (H) ngắn
+  const calcSmartDropdownPlacement = (triggerEl: HTMLElement) => {
+    const rect = triggerEl.getBoundingClientRect()
+    const container = triggerEl.closest(".overflow-y-auto") as HTMLElement | null
+    const containerBottom = container ? container.getBoundingClientRect().bottom : (window.innerHeight - 60)
+    const containerTop = container ? container.getBoundingClientRect().top : 80
+
+    // Khoảng trống thực tế bên dưới và bên trên trong khung hiển thị (chừa 16px an toàn)
+    const spaceBelow = Math.max(0, containerBottom - rect.bottom - 16)
+    const spaceAbove = Math.max(0, rect.top - containerTop - 16)
+
+    const DESIRED_HEIGHT = 340
+    const MIN_HEIGHT = 180
+
+    let placement: "top" | "bottom" = "bottom"
+
+    if (spaceBelow >= DESIRED_HEIGHT) {
+      placement = "bottom"
+    } else if (spaceAbove >= DESIRED_HEIGHT) {
+      placement = "top"
+    } else {
+      // Màn hình có chiều cao H ngắn: ưu tiên bên nào rộng rãi hơn
+      placement = spaceAbove >= spaceBelow ? "top" : "bottom"
+    }
+
+    const availableSpace = placement === "top" ? spaceAbove : spaceBelow
+    const maxHeight = Math.min(360, Math.max(MIN_HEIGHT, Math.floor(availableSpace)))
+
+    return { placement, maxHeight }
+  }
+
   const [currentPriority, setCurrentPriority] = useState<string>(() => {
     return request?.priority || "Lv3"
   })
@@ -992,6 +1027,29 @@ export default function RequestDetail({
   const [trackedSeconds, setTrackedSeconds] = useState<number>(0)
   const [activeTags, setActiveTags] = useState<string[]>(["Lending", "UX Research"])
   const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || request?.expected_deadline || "")
+  const [copiedTaskId, setCopiedTaskId] = useState(false)
+
+  const handleCopyTaskId = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!request?.request_id) return
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(request.request_id)
+      } else {
+        const textarea = document.createElement("textarea")
+        textarea.value = request.request_id
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand("copy")
+        document.body.removeChild(textarea)
+      }
+      setCopiedTaskId(true)
+      toast.success(`Đã sao chép mã bài toán: ${request.request_id}`)
+      setTimeout(() => setCopiedTaskId(false), 2000)
+    } catch {
+      toast.error("Không thể sao chép mã bài toán")
+    }
+  }
 
   useEffect(() => {
     setCustomDeadline(request?.design_deadline || request?.expected_deadline || "")
@@ -3233,10 +3291,28 @@ export default function RequestDetail({
 
                   <span className="text-slate-300 font-light">/</span>
 
-                  <div className="flex items-center gap-1 font-mono font-bold text-slate-800 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/60 shrink-0">
-                    <Target className="w-3.5 h-3.5 text-slate-400" />
+                  <button
+                    type="button"
+                    onClick={handleCopyTaskId}
+                    className={`flex items-center gap-1.5 font-mono font-bold px-2 py-0.5 rounded border shrink-0 cursor-pointer transition-all duration-150 group shadow-2xs select-none ${
+                      copiedTaskId
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-300"
+                        : "text-slate-800 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 active:scale-95"
+                    }`}
+                    title="Click để sao chép mã bài toán"
+                  >
+                    {copiedTaskId ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600 animate-in zoom-in-75 duration-150" />
+                    ) : (
+                      <Target className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    )}
                     <span>{request.request_id}</span>
-                  </div>
+                    {copiedTaskId ? (
+                      <span className="text-[10px] font-sans font-semibold text-emerald-600">Đã copy</span>
+                    ) : (
+                      <Copy className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                    )}
+                  </button>
 
                   {statusConfig && (
                     <span className={`hidden sm:inline-block ml-1 px-2.5 py-0.5 rounded-md font-bold text-[11px] tracking-wide uppercase border ${
@@ -3335,8 +3411,8 @@ export default function RequestDetail({
                 </div>
               ) : (
                 <React.Fragment>
-                  {/* 2. ReUI Checkout-1 Style Dynamic UX Progression Stepper Bar */}
-                  <div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
+                  {/* 2. ReUI Checkout-style Dynamic UX Progression Stepper Bar */}
+                  <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200/80 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
                     <Stepper
                       activeStep={currentPhaseIndex}
                       orientation="horizontal"
@@ -3356,7 +3432,6 @@ export default function RequestDetail({
                             key={step.key}
                             step={idx}
                             title={stepTitle}
-                            description={`${step.progress}%`}
                             state={status}
                             className="cursor-pointer"
                           />
@@ -3403,10 +3478,10 @@ export default function RequestDetail({
                   
                   {/* BANNER LOẠI 1: PO PENDING - Quá hạn 24h PO chưa phản hồi duyệt phương án (Màu Hổ phách / Amber) */}
                   {pendingClassification.type === "po_pending" && (
-                    <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/95 border border-amber-300 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="flex items-start gap-2.5">
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/95 border border-amber-300 text-xs text-amber-950 flex flex-col gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5 w-full">
                         <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className="font-bold text-amber-950 text-[13px] flex items-center gap-1.5 flex-wrap">
                             <span>Trạng thái: PO Pending</span>
                             <span className="px-2 py-0.5 rounded-full bg-amber-200/90 text-[10px] font-extrabold text-amber-900 uppercase tracking-wide border border-amber-300/80">
@@ -3420,7 +3495,7 @@ export default function RequestDetail({
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                      <div className="flex items-center gap-2 pl-0 sm:pl-[26px] flex-wrap">
                         {/* Nút dành cho Designer: Gỡ trạng thái bằng cách bấm Tiếp tục update */}
                         <Button 
                           size="sm" 
@@ -3435,16 +3510,10 @@ export default function RequestDetail({
 
                         {/* Nút dành cho PO / Tác giả */}
                         {(session?.role === "PO" || session?.role === "Business" || isAuthor) && (
-                          <>
-                            <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{APP_CONTENT.track.detailModal.banners.poPending.buttons.confirm}</span>
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handlePoRequestChanges()} className="h-7.5 px-3 text-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 rounded-xl font-semibold cursor-pointer flex items-center gap-1">
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>{APP_CONTENT.track.detailModal.banners.poPending.buttons.needUpdate}</span>
-                            </Button>
-                          </>
+                          <Button size="sm" onClick={handlePoApprove} className="h-7.5 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{APP_CONTENT.track.detailModal.banners.poPending.buttons.confirm}</span>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -3573,23 +3642,25 @@ export default function RequestDetail({
                           return (
                             <>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenDropdown(openDropdown === "phase" ? null : "phase")}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
-                                >
-                                  <span className={`w-2 h-2 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
-                                  <span>{displayPhase}</span>
-                                </button>
-
-                                {pendingClassification.isPending && (
-                                  <span
-                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${pendingClassification.badgeClasses.bg} ${pendingClassification.badgeClasses.text} ${pendingClassification.badgeClasses.border} shadow-2xs`}
+                                {pendingClassification.isPending ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(openDropdown === "phase" ? null : "phase")}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${pendingClassification.badgeClasses.bg} ${pendingClassification.badgeClasses.text} border ${pendingClassification.badgeClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
                                     title={pendingClassification.type === "po_pending" ? "Quá hạn 24h PO chưa phản hồi duyệt" : `Pending: ${pendingClassification.reason}`}
                                   >
-                                    <span className={`w-1.5 h-1.5 rounded-full ${pendingClassification.badgeClasses.dot} shrink-0`} />
+                                    <span className={`w-2 h-2 rounded-full ${pendingClassification.badgeClasses.dot} shrink-0`} />
                                     <span>{pendingClassification.label}</span>
-                                  </span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(openDropdown === "phase" ? null : "phase")}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} border ${cfg.inlineClasses.border} whitespace-nowrap cursor-pointer hover:opacity-90 transition-all shadow-2xs`}
+                                  >
+                                    <span className={`w-2 h-2 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                    <span>{displayPhase}</span>
+                                  </button>
                                 )}
                               </div>
 
@@ -3661,9 +3732,9 @@ export default function RequestDetail({
                               return
                             }
                             setAssigneeSearchQuery("")
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                            const spaceBelow = window.innerHeight - rect.bottom
-                            setAssigneePlacement(spaceBelow < 440 ? "top" : "bottom")
+                            const { placement, maxHeight } = calcSmartDropdownPlacement(e.currentTarget as HTMLElement)
+                            setAssigneePlacement(placement)
+                            setAssigneeMaxHeight(maxHeight)
                             setOpenDropdown("assignee")
                           }}
                           className="flex items-center gap-2 min-w-0 p-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer max-w-full"
@@ -3708,12 +3779,12 @@ export default function RequestDetail({
                               initial={{ opacity: 0, y: assigneePlacement === "top" ? -6 : 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: assigneePlacement === "top" ? -4 : 4, scale: 0.96 }}
-                              className={`absolute z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col ${
+                              className={`absolute z-50 w-80 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col ${
                                 assigneePlacement === "top"
-                                  ? "bottom-full mb-2 left-0 sm:left-auto sm:right-0"
-                                  : "top-full mt-2 left-0 sm:left-auto sm:right-0"
+                                  ? "bottom-full mb-1.5 left-0 sm:left-auto sm:right-0"
+                                  : "top-full mt-1.5 left-0 sm:left-auto sm:right-0"
                               }`}
-                              style={{ maxHeight: "min(460px, calc(100vh - 160px))" }}
+                              style={{ maxHeight: `${assigneeMaxHeight}px` }}
                             >
                               {/* Header & Search Input */}
                               <div className="px-3 pt-2.5 pb-2 border-b border-slate-100 space-y-2 bg-slate-50/50">
@@ -4120,9 +4191,9 @@ export default function RequestDetail({
                                     return
                                   }
                                   setViewerSearchQuery("")
-                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                                  const spaceBelow = window.innerHeight - rect.bottom
-                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  const { placement, maxHeight } = calcSmartDropdownPlacement(e.currentTarget as HTMLElement)
+                                  setViewerPlacement(placement)
+                                  setViewerMaxHeight(maxHeight)
                                   setOpenDropdown("viewers")
                                 }
                               }}
@@ -4133,9 +4204,9 @@ export default function RequestDetail({
                                     return
                                   }
                                   setViewerSearchQuery("")
-                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                                  const spaceBelow = window.innerHeight - rect.bottom
-                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  const { placement, maxHeight } = calcSmartDropdownPlacement(e.currentTarget as HTMLElement)
+                                  setViewerPlacement(placement)
+                                  setViewerMaxHeight(maxHeight)
                                   setOpenDropdown("viewers")
                                 }
                               }}
@@ -4198,9 +4269,9 @@ export default function RequestDetail({
                                     return
                                   }
                                   setViewerSearchQuery("")
-                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                                  const spaceBelow = window.innerHeight - rect.bottom
-                                  setViewerPlacement(spaceBelow < 420 ? "top" : "bottom")
+                                  const { placement, maxHeight } = calcSmartDropdownPlacement(e.currentTarget as HTMLElement)
+                                  setViewerPlacement(placement)
+                                  setViewerMaxHeight(maxHeight)
                                   setOpenDropdown("viewers")
                                 }}
                                 className="inline-flex items-center gap-1 text-xs font-semibold text-[#1057FB] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/80 cursor-pointer transition-colors shadow-2xs"
@@ -4225,12 +4296,12 @@ export default function RequestDetail({
                               initial={{ opacity: 0, y: viewerPlacement === "top" ? -6 : 6, scale: 0.96 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: viewerPlacement === "top" ? -4 : 4, scale: 0.96 }}
-                              className={`absolute z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col text-xs ${
+                              className={`absolute z-50 w-80 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col text-xs ${
                                 viewerPlacement === "top"
-                                  ? "bottom-full mb-2 left-0"
-                                  : "top-full mt-2 left-0"
+                                  ? "bottom-full mb-1.5 right-0 sm:right-auto sm:left-0"
+                                  : "top-full mt-1.5 right-0 sm:right-auto sm:left-0"
                               }`}
-                              style={{ maxHeight: "min(420px, calc(100vh - 160px))" }}
+                              style={{ maxHeight: `${viewerMaxHeight}px` }}
                             >
                               {renderViewerPopoverContent(() => {
                                 setOpenDropdown(null)
@@ -4300,16 +4371,7 @@ export default function RequestDetail({
                           <span>{request.request_type || "Yêu cầu UX"}</span>
                         </span>
 
-                        {/* Ngày Release (Màu tím chuyển từ lending) */}
-                        {request.expected_deadline && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200" title="Hạn Release">
-                            <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                            <strong className="font-bold text-purple-900">{request.expected_deadline}</strong>
-                            {request.deadline_reason && (
-                              <span className="text-purple-600/80 font-normal text-[11px]">({request.deadline_reason})</span>
-                            )}
-                          </span>
-                        )}
+
                       </div>
 
                       {/* Row 2: Author and Created Metadata aligned with Edit Button */}

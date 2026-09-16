@@ -50,7 +50,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
-    test: false,
+    test: true,
     compressor: false,
     manage: false,
     invite: false,
@@ -60,7 +60,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     create: true,
-    test: false,
+    test: true,
     compressor: false,
     manage: false,
     invite: false,
@@ -73,13 +73,22 @@ export function getRoleNavConfig(): RoleNavConfig {
     const raw = localStorage.getItem(STORAGE_KEY_NAV_VISIBILITY)
     if (!raw) return DEFAULT_ROLE_NAV_CONFIG
     const parsed = JSON.parse(raw)
-    const resolveRole = (role: UserRole) => ({
-      ...DEFAULT_ROLE_NAV_CONFIG[role],
-      ...(parsed[role] || {}),
-      invite: parsed[role]?.invite !== undefined ? parsed[role].invite : DEFAULT_ROLE_NAV_CONFIG[role].invite,
-      manage: role === "Admin" ? (parsed.Admin?.manage ?? true) : false,
-      ia: parsed[role]?.ia !== undefined ? parsed[role].ia : DEFAULT_ROLE_NAV_CONFIG[role].ia,
-    })
+    const resolveRole = (role: UserRole) => {
+      const defaults = DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
+      const roleData = parsed[role] || {}
+      return {
+        ...defaults,
+        ...roleData,
+        overview: roleData.overview !== undefined ? roleData.overview : defaults.overview,
+        track: roleData.track !== undefined ? roleData.track : defaults.track,
+        create: roleData.create !== undefined ? roleData.create : defaults.create,
+        test: role === "Admin" ? (roleData.test ?? true) : (roleData.test !== undefined ? roleData.test : defaults.test),
+        compressor: role === "Admin" ? (roleData.compressor ?? true) : (roleData.compressor !== undefined ? roleData.compressor : defaults.compressor),
+        invite: roleData.invite !== undefined ? roleData.invite : defaults.invite,
+        manage: role === "Admin" ? (parsed.Admin?.manage ?? true) : false,
+        ia: roleData.ia !== undefined ? roleData.ia : defaults.ia,
+      }
+    }
 
     return {
       Admin: resolveRole("Admin"),
@@ -119,11 +128,22 @@ export function getNavOrderConfig(): NavOrderConfig {
       platform.push("ia")
     }
     let resources = Array.isArray(parsed.resources) && parsed.resources.length > 0 ? [...parsed.resources] : [...DEFAULT_NAV_ORDER.resources]
-    if (!resources.includes("invite")) {
-      resources.push("invite")
+    if (!resources.includes("compressor")) {
+      resources.unshift("compressor")
+    }
+    if (!resources.includes("test")) {
+      const compIdx = resources.indexOf("compressor")
+      if (compIdx !== -1) {
+        resources.splice(compIdx + 1, 0, "test")
+      } else {
+        resources.unshift("test")
+      }
     }
     if (!resources.includes("manage")) {
       resources.push("manage")
+    }
+    if (!resources.includes("invite")) {
+      resources.push("invite")
     }
     return {
       platform,

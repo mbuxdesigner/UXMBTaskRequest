@@ -702,7 +702,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
 
       {/* Khi đã có ảnh: Giao diện 2 cột chuẩn ReUI Receipt 5 (Ảnh đã nén 1 bên - Setting 1 bên) */}
       {originalImages.length > 0 && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
+        <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
             {/* CỘT TRÁI: THIẾT LẬP (SETTING) & SUMMARY PHONG CÁCH RECEIPT-5 */}
             <div className="w-full lg:w-[380px] xl:w-[400px] shrink-0 p-6 bg-slate-50/50 flex flex-col justify-between">

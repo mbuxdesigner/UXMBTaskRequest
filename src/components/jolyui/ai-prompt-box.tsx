@@ -727,15 +727,15 @@ export function AiPromptBox({
             {/* Keyboard Shortcuts Hint */}
             <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 select-none">
               <span className="inline-flex items-center gap-1.5">
-                <Kbd size="xs">Enter ↵</Kbd>
+                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Enter ↵</Kbd>
                 <span className="text-[10px] text-slate-400">gửi</span>
               </span>
               <span className="text-slate-300">•</span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1">
-                  <Kbd size="xs">Shift</Kbd>
+                  <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Shift</Kbd>
                   <span className="text-slate-400 text-[10px]">+</span>
-                  <Kbd size="xs">Enter ↵</Kbd>
+                  <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Enter ↵</Kbd>
                 </span>
                 <span className="text-[10px] text-slate-400">xuống dòng</span>
               </span>

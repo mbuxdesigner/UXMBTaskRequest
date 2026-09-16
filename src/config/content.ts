@@ -67,7 +67,7 @@ export const APP_CONTENT = {
     },
     navItems: {
       overview: {
-        title: "Dashboard",
+        title: "Overview",
         description: "Overview Workload",
       },
       track: {
