@@ -36,6 +36,8 @@
 | 16 | Design System Guidelines Documentation | Author complete `doc/UI_DESIGN_SYSTEM.md` with tokens, guidelines, and code snippets | M5 | ORIGINAL_REQUEST R4 |
 | 17 | Final E2E Test Suite & Build Verification | Pass 100% of E2E test suite, `npm run build`, and verify zero TypeScript regressions | M5 | Acceptance Criteria |
 | 18 | E2E Opaque-Box Test Suite (Tiers 1-4) | Comprehensive test suite verifying tokens, responsive layouts, components, and interactions | E2E Track | Dual Track |
+| 19 | ReUI Sonner Toast Notifications & 3D Stacking | Official ReUI Sonner component, 3D card stacking, top-right close button, top-aligned multiline icons | Polish | User Request |
+| 20 | Google Sheet Two-Way Sync & Email Persistence | Bi-directional sync between USERS sheet and RAW_SETTINGS, separated Teams/Personal emails, onEdit trigger | Backend/Admin | User Request |
 
 ---
 
@@ -45,8 +47,10 @@
 | M1 | Core Tokens & Base ReUI Primitives | Standardize Button (#0F172A), Status Colors, Badge, Stepper, Timeline, Drawer, fix TS error | none | DONE (Gate Passed: 8/8 unit, 114/114 E2E, 0 errors) |
 | M2 | Track Task & Task Detail Alignment | Standardize Track table (sticky action col), Filter popover, Detail Stepper, Timeline, Tablet drawer width | M1 | DONE (Gate Passed: 19/19 unit, 114/114 E2E, 24/24 & 22/22 adv, Auditor CLEAN) |
 | M3 | Form, Admin & Dashboard Alignment | Standardize Request Form (2-col + summary), Admin 6 tables & Frame cards, Dashboard & IA tokens | M1 | DONE (Gate Passed: 25/25 unit, 114/114 E2E, 43/43 & 48/48 adv, Auditor CLEAN) |
-| M4 | Responsive Hardening & Animate UI | Fix responsive issues across 375px/768px/1024px/1440px, sliding indicators, modal animations | M2, M3 | IN_PROGRESS (Worker M4 executing) |
-| M5 | Documentation & Final Verification | Author `doc/UI_DESIGN_SYSTEM.md`, run full E2E test suite, verify build & test passing | M4, E2E | PLANNED |
+| M4 | Responsive Hardening & Animate UI | Fix responsive issues across 375px/768px/1024px/1440px, sliding indicators, modal animations | M2, M3 | DONE (Gate Passed: 114/114 E2E, 0 CLS, Auditor CLEAN) |
+| M5 | Documentation & Final Verification | Author `doc/UI_DESIGN_SYSTEM.md`, run full E2E test suite, verify build & test passing | M4, E2E | DONE (Gate Passed: 833 lines doc, 114/114 E2E, 0 errors) |
+| M6 | IA Map v2 & View-Only RBAC Optimization | 8 standards exceeding ReUI Flow, Multi-Root Tier 1, n8n QuickAdd, Snap Grid, View-Only Zero Clutter | M1-M5 | DONE (34/34 v2 tests pass, 30/30 view-only tests pass, Vite build in 567ms) |
+| FIX | ReUI Sonner & Google Sheet Two-Way Sync | ReUI Sonner toast stacking, top-right close button, icon top-alignment, Google Sheet 2-way sync & 09:02 email retention | all | DONE (10/10 Sonner tests, sheet live verified) |
 | E2E | E2E Testing Track | Independent opaque-box test suite for design tokens, components, responsive layouts | none | DONE (TEST_READY.md published, 114/114 tests) |
 
 ---

@@ -124,7 +124,23 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
     - Huy hiệu mã bài toán + Icon khóa `ShieldAlert` nổi bật.
     - Tiêu đề: **"Không có quyền truy cập"**.
     - Hướng dẫn: **"Bài toán này thuộc quyền quản lý của đơn vị khác. Vui lòng liên hệ Quản trị viên (Admin) để được cấp quyền theo dõi hoặc phê duyệt."**
-    - Các nút hành động: *Đóng cửa sổ* & *Gửi email liên hệ Admin (`admin@mbbank.com.vn`)*.
+### 3.6. Cải Tiến Giao Diện NewsFeed Release Timeline & Chuẩn Hóa Màn Hình Không Có Quyền Truy Cập
+- **Căn chỉnh NewsFeed Release Timeline (`ReleaseNewsfeedTimeline.tsx`):**
+  - Khắc phục triệt để hiện tượng lệch dòng và xô lệch trục ngang giữa số thứ tự `[ 1 ]`, tiêu đề bài toán mã hóa `*******` và thông tin Designer.
+  - Cấu trúc flexbox `items-center justify-between` với 2 cột:
+    - **Cột trái:** Số thứ tự `[ 1 ]` kích thước cố định `size-5` (`20x20px`), viền `border-neutral-200/90`, nền trắng đổ bóng nhẹ, căn giữa tuyệt đối; tiêu đề bài toán hiển thị `text-xs font-medium text-neutral-800 line-clamp-1 leading-normal truncate`.
+    - **Cột phải:** Avatar designer `size-5 rounded-full ring-1 ring-neutral-200` và tên designer `text-[11.5px] font-medium leading-none`.
+    - Loại bỏ gạch chân thô `hover:underline` trên chuỗi hoa thị mã hóa để giữ thẩm mỹ giao diện sạch và tinh tế.
+- **Chuẩn hóa màn hình Không có quyền truy cập (`RequestDetail.tsx`):**
+  - **Đổi nhãn định danh:** Chuyển đổi toàn diện từ `Mã bài toán: {request.request_id}` thành **`Yêu cầu tư vấn trải nghiệm: {request.request_id}`** (đồng bộ ở cả thanh breadcrumb trên cùng và nhãn pill badge).
+  - **Loại bỏ khối thông tin thừa:** Đã gỡ bỏ hoàn toàn khối hộp *"Thông tin bảo mật"* bên dưới (gồm Trạng thái, Tiêu đề `***`, Hỗ trợ kỹ thuật) theo đúng phản hồi thực tế của người dùng.
+  - **Tích hợp Icon Stack 3D isometric (`@reui/c-icon-stack-2`):**
+    - Sử dụng component `IconStackLarge` (`h-28 w-24`) từ `@/components/reui/c-icon-stack-2`.
+    - Icon cảnh báo bên trong là hình tam giác có dấu chấm than `TriangleAlert` (`size-7 text-amber-500 stroke-[2.25]`).
+- **Phân quyền truy cập Tổng quan (Overview) cho PO & Business:**
+  - Kích hoạt quyền `overview: true` cho vai trò `PO` và `Business` trong `navVisibilityConfig.ts`.
+  - Gỡ bỏ chuyển hướng cưỡng bức về `#track` trong `App.tsx`, cho phép PO & Business truy cập trực tiếp trang Tổng quan (Dashboard) để theo dõi các chỉ số KPI, Backlog & Pending, Đang thực hiện, Đã hoàn thành, Squad Trending.
+  - Tại NewsFeed & Track Task: bài toán của chính họ hoặc được gán quyền view thì hiển thị rõ ràng, mở xem bình thường; bài toán không thuộc quyền sở hữu sẽ được mã hóa và khóa truy cập bảo mật.
 
 ---
 
@@ -137,6 +153,9 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
 | **Stage 7 trên Gantt Chart** | `src/components/reui/gantt-chart.tsx` | Mốc 7 chỉ xuất hiện khi task ở trạng thái chờ PO; không làm lệch dải thời gian của các khâu 1-6 trước đó. |
 | **Định dạng Due Date Gantt** | `src/components/reui/gantt-chart.tsx` | Cột `w-24` bảo đảm không xô lệch các cột Status và Assignee lân cận. |
 | **Mã hóa Task Dashboard RBAC** | `src/pages/TongQuanPage.tsx`<br>`src/lib/accessControl.ts`<br>`src/components/track/RequestDetail.tsx`<br>`src/components/dashboard/ai-ops/ReleaseNewsfeedTimeline.tsx`<br>`src/components/dashboard/ai-ops/TrackTaskGanttFrame.tsx` | Đảm bảo PO/Business xem đầy đủ số liệu thống kê chung (KPI cards, Squad Trending, Tabs sản phẩm). Riêng tại NewsFeed & Track Task: task do họ tạo hoặc được gán quyền view thì hiển thị rõ ràng; task không tạo và không gán quyền view sẽ bị mã hóa `*******` và khi click chi tiết sẽ báo không có quyền truy cập. |
+| **Căn chỉnh NewsFeed Timeline** | `src/components/dashboard/ai-ops/ReleaseNewsfeedTimeline.tsx` | Đảm bảo 2 cột thẳng hàng trên trục ngang, số thứ tự `[ 1 ]` và avatar không bị co méo trên màn hình nhỏ. |
+| **Màn hình Không có quyền truy cập** | `src/components/track/RequestDetail.tsx`<br>`src/components/reui/c-icon-stack-2.tsx` | Dùng component `IconStackLarge` với `TriangleAlert` 3D isometric; loại bỏ hoàn toàn box thông tin bảo mật bên dưới; đổi nhãn thành `Yêu cầu tư vấn trải nghiệm`. |
+| **Điều hướng Sidebar cho PO/Business** | `src/config/navVisibilityConfig.ts`<br>`src/App.tsx` | Cho phép PO/Business click vào menu Tổng quan (Dashboard) từ thanh bên mà không bị nảy ngược về Track Task. |
 
 ---
 
@@ -150,10 +169,19 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
 - [x] **Kiểm tra Gantt Timeline:** Mở chế độ Gantt Chart -> Task chờ PO hiển thị block màu hổ phách và dot vàng, Footer Legend có mốc `7. PO Pending`.
 - [x] **Kiểm tra Định dạng Due Date:** Hiển thị chuẩn `DD/MM/YYYY` (ví dụ `16/09/2026`), độ rộng cột cân đối không bị truncate.
 - [x] **Kiểm tra UI Kbd:** Gợi ý phím tắt trong khung chat hiển thị phím bấm nổi ReUI sắc nét (`Enter ↵`, `Shift`, `Enter ↵`).
-- [x] **Kiểm tra Phân quyền Mã hóa Dashboard:**
-  - Đăng nhập quyền PO/Business -> Dashboard hiển thị đầy đủ số liệu thống kê 3 thẻ KPI và Squad Trending.
+- [x] **Kiểm tra Phân quyền Mã hóa Dashboard & Điều hướng PO/Business:**
+  - PO/Business click vào menu Tổng quan (Dashboard) từ Sidebar chuyển trang thành công, không bị chặn hay nảy ngược về Track Task.
+  - Dashboard hiển thị đầy đủ số liệu thống kê 3 thẻ KPI và Squad Trending.
   - Tại NewsFeed và Track Task: task do chính PO/Business tạo HOẶC được gán quyền view (viewers) hiển thị rõ ràng, mở xem chi tiết bình thường.
   - Task không tạo và không được gán quyền view hiển thị dưới dạng chuỗi `********` có độ dài ngẫu nhiên khác nhau.
-  - Bấm vào task bị mã hóa -> Sheet hiển thị giao diện báo *"Không có quyền truy cập, vui lòng liên hệ Admin"*, không để lộ bất kỳ nội dung nhạy cảm nào.
-- [x] **Kiểm tra Build & Compile:** Chạy `npm run build` hoàn thành với 0 cảnh báo hoặc lỗi cú pháp.
+- [x] **Kiểm tra NewsFeed Timeline:**
+  - Số thứ tự `[ 1 ]`, tiêu đề bài toán (kể cả khi bị mã hóa `*******`) và avatar/tên designer thẳng hàng tuyệt đối trên cùng 1 trục ngang.
+  - Bỏ gạch chân khi hover vào chuỗi hoa thị mã hóa.
+- [x] **Kiểm tra Màn hình Không có quyền truy cập:**
+  - Bấm vào task bị mã hóa -> Sheet hiển thị giao diện báo *"Không có quyền truy cập"*.
+  - Nhãn định danh hiển thị chuẩn: **Yêu cầu tư vấn trải nghiệm: {request_id}** (ở cả breadcrumb và pill badge).
+  - Sử dụng component `IconStackLarge` (`@reui/c-icon-stack-2`) kích thước lớn với icon tam giác có dấu chấm than `TriangleAlert` 3D isometric màu vàng hổ phách.
+  - Đã loại bỏ hoàn toàn khối hộp thông tin bảo mật bên dưới (Trạng thái, Tiêu đề, Hỗ trợ kỹ thuật).
+  - Có đủ nút *"Đóng cửa sổ"* và nút *"Liên hệ Admin"*.
+- [x] **Kiểm tra Build & Compile:** Chạy `npm run build` hoàn thành với 0 cảnh báo hoặc lỗi cú pháp (exit code 0).
 

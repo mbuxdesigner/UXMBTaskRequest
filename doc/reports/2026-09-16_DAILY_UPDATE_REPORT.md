@@ -24,6 +24,9 @@
 > 7. **Tối ưu hóa trải nghiệm phân hệ IA map cho các quyền View (PO, Business, Viewer):**
 >    - Người xem chỉ cần và chỉ có thể: **Kéo xem IA map mượt mà**, **Tích chọn để xem chi tiết 1 node** (mở drawer chi tiết, xem link figma, xem bài toán UX liên kết), và **Phóng to toàn màn hình (Vew full)**.
 >    - **Ẩn 100% các tính năng thừa khác:** Ẩn toàn bộ thanh QuickAdd n8n bên trái; ẩn các nút Cài đặt sơ đồ, Lưu/Tải Cloud trên PageHeader; ẩn Tool Switcher, Snap to Grid, Căn chuẩn, Minimap, Menu con trên Canvas Dock; ẩn 4 cổng kết nối ports, nút (+ Thêm con), nút Sửa, nút Xóa và thanh resize trên các thẻ node; khóa cứng việc kéo rê thay đổi vị trí node.
+> 8. **Căn chỉnh NewsFeed Release Timeline chuẩn flexbox:** Căn chỉnh số thứ tự `[ 1 ]`, tiêu đề bài toán (kể cả khi bị mã hóa `*******`) và avatar/tên designer thẳng hàng tuyệt đối trên cùng 1 trục ngang; loại bỏ gạch chân thô `hover:underline` trên chuỗi hoa thị mã hóa.
+> 9. **Chuẩn hóa màn hình cảnh báo "Không có quyền truy cập" chuẩn ReUI:** Đổi nhãn `Mã bài toán` $\rightarrow$ `Yêu cầu tư vấn trải nghiệm`; gỡ bỏ hoàn toàn khối hộp "Thông tin bảo mật" (Trạng thái, Tiêu đề, Hỗ trợ kỹ thuật) theo ảnh chụp thực tế; tích hợp ReUI Icon Stack 3D isometric (`@reui/c-icon-stack-2` kích thước lớn `IconStackLarge`) với icon tam giác có dấu chấm than `TriangleAlert` màu vàng hổ phách.
+> 10. **Khai thông điều hướng Tổng quan (Overview) cho PO & Business:** Kích hoạt `overview: true` trong `navVisibilityConfig.ts` và gỡ bỏ đoạn code cưỡng bức nảy về `#track` trong `App.tsx`, cho phép PO & Business truy cập trực tiếp xem dashboard số liệu chung trong khi vẫn bảo mật các bài toán của squad khác.
 
 ---
 
@@ -38,6 +41,9 @@
 | **5** | **Nâng Cấp Toàn Diện Phân Hệ IA Map V2 Vượt Chuẩn ReUI Flow** | ✅ Hoàn thành 100% | Triển khai hoàn hảo toàn bộ 8 tiêu chuẩn: Đa Tier 1, Đổi tên IA map, Fullscreen, Chip sản phẩm có màu, QuickAdd Sidebar n8n, Snap Grid 20px, Minimap, Selection-driven Actions, Đẩy JSON & Copy JSON. |
 | **6** | **Tối Ưu Hóa Giao Diện IA Map Cho Quyền Chỉ Xem (Zero-Clutter)** | ✅ Hoàn thành 100% | Tinh gọn 100% cho quyền View: Kéo xem, tích chọn xem chi tiết node, vew full; ẩn hoàn toàn QuickAdd Sidebar, các nút Cloud/Cài đặt, Snap to Grid, AutoAlign, Minimap, Ports và nút sửa/xóa. |
 | **7** | **Đồng Bộ Tài Liệu Kỹ Thuật & Kiểm Thử Toàn Diện** | ✅ Hoàn thành 100% | Cập nhật `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md`, hoàn thiện 2 bộ kiểm thử `test-ia-map-v2-features.mjs` (34/34 PASS) và `test-ia-map-view-only.mjs` (30/30 PASS), xác nhận `vite build` thành công trong ~ 560ms. |
+| **8** | **Căn Chỉnh NewsFeed Release Timeline Thẳng Trục Tuyệt Đối** | ✅ Hoàn thành 100% | Căn chỉnh `items-center` giữa cột trái (số thứ tự `[ 1 ]` `size-5` + tiêu đề `line-clamp-1`) và cột phải (avatar `size-5` + designer); loại bỏ gạch chân thô `hover:underline` trên hoa thị mã hóa. |
+| **9** | **Chuẩn Hóa Màn Hình Cảnh Báo Bản Quyền Với ReUI Icon Stack** | ✅ Hoàn thành 100% | Đổi nhãn `Mã bài toán` $\rightarrow$ `Yêu cầu tư vấn trải nghiệm`; gỡ bỏ box thông tin bảo mật; tích hợp ReUI `IconStackLarge` (`@reui/c-icon-stack-2`) kích thước lớn với icon tam giác có dấu chấm than `TriangleAlert` 3D isometric. |
+| **10** | **Khai Thông Truy Cập Tổng Quan (Overview) Cho PO & Business** | ✅ Hoàn thành 100% | Kích hoạt `overview: true` trong `navVisibilityConfig.ts`, gỡ bỏ hardcode nảy về `#track` trong `App.tsx`, cho phép PO/Business xem dashboard số liệu thống kê chung an toàn. |
 
 ---
 
