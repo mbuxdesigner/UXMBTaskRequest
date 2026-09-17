@@ -26,7 +26,7 @@ export default function TrackTaskGanttFrame({
         <div>
           <h3 className="text-sm font-semibold text-neutral-900 tracking-tight flex items-center gap-2">
             <CalendarRange className="size-4 text-neutral-700" />
-            <span>Track Task — Lộ Trình Gantt Toàn Diện</span>
+            <span>Track Task</span>
           </h3>
           <p className="text-xs text-neutral-400 font-normal mt-0.5">
             Theo dõi tiến trình từ ngày tạo đến hạn deadline dự kiến ({displayRequests.length} bài toán)
