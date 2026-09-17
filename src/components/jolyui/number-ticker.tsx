@@ -24,12 +24,20 @@ export function NumberTicker({
 }: NumberTickerProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const numValue = typeof value === "number" && !isNaN(value) ? value : 0
-  const motionValue = useMotionValue(direction === "down" ? numValue : 0)
+  const initialNum = direction === "down" ? numValue : 0
+  const motionValue = useMotionValue(initialNum)
   const springValue = useSpring(motionValue, {
     damping: 26,
     stiffness: 100,
   })
   const isInView = useInView(ref, { once: true, margin: "0px" })
+
+  const formatNumber = (val: number) => {
+    return Intl.NumberFormat("en-US", {
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    }).format(Number(val.toFixed(decimalPlaces)))
+  }
 
   useEffect(() => {
     if (isInView) {
@@ -43,13 +51,16 @@ export function NumberTicker({
   useEffect(() => {
     return springValue.on("change", (latest) => {
       if (ref.current) {
-        ref.current.textContent = Intl.NumberFormat("en-US", {
-          minimumFractionDigits: decimalPlaces,
-          maximumFractionDigits: decimalPlaces,
-        }).format(Number(latest.toFixed(decimalPlaces)))
+        ref.current.textContent = formatNumber(latest)
       }
     })
   }, [springValue, decimalPlaces])
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.textContent = formatNumber(motionValue.get())
+    }
+  }, [decimalPlaces])
 
   return (
     <span
@@ -59,7 +70,7 @@ export function NumberTicker({
       )}
       ref={ref}
     >
-      {decimalPlaces > 0 ? (0).toFixed(decimalPlaces) : 0}
+      {formatNumber(initialNum)}
     </span>
   )
 }

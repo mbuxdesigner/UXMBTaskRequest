@@ -512,46 +512,6 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                     </>
                   )}
                 </button>
-
-                {/* Hoặc Đăng nhập Demo Nhanh (1-Click) - Ẩn đi sau khi hoàn thành demo (chỉ hiển thị khi có tham số ?demo trên URL) */}
-                {typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo") && (
-                  <div className="pt-4 border-t border-neutral-200/80">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-semibold text-neutral-600">
-                        Đăng nhập nhanh theo vai trò:
-                      </span>
-                      <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.2 rounded font-bold">
-                        Demo 1-Click
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {DEMO_ACCOUNTS.slice(0, 4).map((acc) => (
-                        <button
-                          key={acc.role}
-                          type="button"
-                          onClick={() => handleQuickDemoLogin(acc)}
-                          className="flex items-center gap-2 p-2 rounded-xl border border-neutral-200/80 bg-neutral-50/80 hover:bg-neutral-100 hover:border-neutral-300 transition-all text-left cursor-pointer group"
-                          title={`Đăng nhập dưới vai trò ${acc.role}`}
-                        >
-                          <UserAvatar
-                            name={acc.displayName}
-                            avatarUrl={acc.avatarUrl}
-                            size="sm"
-                            role={acc.role}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-neutral-900 truncate group-hover:text-blue-600">
-                              {acc.role}
-                            </p>
-                            <p className="text-[10px] text-neutral-500 truncate">
-                              {acc.displayName.split(" ")[0]}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </form>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { toast } from "@/components/ui/toast"
 import { IANode, IAProductInfo, IATier, IATouchpointType, IAPortPosition, IATierDimensionSettings, getTierDefaultDisplaySettings } from "@/types/ia"
 import {
   IA_PRODUCTS,
@@ -314,7 +315,6 @@ export function loadSavedTrees(): Record<string, IANode> {
       }
     }
 
-    // Tự động loại bỏ bất kỳ liên kết bài toán demo cũ nào trong cây IA
     function sanitizeNodeDemoData(node: IANode): IANode {
       let newReqId = node.requestId
       let newTaskIds = node.taskIds
@@ -325,11 +325,14 @@ export function loadSavedTrees(): Record<string, IANode> {
         const filtered = newTaskIds.filter((tid) => !isDemoRequest({ request_id: tid }))
         newTaskIds = filtered.length > 0 ? filtered : undefined
       }
+      const safeTier = Math.min(4, Math.max(1, node.tier || 1)) as IATier
+      const safeChildren = safeTier < 4 && node.children ? node.children.map(sanitizeNodeDemoData) : []
       return {
         ...node,
+        tier: safeTier,
         requestId: newReqId,
         taskIds: newTaskIds,
-        children: node.children ? node.children.map(sanitizeNodeDemoData) : [],
+        children: safeChildren,
       }
     }
 
@@ -366,13 +369,13 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
     const raw = window.localStorage.getItem(IA_TIER_DIMENSIONS_KEY)
     if (!raw) return DEFAULT_TIER_DIMENSIONS
     const parsed = JSON.parse(raw)
-    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao hoặc khoảng cách quá nhỏ gây đè thẻ
+    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao cũ bị thổi phồng (> 150) hoặc quá nhỏ (< 90)
     if (
-      !parsed[1]?.height || parsed[1].height < 140 ||
-      !parsed[2]?.height || parsed[2].height < 150 ||
-      !parsed[3]?.height || parsed[3].height < 150 ||
-      !parsed.verticalGapJourney || parsed.verticalGapJourney < 36 ||
-      !parsed.columnGap || parsed.columnGap < 90
+      !parsed[1]?.height || parsed[1].height > 150 || parsed[1].height < 90 ||
+      !parsed[2]?.height || parsed[2].height > 160 || parsed[2].height < 90 ||
+      !parsed[3]?.height || parsed[3].height > 165 || parsed[3].height < 90 ||
+      !parsed.verticalGapJourney ||
+      !parsed.columnGap || parsed.columnGap < 80
     ) {
       saveTierDimensionSettings(DEFAULT_TIER_DIMENSIONS)
       return DEFAULT_TIER_DIMENSIONS
@@ -408,36 +411,31 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
 
   const ds = node.displaySettings || getTierDefaultDisplaySettings(node.tier)
 
-  // 1. Padding và viền khung thẻ (pt-4: 16px, pb-3.5: 14px, border: 2px)
-  let h = 32
+  // 1. Padding và viền khung thẻ (pt-3.5: 14px, pb-3: 12px, border: 2px)
+  let h = 28
 
-  // 2. Hàng 1: Grip kéo + Squad badge + Action buttons
-  h += 28
+  // 2. Hàng: Tên tính năng + Mô tả (nếu có, Lv1 không có mô tả)
+  h += (node.description && node.tier !== 1) ? 36 : 20
 
-  // 3. Khoảng cách giữa Hàng 1 và Hàng 2
-  h += 8
-
-  // 4. Hàng 2: Tên tính năng + Mô tả (nếu có)
-  h += node.description ? 38 : 22
-
-  // 5. Hàng 3: Thông tin Designer hoặc Touchpoint
+  // 3. Hàng 3: Thông tin Designer hoặc Touchpoint
   const showDesigner = ds.showDesigner !== false && (node.assignedDesigner || node.tier >= 3)
   const showTouchpoint = Boolean(node.touchpointType) || node.tier === 4
   if (showDesigner || showTouchpoint) {
-    h += 26
+    h += 20
   }
 
-  // 6. Hàng 4: Thanh tiến độ & Checklist
+  // 4. Hàng 4: Thanh tiến độ Working & Task chips
   if (ds.showProgress !== false) {
-    h += 56
+    const hasTasks = (node.taskIds && node.taskIds.length > 0) || Boolean(node.requestId)
+    h += hasTasks ? 44 : 26
   }
 
-  // 7. Hàng 5 & 6: Đường kẻ chia cách + Footer trạng thái & Đếm nhánh
+  // 5. Hàng 5 & 6: Đường kẻ chia cách + Footer trạng thái & Đếm nhánh
   if (ds.showStatus !== false || ds.showBranchCount !== false) {
-    h += 38
+    h += 28
   }
 
-  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 165 : node.tier === 2 ? 180 : node.tier === 3 ? 190 : 175)
+  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 115 : node.tier === 2 ? 120 : node.tier === 3 ? 125 : 115)
   return Math.max(defaultDim, Math.round(h))
 }
 
@@ -746,11 +744,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
       let created = false
+      let blocked = false
 
       function dfs(curr: IANode): boolean {
         if (curr.id === parentId) {
           if (curr.tier >= 4) {
-            throw new Error("Cannot add child node to Tier 4 leaf screen")
+            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+            blocked = true
+            return true
           }
           curr.collapsed = false // auto-expand parent
           const nextTier = (curr.tier + 1) as IATier
@@ -789,9 +790,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
       for (const r of [clone, ...(clone.siblingRoots || [])]) {
         if (dfs(r)) {
-          created = true
           break
         }
+      }
+
+      if (blocked) {
+        return prevTrees
       }
 
       if (!created) {
@@ -1175,6 +1179,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         delete curr.customWidth
         delete curr.customHeight
         delete curr.customTrunkOffset
+        if (curr.tier >= 4) {
+          curr.children = undefined
+        }
         if (curr.children) {
           for (const child of curr.children) {
             dfs(child)
@@ -1197,9 +1204,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     setTrees((prevTrees) => {
       const current = getTargetTree(prevTrees, selectedProductId)
       const clone = deepCloneTree(current)
+      let blocked = false
+      let added = false
 
       function dfs(curr: IANode): boolean {
         if (curr.id === parentId) {
+          if (curr.tier >= 4) {
+            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+            blocked = true
+            return true
+          }
           curr.collapsed = false
           const nextTier = Math.min(4, curr.tier + 1) as IATier
           const newId = nodeData?.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -1242,6 +1256,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
           if (!curr.children) curr.children = []
           curr.children.push(newNode)
+          added = true
           return true
         }
         if (curr.children) {
@@ -1253,6 +1268,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       dfs(clone)
+      if (blocked || !added) {
+        return prevTrees
+      }
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
       return nextTrees
@@ -1312,8 +1330,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       // 3. Attach detachedNode as child of sourceNode
+      let blocked = false
       function attach(curr: IANode): boolean {
         if (curr.id === sourceNodeId) {
+          if (curr.tier >= 4) {
+            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+            blocked = true
+            return true
+          }
           curr.collapsed = false
           if (!curr.children) curr.children = []
           const nodeToAttach = detachedNode!
@@ -1331,6 +1355,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       attach(clone)
+      if (blocked) {
+        return prevTrees
+      }
 
       const nextTrees = { ...prevTrees, [selectedProductId]: clone }
       saveTreesToStorage(nextTrees)
@@ -1349,9 +1376,16 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       setTrees((prevTrees) => {
         const current = getTargetTree(prevTrees, selectedProductId)
         const clone = deepCloneTree(current)
+        let blocked = false
+        let created = false
 
         function dfs(curr: IANode): boolean {
           if (curr.id === sourceNodeId) {
+            if (curr.tier >= 4) {
+              toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+              blocked = true
+              return true
+            }
             curr.collapsed = false
             const nextTier = Math.min(4, curr.tier + 1) as IATier
             const newId = nodeData?.id || `node-wire-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -1385,6 +1419,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
             if (!curr.children) curr.children = []
             curr.children.push(newNode)
+            created = true
             return true
           }
           if (curr.children) {
@@ -1396,6 +1431,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         }
 
         dfs(clone)
+        if (blocked || !created) {
+          return prevTrees
+        }
         const nextTrees = { ...prevTrees, [selectedProductId]: clone }
         saveTreesToStorage(nextTrees)
         return nextTrees
@@ -1476,11 +1514,11 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
     // 1. First pass: Build internal hierarchy with effective collapse state
     function buildInternal(node: IANode): InternalNode {
-      const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 180 }
+      const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 120 }
       const nodeWidth = node.customWidth || dim.width
       const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
-      const hasChildren = Boolean(node.children && node.children.length > 0)
-      const childCount = node.children ? node.children.length : 0
+      const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 4)
+      const childCount = node.children && node.tier < 4 ? node.children.length : 0
 
       // Node is forced expanded if it's an ancestor of a search match
       const forceExpanded = ancestorIdsToExpand.has(node.id)
@@ -1488,7 +1526,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const isExpanded = hasChildren && !isCollapsed
 
       const children: InternalNode[] = []
-      if (hasChildren && isExpanded) {
+      if (hasChildren && isExpanded && node.tier < 4) {
         for (const child of node.children!) {
           children.push(buildInternal(child))
         }

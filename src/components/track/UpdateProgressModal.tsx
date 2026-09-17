@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { IconTile } from "@/components/reui/icon-tile"
+import { Slider } from "@/components/ui/slider"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { UXRequest, ALL_PHASES, UserRole } from "../../data/mockData"
 import { updateTaskProgress } from "../../api/api"
@@ -219,14 +220,13 @@ export default function UpdateProgressModal({
               </span>
               <span className="text-sm font-bold text-[#1B3A6B]">{progress}%</span>
             </div>
-            <input
-              type="range"
+            <Slider
               min={0}
               max={100}
               step={5}
               value={progress}
-              onChange={(e) => setProgress(Number(e.target.value))}
-              className="w-full accent-[#1B3A6B] cursor-pointer"
+              onChange={setProgress}
+              color="#1B3A6B"
             />
             <div className="flex justify-between gap-1 pt-1">
               {[15, 30, 50, 70, 90, 100].map((preset) => (

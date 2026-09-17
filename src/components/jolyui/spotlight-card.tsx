@@ -8,6 +8,7 @@ export interface SpotlightCardProps extends HTMLMotionProps<"div"> {
   interactive?: boolean
   className?: string
   children?: React.ReactNode
+  mode?: string
 }
 
 export const SpotlightCard = React.forwardRef<HTMLDivElement, SpotlightCardProps>(

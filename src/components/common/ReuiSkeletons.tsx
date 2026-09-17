@@ -12,15 +12,15 @@ import { cn } from "@/lib/utils"
 export function OverviewContentSkeleton() {
   return (
     <div data-testid="overview-content-skeleton" className="space-y-4">
-      {/* ROW 1: 3 Bento KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5 items-stretch">
+      {/* ROW 1: 4 Bento KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4.5 items-stretch">
         {/* Card 1: Backlog & Pending */}
         <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col justify-between h-full min-w-0">
-          <div className="flex items-center justify-between px-3 py-1.5">
+          <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
             <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
-            <Skeleton className="size-4 rounded-full bg-neutral-200/80" />
+            <Skeleton className="size-4 rounded-full bg-neutral-200/80 shrink-0 ml-1" />
           </div>
-          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex items-center justify-between gap-3 min-h-[110px]">
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex items-center justify-between gap-3 min-h-[110px] min-w-0">
             {/* Donut circle skeleton */}
             <div className="w-[98px] h-[98px] shrink-0 flex items-center justify-center">
               <Skeleton className="size-20 rounded-full border-8 border-slate-100" />
@@ -52,39 +52,65 @@ export function OverviewContentSkeleton() {
           </div>
         </div>
 
-        {/* Card 2: Đang thực hiện */}
+        {/* Card 2: Workload / Capacity */}
         <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col justify-between h-full min-w-0">
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <Skeleton className="h-4 w-24 rounded-md bg-neutral-200/80" />
-            <Skeleton className="size-4 rounded-md bg-neutral-200/80" />
+          <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+            <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
+            <Skeleton className="size-4 rounded-md bg-neutral-200/80 shrink-0 ml-1" />
           </div>
-          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-h-[110px]">
-            <div className="flex items-baseline gap-2.5 my-auto py-1">
-              <Skeleton className="h-10 w-12 rounded-lg" />
-              <Skeleton className="h-4 w-10 rounded-md" />
-              <Skeleton className="h-5 w-24 rounded-md ml-1" />
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-h-[110px] min-w-0">
+            <div className="flex items-baseline justify-between gap-x-2 gap-y-1 flex-wrap my-auto py-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <Skeleton className="h-9 w-14 rounded-lg" />
+                <Skeleton className="h-3.5 w-12 rounded-md" />
+              </div>
+              <Skeleton className="h-5 w-20 rounded-md ml-auto" />
             </div>
-            <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2.5 py-1.5 flex items-center justify-between text-xs mt-1.5">
-              <Skeleton className="h-3.5 w-28 rounded-md" />
+            <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2 sm:px-2.5 py-1.5 flex items-center justify-between text-xs mt-1.5 min-w-0">
+              <Skeleton className="h-3.5 w-24 rounded-md" />
               <Skeleton className="h-5 w-24 rounded border border-neutral-200/60" />
             </div>
           </div>
         </div>
 
-        {/* Card 3: Đã hoàn thành */}
+        {/* Card 3: Tỷ lệ Đúng hạn (On-time Delivery) */}
         <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col justify-between h-full min-w-0">
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <Skeleton className="h-4 w-24 rounded-md bg-neutral-200/80" />
-            <Skeleton className="size-4 rounded-md bg-neutral-200/80" />
+          <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+            <Skeleton className="h-4 w-32 rounded-md bg-neutral-200/80" />
+            <Skeleton className="size-4 rounded-md bg-neutral-200/80 shrink-0 ml-1" />
           </div>
-          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-h-[110px]">
-            <div className="flex items-baseline gap-2.5 my-auto py-1">
-              <Skeleton className="h-10 w-12 rounded-lg" />
-              <Skeleton className="h-4 w-10 rounded-md" />
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-h-[110px] min-w-0">
+            <div className="flex items-baseline justify-between gap-x-2 gap-y-1 flex-wrap my-auto py-1 min-w-0">
+              <div className="flex items-baseline gap-1">
+                <Skeleton className="h-9 w-16 rounded-lg" />
+                <Skeleton className="h-6 w-5 rounded-md" />
+              </div>
+              <Skeleton className="h-5 w-24 rounded-md ml-auto" />
             </div>
-            <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2.5 py-1.5 flex items-center justify-between text-xs mt-1.5">
-              <Skeleton className="h-3.5 w-32 rounded-md" />
-              <Skeleton className="h-5 w-22 rounded border border-neutral-200/60" />
+            <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2 sm:px-2.5 py-1.5 flex items-center justify-between text-xs mt-1.5 min-w-0">
+              <Skeleton className="h-3.5 w-24 rounded-md" />
+              <Skeleton className="h-5 w-28 rounded border border-neutral-200/60" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Tốc độ Xử lý (Cycle Time) */}
+        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col justify-between h-full min-w-0">
+          <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+            <Skeleton className="h-4 w-32 rounded-md bg-neutral-200/80" />
+            <Skeleton className="size-4 rounded-md bg-neutral-200/80 shrink-0 ml-1" />
+          </div>
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-h-[110px] min-w-0">
+            <div className="flex items-baseline justify-between gap-x-2 gap-y-1 flex-wrap my-auto py-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <Skeleton className="h-9 w-12 rounded-lg" />
+                <Skeleton className="h-3.5 w-14 rounded-md" />
+              </div>
+              <Skeleton className="h-5 w-24 rounded-md ml-auto" />
+            </div>
+            <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2 sm:px-2.5 py-1.5 flex items-center justify-between text-xs mt-1.5 min-w-0">
+              <Skeleton className="h-3.5 w-28 rounded-md" />
+              <Skeleton className="h-5 w-24 rounded border border-neutral-200/60" />
             </div>
           </div>
         </div>

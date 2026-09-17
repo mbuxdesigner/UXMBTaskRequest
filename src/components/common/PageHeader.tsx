@@ -1,4 +1,5 @@
 import React from "react"
+import { cn } from "@/lib/utils"
 
 interface PageHeaderProps {
   breadcrumb?: {
@@ -21,7 +22,7 @@ export default function PageHeader({
   className = "",
 }: PageHeaderProps) {
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1 ${className}`}>
+    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1", className)}>
       <div className="space-y-1">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl sm:text-[28px] font-semibold text-slate-900 tracking-tight">

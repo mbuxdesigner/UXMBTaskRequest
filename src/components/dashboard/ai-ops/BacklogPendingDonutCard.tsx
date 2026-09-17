@@ -12,6 +12,7 @@ import {
 import type { UXRequest } from "@/data/mockData"
 import { getRequestPendingClassification } from "@/config/statusConfig"
 import { NumberTicker, useCountUp } from "@/components/jolyui/number-ticker"
+import { isCompletedTask, isValidTask } from "./kpiMetrics"
 
 interface BacklogPendingDonutCardProps {
   requests?: UXRequest[]
@@ -31,12 +32,16 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
     let designerPending = 0
     let overdueCount = 0
 
-    requests.forEach((r) => {
+    const safeReqs = Array.isArray(requests) ? requests.filter(isValidTask) : []
+
+    safeReqs.forEach((r) => {
+      if (isCompletedTask(r)) return
+
       const cls = getRequestPendingClassification(r)
       if (cls.isPending) {
         if (cls.type === "po_pending") {
           poPending++
-          if (cls.isOverdue) overdueCount++
+          if (cls.elapsedHours >= 24) overdueCount++
         } else if (cls.type === "designer_pending") {
           designerPending++
         } else {
@@ -44,11 +49,25 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
         }
       } else {
         const s = (r.status || "").toLowerCase()
-        if (s.includes("chờ xác nhận") || s.includes("chờ tiếp nhận") || s.includes("mới tạo")) {
-          choTiepNhan++
-        } else if (s.includes("po pending") || s.includes("đã gửi po")) {
+        if (s.includes("po pending") || (s.includes("po") && (s.includes("chờ") || s.includes("cho")))) {
           poPending++
-        } else if (s.includes("pending") || s.includes("tạm dừng")) {
+        } else if (
+          s.includes("chờ xác nhận") ||
+          s.includes("chờ tiếp nhận") ||
+          s.includes("chờ duyệt") ||
+          s.includes("chờ") ||
+          s.includes("mới tạo") ||
+          s.includes("đã gửi yêu cầu") ||
+          s.includes("đã gửi")
+        ) {
+          choTiepNhan++
+        } else if (
+          s.includes("pending") ||
+          s.includes("tạm dừng") ||
+          s.includes("tam dung") ||
+          s.includes("bị chặn") ||
+          s.includes("bi chan")
+        ) {
           designerPending++
         }
       }
@@ -75,20 +94,22 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
       className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col justify-between h-full min-w-0"
     >
       {/* Header on gray background */}
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <span className="text-sm font-medium text-neutral-500">Backlog & Pending</span>
-        <Clock className="size-4 text-neutral-400 stroke-[1.5]" />
+      <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+        <span className="text-sm font-medium text-neutral-500 truncate" title="Backlog & Pending">
+          Backlog & Pending
+        </span>
+        <Clock className="size-4 text-neutral-400 stroke-[1.5] shrink-0 ml-1" />
       </div>
 
       {/* Inner White Card */}
-      <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between">
+      <div className="rounded-xl border border-neutral-200/70 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col flex-1 justify-between min-w-0">
         {/* Horizontal Layout: Donut Chart nhỏ bên trái + Danh sách trạng thái bên phải */}
-        <div className="w-full flex-1 flex items-center justify-between gap-3 py-0.5">
+        <div className="w-full flex-1 flex items-center justify-start gap-4 sm:gap-6 py-0.5 min-w-0">
           {/* Cột trái: Donut chart compact với cụm số nhỏ vừa vặn */}
-          <div className="w-[98px] h-[98px] shrink-0 relative flex items-center justify-center">
+          <div className="w-[84px] sm:w-[94px] xl:w-[84px] 2xl:w-[96px] h-[84px] sm:h-[94px] xl:h-[84px] 2xl:h-[96px] shrink-0 relative flex items-center justify-center">
             <ChartContainer
               config={chartConfig}
-              className="w-[98px] h-[98px] aspect-square"
+              className="w-[84px] sm:w-[94px] xl:w-[84px] 2xl:w-[96px] h-[84px] sm:h-[94px] xl:h-[84px] 2xl:h-[96px] aspect-square"
             >
               <PieChart accessibilityLayer width={98} height={98} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <ChartTooltip
@@ -178,9 +199,9 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
             </ChartContainer>
           </div>
 
-          {/* Cột phải: Danh sách chỉ số các trạng thái sạch sẽ, không khung viền và không nền hộp */}
-          <div className="flex-1 min-w-0 space-y-2 py-0.5">
-            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+          {/* Cột phải: Danh sách chỉ số các trạng thái sạch sẽ, số đặt gần với nhãn */}
+          <div className="flex flex-col justify-center gap-y-2 flex-1 min-w-0 max-w-[190px] sm:max-w-[210px] py-0.5">
+            <div className="flex items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="size-2 rounded-xs shrink-0"
@@ -188,12 +209,12 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                 />
                 <span className="text-neutral-600 truncate text-xs font-normal">Chờ tiếp nhận</span>
               </div>
-              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 text-xs text-right">
                 <NumberTicker value={stats.choTiepNhan} />
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+            <div className="flex items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="size-2 rounded-xs shrink-0"
@@ -201,12 +222,12 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                 />
                 <span className="text-neutral-600 truncate text-xs font-normal">PO pending</span>
               </div>
-              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 text-xs text-right">
                 <NumberTicker value={stats.poPending} />
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-xs py-0.5 transition-colors">
+            <div className="flex items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="size-2 rounded-xs shrink-0"
@@ -214,7 +235,7 @@ export default function BacklogPendingDonutCard({ requests = [] }: BacklogPendin
                 />
                 <span className="text-neutral-600 truncate text-xs font-normal">Khác</span>
               </div>
-              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 ml-1 text-xs">
+              <span className="font-mono font-bold text-neutral-900 tabular-nums shrink-0 text-xs text-right">
                 <NumberTicker value={stats.designerPending} />
               </span>
             </div>

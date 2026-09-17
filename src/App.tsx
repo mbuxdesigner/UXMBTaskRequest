@@ -367,28 +367,17 @@ export default function App() {
             }
           />
 
-          {/* Main Content View */}
-          <div
-            className={cn(
-              "flex-1 w-full min-w-0 max-w-full",
-              page === "ia"
-                ? "p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden"
-                : "px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8"
-            )}
-          >
-            <ErrorBoundary>
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={page}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15, ease: "easeInOut" }}
-                  className={cn(
-                    "w-full min-w-0 max-w-full",
-                    page === "ia" && "h-full flex flex-col flex-1"
-                  )}
-                >
+          {/* Main Content View: Tách biệt IA Canvas toàn màn hình và các trang cuộn tiêu chuẩn để loại bỏ hoàn toàn hiện tượng nháy layout */}
+          {page === "ia" ? (
+            <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+              <ErrorBoundary>
+                <IAPage />
+              </ErrorBoundary>
+            </div>
+          ) : (
+            <div className="flex-1 w-full min-w-0 max-w-full flex flex-col justify-between">
+              <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+                <ErrorBoundary>
                   {page === "overview" && <TongQuanPage />}
                   {page === "create" && (
                     <CreateRequestPage onBack={() => handleNavigate("track")} />
@@ -401,17 +390,14 @@ export default function App() {
                   {page === "manage" && <QuanLyPage />}
                   {page === "test" && <TestAssessmentPage />}
                   {page === "compressor" && <ImageCompressorPage />}
-                  {page === "ia" && <IAPage />}
-                </motion.div>
-              </AnimatePresence>
-            </ErrorBoundary>
-          </div>
+                </ErrorBoundary>
+              </div>
 
-          {/* ReUI App Shell 12 Footer (Ẩn trên trang IA để Canvas full màn hình theo UI Magnific) */}
-          {page !== "ia" && (
-            <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
-              <div>2026 © MBBank UX Platform</div>
-            </footer>
+              {/* ReUI App Shell 12 Footer */}
+              <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
+                <div>2026 © MBBank UX Platform</div>
+              </footer>
+            </div>
           )}
         </div>
 

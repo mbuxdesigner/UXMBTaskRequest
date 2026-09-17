@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 import { IATierDimensionSettings } from "@/types/ia"
 
 export const DEFAULT_TIER_DIMENSIONS: IATierDimensionSettings = {
-  1: { width: 320, height: 165 },
-  2: { width: 280, height: 180 },
-  3: { width: 260, height: 190 },
-  4: { width: 250, height: 175 },
+  1: { width: 320, height: 115 },
+  2: { width: 280, height: 120 },
+  3: { width: 260, height: 125 },
+  4: { width: 250, height: 115 },
   columnGap: 110,
-  verticalGapJourney: 52,
-  verticalGapScreen: 36,
+  verticalGapJourney: 44,
+  verticalGapScreen: 32,
 }
 
 interface IASettingsModalProps {

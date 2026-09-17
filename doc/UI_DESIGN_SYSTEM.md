@@ -333,21 +333,26 @@ export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
 ```
 
 ### Indicator Visual States:
-- **Active / Current**: `bg-slate-900 border-slate-900 text-white shadow-md shadow-slate-900/25 ring-4 ring-slate-900/15`
+- **Active / Current (Sonar Motion & Live Beacon)**:
+  - **Lõi nút**: `bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/25`
+  - **Sóng Sonar / Radar Ping Wave sau UI (`-z-10`)**: `absolute inset-0 -z-10 rounded-full bg-blue-500/20 animate-pulse` (sử dụng độ mờ opacity, nghiêm cấm dùng `transform: scale` để tránh layout jitter).
+  - **Vòng xoay nét đứt ngoài duy nhất**: `absolute -inset-1 rounded-full border border-dashed border-blue-500/50 animate-[spin_8s_linear_infinite]` (loại bỏ nét đứt bên trong, chỉ giữ 1 vòng xoay ngoài).
+  - **Live Pulse Beacon cạnh tiêu đề**: `w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-2 ring-emerald-500/20` ngay trước tiêu đề khâu đang xử lý.
 - **Completed**: `bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-500/20` with `<Check className="w-4 h-4 stroke-[2.5]" />`
 - **Upcoming / Pending**: `bg-slate-50 border-slate-200 text-slate-400 group-hover:border-slate-300 group-hover:text-slate-600`
 - **Error / Blocker**: `bg-rose-500 border-rose-500 text-white shadow-sm shadow-rose-500/20` with `<AlertCircle className="w-4 h-4" />`
 - **Connector Track**: Emerald (`bg-emerald-500`) for completed segments, Slate 200 (`bg-slate-200`) for pending.
 
-### Horizontal Overflow Containment:
-To prevent long Vietnamese step labels from breaking mobile or tablet layouts, the Stepper is wrapped in an overflow container:
+### Horizontal Overflow Containment & Anti-Jitter Architecture:
+To prevent long Vietnamese step labels from breaking mobile or tablet layouts and completely eliminate vertical bounce/jitter ("thụt ra thụt vào"):
 ```tsx
-<div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
+<div className="px-4 sm:px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto overflow-y-hidden no-scrollbar shrink-0 touch-pan-x">
   <Stepper activeStep={currentStep} className="min-w-[640px] lg:min-w-full">
     {/* Step Items */}
   </Stepper>
 </div>
 ```
+- **Quy tắc vàng chống co giật (CLS = 0)**: Bắt buộc kèm `overflow-y-hidden` trên wrapper cuộn ngang để chặn triệt để việc trình duyệt tự động kích hoạt thanh cuộn dọc ảo khi hiệu ứng hoạt họa kích hoạt.
 
 ---
 

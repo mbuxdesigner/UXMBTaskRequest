@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 
 export interface CanvasTransform {
   x: number
@@ -112,8 +112,18 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
   )
   const [isPanning, setIsPanning] = useState<boolean>(false)
 
-  // Drag tracking refs
-  const dragStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
+  // Synchronized ref for current transform to decouple event handlers from rapid re-renders
+  const transformRef = useRef<CanvasTransform>(transform)
+  transformRef.current = transform
+
+  // Drag tracking refs (supports button 0 and button 1)
+  const dragStartRef = useRef<{
+    clientX: number
+    clientY: number
+    startX: number
+    startY: number
+    button: number
+  } | null>(null)
   const hasCrossedThresholdRef = useRef<boolean>(false)
 
   const panBy = useCallback((dx: number, dy: number) => {
@@ -172,24 +182,36 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
   )
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only primary button initiates drag
-    if (e.button !== 0) return
+    // Allow primary button (0) or middle wheel button (1)
+    if (e.button !== 0 && e.button !== 1) return
+
+    const isMiddle = e.button === 1
+    if (isMiddle) {
+      // Suppress browser autoscroll immediately
+      e.preventDefault()
+      // Middle click immediately activates grabbing cursor and pan state
+      setIsPanning(true)
+      hasCrossedThresholdRef.current = true
+    } else {
+      hasCrossedThresholdRef.current = false
+    }
+
     dragStartRef.current = {
       clientX: e.clientX,
       clientY: e.clientY,
-      startX: transform.x,
-      startY: transform.y,
+      startX: transformRef.current.x,
+      startY: transformRef.current.y,
+      button: e.button,
     }
-    hasCrossedThresholdRef.current = false
-  }, [transform.x, transform.y])
+  }, [])
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+  const handlePointerMove = useCallback((e: React.PointerEvent | PointerEvent) => {
     const dragStart = dragStartRef.current
     if (!dragStart) return
     const dx = e.clientX - dragStart.clientX
     const dy = e.clientY - dragStart.clientY
 
-    // 3px drag threshold disambiguation
+    // 3px drag threshold disambiguation for left-click; middle click pans immediately
     if (!hasCrossedThresholdRef.current) {
       if (dx * dx + dy * dy > 9) {
         hasCrossedThresholdRef.current = true
@@ -211,11 +233,59 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
     }
   }, [])
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e?: React.PointerEvent | PointerEvent | MouseEvent) => {
+    if (!dragStartRef.current) return
+    // If specific button is passed, only clear when that button was released or on pointercancel
+    if (
+      e &&
+      e.type !== "pointercancel" &&
+      typeof e.button === "number" &&
+      e.button !== -1 &&
+      e.button !== dragStartRef.current.button
+    ) {
+      return
+    }
     dragStartRef.current = null
     hasCrossedThresholdRef.current = false
     setIsPanning(false)
   }, [])
+
+  // Window-level safety listeners during active dragging & cursor grabbing management
+  useEffect(() => {
+    if (!isPanning) return
+
+    const handleWindowMove = (e: PointerEvent) => {
+      handlePointerMove(e)
+    }
+
+    const handleWindowUp = (e: PointerEvent | MouseEvent) => {
+      handlePointerUp(e)
+    }
+
+    const handleWindowAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault()
+      }
+    }
+
+    const prevCursor = document.body.style.cursor
+    document.body.style.cursor = "grabbing"
+
+    window.addEventListener("pointermove", handleWindowMove)
+    window.addEventListener("pointerup", handleWindowUp)
+    window.addEventListener("mouseup", handleWindowUp)
+    window.addEventListener("pointercancel", handleWindowUp)
+    window.addEventListener("auxclick", handleWindowAuxClick)
+
+    return () => {
+      document.body.style.cursor = prevCursor
+      window.removeEventListener("pointermove", handleWindowMove)
+      window.removeEventListener("pointerup", handleWindowUp)
+      window.removeEventListener("mouseup", handleWindowUp)
+      window.removeEventListener("pointercancel", handleWindowUp)
+      window.removeEventListener("auxclick", handleWindowAuxClick)
+    }
+  }, [isPanning, handlePointerMove, handlePointerUp])
 
   const handleWheel = useCallback(
     (e: WheelEvent, containerRect: DOMRect) => {

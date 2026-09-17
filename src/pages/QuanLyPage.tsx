@@ -34,6 +34,7 @@ import PageHeader from "@/components/common/PageHeader"
 import AddMemberModal from "@/components/common/AddMemberModal"
 import { isMockDesigner } from "@/components/track/RequestDetail"
 import { ManagementSkeleton } from "@/components/common/ReuiSkeletons"
+import { sortMembersByVietnameseName } from "@/lib/utils"
 import {
   Users,
   Eye,
@@ -99,6 +100,9 @@ import {
   Flame,
   XCircle,
   UserCog,
+  ArrowUpDown,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react"
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
@@ -1421,7 +1425,9 @@ function CompactRoleMemberSelector({
 }: CompactRoleMemberSelectorProps) {
   const [search, setSearch] = useState("")
 
-  const filteredMembers = members.filter((m) =>
+  const sortedMembers = useMemo(() => sortMembersByVietnameseName(members), [members])
+
+  const filteredMembers = sortedMembers.filter((m) =>
     search.trim() ? m.name.toLowerCase().includes(search.toLowerCase()) : true
   )
 
@@ -2148,6 +2154,13 @@ export default function QuanLyPage() {
   // Master Data Table Search & Filter State
   const [squadSearchQuery, setSquadSearchQuery] = useState("")
   const [selectedProductFilter, setSelectedProductFilter] = useState("ALL")
+
+  // Master Data Reordering State
+  const [draggedProductIndex, setDraggedProductIndex] = useState<number | null>(null)
+  const [draggedSquadInfo, setDraggedSquadInfo] = useState<{ productId: string; squadId: string } | null>(null)
+  const [showReorderModal, setShowReorderModal] = useState<boolean>(false)
+  const [reorderModalTab, setReorderModalTab] = useState<"products" | "squads">("products")
+  const [reorderModalSelectedProduct, setReorderModalSelectedProduct] = useState<string>("")
 
   // Tập hợp tên các sản phẩm đang có hiệu lực trong Master Data
   const activeProductNamesSet = useMemo(
@@ -3102,6 +3115,155 @@ export default function QuanLyPage() {
     syncMasterDataToSheet({ products: updatedProds, squads: updatedSquads })
   }
 
+  // --- MASTER DATA REORDERING HANDLERS ---
+  const handleMoveProduct = (index: number, direction: "prev" | "next") => {
+    const targetIdx = direction === "prev" ? index - 1 : index + 1
+    if (targetIdx < 0 || targetIdx >= products.length) return
+    const updated = [...products]
+    const temp = updated[index]
+    updated[index] = updated[targetIdx]
+    updated[targetIdx] = temp
+
+    setProducts(updated)
+    localStorage.setItem("mbbank_admin_products", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    window.dispatchEvent(new Event("admin_products_changed"))
+    logAdminAction(
+      "Sắp xếp Sản phẩm",
+      temp.name,
+      `Đổi vị trí sản phẩm [${temp.name}] sang thứ tự ${targetIdx + 1}`,
+      "masterdata"
+    )
+    toast.success(`Đã chuyển sản phẩm [${temp.name}] sang vị trí ${targetIdx + 1}!`)
+    syncMasterDataToSheet({ products: updated, squads })
+  }
+
+  const handleProductDragStart = (index: number) => {
+    setDraggedProductIndex(index)
+  }
+
+  const handleProductDrop = (dropIndex: number) => {
+    if (draggedProductIndex === null || draggedProductIndex === dropIndex) {
+      setDraggedProductIndex(null)
+      return
+    }
+    const updated = [...products]
+    const [removed] = updated.splice(draggedProductIndex, 1)
+    updated.splice(dropIndex, 0, removed)
+
+    setProducts(updated)
+    localStorage.setItem("mbbank_admin_products", JSON.stringify(updated))
+    localStorage.setItem("ux_portal_products_v2", JSON.stringify(updated))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    window.dispatchEvent(new Event("admin_products_changed"))
+    logAdminAction(
+      "Sắp xếp Sản phẩm",
+      removed.name,
+      `Kéo thả sản phẩm [${removed.name}] sang thứ tự ${dropIndex + 1}`,
+      "masterdata"
+    )
+    toast.success(`Đã xếp sản phẩm [${removed.name}] sang vị trí ${dropIndex + 1}!`)
+    setDraggedProductIndex(null)
+    syncMasterDataToSheet({ products: updated, squads })
+  }
+
+  const handleMoveSquadInProduct = (
+    productId: string,
+    squadId: string,
+    direction: "prev" | "next"
+  ) => {
+    const pr = products.find((p) => p.id === productId)
+    if (!pr) return
+    const prodSquads = squads.filter((s) => isSquadBelongToProduct(s, pr))
+    const currentIdx = prodSquads.findIndex((s) => s.id === squadId)
+    if (currentIdx === -1) return
+    const targetIdx = direction === "prev" ? currentIdx - 1 : currentIdx + 1
+    if (targetIdx < 0 || targetIdx >= prodSquads.length) return
+
+    const reorderedProdSquads = [...prodSquads]
+    const [movedSquad] = reorderedProdSquads.splice(currentIdx, 1)
+    reorderedProdSquads.splice(targetIdx, 0, movedSquad)
+
+    let prodSquadCursor = 0
+    const updatedSquads = squads.map((s) => {
+      if (isSquadBelongToProduct(s, pr)) {
+        const next = reorderedProdSquads[prodSquadCursor]
+        prodSquadCursor++
+        return next
+      }
+      return s
+    })
+
+    setSquads(updatedSquads)
+    localStorage.setItem("mbbank_admin_squads", JSON.stringify(updatedSquads))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updatedSquads))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    logAdminAction(
+      "Sắp xếp Squad",
+      `${movedSquad.name} (${pr.name})`,
+      `Đổi vị trí squad [${movedSquad.name}] sang thứ tự ${targetIdx + 1} trong sản phẩm [${pr.name}]`,
+      "masterdata"
+    )
+    toast.success(`Đã đổi thứ tự squad [${movedSquad.name}] sang vị trí ${targetIdx + 1}!`)
+    syncMasterDataToSheet({ squads: updatedSquads, products })
+  }
+
+  const handleSquadDragStart = (productId: string, squadId: string) => {
+    setDraggedSquadInfo({ productId, squadId })
+  }
+
+  const handleSquadDrop = (productId: string, targetSquadId: string) => {
+    if (!draggedSquadInfo || draggedSquadInfo.productId !== productId || draggedSquadInfo.squadId === targetSquadId) {
+      setDraggedSquadInfo(null)
+      return
+    }
+    const pr = products.find((p) => p.id === productId)
+    if (!pr) {
+      setDraggedSquadInfo(null)
+      return
+    }
+    const prodSquads = squads.filter((s) => isSquadBelongToProduct(s, pr))
+    const fromIdx = prodSquads.findIndex((s) => s.id === draggedSquadInfo.squadId)
+    const toIdx = prodSquads.findIndex((s) => s.id === targetSquadId)
+    if (fromIdx === -1 || toIdx === -1) {
+      setDraggedSquadInfo(null)
+      return
+    }
+
+    const reorderedProdSquads = [...prodSquads]
+    const [movedSquad] = reorderedProdSquads.splice(fromIdx, 1)
+    reorderedProdSquads.splice(toIdx, 0, movedSquad)
+
+    let prodSquadCursor = 0
+    const updatedSquads = squads.map((s) => {
+      if (isSquadBelongToProduct(s, pr)) {
+        const next = reorderedProdSquads[prodSquadCursor]
+        prodSquadCursor++
+        return next
+      }
+      return s
+    })
+
+    setSquads(updatedSquads)
+    localStorage.setItem("mbbank_admin_squads", JSON.stringify(updatedSquads))
+    localStorage.setItem("ux_portal_squads_v2", JSON.stringify(updatedSquads))
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
+    logAdminAction(
+      "Sắp xếp Squad",
+      `${movedSquad.name} (${pr.name})`,
+      `Kéo thả squad [${movedSquad.name}] sang thứ tự ${toIdx + 1} trong sản phẩm [${pr.name}]`,
+      "masterdata"
+    )
+    toast.success(`Đã xếp squad [${movedSquad.name}] sang vị trí ${toIdx + 1}!`)
+    setDraggedSquadInfo(null)
+    syncMasterDataToSheet({ squads: updatedSquads, products })
+  }
+
   const handleExportBackup = () => {
     const backupData = {
       version: "3.0.0",
@@ -3144,14 +3306,17 @@ export default function QuanLyPage() {
     toast.success(`Đã tải xuống danh sách ${teamMembers.length} nhân sự dạng CSV (mở bằng Excel)!`)
   }
 
-  const filteredMembers = teamMembers.filter((m) => {
-    if (roleFilter !== "ALL" && m.role !== roleFilter) return false
-    if (!memberSearchQuery.trim()) return true
-    const q = memberSearchQuery.toLowerCase()
-    const squadMatch = (m.squads || []).some((s) => s.toLowerCase().includes(q))
-    const prodMatch = (m.products || []).some((p) => p.toLowerCase().includes(q))
-    return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || squadMatch || prodMatch
-  })
+  const filteredMembers = useMemo(() => {
+    const list = teamMembers.filter((m) => {
+      if (roleFilter !== "ALL" && m.role !== roleFilter) return false
+      if (!memberSearchQuery.trim()) return true
+      const q = memberSearchQuery.toLowerCase()
+      const squadMatch = (m.squads || []).some((s) => s.toLowerCase().includes(q))
+      const prodMatch = (m.products || []).some((p) => p.toLowerCase().includes(q))
+      return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || squadMatch || prodMatch
+    })
+    return sortMembersByVietnameseName(list)
+  }, [teamMembers, roleFilter, memberSearchQuery])
 
   if (!loading && !isAdmin) {
     return (
@@ -4915,6 +5080,22 @@ export default function QuanLyPage() {
                     <Plus className="w-3.5 h-3.5" />
                     <span>Thêm Squad mới</span>
                   </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setReorderModalTab("products")
+                      setReorderModalSelectedProduct(products[0]?.name || "")
+                      setShowReorderModal(true)
+                    }}
+                    className="rounded-lg text-xs font-medium gap-1.5 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer shadow-2xs"
+                    title="Sắp xếp thứ tự Sản phẩm & Squads nghiệp vụ"
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Sắp xếp thứ tự</span>
+                  </Button>
                 </div>
 
                 <Button
@@ -5033,11 +5214,36 @@ export default function QuanLyPage() {
 
                   totalRenderedSquads += filteredSquads.length
 
+                  const prIdx = products.findIndex((p) => p.id === pr.id)
+                  const isFirstProduct = prIdx === 0
+                  const isLastProduct = prIdx === products.length - 1
+                  const isDraggingProduct = draggedProductIndex === prIdx
+
                   return (
-                    <div key={`group-prod-${pr.id}`} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div
+                      key={`group-prod-${pr.id}`}
+                      draggable={selectedProductFilter === "ALL" && !squadSearchQuery.trim()}
+                      onDragStart={() => handleProductDragStart(prIdx)}
+                      onDragOver={(e) => {
+                        if (draggedProductIndex !== null) e.preventDefault()
+                      }}
+                      onDrop={() => handleProductDrop(prIdx)}
+                      onDragEnd={() => setDraggedProductIndex(null)}
+                      className={`bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200 ${
+                        isDraggingProduct ? "opacity-30 ring-2 ring-indigo-500 scale-[0.99]" : ""
+                      }`}
+                    >
                       {/* Product Group Header */}
                       <div className="p-4 sm:px-5 sm:py-3.5 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {selectedProductFilter === "ALL" && !squadSearchQuery.trim() && (
+                            <div
+                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                              title="Kéo thả để sắp xếp vị trí Sản phẩm"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          )}
                           <span className={`w-3.5 h-3.5 rounded-full ${cDef.dotClass} ring-4 ring-white shadow-2xs shrink-0`} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -5057,6 +5263,44 @@ export default function QuanLyPage() {
 
                         {/* Product Level Quick Actions */}
                         <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                          {/* Move Product Up / Down controls */}
+                          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                            <button
+                              type="button"
+                              disabled={isFirstProduct}
+                              onClick={() => handleMoveProduct(prIdx, "prev")}
+                              className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                              title="Di chuyển Sản phẩm lên trên"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isLastProduct}
+                              onClick={() => handleMoveProduct(prIdx, "next")}
+                              className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                              title="Di chuyển Sản phẩm xuống dưới"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setReorderModalTab("squads")
+                              setReorderModalSelectedProduct(pr.name)
+                              setShowReorderModal(true)
+                            }}
+                            className="h-8 text-xs font-medium gap-1 bg-white border-slate-200 hover:bg-slate-50 text-slate-700 cursor-pointer shadow-2xs"
+                            title={`Sắp xếp danh sách Squads thuộc [${pr.name}]`}
+                          >
+                            <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                            <span className="hidden md:inline">Sắp xếp Squads</span>
+                          </Button>
+
                           <Button
                             type="button"
                             size="sm"
@@ -5105,11 +5349,26 @@ export default function QuanLyPage() {
                               const poList = getSquadPos(sq)
                               const bizList = getSquadBusinesses(sq)
                               const sqColorDef = getSquadColorDef(sq.name, sq.productName)
+                              const sqInProdIdx = prodSquads.findIndex((s) => s.id === sq.id)
+                              const isFirstSquad = sqInProdIdx === 0
+                              const isLastSquad = sqInProdIdx === prodSquads.length - 1
+                              const isDraggingSquad = draggedSquadInfo?.squadId === sq.id
 
                               return (
                                 <div
                                   key={`sq-card-${sq.id}`}
-                                  className="bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between p-3 relative group"
+                                  draggable={!squadSearchQuery.trim()}
+                                  onDragStart={() => handleSquadDragStart(pr.id, sq.id)}
+                                  onDragOver={(e) => {
+                                    if (draggedSquadInfo && draggedSquadInfo.productId === pr.id) {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  onDrop={() => handleSquadDrop(pr.id, sq.id)}
+                                  onDragEnd={() => setDraggedSquadInfo(null)}
+                                  className={`bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between p-3 relative group ${
+                                    isDraggingSquad ? "opacity-30 ring-2 ring-blue-500 scale-95" : ""
+                                  }`}
                                 >
                                   {/* Card Top: Title Squad + Code badge + Quick actions */}
                                   <div>
@@ -5123,8 +5382,36 @@ export default function QuanLyPage() {
                                         </div>
                                       </div>
 
-                                      {/* Quick Edit/Delete buttons */}
+                                      {/* Quick actions: Reorder + Edit/Delete */}
                                       <div className="flex items-center gap-0.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                                        {/* Drag handle */}
+                                        <div
+                                          className="cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-600 transition-colors"
+                                          title="Kéo thả đổi vị trí squad"
+                                        >
+                                          <GripVertical className="w-3 h-3" />
+                                        </div>
+
+                                        {/* Move Left / Right */}
+                                        <button
+                                          type="button"
+                                          disabled={isFirstSquad}
+                                          onClick={() => handleMoveSquadInProduct(pr.id, sq.id, "prev")}
+                                          className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                          title="Chuyển squad sang trước"
+                                        >
+                                          <ArrowLeft className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={isLastSquad}
+                                          onClick={() => handleMoveSquadInProduct(pr.id, sq.id, "next")}
+                                          className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                          title="Chuyển squad sang sau"
+                                        >
+                                          <ArrowRight className="w-3 h-3" />
+                                        </button>
+
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -6643,6 +6930,274 @@ export default function QuanLyPage() {
                   </Button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* MODAL: SẮP XẾP THỨ TỰ SẢN PHẨM & SQUADS MASTER DATA       */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {showReorderModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl border border-slate-200"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                    <ArrowUpDown className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 leading-tight">
+                      Sắp xếp thứ tự Sản phẩm & Squads
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Thứ tự này sẽ áp dụng trực tiếp cho các Dropdown chọn Sản phẩm / Squad, bộ lọc và app
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReorderModal(false)}
+                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Tabs Switcher */}
+              <div className="flex items-center gap-2 pt-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setReorderModalTab("products")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                    reorderModalTab === "products"
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                  }`}
+                >
+                  1. Thứ tự Sản phẩm ({products.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReorderModalTab("squads")
+                    if (!reorderModalSelectedProduct) {
+                      setReorderModalSelectedProduct(products[0]?.name || "")
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                    reorderModalTab === "squads"
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                  }`}
+                >
+                  2. Thứ tự Squads trong Sản phẩm
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
+                {reorderModalTab === "products" ? (
+                  <div className="space-y-2">
+                    <p className="text-[11.5px] text-slate-500">
+                      Kéo thả hoặc dùng mũi tên để đổi thứ tự xuất hiện của các Sản phẩm trong hệ thống:
+                    </p>
+                    <div className="space-y-1.5">
+                      {products.map((pr, pIdx) => {
+                        const cDef = getProductColorDef(pr.name, pr.color)
+                        const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
+                        const isDragging = draggedProductIndex === pIdx
+
+                        return (
+                          <div
+                            key={`modal-reorder-pr-${pr.id}`}
+                            draggable
+                            onDragStart={() => handleProductDragStart(pIdx)}
+                            onDragOver={(e) => {
+                              if (draggedProductIndex !== null) e.preventDefault()
+                            }}
+                            onDrop={() => handleProductDrop(pIdx)}
+                            onDragEnd={() => setDraggedProductIndex(null)}
+                            className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
+                              isDragging ? "opacity-30 ring-2 ring-indigo-500 scale-98" : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                                {pIdx + 1}
+                              </span>
+                              <span className={`w-2.5 h-2.5 rounded-full ${cDef.dotClass} shrink-0`} />
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{pr.name}</p>
+                                <p className="text-[11px] text-slate-400 truncate">{count} squads</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                              <button
+                                type="button"
+                                disabled={pIdx === 0}
+                                onClick={() => handleMoveProduct(pIdx, "prev")}
+                                className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                title="Lên trên"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={pIdx === products.length - 1}
+                                onClick={() => handleMoveProduct(pIdx, "next")}
+                                className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                title="Xuống dưới"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Select Product to sort squads */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                      {products.map((pr) => {
+                        const isSelected = (reorderModalSelectedProduct || products[0]?.name) === pr.name
+                        const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
+                        const cDef = getProductColorDef(pr.name, pr.color)
+
+                        return (
+                          <button
+                            key={`modal-prod-sel-${pr.id}`}
+                            type="button"
+                            onClick={() => setReorderModalSelectedProduct(pr.name)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 cursor-pointer border transition-all ${
+                              isSelected
+                                ? `${cDef.badgeClass} border-current font-bold shadow-2xs`
+                                : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${cDef.dotClass}`} />
+                            <span>{pr.name}</span>
+                            <span className="text-[10.5px] opacity-75">({count})</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Squads in the selected product */}
+                    {(() => {
+                      const curProd = products.find(
+                        (p) => p.name === (reorderModalSelectedProduct || products[0]?.name)
+                      )
+                      if (!curProd) return null
+                      const prodSquads = squads.filter((s) => isSquadBelongToProduct(s, curProd))
+
+                      if (prodSquads.length === 0) {
+                        return (
+                          <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                            <p className="text-xs text-slate-500">Sản phẩm này chưa có Squad nào.</p>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="space-y-1.5">
+                          <p className="text-[11.5px] text-slate-500">
+                            Thứ tự các Squads trong sản phẩm <strong>{curProd.name}</strong> (ảnh hưởng trực tiếp khi chọn Squad trong form tạo/sửa yêu cầu):
+                          </p>
+                          {prodSquads.map((sq, sqIdx) => {
+                            const sqColorDef = getSquadColorDef(sq.name, sq.productName)
+                            const isDragging = draggedSquadInfo?.squadId === sq.id
+
+                            return (
+                              <div
+                                key={`modal-sq-sort-${sq.id}`}
+                                draggable
+                                onDragStart={() => handleSquadDragStart(curProd.id, sq.id)}
+                                onDragOver={(e) => {
+                                  if (draggedSquadInfo && draggedSquadInfo.productId === curProd.id) {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                onDrop={() => handleSquadDrop(curProd.id, sq.id)}
+                                onDragEnd={() => setDraggedSquadInfo(null)}
+                                className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
+                                  isDragging ? "opacity-30 ring-2 ring-blue-500 scale-98" : ""
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                                    {sqIdx + 1}
+                                  </span>
+                                  <span className={`w-2 h-2 rounded-full ${sqColorDef.dotClass} shrink-0`} />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-900 truncate">{sq.name}</p>
+                                    <p className="text-[11px] text-slate-400 truncate">
+                                      {sq.domain || "Nghiệp vụ trực thuộc"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={sqIdx === 0}
+                                    onClick={() => handleMoveSquadInProduct(curProd.id, sq.id, "prev")}
+                                    className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                    title="Lên trên"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={sqIdx === prodSquads.length - 1}
+                                    onClick={() => handleMoveSquadInProduct(curProd.id, sq.id, "next")}
+                                    className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                    title="Xuống dưới"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between shrink-0">
+                <span className="text-[11.5px] text-slate-400">
+                  Thứ tự được tự động lưu vào bộ nhớ và đồng bộ với Google Sheet
+                </span>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowReorderModal(false)}
+                  className="rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white cursor-pointer px-4"
+                >
+                  Hoàn tất
+                </Button>
+              </div>
             </motion.div>
           </div>
         )}

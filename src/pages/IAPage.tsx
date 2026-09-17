@@ -12,8 +12,10 @@ import { useCanvasTransform } from "@/hooks/useCanvasTransform"
 import IACanvasViewport from "@/components/ia/IACanvasViewport"
 import IANodeEditorModal, { ModalMode } from "@/components/ia/IANodeEditorModal"
 import IASettingsModal from "@/components/ia/IASettingsModal"
-import IAQuickAddSidebar, { QuickAddNodeType } from "@/components/ia/IAQuickAddSidebar"
+import type { QuickAddNodeType } from "@/components/ia/IAQuickAddSidebar"
 import IAJsonImportModal from "@/components/ia/IAJsonImportModal"
+import { IADockTool } from "@/components/ia/IAVerticalDock"
+import { Tooltip } from "@/components/ui/tooltip"
 import RequestDetail from "@/components/track/RequestDetail"
 import { IANode, IATier } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
@@ -102,7 +104,7 @@ export default function IAPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [targetNode, setTargetNode] = useState<IANode | null>(null)
   const [selectedNode, setSelectedNode] = useState<IANode | null>(null)
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(true)
+  const [activeDockTool, setActiveDockTool] = useState<IADockTool>(null)
   const [isJsonImportOpen, setIsJsonImportOpen] = useState<boolean>(false)
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false)
   const [isPullingCloud, setIsPullingCloud] = useState<boolean>(false)
@@ -189,9 +191,10 @@ export default function IAPage() {
     fitToView({ width: Math.max(600, vpWidth), height: Math.max(400, vpHeight) }, bounds, 60)
   }, [fitToView, bounds])
 
-  // Auto-fit on product switch
+  // Auto-fit and reset dock tool on product switch
   useEffect(() => {
     handleFitToView()
+    setActiveDockTool(null)
   }, [selectedProductId])
 
   // Modal Action Handlers (blocked if !canEdit)
@@ -230,6 +233,12 @@ export default function IAPage() {
     setModalMode("view")
   }, [])
 
+  const handleOpenLinkTask = useCallback((node: IANode) => {
+    if (!canEdit) return
+    setTargetNode(node)
+    setModalMode("link-task" as any)
+  }, [canEdit])
+
   const handleCloseModal = useCallback(() => {
     setModalMode(null)
     setTargetNode(null)
@@ -239,8 +248,13 @@ export default function IAPage() {
   const handleSyncCloud = useCallback(async () => {
     if (!canEdit) return
     setIsSyncingCloud(true)
+    const startTime = Date.now()
     try {
       const ok = await syncCloud()
+      const elapsed = Date.now() - startTime
+      if (elapsed < 1200) {
+        await new Promise((r) => setTimeout(r, 1200 - elapsed))
+      }
       if (ok) {
         toast.success("Đã đồng bộ sơ đồ IA lên Cloud thành công!")
       } else {
@@ -256,8 +270,13 @@ export default function IAPage() {
   // Cloud Pull Handler
   const handlePullCloud = useCallback(async () => {
     setIsPullingCloud(true)
+    const startTime = Date.now()
     try {
       const ok = await pullCloud()
+      const elapsed = Date.now() - startTime
+      if (elapsed < 1200) {
+        await new Promise((r) => setTimeout(r, 1200 - elapsed))
+      }
       if (ok) {
         toast.success("Đã tải dữ liệu sơ đồ IA mới nhất từ Cloud!")
         setTimeout(() => handleFitToView(), 150)
@@ -444,92 +463,119 @@ export default function IAPage() {
       tabIndex={-1}
       className="flex flex-col w-full h-full flex-1 min-h-0 min-w-0 max-w-full outline-none overflow-hidden select-none bg-slate-50"
     >
-      {/* 1. Page Header: Title on Left, c-tabs-5 Product Switcher on Right */}
-      <PageHeader
-        breadcrumb={{
-          parent: "Platform",
-          current: "Information architecture",
-        }}
-        title="Information architecture"
-        badge={
-          !canEdit ? (
-            <span
-              data-testid="ia-readonly-badge"
-              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold"
-              title="Bạn đang ở chế độ chỉ xem, không thể chỉnh sửa hoặc di chuyển node"
-            >
-              <Eye className="w-3 h-3 text-amber-600" />
-              Chế độ chỉ xem
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync
-            </span>
-          )
-        }
-        actions={
-          /* c-tabs-5 Product Switcher with Admin Color Dots */
-          <div
-            role="tablist"
-            aria-label="Lọc sơ đồ IA theo sản phẩm"
-            className="inline-flex h-9 items-center justify-center rounded-xl bg-slate-100/90 p-1 text-slate-500 border border-slate-200/80 shadow-2xs overflow-x-auto max-w-full"
-          >
-            {products.map((prod, idx) => {
-              const tabKey = prod?.id?.trim() || prod?.code?.trim() || `ia-prod-${idx}`
-              const isSelected =
-                selectedProductId === prod.id ||
-                (selectedProductId === "app-mbbank" && prod.code === "APP_MB")
-              const colorDef = getProductColorDef(prod.name, prod.color)
-              const dotColor = colorDef.hex || prod.color || "#2563EB"
-              const nodeCount = productNodeCounts[prod.id] ?? 0
-
-              return (
-                <button
-                  key={`ia-tab-${tabKey}-${idx}`}
-                  role="tab"
-                  type="button"
-                  id={`ia-product-tab-${prod.id}`}
-                  data-testid={`ia-product-tab-${prod.id}`}
-                  aria-selected={isSelected}
-                  onClick={() => setSelectedProductId(prod.id)}
-                  className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
-                    isSelected
-                      ? "bg-white text-slate-900 shadow-xs font-semibold"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-                  )}
+      {/* 1. Page Header & Product Navigation: Synchronized with Overview and Design System */}
+      <div className="px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8 pb-3 bg-[#FCFCFD] border-b border-slate-200/80 shrink-0 select-none space-y-2.5">
+        <PageHeader
+          breadcrumb={{
+            parent: "Platform",
+            current: "IA map",
+          }}
+          title="IA map"
+          badge={
+            !canEdit ? (
+              <Tooltip content="Bạn đang ở chế độ chỉ xem, không thể chỉnh sửa hoặc di chuyển node">
+                <span
+                  data-testid="ia-readonly-badge"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold cursor-help"
                 >
-                  {/* Chấm tròn theo màu cài đặt trong Admin */}
-                  <span
-                    className="w-2 h-2 rounded-full mr-1.5 shrink-0 transition-transform"
-                    style={{ backgroundColor: dotColor }}
-                  />
-                  <span>{prod.name}</span>
-                  {nodeCount > 0 && (
-                    <span
-                      className={cn(
-                        "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
-                        isSelected
-                          ? "bg-slate-100 text-slate-700 font-semibold"
-                          : "bg-slate-200/70 text-slate-500"
-                      )}
-                    >
-                      {nodeCount}
-                    </span>
+                  <Eye className="w-3 h-3 text-amber-600" />
+                  Chế độ chỉ xem
+                </span>
+              </Tooltip>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live Sync
+              </span>
+            )
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                tactile
+                onClick={handlePullCloud}
+                disabled={isPullingCloud || isSyncingCloud}
+                aria-label="Làm mới sơ đồ IA"
+                className={cn(
+                  "cursor-pointer shrink-0 select-none",
+                  isPullingCloud && "bg-slate-50 border-slate-300 text-slate-900"
+                )}
+              >
+                <RefreshCw
+                  className={cn(
+                    "w-3.5 h-3.5 mr-1.5 text-slate-500",
+                    isPullingCloud && "animate-spin text-slate-900"
                   )}
-                </button>
-              )
-            })}
-          </div>
-        }
-        className="px-4 py-2 sm:px-6 bg-white border-b border-slate-200/80 shrink-0 select-none"
-      />
+                />
+                <span>Làm mới</span>
+              </Button>
+            </div>
+          }
+          className="pb-0"
+        />
+
+        {/* Product Navigation Tabs - Hàng dưới đồng bộ 100% với Overview */}
+        <div
+          role="tablist"
+          aria-label="Lọc sơ đồ IA theo sản phẩm"
+          aria-orientation="horizontal"
+          className="inline-flex h-9 items-center justify-start rounded-xl bg-slate-100/90 p-1 text-slate-500 border border-slate-200/80 shadow-2xs overflow-x-auto max-w-full select-none"
+        >
+          {products.map((prod, idx) => {
+            const tabKey = prod?.id?.trim() || prod?.code?.trim() || `ia-prod-${idx}`
+            const isSelected =
+              selectedProductId === prod.id ||
+              (selectedProductId === "app-mbbank" && prod.code === "APP_MB")
+            const colorDef = getProductColorDef(prod.name, prod.color)
+            const dotColor = colorDef.hex || prod.color || "#2563EB"
+            const nodeCount = productNodeCounts[prod.id] ?? 0
+
+            return (
+              <button
+                key={`ia-tab-${tabKey}-${idx}`}
+                role="tab"
+                type="button"
+                id={`ia-product-tab-${prod.id}`}
+                data-testid={`ia-product-tab-${prod.id}`}
+                aria-selected={isSelected}
+                onClick={() => setSelectedProductId(prod.id)}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
+                  isSelected
+                    ? "bg-white text-slate-900 shadow-xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                )}
+              >
+                {/* Chấm tròn theo màu cài đặt trong Admin */}
+                <span
+                  className="w-2 h-2 rounded-full mr-1.5 shrink-0 transition-transform"
+                  style={{ backgroundColor: dotColor }}
+                />
+                <span>{prod.name}</span>
+                {nodeCount > 0 && (
+                  <span
+                    className={cn(
+                      "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
+                      isSelected
+                        ? "bg-slate-100 text-slate-700 font-semibold"
+                        : "bg-slate-200/70 text-slate-500"
+                    )}
+                  >
+                    {nodeCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* 2. Main Full-Screen Canvas Workspace (Magnific UI) */}
       <div
         className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#F8FAFC]"
-        style={{ height: "calc(100vh - 7rem)", minHeight: "500px" }}
+        style={{ minHeight: "450px" }}
       >
         {/* Full-Screen Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
         <div className="absolute inset-0 w-full h-full overflow-hidden">
@@ -552,6 +598,7 @@ export default function IAPage() {
             onToggleCollapse={toggleCollapse}
             onOpenDetail={(req) => setSelectedRequest(req)}
             onOpenNodeDetail={handleOpenViewNode}
+            onOpenTaskPicker={canEdit ? handleOpenLinkTask : undefined}
             onAddChild={handleOpenAdd}
             onAddChildInDirection={canEdit ? addChildInDirection : undefined}
             onConnectNodes={canEdit ? connectNodes : undefined}
@@ -579,30 +626,27 @@ export default function IAPage() {
             onSyncCloud={handleSyncCloud}
             isSyncingCloud={isSyncingCloud}
             onResetToDefault={handleOpenReset}
+            activeDockTool={activeDockTool}
+            onSelectDockTool={setActiveDockTool}
+            activeTree={activeTree}
+            activeProduct={activeProduct}
+            onAddNode={handleAddFromSidebar}
+            tierDimensions={tierDimensions}
+            onSaveSettings={(newSettings) => {
+              setTierDimensions(newSettings)
+              setTimeout(() => handleFitToView(), 100)
+            }}
+            onImportJson={handleImportJson}
           />
         </div>
-
-        {/* Left Quick Add Sidebar - Floats on top of canvas */}
-        {isDesignAdminOrOwner && (
-          <div className="absolute top-0 left-0 bottom-0 z-30 pointer-events-none flex items-stretch">
-            <div className="pointer-events-auto flex items-stretch h-full">
-              <IAQuickAddSidebar
-                isOpen={isQuickAddOpen}
-                onToggle={() => setIsQuickAddOpen((prev) => !prev)}
-                onAddNode={handleAddFromSidebar}
-                selectedNodeId={selectedNode?.id}
-                selectedNodeName={selectedNode?.name}
-                selectedNodeTier={selectedNode?.tier}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}
       <IANodeEditorModal
         mode={modalMode}
         targetNode={targetNode}
+        activeProduct={activeProduct}
+        productName={activeProduct?.name}
         availableRequests={Array.from(requestsMap.values())}
         isOpen={modalMode !== null}
         onClose={handleCloseModal}

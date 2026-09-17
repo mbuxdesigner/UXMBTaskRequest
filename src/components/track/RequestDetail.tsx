@@ -27,7 +27,7 @@ import { toast } from "@/components/ui/toast"
 import { dispatchNotification } from "@/services/notificationService"
 import { updateTaskProgress } from "../../api/api"
 import { canUserAccessRequest, isUserInViewers, normalizeVietnameseString } from "@/lib/accessControl"
-import { capitalizeFirstLetter } from "@/lib/utils"
+import { capitalizeFirstLetter, sortMembersByVietnameseName } from "@/lib/utils"
 import { DropdownMenu, DropdownOption } from "@/components/reui/dropdown-menu"
 import { Stepper, Step, type StepDef, type StepStatus } from "@/components/reui/stepper"
 import {
@@ -920,8 +920,8 @@ export default function RequestDetail({
     const cleanSquadDisplay = hasCleanSquad ? rawSquad : "Chưa phân squad"
 
     return {
-      squadDesigners: squadList,
-      supportingDesigners: supportList,
+      squadDesigners: sortMembersByVietnameseName(squadList),
+      supportingDesigners: sortMembersByVietnameseName(supportList),
       taskSquadName: cleanSquadDisplay,
       assignedSquadDesignerNames: cleanAssignedNames,
     }
@@ -1651,8 +1651,8 @@ export default function RequestDetail({
     })
 
     return {
-      squadViewers: squadList,
-      supportingViewers: supportList,
+      squadViewers: sortMembersByVietnameseName(squadList),
+      supportingViewers: sortMembersByVietnameseName(supportList),
     }
   }, [availableViewerMembers, request, localSquad, matchesPerson])
 
@@ -3285,42 +3285,48 @@ export default function RequestDetail({
               <div className="px-3 sm:px-6 py-2.5 sm:py-3 bg-white border-b border-slate-100 flex items-center justify-between shrink-0 select-none gap-2">
                 {/* Left: Breadcrumbs [Squad / Task ID] */}
                 <div className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
-                  <span className="text-slate-600 font-bold truncate max-w-[120px] sm:max-w-none">
-                    {isRestrictedAccess ? "Yêu cầu tư vấn trải nghiệm" : (localProduct || request.product || "App MBBank")}
+                  <span className="inline-flex items-center gap-1.5 text-slate-500 font-medium text-xs truncate max-w-[140px] sm:max-w-none">
+                    <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>{isRestrictedAccess ? "Yêu cầu tư vấn trải nghiệm" : (localProduct || request.product || "App MBBank")}</span>
                   </span>
 
-                  <span className="text-slate-300 font-light">/</span>
+                  <span className="text-slate-300 font-light select-none">/</span>
 
                   <button
                     type="button"
                     onClick={handleCopyTaskId}
-                    className={`flex items-center gap-1.5 font-mono font-bold px-2 py-0.5 rounded border shrink-0 cursor-pointer transition-all duration-150 group shadow-2xs select-none ${
+                    className={`flex items-center gap-1.5 font-mono font-medium text-[11.5px] px-2 py-0.5 rounded-md border shrink-0 cursor-pointer transition-all duration-150 group select-none ${
                       copiedTaskId
                         ? "bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-300"
-                        : "text-slate-800 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 active:scale-95"
+                        : "text-slate-600 bg-slate-50/80 border-slate-200/80 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300 active:scale-95"
                     }`}
                     title="Click để sao chép mã bài toán"
                   >
                     {copiedTaskId ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600 animate-in zoom-in-75 duration-150" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600 animate-in zoom-in-75 duration-150 shrink-0" />
                     ) : (
-                      <Target className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                      <Target className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />
                     )}
                     <span>{request.request_id}</span>
                     {copiedTaskId ? (
                       <span className="text-[10px] font-sans font-semibold text-emerald-600">Đã copy</span>
                     ) : (
-                      <Copy className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                      <Copy className="w-3 h-3 text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity ml-0.5 shrink-0" />
                     )}
                   </button>
 
                   {statusConfig && (
-                    <span className={`hidden sm:inline-block ml-1 px-2.5 py-0.5 rounded-md font-bold text-[11px] tracking-wide uppercase border ${
+                    <span className={`hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-0.5 rounded-md font-semibold text-[10.5px] tracking-wide uppercase border ${
                       pendingClassification.isPending
                         ? `${pendingClassification.badgeClasses.bg} ${pendingClassification.badgeClasses.text} ${pendingClassification.badgeClasses.border}`
                         : `${statusConfig.inlineClasses.bg} ${statusConfig.inlineClasses.text} ${statusConfig.inlineClasses.border}`
                     } shrink-0`}>
-                      {pendingClassification.isPending ? pendingClassification.label : request.status}
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        pendingClassification.isPending
+                          ? (pendingClassification.badgeClasses.dot || "bg-amber-500")
+                          : (statusConfig.inlineClasses.dot || "bg-blue-500")
+                      }`} />
+                      <span>{pendingClassification.isPending ? pendingClassification.label : request.status}</span>
                     </span>
                   )}
                 </div>
@@ -3412,7 +3418,7 @@ export default function RequestDetail({
               ) : (
                 <React.Fragment>
                   {/* 2. ReUI Checkout-style Dynamic UX Progression Stepper Bar */}
-                  <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200/80 overflow-x-auto no-scrollbar shrink-0 touch-pan-x">
+                  <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200/80 overflow-x-auto overflow-y-hidden no-scrollbar shrink-0 touch-pan-x">
                     <Stepper
                       activeStep={currentPhaseIndex}
                       orientation="horizontal"
@@ -4371,7 +4377,89 @@ export default function RequestDetail({
                           <span>{request.request_type || "Yêu cầu UX"}</span>
                         </span>
 
+                        {/* Ngày Release dự kiến */}
+                        {(() => {
+                          const relDate = request.release_date || request.expected_deadline
+                          if (!relDate) {
+                            if (!canEditBrief) return null
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                                  setPoFormSquad(curSq)
+                                  setPoFormProduct(localProduct || request.product || "")
+                                  setPoFormTitle(request.title || "")
+                                  setPoFormReqType(request.request_type || "")
+                                  setPoFormDesc(request.description || "")
+                                  setPoFormBizNeed(request.business_need || "")
+                                  setPoFormUserProb(request.user_problem || "")
+                                  setPoFormTargetUser(request.target_user || "")
+                                  setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                                  setPoFormDeadlineReason(request.deadline_reason || "")
+                                  setPoFormDocLinks(request.doc_links || [])
+                                  setShowPoEditModal(true)
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50/60 hover:bg-purple-100/80 text-purple-700 text-xs font-semibold border border-dashed border-purple-200 transition-colors cursor-pointer"
+                                title="Bấm để thêm ngày release dự kiến"
+                              >
+                                <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <span>+ Thêm release dự kiến</span>
+                              </button>
+                            )
+                          }
 
+                          if (canEditBrief) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const curSq = (localSquad !== undefined && localSquad !== "" ? localSquad : (request.squad_name || request.preferred_squad || "")).trim()
+                                  setPoFormSquad(curSq)
+                                  setPoFormProduct(localProduct || request.product || "")
+                                  setPoFormTitle(request.title || "")
+                                  setPoFormReqType(request.request_type || "")
+                                  setPoFormDesc(request.description || "")
+                                  setPoFormBizNeed(request.business_need || "")
+                                  setPoFormUserProb(request.user_problem || "")
+                                  setPoFormTargetUser(request.target_user || "")
+                                  setPoFormExpectedDeadline(request.release_date || request.expected_deadline || "")
+                                  setPoFormDeadlineReason(request.deadline_reason || "")
+                                  setPoFormDocLinks(request.doc_links || [])
+                                  setShowPoEditModal(true)
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold border border-purple-200 transition-colors cursor-pointer shadow-2xs"
+                                title="Hạn Release dự kiến (Bấm để chỉnh sửa)"
+                              >
+                                <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <span>Release:</span>
+                                <strong className="font-bold text-purple-900">{relDate}</strong>
+                                {request.deadline_reason && (
+                                  <span className="text-purple-600/80 font-normal text-[11px] max-w-[200px] truncate" title={request.deadline_reason}>
+                                    ({request.deadline_reason})
+                                  </span>
+                                )}
+                                <Edit3 className="w-2.5 h-2.5 text-purple-400 opacity-70" />
+                              </button>
+                            )
+                          }
+
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 text-xs font-semibold border border-purple-200 shadow-2xs"
+                              title="Hạn Release dự kiến"
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <span>Release:</span>
+                              <strong className="font-bold text-purple-900">{relDate}</strong>
+                              {request.deadline_reason && (
+                                <span className="text-purple-600/80 font-normal text-[11px] max-w-[200px] truncate" title={request.deadline_reason}>
+                                  ({request.deadline_reason})
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })()}
                       </div>
 
                       {/* Row 2: Author and Created Metadata aligned with Edit Button */}
@@ -4485,7 +4573,34 @@ export default function RequestDetail({
                         </p>
                       </div>
 
-                      {/* 5. Tài liệu & Tệp đính kèm */}
+                      {/* 5. Kế hoạch Release dự kiến */}
+                      {(request.release_date || request.expected_deadline || request.deadline_reason) && (
+                        <div className="space-y-2">
+                          <h3 className="text-[16px] sm:text-[17px] font-bold text-slate-900 tracking-tight">
+                            Kế hoạch Release dự kiến
+                          </h3>
+                          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80 text-xs sm:text-sm text-purple-950">
+                            <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 border border-purple-200/60">
+                              <Calendar className="w-4 h-4" />
+                            </div>
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <div className="font-semibold text-purple-900 flex items-center gap-2">
+                                <span>Ngày release dự kiến:</span>
+                                <span className="font-mono font-bold text-purple-800">
+                                  {request.release_date || request.expected_deadline || "Chưa xác định"}
+                                </span>
+                              </div>
+                              {request.deadline_reason && (
+                                <p className="text-xs text-purple-700">
+                                  <span className="font-medium">Lý do thời hạn:</span> {request.deadline_reason}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 6. Tài liệu & Tệp đính kèm */}
                       {(() => {
                         const allDocs: { title: string; url: string }[] = []
                         let docCounter = 1

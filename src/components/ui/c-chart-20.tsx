@@ -79,8 +79,7 @@ export function Pattern() {
               }
             />
             <ChartLegend
-              content={<ChartLegendContent nameKey="status" />}
-              className="-translate-y-2"
+              content={<ChartLegendContent nameKey="status" className="-translate-y-2" />}
             />
             <Pie
               data={chartData}

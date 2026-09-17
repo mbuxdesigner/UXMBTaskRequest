@@ -53,6 +53,28 @@ const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
 export const TASK_VIEWERS_STORE_KEY = "ux_task_viewers_map"
 
+export function clearSelectionsCache(): void {
+  cachedSelections = null
+  inflightSelectionsPromise = null
+  try {
+    localStorage.removeItem(SELECTIONS_CACHE_KEY)
+  } catch {}
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === "mbbank_admin_products" || e.key === "mbbank_admin_squads") {
+      clearSelectionsCache()
+    }
+  })
+  window.addEventListener("admin_products_changed", () => {
+    clearSelectionsCache()
+  })
+  window.addEventListener("ux_data_refreshed", () => {
+    clearSelectionsCache()
+  })
+}
+
 export function getStoredTaskViewers(requestId?: string): string[] {
   if (!requestId) return []
   try {
@@ -634,6 +656,37 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
               fetchedProducts = FALLBACK_SELECTIONS.products
             }
 
+            let fetchedSquads = data.selections.squads?.length
+              ? data.selections.squads
+              : FALLBACK_SELECTIONS.squads
+
+            const fetchedProductSquadMap = data.selections.product_squad_map
+              ? { ...data.selections.product_squad_map }
+              : { ...FALLBACK_SELECTIONS.product_squad_map }
+
+            // Overlay active squads & product_squad_map from Admin Settings if available (preserving configured order)
+            try {
+              const adminSquadsRaw = localStorage.getItem("mbbank_admin_squads")
+              if (adminSquadsRaw) {
+                const parsedAdminSquads = JSON.parse(adminSquadsRaw)
+                if (Array.isArray(parsedAdminSquads) && parsedAdminSquads.length > 0) {
+                  fetchedSquads = parsedAdminSquads.map((s: any) => ({
+                    ...s,
+                    squad_id: s.id || s.squad_id,
+                    squad_name: s.name || s.squad_name,
+                    product_name: s.productName || s.product_name,
+                  }))
+                  parsedAdminSquads.forEach((sq: any) => {
+                    const pName = sq.productName || sq.product_name
+                    const sName = sq.name || sq.squad_name
+                    if (pName && sName && !fetchedProductSquadMap[pName]) {
+                      fetchedProductSquadMap[pName] = sName
+                    }
+                  })
+                }
+              }
+            } catch {}
+
             const merged: SelectionsData = {
               products: fetchedProducts,
               request_types: data.selections.request_types?.length
@@ -645,12 +698,8 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
               deadline_reasons: data.selections.deadline_reasons?.length
                 ? data.selections.deadline_reasons
                 : FALLBACK_SELECTIONS.deadline_reasons,
-              squads: data.selections.squads?.length
-                ? data.selections.squads
-                : FALLBACK_SELECTIONS.squads,
-              product_squad_map: data.selections.product_squad_map
-                ? data.selections.product_squad_map
-                : FALLBACK_SELECTIONS.product_squad_map,
+              squads: fetchedSquads,
+              product_squad_map: fetchedProductSquadMap,
             }
             cachedSelections = merged
             try {

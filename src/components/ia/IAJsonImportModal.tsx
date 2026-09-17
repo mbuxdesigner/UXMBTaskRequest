@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { IANode, IATier, IATouchpointType } from "@/types/ia"
 import { toast } from "@/components/ui/toast"
 import { springs, tactileProps } from "@/lib/motion"
+import { Tooltip } from "@/components/ui/tooltip"
 
 interface IAJsonImportModalProps {
   isOpen: boolean
@@ -273,26 +274,28 @@ export default function IAJsonImportModal({
         {/* Action helper bar */}
         <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap text-xs">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLoadSample}
-              title="Điền mẫu JSON chuẩn 4 tầng để thử nghiệm"
-              className="text-xs h-7 gap-1"
-            >
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Dán mẫu chuẩn</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              title="Tải tệp .json từ máy tính"
-              className="text-xs h-7 gap-1"
-            >
-              <Upload className="w-3 h-3 text-slate-500" />
-              <span>Tải file .json</span>
-            </Button>
+            <Tooltip content="Dán mẫu JSON chuẩn 4 tầng (Lv1-Lv4)" side="bottom">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLoadSample}
+                className="text-xs h-7 gap-1"
+              >
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>Dán mẫu chuẩn</span>
+              </Button>
+            </Tooltip>
+            <Tooltip content="Tải tệp JSON từ máy tính" side="bottom">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs h-7 gap-1"
+              >
+                <Upload className="w-3 h-3 text-slate-500" />
+                <span>Tải file .json</span>
+              </Button>
+            </Tooltip>
             <input
               ref={fileInputRef}
               type="file"
@@ -302,16 +305,17 @@ export default function IAJsonImportModal({
             />
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopyCurrentMap}
-            title="Sao chép JSON của sơ đồ hiện tại"
-            className="text-xs h-7 gap-1 text-slate-600 hover:text-slate-900"
-          >
-            {copiedExport ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-            <span>{copiedExport ? "Đã copy!" : "Copy JSON hiện tại"}</span>
-          </Button>
+          <Tooltip content="Sao chép JSON sơ đồ hiện tại" side="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyCurrentMap}
+              className="text-xs h-7 gap-1 text-slate-600 hover:text-slate-900"
+            >
+              {copiedExport ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedExport ? "Đã copy!" : "Copy JSON hiện tại"}</span>
+            </Button>
+          </Tooltip>
         </div>
 
         {/* Code editor textarea */}

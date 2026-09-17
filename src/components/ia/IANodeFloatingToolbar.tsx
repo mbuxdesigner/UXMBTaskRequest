@@ -16,6 +16,7 @@ import { IANode } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
 import { springs, tactileProps } from "@/lib/motion"
 import { toast } from "@/components/ui/toast"
+import { Tooltip } from "@/components/ui/tooltip"
 
 interface IANodeFloatingToolbarProps {
   node: IANode
@@ -66,160 +67,163 @@ export default function IANodeFloatingToolbar({
   }
 
   return (
-    <motion.div
+    <div
       data-testid={`ia-floating-toolbar-${node.id}`}
-      initial={{ opacity: 0, y: 6, scale: 0.92 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 6, scale: 0.92 }}
-      transition={springs.snappy}
       style={{
         position: "absolute",
         left: x + nodeWidth / 2,
-        top: y - 48,
+        top: y - 52,
         transform: "translateX(-50%)",
         zIndex: 60,
       }}
-      className="flex items-center gap-1 p-1 bg-slate-900/95 text-white backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl select-none"
+      className="pointer-events-auto select-none"
       onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Tier indicator pill */}
-      <span className="px-2 py-0.5 rounded-lg bg-blue-600/60 text-blue-200 text-[10px] font-mono font-bold tracking-tight">
-        Lv{node.tier}
-      </span>
-
-      <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-
-      {/* Xem chi tiết Node (Luôn khả dụng cho cả View và Edit) */}
-      <motion.button
-        type="button"
-        data-testid={`ia-float-view-${node.id}`}
-        onClick={(e) => {
-          e.stopPropagation()
-          onViewDetail?.(node)
-        }}
-        title="Xem chi tiết thông tin node"
-        className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors cursor-pointer shadow-xs"
-        {...tactileProps.button}
+      <motion.div
+        initial={{ opacity: 0, y: 6, scale: 0.92 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 6, scale: 0.92 }}
+        transition={springs.snappy}
+        className="flex items-center justify-center gap-1 p-1 bg-slate-900/95 text-white backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl"
       >
-        <Eye className="w-3.5 h-3.5" />
-        <span>Xem chi tiết</span>
-      </motion.button>
+      {/* Xem chi tiết Node (Luôn khả dụng cho cả View và Edit) */}
+      <Tooltip content="Xem chi tiết node" side="top">
+        <motion.button
+          type="button"
+          data-testid={`ia-float-view-${node.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewDetail?.(node)
+          }}
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-white bg-blue-600 hover:bg-blue-500 transition-colors cursor-pointer shadow-xs"
+          {...tactileProps.button}
+        >
+          <Eye className="w-4 h-4" />
+        </motion.button>
+      </Tooltip>
 
       {/* Xem bài toán liên kết (nếu có) */}
       {linkedRequest && onOpenTask && (
-        <motion.button
-          type="button"
-          data-testid={`ia-float-task-${node.id}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpenTask(linkedRequest)
-          }}
-          title={`Xem bài toán: ${linkedRequest.title}`}
-          className="flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-semibold text-blue-200 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
-          <span>Bài toán</span>
-        </motion.button>
+        <Tooltip content={`Xem bài toán: ${linkedRequest.title}`} side="top">
+          <motion.button
+            type="button"
+            data-testid={`ia-float-task-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenTask(linkedRequest)
+            }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-blue-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <CheckSquare className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
       )}
 
       {/* Add Child (Tier 1-3) - Chỉ khi có quyền Edit */}
       {!readOnly && node.tier < 4 && (
-        <motion.button
-          type="button"
-          data-testid={`ia-float-add-${node.id}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onAddChild(node)
-          }}
-          title="Thêm node con vào thẻ này"
-          className="flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Thêm con</span>
-        </motion.button>
+        <Tooltip content="Thêm node con" shortcut="Tab" side="top">
+          <motion.button
+            type="button"
+            data-testid={`ia-float-add-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onAddChild(node)
+            }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-200 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+          </motion.button>
+        </Tooltip>
       )}
 
       {/* Edit Node - Chỉ khi có quyền Edit */}
       {!readOnly && (
-        <motion.button
-          type="button"
-          data-testid={`ia-float-edit-${node.id}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onEditNode(node)
-          }}
-          title="Chỉnh sửa thông tin thẻ"
-          className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </motion.button>
+        <Tooltip content="Chỉnh sửa thông tin thẻ" side="top">
+          <motion.button
+            type="button"
+            data-testid={`ia-float-edit-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditNode(node)
+            }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <Pencil className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
       )}
 
       {/* Figma link if present */}
       {node.figmaUrl && (
-        <motion.button
-          type="button"
-          data-testid={`ia-float-figma-${node.id}`}
-          onClick={handleFigma}
-          title="Mở liên kết thiết kế Figma"
-          className="p-1.5 rounded-xl text-purple-300 hover:text-purple-100 hover:bg-purple-900/50 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </motion.button>
+        <Tooltip content="Mở thiết kế Figma liên kết" side="top">
+          <motion.button
+            type="button"
+            data-testid={`ia-float-figma-${node.id}`}
+            onClick={handleFigma}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-purple-300 hover:text-purple-100 hover:bg-purple-900/50 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
       )}
 
       {/* Copy ID */}
-      <motion.button
-        type="button"
-        data-testid={`ia-float-copy-${node.id}`}
-        onClick={handleCopyId}
-        title="Sao chép Node ID"
-        className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-        {...tactileProps.button}
-      >
-        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-      </motion.button>
+      <Tooltip content="Sao chép mã Node ID" side="top">
+        <motion.button
+          type="button"
+          data-testid={`ia-float-copy-${node.id}`}
+          onClick={handleCopyId}
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          {...tactileProps.button}
+        >
+          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+        </motion.button>
+      </Tooltip>
 
       {/* Center view on this node */}
       {onCenterNode && (
-        <motion.button
-          type="button"
-          data-testid={`ia-float-center-${node.id}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onCenterNode(node)
-          }}
-          title="Căn giữa màn hình vào thẻ này"
-          className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
-        </motion.button>
+        <Tooltip content="Căn giữa vào thẻ này" side="top">
+          <motion.button
+            type="button"
+            data-testid={`ia-float-center-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onCenterNode(node)
+            }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <Maximize2 className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
       )}
 
       {/* Delete Node */}
       {!readOnly && (
         <>
-          <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-          <motion.button
-            type="button"
-            data-testid={`ia-float-delete-${node.id}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onDeleteNode(node)
-            }}
-            title="Xóa node này"
-            className="p-1.5 rounded-xl text-rose-400 hover:text-rose-200 hover:bg-rose-950/60 transition-colors cursor-pointer"
-            {...tactileProps.button}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </motion.button>
+          <div className="w-px h-4 bg-slate-700/80 mx-0.5" />
+          <Tooltip content="Xóa node này" shortcut="Del" side="top">
+            <motion.button
+              type="button"
+              data-testid={`ia-float-delete-${node.id}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeleteNode(node)
+              }}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-rose-400 hover:text-rose-200 hover:bg-rose-950/60 transition-colors cursor-pointer"
+              {...tactileProps.button}
+            >
+              <Trash2 className="w-4 h-4" />
+            </motion.button>
+          </Tooltip>
         </>
       )}
-    </motion.div>
+      </motion.div>
+    </div>
   )
 }

@@ -26,21 +26,26 @@ import {
   Eye,
   ExternalLink,
   Copy,
+  UserCheck,
+  FolderTree,
 } from "lucide-react"
 import { springs, dialogOverlayVariants, drawerVariants } from "@/lib/motion"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { IANode, IATier, IATouchpointType, IANodeDisplaySettings, getTierDefaultDisplaySettings } from "@/types/ia"
-import { getAdminSquadsList } from "@/data/iaMockData"
+import { IANode, IATier, IATouchpointType, IANodeDisplaySettings, getTierDefaultDisplaySettings, IAProductInfo } from "@/types/ia"
+import { getAdminSquadsList, getAdminSquadsForProduct } from "@/data/iaMockData"
 import { UXRequest, isDemoRequest } from "@/data/mockData"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export type ModalMode = "add" | "edit" | "delete" | "reset" | "view" | null
 
 export interface IANodeEditorModalProps {
-  mode: ModalMode
+  mode: ModalMode | "link-task"
   targetNode: IANode | null
   isOpen: boolean
+  activeProduct?: IAProductInfo | null
+  productName?: string
   availableRequests?: UXRequest[]
   onClose: () => void
   onConfirmAdd?: (parentId: string, data: Partial<IANode>) => void
@@ -108,6 +113,8 @@ export default function IANodeEditorModal({
   mode,
   targetNode,
   isOpen,
+  activeProduct,
+  productName,
   availableRequests = [],
   onClose,
   onConfirmAdd,
@@ -125,6 +132,19 @@ export default function IANodeEditorModal({
   const [colorTheme, setColorTheme] = useState<string>("blue")
   const [touchpointType, setTouchpointType] = useState<IATouchpointType>("screen")
   const [errorMessage, setErrorMessage] = useState<string>("")
+
+  // Xác định Sản phẩm mục tiêu của Node / Cây IA
+  const effectiveProduct = useMemo(() => {
+    if (activeProduct) return activeProduct
+    if (productName) return productName
+    if (targetNode?.tier === 1 && targetNode.name) return targetNode.name
+    return "App MBBank"
+  }, [activeProduct, productName, targetNode])
+
+  const effectiveProductName = useMemo(() => {
+    if (typeof effectiveProduct === "string") return effectiveProduct
+    return effectiveProduct?.name || "App MBBank"
+  }, [effectiveProduct])
 
   // Cấp độ hiện tại của node đang xử lý
   const currentTier: IATier = useMemo(() => {
@@ -171,11 +191,15 @@ export default function IANodeEditorModal({
   const [filterBySquadOnly, setFilterBySquadOnly] = useState<boolean>(true)
   const [isTaskDropdownOpen, setIsTaskDropdownOpen] = useState<boolean>(false)
 
-  // Danh mục Squads nội bộ chuẩn xác (chỉ lấy đúng squad thực tế, không lấy dữ liệu lạ)
-  const availableSquads = useMemo(
-    () => Array.from(new Set(getAdminSquadsList().map((s) => s.trim()).filter(Boolean))),
-    [isOpen]
-  )
+  // Danh mục Squads nội bộ chuẩn xác - CHỈ LẤY CÁC SQUAD THUỘC ĐÚNG SẢN PHẨM NÀY
+  const availableSquads = useMemo(() => {
+    const list = getAdminSquadsForProduct(effectiveProduct)
+    const currentSquad = targetNode?.squad?.trim()
+    if (currentSquad && !list.includes(currentSquad)) {
+      return [currentSquad, ...list]
+    }
+    return list
+  }, [effectiveProduct, targetNode?.squad, isOpen])
 
   // Close squad dropdown on click outside
   useEffect(() => {
@@ -202,7 +226,7 @@ export default function IANodeEditorModal({
       setTaskSearchQuery("")
       return
     }
-    if (mode === "edit" && targetNode) {
+    if ((mode === "edit" || mode === "link-task") && targetNode) {
       setName(targetNode.name || "")
       const nodeSquad = targetNode.squad || ""
       if (nodeSquad && !availableSquads.includes(nodeSquad)) {
@@ -212,6 +236,7 @@ export default function IANodeEditorModal({
         setSquad(nodeSquad)
         setCustomSquad("")
       }
+      setFilterBySquadOnly(Boolean(nodeSquad))
 
       // Populate taskIds (tự động loại bỏ bất kỳ mã demo nào)
       const initialTaskIds: string[] = []
@@ -295,28 +320,134 @@ export default function IANodeEditorModal({
     return list
   }, [availableRequests, filterBySquadOnly, effectiveSquadName, taskSearchQuery])
 
-  // Linked requests for targetNode (used in view mode and details)
-  const targetNodeTasks = useMemo(() => {
-    if (!targetNode) return []
-    const ids = targetNode.taskIds && targetNode.taskIds.length > 0
-      ? targetNode.taskIds
-      : targetNode.requestId
-      ? [targetNode.requestId]
-      : []
-    return ids.map((id) => {
-      const match = availableRequests.find((r) => r.request_id === id)
+  // Subtree Metrics and Grouped Tasks calculation for targetNode (used in view mode and details)
+  const nodeSubtreeData = useMemo(() => {
+    if (!targetNode) {
+      return {
+        totalTasks: 0,
+        completedTasks: 0,
+        inProgressTasks: 0,
+        progressPercent: 0,
+        directTasks: [] as UXRequest[],
+        childGroups: [] as Array<{
+          nodeId: string
+          nodeName: string
+          tier: IATier
+          touchpointType?: IATouchpointType
+          tasks: UXRequest[]
+        }>,
+      }
+    }
+
+    const reqMap = new Map<string, UXRequest>(
+      availableRequests.map((r) => [r.request_id, r])
+    )
+
+    const resolveRequest = (id: string, fallbackSquad?: string): UXRequest => {
+      const match = reqMap.get(id)
       if (match) return match
       return ({
         request_id: id,
         title: `Bài toán ${id}`,
         status: "Đang thực hiện",
-        squad: targetNode.squad || "Chưa gán",
-        squad_name: targetNode.squad || "Chưa gán",
+        squad: fallbackSquad || targetNode.squad || "Chưa gán",
+        squad_name: fallbackSquad || targetNode.squad || "Chưa gán",
         requester_name: "Hệ thống",
         assigned_designer: "Chưa gán",
         created_at: new Date().toISOString(),
       } as unknown) as UXRequest
-    })
+    }
+
+    // 1. Direct tasks at targetNode
+    const directIds =
+      targetNode.taskIds && targetNode.taskIds.length > 0
+        ? targetNode.taskIds
+        : targetNode.requestId
+        ? [targetNode.requestId]
+        : []
+    const directTasks = directIds.map((id) => resolveRequest(id, targetNode.squad))
+
+    // 2. Child nodes tasks grouped by descendant node (nodes lv sau)
+    interface NodeTaskGroup {
+      nodeId: string
+      nodeName: string
+      tier: IATier
+      touchpointType?: IATouchpointType
+      tasks: UXRequest[]
+    }
+
+    const childGroups: NodeTaskGroup[] = []
+    const allSubtreeTaskIds = new Set<string>(directIds)
+
+    const collectGroups = (curr: IANode) => {
+      if (!curr.children || curr.children.length === 0) return
+      for (const child of curr.children) {
+        const cIds =
+          child.taskIds && child.taskIds.length > 0
+            ? child.taskIds
+            : child.requestId
+            ? [child.requestId]
+            : []
+
+        cIds.forEach((id) => allSubtreeTaskIds.add(id))
+
+        if (cIds.length > 0) {
+          const tasks = cIds.map((id) => resolveRequest(id, child.squad))
+          childGroups.push({
+            nodeId: child.id,
+            nodeName: child.name,
+            tier: child.tier,
+            touchpointType: child.touchpointType,
+            tasks,
+          })
+        }
+        collectGroups(child)
+      }
+    }
+
+    collectGroups(targetNode)
+
+    // Calculate progress stats across all tasks
+    const allTaskIds = Array.from(allSubtreeTaskIds)
+    const totalTasks = allTaskIds.length
+    let completedTasks = 0
+    let inProgressTasks = 0
+
+    for (const id of allTaskIds) {
+      const req = reqMap.get(id)
+      if (req) {
+        const s = (req.status || "").toLowerCase()
+        const isDone =
+          s.includes("hoàn thành") ||
+          s.includes("nghiệm thu") ||
+          s.includes("release") ||
+          req.progress === 100
+        const isDoing =
+          !isDone &&
+          (s.includes("thực hiện") ||
+            s.includes("đang làm") ||
+            s.includes("tiến hành") ||
+            s.includes("review") ||
+            (req.progress !== undefined && req.progress > 0 && req.progress < 100))
+
+        if (isDone) completedTasks++
+        else if (isDoing) inProgressTasks++
+      }
+    }
+
+    const progressPercent =
+      totalTasks > 0
+        ? Math.round((completedTasks / totalTasks) * 100)
+        : targetNode.progress || 0
+
+    return {
+      totalTasks,
+      completedTasks,
+      inProgressTasks,
+      progressPercent,
+      directTasks,
+      childGroups,
+    }
   }, [targetNode, availableRequests])
 
   const toggleTaskId = (id: string) => {
@@ -342,6 +473,17 @@ export default function IANodeEditorModal({
 
     if (mode === "reset") {
       onConfirmReset?.()
+      onClose()
+      return
+    }
+
+    if (mode === "link-task" && targetNode) {
+      const effectiveTaskIds = taskIds.length > 0 ? taskIds : undefined
+      onConfirmEdit?.(targetNode.id, {
+        taskIds: effectiveTaskIds,
+        requestId: effectiveTaskIds && effectiveTaskIds.length > 0 ? effectiveTaskIds[0] : undefined,
+        hasActiveTask: undefined,
+      })
       onClose()
       return
     }
@@ -391,6 +533,7 @@ export default function IANodeEditorModal({
   const isFormMode = mode === "add" || mode === "edit"
   const isDeleteMode = mode === "delete"
   const isResetMode = mode === "reset"
+  const isTaskPickerMode = mode === "link-task"
 
   const showTouchpointSelect =
     (mode === "add" && targetNode?.tier === 3) ||
@@ -410,7 +553,7 @@ export default function IANodeEditorModal({
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs cursor-pointer"
         />
 
-        {/* ReUI Sheet-9 Inset Right Panel (Không dùng Header) */}
+        {/* ReUI Slide-Over Drawer Container */}
         <motion.div
           role="dialog"
           aria-modal="true"
@@ -421,15 +564,33 @@ export default function IANodeEditorModal({
           transition={springs.gentle}
           className="relative w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl bg-white shadow-2xl z-10 flex flex-col h-full overflow-hidden border-l border-slate-200"
         >
-          {/* Nút Đóng (X) Tinh Gọn Nổi Góc Trên Phải */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 z-20 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
-            title="Đóng bảng (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* ReUI Drawer Header */}
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0 bg-white">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight truncate">
+              {isTaskPickerMode
+                ? "Liên kết task"
+                : isViewMode
+                ? "Xem chi tiết node"
+                : isDeleteMode
+                ? "Xác nhận xóa nhánh tính năng"
+                : isResetMode
+                ? "Khôi phục dữ liệu cây IA"
+                : mode === "add"
+                ? `Thêm nhánh con vào "${targetNode?.name || "Sơ đồ"}"`
+                : "Cập nhật node"}
+            </h3>
+
+            <Tooltip content="Đóng (Esc)" shortcut="Esc" side="left">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 -mr-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 shrink-0"
+                aria-label="Đóng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
+          </div>
 
           {/* Sheet Body Content with Scroll */}
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
@@ -444,253 +605,452 @@ export default function IANodeEditorModal({
               {/* Chi tiết Node cho View Mode */}
               {isViewMode && targetNode && (
                 <div className="space-y-5" data-testid="ia-node-view-details">
-                  {/* Header Title & Tier Badge */}
+                  {/* Header Title & Node Name */}
                   <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono">
-                          Tier {targetNode.tier} · {
-                            targetNode.tier === 1
-                              ? "Cấp 1 · Sản phẩm chính"
-                              : targetNode.tier === 2
-                              ? "Cấp 2 · Phân hệ chức năng"
-                              : targetNode.tier === 3
-                              ? "Cấp 3 · Tính năng nghiệp vụ"
-                              : "Cấp 4 · Điểm chạm (Touchpoint)"
-                          }
-                        </span>
-                        {targetNode.code && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-mono font-semibold">
-                            {targetNode.code}
-                          </span>
-                        )}
-                        {targetNode.isCriticalPath && (
-                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
-                            Tuyến trọng yếu
-                          </span>
-                        )}
-                      </div>
+                      {(targetNode.code || targetNode.isCriticalPath) && (
+                        <div className="flex items-center gap-2">
+                          {targetNode.code && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-mono font-semibold">
+                              {targetNode.code}
+                            </span>
+                          )}
+                          {targetNode.isCriticalPath && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
+                              Tuyến trọng yếu
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                         {targetNode.name}
                       </h3>
                     </div>
                   </div>
 
-                  {/* ID Node with Copy action */}
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="text-xs">
-                      <span className="text-slate-500 font-medium">Mã định danh ID: </span>
-                      <span className="font-mono font-bold text-slate-800">{targetNode.id}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(targetNode.id)
-                        setCopiedId(true)
-                        setTimeout(() => setCopiedId(false), 2000)
-                      }}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      {copiedId ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedId ? "Đã chép" : "Sao chép"}</span>
-                    </button>
-                  </div>
-
-                  {/* Thông tin chi tiết phân loại */}
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
-                      <div className="text-slate-500 font-medium flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Squad phụ trách</span>
-                      </div>
-                      <div className="font-semibold text-slate-800">
-                        {targetNode.squad || "Chưa phân công"}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
-                      <div className="text-slate-500 font-medium flex items-center gap-1">
-                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Loại điểm chạm</span>
-                      </div>
-                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        {getTouchpointIcon(targetNode.touchpointType)}
-                        <span>
-                          {TOUCHPOINT_OPTIONS.find((t) => t.value === targetNode.touchpointType)?.label.split(" (")[0] || "Màn hình chính"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
-                      <div className="text-slate-500 font-medium flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Màu chủ đề</span>
-                      </div>
-                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        <span
-                          className={`w-3 h-3 rounded-full ${
-                            COLOR_OPTIONS.find((c) => c.id === targetNode.colorTheme)?.bg || "bg-[#1057FB]"
-                          }`}
-                        />
-                        <span>{COLOR_OPTIONS.find((c) => c.id === targetNode.colorTheme)?.name || "Xanh MB"}</span>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
-                      <div className="text-slate-500 font-medium">Thẻ phân loại (Tag)</div>
-                      <div className="font-semibold text-slate-800">
-                        {targetNode.customTag ? (
-                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">
-                            {targetNode.customTag}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-normal">Không có thẻ</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Mô tả / Ghi chú */}
-                  <div className="space-y-1.5 text-xs">
-                    <label className="font-semibold text-slate-700">Mô tả tính năng</label>
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 leading-relaxed min-h-[50px]">
-                      {targetNode.description || <span className="text-slate-400 italic">Không có mô tả chi tiết cho node này.</span>}
-                    </div>
-                  </div>
-
-                  {/* Figma URL */}
-                  <div className="space-y-1.5 text-xs">
-                    <label className="font-semibold text-slate-700">Thiết kế Figma</label>
-                    {targetNode.figmaUrl ? (
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-purple-50/60 border border-purple-200/80 text-purple-900">
-                        <div className="truncate max-w-[280px] font-mono text-[11px] text-purple-700">
-                          {targetNode.figmaUrl}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(targetNode.figmaUrl, "_blank", "noopener,noreferrer")}
-                          className="border-purple-300 text-purple-700 hover:bg-purple-100/60 h-7 text-xs"
-                        >
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          <span>Mở Figma</span>
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 italic">
-                        Chưa liên kết đường dẫn Figma
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bài toán thiết kế liên kết (UX Requests) */}
-                  <div className="space-y-2 text-xs">
+                  {/* Process % Working Card */}
+                  <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80">
+                          <CheckSquare className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-slate-800">Tiến độ thực hiện (Working)</div>
+                          <div className="text-[11px] text-slate-500">
+                            {nodeSubtreeData.totalTasks > 0
+                              ? `${nodeSubtreeData.completedTasks}/${nodeSubtreeData.totalTasks} task hoàn thành`
+                              : "Chưa có task liên kết"}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-slate-900 tracking-tight">
+                        {nodeSubtreeData.progressPercent}%
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 rounded-full bg-slate-200/70 overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                        style={{ width: `${nodeSubtreeData.progressPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Micro Stats */}
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/60 text-center">
+                        <div className="text-[10px] text-slate-500 uppercase font-medium">Tổng task</div>
+                        <div className="text-xs font-bold text-slate-800 font-mono">{nodeSubtreeData.totalTasks}</div>
+                      </div>
+                      <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/60 text-center">
+                        <div className="text-[10px] text-blue-600 uppercase font-medium">Đang làm</div>
+                        <div className="text-xs font-bold text-blue-700 font-mono">{nodeSubtreeData.inProgressTasks}</div>
+                      </div>
+                      <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/60 text-center">
+                        <div className="text-[10px] text-emerald-600 uppercase font-medium">Hoàn thành</div>
+                        <div className="text-xs font-bold text-emerald-700 font-mono">{nodeSubtreeData.completedTasks}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Task liên kết theo nhóm các node level sau */}
+                  <div className="space-y-4 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                         <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Bài toán thiết kế liên kết ({targetNodeTasks.length})</span>
+                        <span>Task liên kết ({nodeSubtreeData.totalTasks})</span>
                       </label>
                     </div>
 
-                    {targetNodeTasks.length > 0 ? (
-                      <div className="space-y-2">
-                        {targetNodeTasks.map((req) => (
-                          <div
-                            key={req.request_id}
-                            className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-colors flex items-center justify-between gap-3"
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-blue-600 text-[11px]">
-                                  {req.request_id}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getTaskStatusBadge(req.status)}`}>
-                                  {req.status}
-                                </span>
-                              </div>
-                              <div className="font-semibold text-slate-800 truncate text-xs">
-                                {req.title}
-                              </div>
-                              <div className="text-[11px] text-slate-500">
-                                {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
-                              </div>
+                    {nodeSubtreeData.totalTasks === 0 ? (
+                      <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-center space-y-1">
+                        <p className="text-xs italic">Chưa có bài toán thiết kế nào được liên kết với node này hoặc các nhánh con.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Group 1: Task trực tiếp tại node này nếu có */}
+                        {nodeSubtreeData.directTasks.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold font-mono">
+                                Lv{targetNode.tier}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800">
+                                {targetNode.name} (Trực tiếp)
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                · {nodeSubtreeData.directTasks.length} task
+                              </span>
                             </div>
 
-                            {onOpenRequestDetail && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  onClose()
-                                  onOpenRequestDetail(req)
-                                }}
-                                className="shrink-0 h-7 text-xs"
+                            <div className="space-y-2">
+                              {nodeSubtreeData.directTasks.map((req) => (
+                                <div
+                                  key={req.request_id}
+                                  className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-colors flex items-center justify-between gap-3"
+                                >
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-blue-600 text-[11px]">
+                                        {req.request_id}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getTaskStatusBadge(req.status)}`}>
+                                        {req.status}
+                                      </span>
+                                    </div>
+                                    <div className="font-semibold text-slate-800 truncate text-xs">
+                                      {req.title}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                      {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
+                                    </div>
+                                  </div>
+
+                                  {onOpenRequestDetail && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        onClose()
+                                        onOpenRequestDetail(req)
+                                      }}
+                                      className="shrink-0 h-7 text-xs"
+                                    >
+                                      <Eye className="w-3 h-3 mr-1" />
+                                      <span>Chi tiết</span>
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Groups: Tasks theo từng node level sau */}
+                        {nodeSubtreeData.childGroups.map((group) => (
+                          <div key={group.nodeId} className="space-y-2">
+                            <div className="flex items-center gap-2 px-1 pt-1">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-bold font-mono border ${
+                                  group.tier === 2
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                    : group.tier === 3
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-800 border-amber-200"
+                                }`}
                               >
-                                <Eye className="w-3 h-3 mr-1" />
-                                <span>Chi tiết</span>
-                              </Button>
-                            )}
+                                Lv{group.tier}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800">
+                                {group.nodeName}
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                · {group.tasks.length} task
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              {group.tasks.map((req) => (
+                                <div
+                                  key={req.request_id}
+                                  className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-blue-300 transition-colors flex items-center justify-between gap-3"
+                                >
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-blue-600 text-[11px]">
+                                        {req.request_id}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getTaskStatusBadge(req.status)}`}>
+                                        {req.status}
+                                      </span>
+                                    </div>
+                                    <div className="font-semibold text-slate-800 truncate text-xs">
+                                      {req.title}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                      {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
+                                    </div>
+                                  </div>
+
+                                  {onOpenRequestDetail && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        onClose()
+                                        onOpenRequestDetail(req)
+                                      }}
+                                      className="shrink-0 h-7 text-xs"
+                                    >
+                                      <Eye className="w-3 h-3 mr-1" />
+                                      <span>Chi tiết</span>
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-center italic">
-                        Chưa có bài toán thiết kế nào được liên kết với node này.
-                      </div>
                     )}
                   </div>
+                </div>
+              )}
 
-                  {/* Nhánh con phụ thuộc */}
-                  {targetNode.children && targetNode.children.length > 0 && (
-                    <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-200/60 text-xs text-blue-900 flex items-center justify-between">
+              {/* Task Picker Sheet Mode (Khi bấm vào "Không có task" trên node) */}
+              {isTaskPickerMode && targetNode && (
+                <div className="space-y-5" data-testid="ia-node-task-picker">
+                  {/* Header Title & Target Node Info */}
+                  <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-600" />
-                        <span className="font-semibold">Nhánh con trực thuộc</span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono">
+                          Lv{targetNode.tier} · {
+                            targetNode.tier === 1
+                              ? "Nút gốc"
+                              : targetNode.tier === 2
+                              ? "Luồng nghiệp vụ"
+                              : targetNode.tier === 3
+                              ? "Chức năng con"
+                              : "Điểm chạm"
+                          }
+                        </span>
+                        {targetNode.squad && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold">
+                            {targetNode.squad}
+                          </span>
+                        )}
                       </div>
-                      <span className="font-bold text-blue-700">{targetNode.children.length} nhánh</span>
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                        {targetNode.name}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Chọn các bài toán thiết kế (UX Request) để liên kết với tính năng này.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Search Bar & Squad Filter */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Danh sách bài toán khả dụng ({filteredAvailableTasks.length})</span>
+                      </label>
+                      {effectiveSquadName && (
+                        <Tooltip
+                          content={filterBySquadOnly ? "Hiển thị tất cả Squad" : `Chỉ lọc theo ${effectiveSquadName}`}
+                          side="top"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setFilterBySquadOnly(!filterBySquadOnly)}
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                              filterBySquadOnly
+                                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            <Filter className="w-3 h-3" />
+                            <span>
+                              {filterBySquadOnly ? `Theo ${effectiveSquadName}` : "Tất cả Squad"}
+                            </span>
+                          </button>
+                        </Tooltip>
+                      )}
+                    </div>
+
+                    {/* Task Search Bar */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={taskSearchQuery}
+                        onChange={(e) => setTaskSearchQuery(e.target.value)}
+                        placeholder={`Tìm mã bài toán (REQ-...), tên task, designer...`}
+                        className="w-full pl-8 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 text-slate-800"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* Selected Tasks Bar (If any selected) */}
+                  {taskIds.length > 0 && (
+                    <div className="space-y-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-blue-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Đã chọn ({taskIds.length})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTaskIds([])}
+                          className="text-[11px] text-blue-600 hover:text-rose-600 font-medium cursor-pointer transition-colors"
+                        >
+                          Bỏ chọn tất cả
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                        {taskIds.map((tid) => {
+                          const req = availableRequests.find((r) => r.request_id === tid)
+                          return (
+                            <span
+                              key={`pill-${tid}`}
+                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-blue-200 text-xs text-slate-800 shadow-2xs"
+                            >
+                              <span className="font-mono font-bold text-blue-600 text-[11px]">{tid}</span>
+                              {req?.title && (
+                                <span className="max-w-[160px] truncate text-[11px] text-slate-600">
+                                  {req.title}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeTaskId(tid)}
+                                className="p-0.5 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
+
+                  {/* Available Tasks Pick List */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs max-h-[380px] overflow-y-auto divide-y divide-slate-100">
+                    {filteredAvailableTasks.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400 space-y-2">
+                        <p>
+                          {taskSearchQuery.trim()
+                            ? `Không tìm thấy bài toán nào khớp với "${taskSearchQuery}"`
+                            : effectiveSquadName && filterBySquadOnly
+                            ? `Chưa có bài toán nào thuộc Squad "${effectiveSquadName}"`
+                            : "Chưa có bài toán nào trong hệ thống"}
+                        </p>
+                        {taskSearchQuery.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = taskSearchQuery.trim().toUpperCase()
+                              if (trimmed && !taskIds.includes(trimmed)) {
+                                setTaskIds((prev) => [...prev, trimmed])
+                                setTaskSearchQuery("")
+                              }
+                            }}
+                            className="text-blue-600 font-bold hover:underline cursor-pointer inline-block"
+                          >
+                            + Thêm trực tiếp mã "{taskSearchQuery.trim().toUpperCase()}"
+                          </button>
+                        )}
+                        {effectiveSquadName && filterBySquadOnly && (
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => setFilterBySquadOnly(false)}
+                              className="text-indigo-600 font-semibold hover:underline cursor-pointer text-[11px]"
+                            >
+                              Xem bài toán của tất cả các Squad khác
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      filteredAvailableTasks.map((req) => {
+                        const isSelected = taskIds.includes(req.request_id)
+                        return (
+                          <div
+                            key={req.request_id}
+                            onClick={() => toggleTaskId(req.request_id)}
+                            className={`p-3 text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                              isSelected
+                                ? "bg-blue-50/70 border-l-4 border-l-blue-600"
+                                : "hover:bg-slate-50/90"
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                  {req.request_id}
+                                </span>
+                                {req.status && (
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded font-medium border ${getTaskStatusBadge(
+                                      req.status
+                                    )}`}
+                                  >
+                                    {req.status}
+                                  </span>
+                                )}
+                                {req.squad_name && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
+                                    {req.squad_name}
+                                  </span>
+                                )}
+                                {req.assigned_designer && (
+                                  <span className="text-[11px] text-slate-500">
+                                    • {req.assigned_designer}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-medium text-slate-800 break-words leading-relaxed">
+                                {req.title}
+                              </p>
+                            </div>
+                            <div className="shrink-0 pt-0.5">
+                              {isSelected ? (
+                                <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-2xs">
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </div>
+                              ) : (
+                                <div className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-blue-500 flex items-center justify-center transition-colors">
+                                  <Plus className="w-3 h-3 text-slate-400" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Form Fields for Add / Edit */}
               {isFormMode && (
                 <>
-                  {/* 1. MÀU SẮC CHỦ ĐỀ (Đưa lên trên đầu) */}
+                  {/* 1. TÊN TÍNH NĂNG */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between pr-10">
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Màu sắc chủ đề</span>
-                      </span>
-                      <span className="text-[11px] font-medium text-slate-500">
-                        {COLOR_OPTIONS.find((c) => c.id === colorTheme)?.name || "Xanh MB"}
-                      </span>
-                    </label>
-                    <div className="flex items-center gap-2.5 p-2.5 bg-slate-50/90 rounded-xl border border-slate-200 shadow-2xs">
-                      {COLOR_OPTIONS.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setColorTheme(c.id)}
-                          title={c.name}
-                          className={`w-7 h-7 rounded-full ${c.bg} transition-all cursor-pointer ${
-                            colorTheme === c.id
-                              ? "ring-2 ring-offset-2 ring-slate-800 scale-110 shadow-xs"
-                              : "opacity-70 hover:opacity-100 hover:scale-105"
-                          }`}
-                        />
-                      ))}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-900">
+                        Tên tính năng / Màn hình <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[11px] text-slate-400 font-normal">Bắt buộc</span>
                     </div>
-                  </div>
-
-                  {/* 2. TÊN TÍNH NĂNG */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Tên tính năng <span className="text-rose-500">*</span>
-                    </label>
                     <input
                       type="text"
                       data-testid="ia-node-modal-name-input"
@@ -700,16 +1060,23 @@ export default function IANodeEditorModal({
                         if (errorMessage) setErrorMessage("")
                       }}
                       placeholder="VD: Mở Thẻ Tín Dụng Online, Chia Tiền VietQR..."
-                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 font-semibold text-slate-900 shadow-2xs"
+                      className="w-full h-11 px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 transition-all placeholder:text-slate-400 placeholder:font-normal font-semibold text-slate-900 shadow-2xs"
                       autoFocus
                     />
                   </div>
 
-                  {/* 2. CHỌN SQUAD PHỤ TRÁCH (ReUI DropdownMenu Chuẩn, Chỉ Squad Nội Bộ) */}
+                  {/* 3. CHỌN SQUAD PHỤ TRÁCH (ReUI DropdownMenu Chuẩn, Đi theo Sản phẩm) */}
                   <div className="relative" ref={squadDropdownRef}>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Chọn Squad phụ trách</span>
+                    <label className="block text-xs font-bold text-slate-900 mb-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Chọn Squad phụ trách</span>
+                      </div>
+                      {effectiveProductName && (
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                          {effectiveProductName}
+                        </span>
+                      )}
                     </label>
 
                     {/* ReUI Dropdown Trigger */}
@@ -717,14 +1084,16 @@ export default function IANodeEditorModal({
                       type="button"
                       data-testid="ia-node-modal-squad-select"
                       onClick={() => setIsSquadDropdownOpen(!isSquadDropdownOpen)}
-                      className={`w-full px-3.5 py-2.5 bg-white hover:bg-slate-50/80 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-2xs ${
+                      className={`w-full h-11 px-3.5 py-2.5 bg-white hover:bg-slate-50/80 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900/20 ${
                         isSquadDropdownOpen
-                          ? "border-blue-500 ring-2 ring-blue-500/20"
+                          ? "border-slate-400 ring-2 ring-slate-900/10"
                           : "border-slate-200 hover:border-slate-300"
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Users className="w-4 h-4 text-slate-400 shrink-0" />
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                          <Users className="w-3.5 h-3.5" />
+                        </div>
                         <span className="text-xs font-semibold text-slate-800 truncate">
                           {squad === "custom"
                             ? customSquad || "Squad tùy chỉnh..."
@@ -748,6 +1117,12 @@ export default function IANodeEditorModal({
                           transition={springs.snappy}
                           className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-40 overflow-hidden flex flex-col max-h-72"
                         >
+                          {/* Product Context Scope Header */}
+                          <div className="px-3 py-1.5 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-500 font-medium">Squad thuộc sản phẩm:</span>
+                            <span className="font-bold text-blue-600 truncate max-w-[180px]">{effectiveProductName}</span>
+                          </div>
+
                           {/* Search Squad */}
                           <div className="p-2 border-b border-slate-100 bg-slate-50/70">
                             <div className="relative flex items-center">
@@ -756,13 +1131,13 @@ export default function IANodeEditorModal({
                                 type="text"
                                 value={squadSearchQuery}
                                 onChange={(e) => setSquadSearchQuery(e.target.value)}
-                                placeholder="Tìm kiếm Squad..."
+                                placeholder={`Tìm Squad trong ${effectiveProductName}...`}
                                 className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-800"
                               />
                             </div>
                           </div>
 
-                          {/* Options List (Chỉ chứa Squad nội bộ thực tế) */}
+                          {/* Options List (Chỉ chứa Squad nội bộ thuộc Sản phẩm) */}
                           <div className="overflow-y-auto p-1 space-y-0.5 flex-1">
                             <button
                               type="button"
@@ -804,6 +1179,14 @@ export default function IANodeEditorModal({
                               )
                             })}
 
+                            {filteredSquads.length === 0 && (
+                              <div className="p-3 text-center text-xs text-slate-400">
+                                {squadSearchQuery.trim()
+                                  ? `Không tìm thấy Squad nào khớp với "${squadSearchQuery}"`
+                                  : `Chưa có Squad nào thuộc sản phẩm "${effectiveProductName}"`}
+                              </div>
+                            )}
+
                             <div className="border-t border-slate-100 my-1 pt-1">
                               <button
                                 type="button"
@@ -838,247 +1221,17 @@ export default function IANodeEditorModal({
                     )}
                   </div>
 
-                  {/* 3. DANH SÁCH TASK LIÊN KẾT */}
-                  {activeSettings.allowDirectTasks ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Danh sách Task liên kết ({taskIds.length})</span>
-                        </label>
-                        {effectiveSquadName && (
-                          <button
-                            type="button"
-                            onClick={() => setFilterBySquadOnly(!filterBySquadOnly)}
-                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                              filterBySquadOnly
-                                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                            title="Bật/Tắt lọc bài toán theo Squad đã chọn"
-                          >
-                            <Filter className="w-3 h-3" />
-                            <span>
-                              {filterBySquadOnly ? `Theo ${effectiveSquadName}` : "Tất cả Squad"}
-                            </span>
-                          </button>
-                        )}
-                      </div>
 
-                      {/* Selected Tasks List (Thẻ rộng, text dài đọc tên rõ ràng) */}
-                      {taskIds.length > 0 && (
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                          {taskIds.map((tid, tIdx) => {
-                            const req = availableRequests.find((r) => r.request_id === tid)
-                            return (
-                              <div
-                                key={`selected-task-${tid || tIdx}`}
-                                className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-start justify-between gap-3 shadow-2xs hover:border-slate-300 transition-all"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                      {tid}
-                                    </span>
-                                    {req?.status && (
-                                      <span
-                                        className={`text-[10px] px-2 py-0.5 rounded font-medium border ${getTaskStatusBadge(
-                                          req.status
-                                        )}`}
-                                      >
-                                        {req.status}
-                                      </span>
-                                    )}
-                                    {req?.assigned_designer && (
-                                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <span className="w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[8px]">
-                                          {req.assigned_designer.charAt(0).toUpperCase()}
-                                        </span>
-                                        <span>{req.assigned_designer}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Tên bài toán hiển thị đầy đủ, không bị cắt ngắn */}
-                                  <p className="text-xs font-semibold text-slate-800 break-words leading-relaxed">
-                                    {req ? req.title : tid}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeTaskId(tid)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
-                                  title="Bỏ chọn task này"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {/* Task Search Bar */}
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          type="text"
-                          value={taskSearchQuery}
-                          onChange={(e) => setTaskSearchQuery(e.target.value)}
-                          placeholder={`Tìm kiếm mã bài toán hoặc tên task${effectiveSquadName ? ` (${effectiveSquadName})...` : "..."}`}
-                          className="w-full pl-8 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 text-slate-800"
-                        />
-                      </div>
-
-                      {/* Available Tasks Pick List (Khung rộng, text dài đọc tên dễ dàng) */}
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs max-h-56 overflow-y-auto divide-y divide-slate-100">
-                        {filteredAvailableTasks.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-slate-400 space-y-1.5">
-                            <p>
-                              {taskSearchQuery.trim()
-                                ? `Không tìm thấy bài toán nào khớp với "${taskSearchQuery}"`
-                                : effectiveSquadName && filterBySquadOnly
-                                ? `Chưa có bài toán nào thuộc Squad "${effectiveSquadName}"`
-                                : "Chưa có bài toán nào trong hệ thống"}
-                            </p>
-                            {taskSearchQuery.trim() && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const trimmed = taskSearchQuery.trim().toUpperCase()
-                                  if (trimmed && !taskIds.includes(trimmed)) {
-                                    setTaskIds((prev) => [...prev, trimmed])
-                                    setTaskSearchQuery("")
-                                  }
-                                }}
-                                className="text-blue-600 font-bold hover:underline cursor-pointer inline-block"
-                              >
-                                + Thêm trực tiếp mã "{taskSearchQuery.trim().toUpperCase()}"
-                              </button>
-                            )}
-                            {effectiveSquadName && filterBySquadOnly && (
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => setFilterBySquadOnly(false)}
-                                  className="text-indigo-600 font-semibold hover:underline cursor-pointer text-[11px]"
-                                >
-                                  Xem bài toán của tất cả các Squad khác
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          filteredAvailableTasks.map((req) => {
-                            const isSelected = taskIds.includes(req.request_id)
-                            return (
-                              <div
-                                key={req.request_id}
-                                onClick={() => toggleTaskId(req.request_id)}
-                                className={`p-3 text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
-                                  isSelected
-                                    ? "bg-blue-50/70 border-l-4 border-l-blue-600"
-                                    : "hover:bg-slate-50/90"
-                                }`}
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                    <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                      {req.request_id}
-                                    </span>
-                                    {req.status && (
-                                      <span
-                                        className={`text-[10px] px-2 py-0.5 rounded font-medium border ${getTaskStatusBadge(
-                                          req.status
-                                        )}`}
-                                      >
-                                        {req.status}
-                                      </span>
-                                    )}
-                                    {req.squad_name && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
-                                        {req.squad_name}
-                                      </span>
-                                    )}
-                                    {req.assigned_designer && (
-                                      <span className="text-[11px] text-slate-500">
-                                        • {req.assigned_designer}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Tên bài toán hiển thị rộng rãi, dễ đọc */}
-                                  <p className="text-xs font-medium text-slate-800 break-words leading-relaxed">
-                                    {req.title}
-                                  </p>
-                                </div>
-                                <div className="shrink-0 pt-0.5">
-                                  {isSelected ? (
-                                    <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-2xs">
-                                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-blue-500 flex items-center justify-center transition-colors">
-                                      <Plus className="w-3 h-3 text-slate-400" />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    /* Thông báo khi tắt gán task trực tiếp */
-                    <div className="p-3.5 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-slate-200/80 text-slate-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <Layers className="w-3.5 h-3.5" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-800">
-                              Gán bài toán trực tiếp: <span className="text-amber-600">Đang Tắt</span>
-                            </p>
-                            <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-                              {currentTier <= 2
-                                ? `Node Cấp ${currentTier} (${currentTier === 1 ? "Sản phẩm" : "Phân hệ"}) tự động tổng hợp tiến độ từ toàn bộ cây con cháu bên dưới (Rollup).`
-                                : "Chức năng gán bài toán trực tiếp cho thẻ này đang được tắt trong Cài đặt hiển thị."}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => updateDisplaySetting("allowDirectTasks", true)}
-                          className="px-2.5 py-1 text-xs font-bold text-blue-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
-                        >
-                          + Bật gán task
-                        </button>
-                      </div>
-                      {taskIds.length > 0 && (
-                        <div className="pt-2 border-t border-slate-200/60 text-[11px] text-slate-500 flex items-center justify-between">
-                          <span>Đang lưu trữ {taskIds.length} task trước đó.</span>
-                          <button
-                            type="button"
-                            onClick={() => setTaskIds([])}
-                            className="text-rose-600 hover:underline cursor-pointer font-medium"
-                          >
-                            Xóa liên kết cũ
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 4. LOẠI ĐIỂM CHẠM (NẾU CẤP 4 / SCREEN) */}
+                  {/* 5. LOẠI ĐIỂM CHẠM (NẾU CẤP 4 / SCREEN) */}
                   {showTouchpointSelect && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Loại điểm chạm
+                      <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                        Loại điểm chạm (Touchpoint)
                       </label>
                       <select
                         value={touchpointType}
                         onChange={(e) => setTouchpointType(e.target.value as IATouchpointType)}
-                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-700 font-medium"
+                        className="w-full h-11 px-3.5 py-2.5 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 transition-all shadow-2xs"
                       >
                         {TOUCHPOINT_OPTIONS.map((opt) => (
                           <option key={`tp-opt-${opt.value}`} value={opt.value}>
@@ -1089,161 +1242,406 @@ export default function IANodeEditorModal({
                     </div>
                   )}
 
-                  {/* 5. CÀI ĐẶT HIỂN THỊ TRÊN THẺ (DISPLAY SETTINGS) */}
-                  <div className="pt-4 border-t border-slate-200/80 space-y-3">
+                  {/* 6. CÀI ĐẶT HIỂN THỊ TRÊN THẺ (DISPLAY SETTINGS) */}
+                  <div className="pt-2 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 border border-blue-200/60 flex items-center justify-center shrink-0">
-                          <Sliders className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                          <Sliders className="w-4 h-4" />
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-slate-800">
+                          <h4 className="text-sm font-bold text-slate-900 tracking-tight">
                             Cài đặt hiển thị trên thẻ
                           </h4>
-                          <p className="text-[11px] text-slate-500">
+                          <p className="text-[11px] text-slate-500 font-normal mt-0.5">
                             Tùy biến bật/tắt các trường dữ liệu theo đặc thù Cấp {currentTier}
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={resetToTierDefaults}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-slate-200/60 hover:border-blue-200"
-                        title={`Khôi phục chuẩn hiển thị của Cấp ${currentTier}`}
-                      >
-                        <RotateCcw className="w-3 h-3 text-slate-400" />
-                        <span>Mặc định Cấp {currentTier}</span>
-                      </button>
+                      <Tooltip content={`Khôi phục chuẩn hiển thị của Cấp ${currentTier}`} side="top">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={resetToTierDefaults}
+                          className="rounded-xl border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-2xs text-xs font-semibold gap-1.5"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Mặc định Cấp {currentTier}</span>
+                        </Button>
+                      </Tooltip>
                     </div>
 
-                    <div className="space-y-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/70">
-                      {/* Item 1: Gán bài toán trực tiếp */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            <span>Gán bài toán trực tiếp</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Cho phép tìm kiếm & gán task Jira/UX trực tiếp vào node này. Khuyên tắt cho Cấp 1 & 2.
-                          </p>
-                        </div>
-                        <Switch
-                          size="sm"
-                          checked={activeSettings.allowDirectTasks}
-                          onCheckedChange={(val) => updateDisplaySetting("allowDirectTasks", val)}
-                        />
-                      </div>
-
-                      {/* Item 2: Hiển thị Tiến độ & Checklist */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Hiển thị Tiến độ & Checklist</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Hiển thị thanh % tiến độ và tóm tắt công việc (đang làm, hoàn thành) trên thẻ.
-                          </p>
+                    {/* ReUI Frame Container with Divide-Y */}
+                    <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden">
+                      {/* Item 1: Hiển thị Tiến độ & Checklist */}
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                            <CheckSquare className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Hiển thị Tiến độ & Checklist
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Hiển thị thanh % tiến độ và tóm tắt công việc (đang làm, hoàn thành) trên thẻ.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.showProgress}
                           onCheckedChange={(val) => updateDisplaySetting("showProgress", val)}
+                          className="shrink-0"
                         />
                       </div>
 
                       {/* Item 3: Tiến độ tổng hợp từ cấp dưới (Rollup) */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <TrendingUp className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>Tiến độ tổng hợp từ nhánh con (Rollup)</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Tự động gom toàn bộ task của cây con cháu bên dưới để tính % tiến độ và số task thực hiện.
-                          </p>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                            <TrendingUp className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Tiến độ tổng hợp từ nhánh con (Rollup)
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Tự động gom toàn bộ task của cây con cháu bên dưới để tính % tiến độ và số task thực hiện.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.rollupProgress}
                           onCheckedChange={(val) => updateDisplaySetting("rollupProgress", val)}
+                          className="shrink-0"
                         />
                       </div>
 
                       {/* Item 4: Huy hiệu Squad */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                            <span>Huy hiệu Squad</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Hiển thị nhãn Squad phụ trách ở góc trên bên trái thẻ.
-                          </p>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
+                            <Users className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Huy hiệu Squad
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Hiển thị nhãn Squad phụ trách ở góc trên bên trái thẻ.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.showSquad}
                           onCheckedChange={(val) => updateDisplaySetting("showSquad", val)}
+                          className="shrink-0"
                         />
                       </div>
 
                       {/* Item 5: Người phụ trách / Designer */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Người phụ trách (UX Designer)</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Hiển thị avatar và tên UX Designer phụ trách luồng hoặc màn hình.
-                          </p>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                            <UserCheck className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Người phụ trách (UX Designer)
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Hiển thị avatar và tên UX Designer phụ trách luồng hoặc màn hình.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.showDesigner}
                           onCheckedChange={(val) => updateDisplaySetting("showDesigner", val)}
+                          className="shrink-0"
                         />
                       </div>
 
                       {/* Item 6: Đèn báo trạng thái chân thẻ */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Bell className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                            <span>Đèn báo trạng thái ở chân thẻ</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Hiển thị nhãn "Đang có task làm", "Đã hoàn thành" hoặc "Chưa có task" ở góc dưới trái thẻ.
-                          </p>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 mt-0.5">
+                            <Bell className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Đèn báo trạng thái ở chân thẻ
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Hiển thị nhãn "Đang có task làm", "Đã hoàn thành" hoặc "Chưa có task" ở góc dưới trái thẻ.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.showStatus}
                           onCheckedChange={(val) => updateDisplaySetting("showStatus", val)}
+                          className="shrink-0"
                         />
                       </div>
 
                       {/* Item 7: Số lượng nhánh con */}
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors gap-3">
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                            <span>Huy hiệu số lượng nhánh con</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                            Hiển thị nút đếm số lượng nhánh con phụ thuộc ở góc dưới bên phải thẻ.
-                          </p>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5">
+                            <FolderTree className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900">
+                              Huy hiệu số lượng nhánh con
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Hiển thị nút đếm số lượng nhánh con phụ thuộc ở góc dưới bên phải thẻ.
+                            </p>
+                          </div>
                         </div>
                         <Switch
                           size="sm"
                           checked={activeSettings.showBranchCount}
                           onCheckedChange={(val) => updateDisplaySetting("showBranchCount", val)}
+                          className="shrink-0"
                         />
                       </div>
                     </div>
                   </div>
+
+                  {/* 5. GÁN TASK (Tách riêng; chỉ hiển thị khi chọn Squad; khi On thì hiện list task ngay ở dưới) */}
+                  {Boolean(effectiveSquadName && effectiveSquadName.trim()) && (
+                    <div className="pt-1 space-y-3">
+                      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden transition-all">
+                        {/* Header Row with Switch */}
+                        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                              <Layers className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-xs font-bold text-slate-900">
+                                  Gán task
+                                </p>
+                                {taskIds.length > 0 && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    {taskIds.length} task đã chọn
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                Cho phép tìm kiếm & liên kết các task UX/Jira của Squad {effectiveSquadName} vào node này.
+                              </p>
+                            </div>
+                          </div>
+                          <Switch
+                            size="sm"
+                            checked={activeSettings.allowDirectTasks}
+                            onCheckedChange={(val) => updateDisplaySetting("allowDirectTasks", val)}
+                            className="shrink-0"
+                          />
+                        </div>
+
+                        {/* Khi ON thì danh sách task hiển thị ngay ở dưới */}
+                        {activeSettings.allowDirectTasks && (
+                          <div className="border-t border-slate-100 p-3.5 sm:p-4 space-y-3 bg-slate-50/40">
+                            {/* Filter Bar */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-700">
+                                Danh sách task khả dụng ({filteredAvailableTasks.length})
+                              </span>
+                              {effectiveSquadName && (
+                                <Tooltip
+                                  content={filterBySquadOnly ? "Hiển thị tất cả Squad" : `Chỉ lọc theo ${effectiveSquadName}`}
+                                  side="top"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setFilterBySquadOnly(!filterBySquadOnly)}
+                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                                      filterBySquadOnly
+                                        ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <Filter className="w-3 h-3" />
+                                    <span>{filterBySquadOnly ? `Theo ${effectiveSquadName}` : "Tất cả Squad"}</span>
+                                  </button>
+                                </Tooltip>
+                              )}
+                            </div>
+
+                            {/* Selected Tasks List (Thẻ rộng, text dài đọc tên rõ ràng) */}
+                            {taskIds.length > 0 && (
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-white rounded-xl border border-blue-100">
+                                {taskIds.map((tid, tIdx) => {
+                                  const req = availableRequests.find((r) => r.request_id === tid)
+                                  return (
+                                    <div
+                                      key={`selected-task-${tid || tIdx}`}
+                                      className="p-2.5 rounded-xl bg-blue-50/30 border border-blue-100 flex items-start justify-between gap-3 shadow-2xs hover:border-blue-200 transition-all"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                          <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                            {tid}
+                                          </span>
+                                          {req?.status && (
+                                            <span
+                                              className={`text-[10px] px-2 py-0.5 rounded font-medium border ${getTaskStatusBadge(
+                                                req.status
+                                              )}`}
+                                            >
+                                              {req.status}
+                                            </span>
+                                          )}
+                                          {req?.assigned_designer && (
+                                            <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                                              <span className="w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[8px]">
+                                                {req.assigned_designer.charAt(0).toUpperCase()}
+                                              </span>
+                                              <span>{req.assigned_designer}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs font-semibold text-slate-800 break-words leading-relaxed">
+                                          {req ? req.title : tid}
+                                        </p>
+                                      </div>
+                                      <Tooltip content="Bỏ liên kết task này" side="left">
+                                        <button
+                                          type="button"
+                                          onClick={() => removeTaskId(tid)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </Tooltip>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {/* Task Search Bar */}
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              <input
+                                type="text"
+                                value={taskSearchQuery}
+                                onChange={(e) => setTaskSearchQuery(e.target.value)}
+                                placeholder={`Tìm kiếm mã task hoặc tên task${effectiveSquadName ? ` (${effectiveSquadName})...` : "..."}`}
+                                className="w-full pl-8 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 text-slate-800 shadow-2xs"
+                              />
+                            </div>
+
+                            {/* Available Tasks Pick List */}
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs max-h-56 overflow-y-auto divide-y divide-slate-100">
+                              {filteredAvailableTasks.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-slate-400 space-y-1.5">
+                                  <p>
+                                    {taskSearchQuery.trim()
+                                      ? `Không tìm thấy task nào khớp với "${taskSearchQuery}"`
+                                      : effectiveSquadName && filterBySquadOnly
+                                      ? `Chưa có task nào thuộc Squad "${effectiveSquadName}"`
+                                      : "Chưa có task nào trong hệ thống"}
+                                  </p>
+                                  {taskSearchQuery.trim() && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const trimmed = taskSearchQuery.trim().toUpperCase()
+                                        if (trimmed && !taskIds.includes(trimmed)) {
+                                          setTaskIds((prev) => [...prev, trimmed])
+                                          setTaskSearchQuery("")
+                                        }
+                                      }}
+                                      className="text-blue-600 font-bold hover:underline cursor-pointer inline-block"
+                                    >
+                                      + Thêm trực tiếp mã "{taskSearchQuery.trim().toUpperCase()}"
+                                    </button>
+                                  )}
+                                  {effectiveSquadName && filterBySquadOnly && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setFilterBySquadOnly(false)}
+                                        className="text-indigo-600 font-semibold hover:underline cursor-pointer text-[11px]"
+                                      >
+                                        Xem task của tất cả các Squad khác
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                filteredAvailableTasks.map((req) => {
+                                  const isSelected = taskIds.includes(req.request_id)
+                                  return (
+                                    <div
+                                      key={req.request_id}
+                                      onClick={() => toggleTaskId(req.request_id)}
+                                      className={`p-3 text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                                        isSelected
+                                          ? "bg-blue-50/70 border-l-4 border-l-blue-600"
+                                          : "hover:bg-slate-50/90"
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                          <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                            {req.request_id}
+                                          </span>
+                                          {req.status && (
+                                            <span
+                                              className={`text-[10px] px-2 py-0.5 rounded font-medium border ${getTaskStatusBadge(
+                                                req.status
+                                              )}`}
+                                            >
+                                              {req.status}
+                                            </span>
+                                          )}
+                                          {req.squad_name && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
+                                              {req.squad_name}
+                                            </span>
+                                          )}
+                                          {req.assigned_designer && (
+                                            <span className="text-[11px] text-slate-500">
+                                              • {req.assigned_designer}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs font-medium text-slate-800 break-words leading-relaxed">
+                                          {req.title}
+                                        </p>
+                                      </div>
+                                      <div className="shrink-0 pt-0.5">
+                                        {isSelected ? (
+                                          <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-2xs">
+                                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                          </div>
+                                        ) : (
+                                          <div className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-blue-500 flex items-center justify-center transition-colors">
+                                            <Plus className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1297,7 +1695,7 @@ export default function IANodeEditorModal({
             </div>
 
             {/* Sheet Footer Buttons (ReUI Pinned Bottom Bar) */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between gap-3 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 backdrop-blur-sm flex items-center justify-between gap-3 shrink-0">
               {isViewMode ? (
                 <div className="w-full flex items-center justify-between">
                   <span className="text-xs text-slate-500">
@@ -1309,6 +1707,7 @@ export default function IANodeEditorModal({
                     size="sm"
                     onClick={onClose}
                     data-testid="ia-modal-close-btn"
+                    className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs font-semibold text-xs px-4 h-9"
                   >
                     Đóng
                   </Button>
@@ -1316,6 +1715,11 @@ export default function IANodeEditorModal({
               ) : (
                 <>
                   <div>
+                    {mode === "link-task" && (
+                      <span className="text-xs text-slate-500 font-medium">
+                        Đang liên kết <strong className="text-slate-900 font-bold">{taskIds.length}</strong> bài toán
+                      </span>
+                    )}
                     {mode === "edit" && targetNode && onConfirmDelete && (
                       <Button
                         type="button"
@@ -1325,6 +1729,7 @@ export default function IANodeEditorModal({
                           onConfirmDelete(targetNode.id)
                           onClose()
                         }}
+                        className="rounded-xl font-semibold text-xs px-3 h-9 gap-1.5 shadow-xs"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Xóa node</span>
@@ -1338,6 +1743,7 @@ export default function IANodeEditorModal({
                       variant="outline"
                       size="sm"
                       onClick={onClose}
+                      className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs font-semibold text-xs px-4 h-9"
                     >
                       {isDeleteMode ? "Hủy bỏ" : "Đóng"}
                     </Button>
@@ -1347,7 +1753,18 @@ export default function IANodeEditorModal({
                       variant={isDeleteMode ? "destructive" : "default"}
                       size="sm"
                       data-testid="ia-modal-confirm-btn"
+                      className={
+                        isDeleteMode
+                          ? "rounded-xl font-semibold text-xs px-4 h-9 shadow-xs"
+                          : "bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs font-semibold text-xs px-4 h-9 gap-1.5 focus-visible:ring-slate-900/30"
+                      }
                     >
+                      {mode === "link-task" && (
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>Lưu Bài Toán Liên Kết</span>
+                        </>
+                      )}
                       {mode === "add" && (
                         <>
                           <Plus className="w-3.5 h-3.5 stroke-[3]" />

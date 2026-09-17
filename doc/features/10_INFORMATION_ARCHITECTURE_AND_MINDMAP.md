@@ -134,6 +134,29 @@ src/
   - Báo cáo số lượng node và cấp bậc sẽ tạo trước khi áp dụng vào sơ đồ.
 - **Sao chép JSON (Copy as JSON):** Xuất toàn bộ sơ đồ của sản phẩm hiện tại thành JSON chuẩn đưa vào Clipboard.
 
+### 9. Kiến Trúc Magnific UI, Tương Tác Chuột Giữa & Capping Cố Định 4 Tầng (17/09/2026)
+- **Tương tác Chuột Giữa (Middle-Click Pan Engine):**
+  - Nhấn giữ chuột giữa (`e.button === 1`) ở bất kỳ điểm nào trên khung vẽ để pan không gian làm việc tức thì.
+  - Chuyển con trỏ sang `cursor-grabbing` trong suốt quá trình giữ; nhả chuột phục hồi trạng thái con trỏ ngay lập tức.
+  - Hoạt động độc lập, không xung đột với chức năng cuộn bánh xe chuột (`wheel`) để phóng to/thu nhỏ (Zoom in/out).
+- **Chuẩn hóa Hệ thống Tooltip ReUI (`src/components/ui/tooltip.tsx`):**
+  - Xây dựng trên `@radix-ui/react-tooltip` theo ReUI Dark Palette.
+  - Thay thế triệt để 100% các thuộc tính `title` HTML thuần trên toàn bộ Dock, Action Deck, Floating Toolbar.
+  - Tích hợp phím tắt hiển thị với thẻ `<Kbd>`, tự động chống tràn biên màn hình và lật chiều thông minh.
+- **Cố định 4 Tầng Node (`✨ Lv1`, `Lv2`, `Lv3`, `Lv4`) & Capping Chặt Chẽ tại Lv4:**
+  - Nhãn tầng hiển thị trực tiếp trên dòng 1 của thẻ node (`IATreeNodeCard.tsx`).
+  - Tại node `Lv4`: Ẩn hoàn toàn nút (+) thêm con và ẩn 4 cổng kết nối (Ports).
+  - Hàm `addChildNode` trong `useIATreeState.ts` và phím tắt `Tab` tự động chặn tạo con sâu hơn kèm thông báo Sonner Toast nhắc nhở.
+- **Thanh Dock Dọc (Lateral Dock 56px) & Slide-Over Sheet (360px):**
+  - Dock dọc bên trái gom nhóm 7 hành động: Thêm node, Cài đặt, Cloud Sync (Tải/Lưu), Quản lý JSON (Nhập/Sao chép), Căn chuẩn Layout.
+  - Bấm vào hành động mở Slide-Over Sheet trượt mượt mà từ cạnh Dock, hỗ trợ Tìm kiếm nhanh, Tab phân loại theo tầng, click chọn mẫu chèn nhanh mà không che khuất Canvas.
+- **Modal "Xem chi tiết node" với Thẻ ReUI Process % Working:**
+  - Tiêu đề chuẩn hóa: "Xem chi tiết node".
+  - Tích hợp thẻ ReUI Process % Working hiển thị tiến độ hoàn thành thực tế và số lượng bài toán.
+  - Gom nhóm danh sách bài toán liên kết theo các tầng con phân cấp (`Lv2`, `Lv3`, `Lv4`).
+  - Bộ lọc Squad theo Sản phẩm: Tự động tải đúng danh sách Squad thuộc sản phẩm số đang mở (App MBBank, Biz MB,...).
+  - Công tắc "Gán task" chuyển đổi linh hoạt chế độ xem thông tin kiến trúc hoặc liên kết bài toán thực tế.
+
 ---
 
 ## ⚡ 5. ĐỘNG CƠ BỐ TRÍ CÂY DẠNG CỘT (COLUMNAR HIERARCHY LAYOUT ENGINE)

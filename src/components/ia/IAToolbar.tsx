@@ -9,6 +9,7 @@ import {
 import { springs } from "@/lib/motion"
 import { getProductColorDef } from "@/lib/colorUtils"
 import { cn } from "@/lib/utils"
+import { Tooltip } from "@/components/ui/tooltip"
 import { IANode, IAProductInfo } from "@/types/ia"
 
 interface IAToolbarProps {
@@ -225,34 +226,37 @@ export default function IAToolbar({
 
               {matchCount > 0 && (
                 <div className="flex items-center">
-                  <button
-                    type="button"
-                    title="Kết quả trước"
-                    onClick={onPrevMatch}
-                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
-                  >
-                    <ChevronUp className="w-3 h-3" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Kết quả kế tiếp"
-                    onClick={onNextMatch}
-                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
-                  >
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
+                  <Tooltip content="Kết quả trước" side="top">
+                    <button
+                      type="button"
+                      onClick={onPrevMatch}
+                      className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Kết quả kế tiếp" side="top">
+                    <button
+                      type="button"
+                      onClick={onNextMatch}
+                      className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </Tooltip>
                 </div>
               )}
 
-              <button
-                type="button"
-                data-testid="ia-search-clear-btn"
-                onClick={() => onSearchChange("")}
-                title="Xóa tìm kiếm"
-                className="p-0.5 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              <Tooltip content="Xóa tìm kiếm" side="top">
+                <button
+                  type="button"
+                  data-testid="ia-search-clear-btn"
+                  onClick={() => onSearchChange("")}
+                  className="p-0.5 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Tooltip>
             </div>
           )}
         </motion.div>

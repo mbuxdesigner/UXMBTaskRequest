@@ -13,6 +13,8 @@ const kbdVariants = cva(
           "border-slate-200 bg-transparent text-slate-600 shadow-none",
         subtle:
           "border-transparent bg-slate-100 text-slate-500 shadow-none",
+        dark:
+          "border-slate-700/80 bg-slate-800 text-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.3)]",
       },
       size: {
         xs: "h-4.5 min-w-4.5 px-1.5 text-[9.5px] rounded",

@@ -4,6 +4,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
+import { sortMembersByVietnameseName } from "@/lib/utils"
 import {
   Play,
   Pause,
@@ -147,7 +148,7 @@ export default function WeeklyCheckinSection({
         set.add(r.assigned_designer.trim())
       }
     })
-    return Array.from(set).filter(Boolean)
+    return sortMembersByVietnameseName(Array.from(set).filter(Boolean))
   }, [requests])
 
   // --- 3. FILTERED REQUESTS ---

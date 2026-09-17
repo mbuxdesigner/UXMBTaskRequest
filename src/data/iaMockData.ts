@@ -130,9 +130,220 @@ export function getAdminIAProducts(): IAProductInfo[] {
 }
 
 /**
- * Đọc danh mục Squads động từ Quản trị hệ thống (chỉ lấy đúng squad nội bộ thực tế, không lấy dữ liệu lạ)
+ * Danh sách các Squads chuẩn theo từng Sản phẩm trọng điểm MBBank (khớp 100% với QuanLyPage)
  */
-export function getAdminSquadsList(): string[] {
+export const DEFAULT_PRODUCT_SQUADS: Record<string, string[]> = {
+  APP_MB: [
+    "Lending",
+    "eSaving",
+    "Core",
+    "Card",
+    "Onboarding",
+    "Base",
+    "Upsale",
+    "Partnership",
+    "Billing",
+    "CSOP",
+    "Junior",
+    "VietQR",
+    "Sub",
+  ],
+  DIGI_INVEST: [
+    "TransferD",
+    "Gold",
+    "Trái phiếu",
+    "Chứng chỉ quỹ",
+    "BeeRich",
+  ],
+  BACKOFFICE: [
+    "Visual",
+    "Designe system",
+    "Nội bộ",
+    "AI",
+  ],
+  BAAS: [
+    "BaaS",
+  ],
+  BIZ_MB: [
+    "Biz Core",
+    "Biz Payment",
+    "Biz Lending",
+    "Biz FX",
+    "Biz Card",
+  ],
+}
+
+/**
+ * Kiểm tra xem một Squad từ Quản trị hệ thống có thuộc về Sản phẩm đang xét hay không
+ */
+export function isSquadMatchingProduct(
+  squadItem: any,
+  productInfoOrName?: IAProductInfo | string | null
+): boolean {
+  if (!squadItem || !productInfoOrName) return true
+
+  const pName = (
+    typeof productInfoOrName === "string"
+      ? productInfoOrName
+      : productInfoOrName.name || ""
+  ).toLowerCase().trim()
+
+  const pCode = (
+    typeof productInfoOrName === "string"
+      ? productInfoOrName
+      : productInfoOrName.code || ""
+  ).toUpperCase().trim()
+
+  const pId = (
+    typeof productInfoOrName === "string"
+      ? productInfoOrName
+      : productInfoOrName.id || ""
+  ).toLowerCase().trim()
+
+  // 1. Khớp theo ID sản phẩm trực tiếp
+  const sProdId = (squadItem.productId || squadItem.product_id || "").toLowerCase().trim()
+  if (sProdId && pId && sProdId === pId) return true
+
+  // 2. Khớp thông minh theo tên / mã sản phẩm MBBank
+  const sProdName = (
+    squadItem.productName ||
+    squadItem.product ||
+    squadItem.product_name ||
+    ""
+  ).toLowerCase().trim()
+
+  // App MBBank
+  if (
+    pName.includes("app mb") ||
+    pCode === "APP_MB" ||
+    pId === "app-mbbank" ||
+    pId === "prod-1"
+  ) {
+    if (
+      sProdName.includes("app mb") ||
+      sProdId === "prod-1" ||
+      sProdId === "app-mbbank" ||
+      squadItem.code === "APP_MB"
+    ) {
+      return true
+    }
+  }
+
+  // Digi invest
+  if (pName.includes("digi") || pCode === "DIGI_INVEST" || pId === "prod-3") {
+    if (sProdName.includes("digi") || sProdId === "prod-3") return true
+  }
+
+  // Backoffice
+  if (
+    pName.includes("backoffice") ||
+    pName.includes("design system") ||
+    pCode === "BACKOFFICE" ||
+    pId === "prod-4"
+  ) {
+    if (
+      sProdName.includes("backoffice") ||
+      sProdName.includes("design system") ||
+      sProdId === "prod-4"
+    ) {
+      return true
+    }
+  }
+
+  // BaaS
+  if (pName.includes("baas") || pCode === "BAAS" || pId === "baas" || pId === "prod-1788765119809") {
+    if (sProdName.includes("baas") || sProdId === "prod-1788765119809" || sProdId === "baas") return true
+  }
+
+  // Biz MB
+  if (pName.includes("biz") || pCode === "BIZ_MB" || pId === "biz-mb") {
+    if (sProdName.includes("biz") || sProdId === "biz-mb") return true
+  }
+
+  // CRM
+  if (pName.includes("crm") || pCode === "CRM" || pId === "prod-1788708686958") {
+    if (sProdName.includes("crm") || sProdId === "prod-1788708686958") return true
+  }
+
+  // Khớp theo chuỗi tên chính xác hoặc bao hàm
+  if (sProdName && pName && (sProdName === pName || sProdName.includes(pName) || pName.includes(sProdName))) {
+    return true
+  }
+
+  // Mảng products nếu squad phụ trách nhiều sản phẩm
+  if (Array.isArray(squadItem.products)) {
+    if (squadItem.products.some((p: any) => {
+      const pStr = String(p || "").toLowerCase().trim()
+      return pStr === pName || (pName && pStr.includes(pName)) || (pStr && pName.includes(pStr))
+    })) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Đọc danh mục Squads theo Sản phẩm từ Quản trị hệ thống
+ */
+export function getAdminSquadsForProduct(product?: IAProductInfo | string | null): string[] {
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const raw =
+        window.localStorage.getItem("ux_portal_squads_v2") ||
+        window.localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const matchedSquads = parsed
+            .filter((s: any) => isSquadMatchingProduct(s, product))
+            .map((s: any) => (typeof s === "string" ? s : s?.name))
+            .filter((n: any) => Boolean(n && typeof n === "string" && n.trim()))
+            .map((n: string) => n.trim())
+
+          if (matchedSquads.length > 0) {
+            return Array.from(new Set(matchedSquads))
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback nếu LocalStorage chưa có dữ liệu hoặc không có squad nào khớp
+  if (!product) {
+    return DEFAULT_PRODUCT_SQUADS.APP_MB
+  }
+
+  const pName = (typeof product === "string" ? product : product.name || "").toLowerCase()
+  const pCode = (typeof product === "string" ? product : product.code || "").toUpperCase()
+  const pId = (typeof product === "string" ? product : product.id || "").toLowerCase()
+
+  if (pName.includes("app mb") || pCode === "APP_MB" || pId === "app-mbbank" || pId === "prod-1") {
+    return DEFAULT_PRODUCT_SQUADS.APP_MB
+  }
+  if (pName.includes("digi") || pCode === "DIGI_INVEST" || pId === "prod-3") {
+    return DEFAULT_PRODUCT_SQUADS.DIGI_INVEST
+  }
+  if (pName.includes("backoffice") || pName.includes("design system") || pCode === "BACKOFFICE" || pId === "prod-4") {
+    return DEFAULT_PRODUCT_SQUADS.BACKOFFICE
+  }
+  if (pName.includes("baas") || pCode === "BAAS" || pId === "baas" || pId === "prod-1788765119809") {
+    return DEFAULT_PRODUCT_SQUADS.BAAS
+  }
+  if (pName.includes("biz") || pCode === "BIZ_MB" || pId === "biz-mb") {
+    return DEFAULT_PRODUCT_SQUADS.BIZ_MB
+  }
+
+  return DEFAULT_PRODUCT_SQUADS.APP_MB
+}
+
+/**
+ * Đọc danh mục Squads động từ Quản trị hệ thống (hỗ trợ lọc theo sản phẩm hoặc lấy toàn bộ)
+ */
+export function getAdminSquadsList(product?: IAProductInfo | string | null): string[] {
+  if (product) {
+    return getAdminSquadsForProduct(product)
+  }
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       const raw =

@@ -77,12 +77,14 @@ import ReleaseNewsfeedTimeline from "@/components/dashboard/ai-ops/ReleaseNewsfe
 import SquadTrendingChart from "@/components/dashboard/ai-ops/SquadTrendingChart"
 import TrackTaskGanttFrame from "@/components/dashboard/ai-ops/TrackTaskGanttFrame"
 import { getAdminIAProducts, IAProductInfo } from "@/data/iaMockData"
+import { getProductColorDef } from "@/lib/colorUtils"
 import { cn } from "@/lib/utils"
 import PageHeader from "@/components/common/PageHeader"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import { OverviewContentSkeleton } from "@/components/common/ReuiSkeletons"
+import { SyncProgressStatus } from "@/components/reui/c-progress-4"
 
 export default function TongQuanPage() {
   const [squads, setSquads] = useState<Squad[]>(() => {
@@ -108,7 +110,16 @@ export default function TongQuanPage() {
     return []
   })
 
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return false
+      }
+    } catch {}
+    return !mockRequests || mockRequests.length === 0
+  })
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isFiltering, setIsFiltering] = useState(false)
 
@@ -117,13 +128,41 @@ export default function TongQuanPage() {
   const selectedRequestRef = useRef<UXRequest | null>(null)
   const [selectedSquad, setSelectedSquad] = useState<Squad | null>(null)
   const [hoveredProduct, setHoveredProduct] = useState<string | null>(null)
+  const [adminVersion, setAdminVersion] = useState<number>(0)
 
   useEffect(() => {
     const handleAuthChange = () => {
       setSession(getStoredSession())
     }
+    const handleAdminDataChanged = () => {
+      setAdminVersion((v) => v + 1)
+      try {
+        const cached = localStorage.getItem("mbbank_admin_squads")
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSquads((prev) => {
+              const orderMap = new Map<string, number>()
+              parsed.forEach((s: any, idx: number) => {
+                const name = (s.name || s.squad_name || "").toLowerCase().trim()
+                if (name) orderMap.set(name, idx)
+              })
+              return [...prev].sort((a, b) => {
+                const nameA = (a.squad_name || (a as any).name || "").toLowerCase().trim()
+                const nameB = (b.squad_name || (b as any).name || "").toLowerCase().trim()
+                const idxA = orderMap.has(nameA) ? orderMap.get(nameA)! : 9999
+                const idxB = orderMap.has(nameB) ? orderMap.get(nameB)! : 9999
+                return idxA - idxB
+              })
+            })
+          }
+        }
+      } catch {}
+    }
     window.addEventListener("auth_session_changed", handleAuthChange)
-    window.addEventListener("storage", handleAuthChange)
+    window.addEventListener("admin_products_changed", handleAdminDataChanged)
+    window.addEventListener("ux_data_refreshed", handleAdminDataChanged)
+    window.addEventListener("storage", handleAdminDataChanged)
     const interval = setInterval(() => {
       const current = getStoredSession()
       setSession((prev) => {
@@ -147,7 +186,9 @@ export default function TongQuanPage() {
   }, [])
 
   useEffect(() => {
-    setIsLoading(true)
+    if (requests.length === 0) {
+      setIsLoading(true)
+    }
     // Background sync from Google Sheets without blocking UI render
     Promise.all([fetchSquads(false), fetchRequests(false)])
       .then(([squadsData, requestsData]) => {
@@ -158,9 +199,7 @@ export default function TongQuanPage() {
         // Quiet fallback to empty/real data
       })
       .finally(() => {
-        setTimeout(() => {
-          setIsLoading(false)
-        }, 450)
+        setIsLoading(false)
       })
   }, [])
 
@@ -223,7 +262,7 @@ export default function TongQuanPage() {
     })
 
     return result
-  }, [requests])
+  }, [requests, adminVersion])
 
   const [selectedProduct, setSelectedProduct] = useState<string>("all")
 
@@ -246,12 +285,16 @@ export default function TongQuanPage() {
     return false
   }
 
+  const currentProductName = useMemo(() => {
+    if (!selectedProduct || selectedProduct === "all") return "all"
+    const prodObj = products.find((p) => p.id === selectedProduct || p.name.toLowerCase() === selectedProduct.toLowerCase())
+    return prodObj?.name || selectedProduct
+  }, [selectedProduct, products])
+
   const filteredRequests = useMemo(() => {
     if (selectedProduct === "all") return displayRequests
-    const prodObj = products.find((p) => p.id === selectedProduct || p.name.toLowerCase() === selectedProduct.toLowerCase())
-    const targetName = prodObj?.name || selectedProduct
-    return displayRequests.filter((r) => isRequestMatchingProduct(r, targetName))
-  }, [displayRequests, selectedProduct, products])
+    return displayRequests.filter((r) => isRequestMatchingProduct(r, currentProductName))
+  }, [displayRequests, selectedProduct, currentProductName])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
@@ -263,8 +306,8 @@ export default function TongQuanPage() {
         fetchRequests(true),
       ])
       const elapsed = Date.now() - startTime
-      if (elapsed < 650) {
-        await new Promise((r) => setTimeout(r, 650 - elapsed))
+      if (elapsed < 1200) {
+        await new Promise((r) => setTimeout(r, 1200 - elapsed))
       }
       if (Array.isArray(squadsData) && squadsData.length > 0) setSquads(squadsData)
       if (Array.isArray(requestsData) && requestsData.length > 0) setRequests(requestsData)
@@ -287,148 +330,152 @@ export default function TongQuanPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-5 text-slate-900 pb-8 outline-none">
-      {/* 1. Page Header Synchronized with Track Task & Design System */}
-      <PageHeader
-        breadcrumb={{
-          parent: "Dashboards",
-          current: "Overview",
-        }}
-        title="Overview"
-        badge={
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live Sync
-          </span>
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              tactile
-              onClick={handleRefresh}
-              disabled={isRefreshing || isLoading}
-              aria-label="Làm mới dữ liệu Overview"
-              className={cn(
-                "cursor-pointer shrink-0 select-none",
-                isRefreshing && "bg-slate-50 border-slate-300 text-slate-900"
-              )}
-            >
-              <RefreshCw
+    <main id="main-content" tabIndex={-1} className="w-full space-y-4 text-slate-900 pb-8 outline-none">
+      {/* Header & Product Navigation Section */}
+      <div className="space-y-2.5">
+        {/* 1. Page Header Synchronized with Track Task & Design System */}
+        <PageHeader
+          breadcrumb={{
+            parent: "Dashboards",
+            current: "Overview",
+          }}
+          title="Overview"
+          badge={
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync
+            </span>
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                tactile
+                onClick={handleRefresh}
+                disabled={isRefreshing || isLoading}
+                aria-label="Làm mới dữ liệu Overview"
                 className={cn(
-                  "w-3.5 h-3.5 mr-1.5 text-slate-500",
-                  isRefreshing && "animate-spin text-slate-900"
-                )}
-              />
-              <span>Làm mới</span>
-            </Button>
-          </div>
-        }
-      />
-      {/* =========================================================================
-          PRODUCT NAVIGATION TABS (Admin-configured products)
-          ========================================================================= */}
-      <div 
-        role="tablist"
-        aria-label="Lọc bài toán theo sản phẩm"
-        aria-orientation="horizontal"
-        onMouseLeave={() => setHoveredProduct(null)}
-        className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 select-none"
-      >
-        <button
-          role="tab"
-          type="button"
-          id="product-tab-all"
-          aria-selected={selectedProduct === "all"}
-          tabIndex={selectedProduct === "all" ? 0 : -1}
-          onClick={() => handleSelectProduct("all")}
-          onMouseEnter={() => setHoveredProduct("all")}
-          className={cn(
-            "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
-            selectedProduct === "all"
-              ? "text-white font-semibold border-transparent shadow-xs"
-              : "bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
-          )}
-        >
-          {selectedProduct === "all" && (
-            <motion.div
-              layoutId="tongquan-product-pill"
-              className="absolute inset-0 bg-slate-900 rounded-xl shadow-xs -z-10"
-              transition={springs.indicator}
-            />
-          )}
-          {hoveredProduct === "all" && selectedProduct !== "all" && (
-            <motion.div
-              layoutId="tongquan-product-hover-pill"
-              className="absolute inset-0 bg-slate-100 rounded-xl -z-10"
-              transition={springs.snappy}
-            />
-          )}
-          <span className="relative z-10">Tất cả</span>
-          <span
-            className={cn(
-              "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold font-mono tabular-nums transition-colors",
-              selectedProduct === "all"
-                ? "bg-slate-800 text-slate-200"
-                : "bg-slate-100 text-slate-500"
-            )}
-          >
-            {displayRequests.length}
-          </span>
-        </button>
-
-        {products.map((prod, pIdx) => {
-          const tabKey = prod.id || (prod as any).code || `overview-prod-${pIdx}`
-          const count = displayRequests.filter((r) => isRequestMatchingProduct(r, prod.name)).length
-          const isSelected = selectedProduct === prod.id || selectedProduct === prod.name
-          const isHovered = hoveredProduct === prod.id
-
-          return (
-            <button
-              key={tabKey}
-              role="tab"
-              type="button"
-              id={`product-tab-${prod.id}`}
-              aria-selected={isSelected}
-              tabIndex={isSelected ? 0 : -1}
-              onClick={() => handleSelectProduct(prod.id)}
-              onMouseEnter={() => setHoveredProduct(prod.id)}
-              className={cn(
-                "relative isolate px-3 py-1.5 rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer flex items-center gap-2 border select-none",
-                isSelected
-                  ? "text-white font-semibold border-transparent shadow-xs"
-                  : "bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
-              )}
-            >
-              {isSelected && (
-                <motion.div
-                  layoutId="tongquan-product-pill"
-                  className="absolute inset-0 bg-slate-900 rounded-xl shadow-xs -z-10"
-                  transition={springs.indicator}
-                />
-              )}
-              {isHovered && !isSelected && (
-                <motion.div
-                  layoutId="tongquan-product-hover-pill"
-                  className="absolute inset-0 bg-slate-100 rounded-xl -z-10"
-                  transition={springs.snappy}
-                />
-              )}
-              <span className="relative z-10">{prod.name}</span>
-              <span
-                className={cn(
-                  "relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-semibold font-mono tabular-nums transition-colors",
-                  isSelected
-                    ? "bg-slate-800 text-slate-200"
-                    : "bg-slate-100 text-slate-500"
+                  "cursor-pointer shrink-0 select-none",
+                  isRefreshing && "bg-slate-50 border-slate-300 text-slate-900"
                 )}
               >
-                {count}
-              </span>
-            </button>
-          )
-        })}
+                <RefreshCw
+                  className={cn(
+                    "w-3.5 h-3.5 mr-1.5 text-slate-500",
+                    isRefreshing && "animate-spin text-slate-900"
+                  )}
+                />
+                <span>Làm mới</span>
+              </Button>
+            </div>
+          }
+          className="pb-0"
+        />
+
+        {/* ReUI c-progress-4 Sync Status Banner when Refreshing */}
+        <AnimatePresence>
+          {isRefreshing && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, y: -6 }}
+              animate={{ opacity: 1, height: "auto", y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SyncProgressStatus
+                active={isRefreshing}
+                type="refresh"
+                label="Đang đồng bộ dữ liệu Live Sync (Google Sheets & Squads)..."
+                className="max-w-md bg-blue-50/50 border-blue-200/80 shadow-xs"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* =========================================================================
+            PRODUCT NAVIGATION TABS (Admin-configured products - IA segmented style)
+            ========================================================================= */}
+        <div
+          role="tablist"
+          aria-label="Lọc bài toán theo sản phẩm"
+          aria-orientation="horizontal"
+          className="inline-flex h-9 items-center justify-start rounded-xl bg-slate-100/90 p-1 text-slate-500 border border-slate-200/80 shadow-2xs overflow-x-auto max-w-full select-none"
+        >
+          {/* Tab Tất cả */}
+          <button
+            role="tab"
+            type="button"
+            id="product-tab-all"
+            data-testid="product-tab-all"
+            aria-selected={selectedProduct === "all"}
+            tabIndex={selectedProduct === "all" ? 0 : -1}
+            onClick={() => handleSelectProduct("all")}
+            className={cn(
+              "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
+              selectedProduct === "all"
+                ? "bg-white text-slate-900 shadow-xs font-semibold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            )}
+          >
+            <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-blue-600" />
+            <span>Tất cả</span>
+            <span
+              className={cn(
+                "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
+                selectedProduct === "all"
+                  ? "bg-slate-100 text-slate-700 font-semibold"
+                  : "bg-slate-200/70 text-slate-500"
+              )}
+            >
+              {displayRequests.length}
+            </span>
+          </button>
+
+          {/* Các sản phẩm */}
+          {products.map((prod, pIdx) => {
+            const tabKey = prod.id || (prod as any).code || `overview-prod-${pIdx}`
+            const count = displayRequests.filter((r) => isRequestMatchingProduct(r, prod.name)).length
+            const isSelected = selectedProduct === prod.id || selectedProduct === prod.name
+            const colorDef = getProductColorDef(prod.name, (prod as any).color)
+            const dotColor = colorDef.hex || (prod as any).color || "#2563EB"
+
+            return (
+              <button
+                key={`overview-tab-${tabKey}-${pIdx}`}
+                role="tab"
+                type="button"
+                id={`product-tab-${prod.id}`}
+                data-testid={`product-tab-${prod.id}`}
+                aria-selected={isSelected}
+                tabIndex={isSelected ? 0 : -1}
+                onClick={() => handleSelectProduct(prod.id)}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
+                  isSelected
+                    ? "bg-white text-slate-900 shadow-xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                )}
+              >
+                {/* Chấm tròn theo màu cài đặt trong Admin */}
+                <span
+                  className="w-2 h-2 rounded-full mr-1.5 shrink-0 transition-transform"
+                  style={{ backgroundColor: dotColor }}
+                />
+                <span>{prod.name}</span>
+                <span
+                  className={cn(
+                    "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
+                    isSelected
+                      ? "bg-slate-100 text-slate-700 font-semibold"
+                      : "bg-slate-200/70 text-slate-500"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* =========================================================================
@@ -458,7 +505,7 @@ export default function TongQuanPage() {
               className="col-start-1 row-start-1 w-full min-w-0 space-y-4 z-20"
             >
               {/* ROW 1: 3 REUI KPI CARDS (Backlog & Pending, Đang thực hiện, Đã hoàn thành) */}
-              <AiOpsKpiCards requests={filteredRequests} />
+              <AiOpsKpiCards requests={filteredRequests} selectedProduct={currentProductName} />
 
               {/* ROW 2: ASYMMETRIC 2-COLUMN GRID (NewsFeed + Squad Trending) */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch">

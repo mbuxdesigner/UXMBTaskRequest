@@ -26,25 +26,27 @@ export default function SquadTrendingChart({
 }: SquadTrendingChartProps) {
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d")
 
-  const chartConfig = useMemo(() => {
+  const chartConfig: ChartConfig = useMemo(() => {
     if (currentProduct === "all") {
-      return {
+      const cfg: ChartConfig = {
         app_mb: { label: "APP MB", color: "var(--chart-1)" },
         digi_invest: { label: "Digi invest", color: "var(--chart-2)" },
         backoffice: { label: "Backoffice", color: "var(--chart-3)" },
         crm: { label: "CRM", color: "var(--chart-4)" },
         baas: { label: "BaaS", color: "var(--chart-5)" },
-      } satisfies ChartConfig
+      }
+      return cfg
     } else {
-      return {
+      const cfg: ChartConfig = {
         in_progress: { label: "Đang thực hiện", color: "var(--chart-1)" },
         pending: { label: "Chờ tiếp nhận", color: "var(--chart-3)" },
         completed: { label: "Đã hoàn thành", color: "var(--chart-2)" },
-      } satisfies ChartConfig
+      }
+      return cfg
     }
   }, [currentProduct])
 
-  const chartData = useMemo(() => {
+  const chartData: any[] = useMemo(() => {
     const periods =
       range === "7d"
         ? ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
@@ -230,7 +232,7 @@ export default function SquadTrendingChart({
                   />
                 }
               />
-              <ChartLegend content={<ChartLegendContent />} className="pt-2 text-xs" />
+              <ChartLegend content={<ChartLegendContent className="pt-2 text-xs" />} />
 
               {currentProduct === "all" ? (
                 <>

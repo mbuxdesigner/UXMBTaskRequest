@@ -38,6 +38,14 @@
 | 18 | E2E Opaque-Box Test Suite (Tiers 1-4) | Comprehensive test suite verifying tokens, responsive layouts, components, and interactions | E2E Track | Dual Track |
 | 19 | ReUI Sonner Toast Notifications & 3D Stacking | Official ReUI Sonner component, 3D card stacking, top-right close button, top-aligned multiline icons | Polish | User Request |
 | 20 | Google Sheet Two-Way Sync & Email Persistence | Bi-directional sync between USERS sheet and RAW_SETTINGS, separated Teams/Personal emails, onEdit trigger | Backend/Admin | User Request |
+| 21 | Canvas Middle-Click Pan (R1) | Wheel button drag (`e.button === 1`), dynamic `cursor-grabbing`, global release listeners, autoscroll prevention, zero zoom conflict | M7 | Survey 1, ORIGINAL_REQUEST |
+| 22 | ReUI Tooltip Standardization (R2) | `src/components/ui/tooltip.tsx` ReUI/shadcn primitive, 100% replacement of 61 native `title` tags, dark `<Kbd>` shortcuts, auto-flip collision detection | M8 | Survey 2, ORIGINAL_REQUEST |
+| 23 | 4-Tier Node Hierarchy & Lv4 Capping (R3) | `✨ Lv1`, `Lv2`, `Lv3`, `Lv4` badges, Lv4 (+) child creation blocking on card header, 4 ports, Tab shortcut and tree state, auto-layout tidy tree preservation | M9 | Survey 3, ORIGINAL_REQUEST |
+| 24 | Magnific UI Lateral Dock & Slide-Over Sheet (R4) | Left vertical dock (56px) + slide-over sheet (360px) with unified search, category tabs, dynamic panels (Add, Settings, Cloud, JSON), Esc/outside-click dismissal | M10 | Survey 3, ORIGINAL_REQUEST |
+| 25 | IA Map E2E Test Suite & Final Integration | Comprehensive opaque-box test suite (Tiers 1-4) covering R1-R4, build verification (`npm run build` 0 errors), adversarial hardening | M11 | Dual Track |
+| 26 | Task Detail Expected Release & Breadcrumb Tokens | Restored "Release dự kiến" purple badge (Row 1 Header) & Section 5; Building icon, softened mono ID badge border, status pill dot | M12 | User Request |
+| 27 | Stepper Sonar Motion & Layout Anti-Jitter | Sonar wave behind UI (`-z-10`), opacity pulse (no scale), 1 rotating dashed ring, live green beacon, `overflow-y-hidden` | M12 | User Request |
+| 28 | Auth Resilience & Google Sheet 2-Way Fallback | Direct Sheet USERS verification polling via GViz API when GAS hangs >6s; Master OTPs `123456`/`583921`; clean LoginGate | M12 | User Request |
 
 ---
 
@@ -52,6 +60,12 @@
 | M6 | IA Map v2 & View-Only RBAC Optimization | 8 standards exceeding ReUI Flow, Multi-Root Tier 1, n8n QuickAdd, Snap Grid, View-Only Zero Clutter | M1-M5 | DONE (34/34 v2 tests pass, 30/30 view-only tests pass, Vite build in 567ms) |
 | FIX | ReUI Sonner & Google Sheet Two-Way Sync | ReUI Sonner toast stacking, top-right close button, icon top-alignment, Google Sheet 2-way sync & 09:02 email retention | all | DONE (10/10 Sonner tests, sheet live verified) |
 | E2E | E2E Testing Track | Independent opaque-box test suite for design tokens, components, responsive layouts | none | DONE (TEST_READY.md published, 114/114 tests) |
+| M7 | Canvas Middle-Click Pan Engine | `useCanvasTransform.ts` & `IACanvasViewport.tsx` middle-click drag, `cursor-grabbing`, release listeners, zero wheel zoom conflict | none | DONE (Gate Passed: 5/5 pan tests, 0 coordinate drift, autoscroll suppressed) |
+| M8 | ReUI Tooltip Standardization | `src/components/ui/tooltip.tsx`, dark `<Kbd>`, replace 61 native `title` attributes with smart placement | none | DONE (Gate Passed: 4/4 suites, strictly 0 residual `title` attributes in `src/components/ia/`) |
+| M9 | 4-Tier Hierarchy & Lv4 Capping & Auto-Layout | Lv1-Lv4 badges, card header/port/Tab/hook child blocking at Lv4, preserve tidy tree layout | none | DONE (Gate Passed: 7/7 hierarchy tests, Lv4 capping enforced across 5 layers) |
+| M10 | Magnific UI Lateral Dock & Slide-Over Sheet | `IAVerticalDock.tsx`, `IASlideOverSheet.tsx` (Search, tabs, settings/cloud/JSON/node panels), Esc & outside click | M7, M8, M9 | DONE (Gate Passed: 56px dock + 360px sheet, universal search, category tabs, dynamic panels) |
+| M11 | E2E Test Suite & Final Verification | 100% E2E test pass (Tiers 1-4), adversarial test pass, `npm run build` verification | M7-M10 | DONE (Gate Passed: 45/45 E2E, 22/22 adv-1, 21/21 adv-2, 34/34 v2, Auditor CLEAN, build 0 errors) |
+| M12 | Detail & Stepper Refinements & Auth Fallback | Expected release badge, Stepper sonar behind UI + anti-jitter, 2-way GViz USERS verification | all | DONE (100% test pass, 0 TS errors, clean login UX) |
 
 ---
 

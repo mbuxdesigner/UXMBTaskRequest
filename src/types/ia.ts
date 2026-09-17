@@ -7,6 +7,58 @@
  */
 export type IATier = 1 | 2 | 3 | 4
 
+export interface IATierInfo {
+  tier: IATier
+  label: string
+  sublabel: string
+  badgeText: string
+  badgeClass: string
+  themeColor: string
+}
+
+export const IA_TIER_CONFIG: Record<IATier, IATierInfo> = {
+  1: {
+    tier: 1,
+    label: "Sản phẩm số",
+    sublabel: "Nút gốc / Sản phẩm",
+    badgeText: "✨ Lv1",
+    badgeClass: "bg-blue-50 text-[#1057FB] border-blue-200",
+    themeColor: "#1057FB",
+  },
+  2: {
+    tier: 2,
+    label: "Phân hệ nghiệp vụ",
+    sublabel: "Luồng nghiệp vụ chính",
+    badgeText: "Lv2",
+    badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    themeColor: "#6366f1",
+  },
+  3: {
+    tier: 3,
+    label: "Luồng tính năng",
+    sublabel: "Màn hình chi tiết / Chức năng",
+    badgeText: "Lv3",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    themeColor: "#10b981",
+  },
+  4: {
+    tier: 4,
+    label: "Màn hình & Điểm chạm",
+    sublabel: "Trạng thái / Modal / Popup",
+    badgeText: "Lv4",
+    badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+    themeColor: "#f59e0b",
+  },
+}
+
+export function getTierBadgeText(tier: IATier): string {
+  return IA_TIER_CONFIG[tier]?.badgeText || `Lv${tier}`
+}
+
+export function getTierBadgeClass(tier: IATier): string {
+  return IA_TIER_CONFIG[tier]?.badgeClass || "bg-slate-100 text-slate-700 border-slate-200"
+}
+
 /**
  * Các loại điểm chạm người dùng ở Tầng 4 (Screens & Touchpoints)
  */

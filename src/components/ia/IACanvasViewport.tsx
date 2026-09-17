@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   ZoomIn,
   ZoomOut,
@@ -24,12 +24,17 @@ import {
 import { tactileProps } from "@/lib/motion"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
 import { LayoutNode, LayoutConnector } from "@/hooks/useIATreeState"
-import { IANode, IAPortPosition, IAPortDragState } from "@/types/ia"
+import { IANode, IAPortPosition, IAPortDragState, IATierDimensionSettings, IAProductInfo } from "@/types/ia"
 import { UXRequest } from "@/data/mockData"
+import { Tooltip } from "@/components/ui/tooltip"
 import IABezierConnectors from "./IABezierConnectors"
 import IATreeNodeCard from "./IATreeNodeCard"
 import IAMinimap from "./IAMinimap"
 import IANodeFloatingToolbar from "./IANodeFloatingToolbar"
+import IAVerticalDock, { IADockTool } from "./IAVerticalDock"
+import IASlideOverSheet from "./IASlideOverSheet"
+import { DEFAULT_TIER_DIMENSIONS } from "./IASettingsModal"
+import { QuickAddNodeType } from "./IAQuickAddSidebar"
 
 interface IACanvasViewportProps {
   transform: CanvasTransform
@@ -76,12 +81,21 @@ interface IACanvasViewportProps {
   onSelectNode?: (node: IANode | null) => void
   onAddNodeAtPosition?: (position: { x: number; y: number }, nodeData: Partial<IANode>) => void
   onOpenNodeDetail?: (node: IANode) => void
+  onOpenTaskPicker?: (node: IANode) => void
   onOpenSettings?: () => void
   onPullCloud?: () => void
   isPullingCloud?: boolean
   onSyncCloud?: () => void
   isSyncingCloud?: boolean
   onResetToDefault?: () => void
+  activeDockTool?: IADockTool
+  onSelectDockTool?: (tool: IADockTool) => void
+  activeTree?: IANode
+  activeProduct?: IAProductInfo
+  onAddNode?: (item: QuickAddNodeType) => void
+  tierDimensions?: IATierDimensionSettings
+  onSaveSettings?: (settings: IATierDimensionSettings) => void
+  onImportJson?: (json: IANode | IANode[]) => void
 }
 
 export default function IACanvasViewport({
@@ -123,6 +137,7 @@ export default function IACanvasViewport({
   onSelectNode,
   onAddNodeAtPosition,
   onOpenNodeDetail,
+  onOpenTaskPicker,
   onOpenSettings,
   onPullCloud,
   isPullingCloud = false,
@@ -130,8 +145,28 @@ export default function IACanvasViewport({
   isSyncingCloud = false,
   onResetToDefault,
   readOnly = false,
+  activeDockTool,
+  onSelectDockTool,
+  activeTree,
+  activeProduct,
+  onAddNode,
+  tierDimensions,
+  onSaveSettings,
+  onImportJson,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [internalDockTool, setInternalDockTool] = useState<IADockTool>(null)
+  const currentDockTool = activeDockTool !== undefined ? activeDockTool : internalDockTool
+  const handleSelectDockTool = useCallback(
+    (tool: IADockTool) => {
+      if (onSelectDockTool) {
+        onSelectDockTool(tool)
+      } else {
+        setInternalDockTool(tool)
+      }
+    },
+    [onSelectDockTool]
+  )
 
 
   // Auto-fit on initial mount when dimensions become available
@@ -159,9 +194,6 @@ export default function IACanvasViewport({
   const [snapToGrid, setSnapToGrid] = useState(true)
   // Minimap state (default: false)
   const [showMinimap, setShowMinimap] = useState(false)
-  // Top Floating Actions Menu (...)
-  const [isTopMenuOpen, setIsTopMenuOpen] = useState(false)
-  const topMenuRef = useRef<HTMLDivElement>(null)
 
   // Magnific-style Zoom Popover Menu
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false)
@@ -196,9 +228,6 @@ export default function IACanvasViewport({
   // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (topMenuRef.current && !topMenuRef.current.contains(e.target as Node)) {
-        setIsTopMenuOpen(false)
-      }
       if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
         setIsZoomMenuOpen(false)
       }
@@ -258,6 +287,16 @@ export default function IACanvasViewport({
     return map
   }, [selectedNodeIds, layoutNodes])
 
+  // Single selected node for slide-over sheet
+  const selectedSingleNode = useMemo(() => {
+    if (selectedNodeIds.size === 1) {
+      const sId = Array.from(selectedNodeIds)[0]
+      const found = layoutNodes.find((ln) => ln.node.id === sId)
+      return found?.node || null
+    }
+    return null
+  }, [selectedNodeIds, layoutNodes])
+
   // Clear selections when layoutNodes completely change or become empty
   useEffect(() => {
     if (layoutNodes.length === 0 && selectedNodeIds.size > 0) {
@@ -285,7 +324,11 @@ export default function IACanvasViewport({
       } else if ((e.key === "h" || e.key === "H") && !e.ctrlKey && !e.metaKey) {
         setToolMode("pan")
       } else if (e.key === "Escape") {
-        setSelectedNodeIds(new Set())
+        if (currentDockTool) {
+          handleSelectDockTool(null)
+        } else {
+          setSelectedNodeIds(new Set())
+        }
       } else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
         e.preventDefault()
         setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
@@ -366,6 +409,19 @@ export default function IACanvasViewport({
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent) => {
       const target = e.target as HTMLElement
+
+      // R1: Middle Click / Wheel button drag (button === 1) pans canvas anywhere on drawing space
+      if (e.button === 1) {
+        // Do not intercept if clicking inside editable text fields
+        if (target.closest("input, textarea, [contenteditable='true']")) {
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        onPointerDown(e)
+        return
+      }
+
       // Ignore if pointer down originated on a card, port, button, input, or floating toolbar
       if (
         target.closest(
@@ -373,6 +429,13 @@ export default function IACanvasViewport({
         )
       ) {
         return
+      }
+
+      // Dismiss active slide-over sheet when left-clicking canvas backdrop outside sheet & dock
+      if (e.button === 0 && currentDockTool) {
+        if (!target.closest("[data-testid='ia-slide-over-sheet']") && !target.closest("[data-testid='ia-vertical-dock']")) {
+          handleSelectDockTool(null)
+        }
       }
 
       // In readOnly mode: Dragging empty canvas pans canvas. Clicking without dragging clears selection.
@@ -402,8 +465,8 @@ export default function IACanvasViewport({
         return
       }
 
-      // In Pan mode, middle mouse button, or Space held down: Pan canvas
-      if (e.button === 1 || toolMode === "pan" || isSpacePressed) {
+      // In Pan mode or Space held down: Left-click pan canvas
+      if (toolMode === "pan" || isSpacePressed) {
         onPointerDown(e)
         return
       }
@@ -487,7 +550,7 @@ export default function IACanvasViewport({
         window.addEventListener("pointercancel", handleWindowPointerUp)
       }
     },
-    [toolMode, isSpacePressed, readOnly, transform, selectedNodeIds, layoutNodes, onPointerDown]
+    [toolMode, isSpacePressed, readOnly, transform, selectedNodeIds, layoutNodes, onPointerDown, currentDockTool, handleSelectDockTool]
   )
 
   // Active port wire drag state for dynamic bezier preview & connection
@@ -646,6 +709,30 @@ export default function IACanvasViewport({
     }
   }, [onWheel])
 
+  // Prevent Windows Chromium/Firefox Autoscroll on Middle Click
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault()
+      }
+    }
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault()
+      }
+    }
+
+    container.addEventListener("auxclick", handleAuxClick)
+    container.addEventListener("mousedown", handleMouseDown)
+    return () => {
+      container.removeEventListener("auxclick", handleAuxClick)
+      container.removeEventListener("mousedown", handleMouseDown)
+    }
+  }, [])
+
   const zoomPercent = Math.round(transform.scale * 100)
   const isHandMode = toolMode === "pan" || isSpacePressed
   const cursorClass = activeWireDrag
@@ -664,7 +751,6 @@ export default function IACanvasViewport({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      onPointerLeave={onPointerUp}
       onDragOver={(e) => {
         e.preventDefault()
         e.dataTransfer.dropEffect = "copy"
@@ -702,138 +788,41 @@ export default function IACanvasViewport({
         backgroundPosition: `${transform.x % 28}px ${transform.y % 28}px`,
       }}
     >
-      {/* Floating Top-Right Canvas Actions (Cài đặt, Cloud Sync, Import/Export, Reset) */}
-      {!readOnly && (
-        <div className="absolute top-3.5 right-3.5 z-30 flex items-center gap-2 select-none">
-          <div className="flex items-center gap-1.5 p-1 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200/80 shadow-md">
-            {/* Cài đặt sơ đồ */}
-            {onOpenSettings && (
-              <motion.button
-                type="button"
-                data-testid="ia-settings-btn"
-                onClick={onOpenSettings}
-                title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                {...tactileProps.button}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Cài đặt sơ đồ</span>
-              </motion.button>
-            )}
+      {/* Magnific UI Left Lateral Dock */}
+      <IAVerticalDock
+        activeTool={currentDockTool}
+        onSelectTool={handleSelectDockTool}
+        onAutoAlign={!readOnly ? onAutoAlign : undefined}
+        onCopyJson={onCopyJson}
+        onResetToDefault={onResetToDefault}
+        isSyncingCloud={isSyncingCloud}
+        isPullingCloud={isPullingCloud}
+        readOnly={readOnly}
+        toolMode={toolMode}
+        onSelectToolMode={setToolMode}
+      />
 
-            {/* Tải từ Cloud */}
-            {onPullCloud && (
-              <motion.button
-                type="button"
-                data-testid="ia-pull-cloud-btn"
-                onClick={onPullCloud}
-                disabled={isPullingCloud}
-                title="Tải sơ đồ IA từ Google Sheets Cloud"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                {...tactileProps.button}
-              >
-                <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
-                <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
-              </motion.button>
-            )}
-
-            {/* Lưu lên Cloud */}
-            {onSyncCloud && (
-              <motion.button
-                type="button"
-                data-testid="ia-sync-cloud-btn"
-                onClick={onSyncCloud}
-                disabled={isSyncingCloud}
-                title="Lưu đồng bộ sơ đồ IA lên Google Sheets Cloud"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#1B3A6B] hover:bg-[#152e54] rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                {...tactileProps.button}
-              >
-                <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
-                <span>{isSyncingCloud ? "Đang lưu..." : "Lưu lên Cloud"}</span>
-              </motion.button>
-            )}
-
-            {/* Menu tùy chọn thêm (...) */}
-            <div className="relative" ref={topMenuRef}>
-              <motion.button
-                type="button"
-                data-testid="ia-more-menu-btn"
-                onClick={() => setIsTopMenuOpen((v) => !v)}
-                title="Tùy chọn sơ đồ khác"
-                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                {...tactileProps.button}
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </motion.button>
-
-              {isTopMenuOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
-                  {onOpenImportJson && (
-                    <button
-                      type="button"
-                      data-testid="ia-more-import-json"
-                      onClick={() => {
-                        setIsTopMenuOpen(false)
-                        onOpenImportJson()
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-blue-50 hover:text-blue-600 text-left transition-colors cursor-pointer font-medium"
-                    >
-                      <FileCode className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Nhập JSON / Đẩy map nhanh</span>
-                    </button>
-                  )}
-
-                  {onCopyJson && (
-                    <button
-                      type="button"
-                      data-testid="ia-more-copy-json"
-                      onClick={() => {
-                        setIsTopMenuOpen(false)
-                        onCopyJson()
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer font-medium"
-                    >
-                      <Copy className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Sao chép sơ đồ (JSON)</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    data-testid="ia-more-select-all"
-                    onClick={() => {
-                      setIsTopMenuOpen(false)
-                      setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer font-medium"
-                  >
-                    <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Chọn tất cả thẻ (Ctrl + A)</span>
-                  </button>
-
-                  {onResetToDefault && (
-                    <>
-                      <div className="my-1 border-t border-slate-100" />
-                      <button
-                        type="button"
-                        data-testid="ia-more-reset"
-                        onClick={() => {
-                          setIsTopMenuOpen(false)
-                          onResetToDefault()
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 text-left transition-colors cursor-pointer font-medium"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Khôi phục sơ đồ mặc định</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Magnific UI Left Slide-Over Sheet */}
+      <AnimatePresence>
+        {currentDockTool && (
+          <IASlideOverSheet
+            activeTool={currentDockTool}
+            onClose={() => handleSelectDockTool(null)}
+            selectedNode={selectedSingleNode}
+            activeTree={activeTree || layoutNodes[0]?.node}
+            activeProduct={activeProduct || ({ id: "app-mb", name: "MBBank", code: "APP_MB" } as any)}
+            onAddNode={(item) => onAddNode ? onAddNode(item) : (onAddNodeAtPosition && onAddNodeAtPosition({ x: 300, y: 200 }, item))}
+            tierDimensions={tierDimensions || DEFAULT_TIER_DIMENSIONS}
+            onSaveSettings={onSaveSettings || (() => {})}
+            onSyncCloud={onSyncCloud ? async () => { onSyncCloud() } : async () => {}}
+            onPullCloud={onPullCloud ? async () => { onPullCloud() } : async () => {}}
+            isSyncingCloud={Boolean(isSyncingCloud)}
+            isPullingCloud={Boolean(isPullingCloud)}
+            onImportJson={onImportJson || (() => {})}
+            onCopyJson={onCopyJson || (() => {})}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Hardware-Accelerated Mindmap Canvas Transformation Layer */}
       <div
@@ -843,6 +832,7 @@ export default function IACanvasViewport({
           transform: `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0) scale(${transform.scale})`,
           transformOrigin: "0 0",
           willChange: isPanning ? "transform" : "auto",
+          pointerEvents: isPanning ? "none" : "auto",
         }}
       >
         {/* SVG Cubic Bezier Connectors Layer */}
@@ -886,6 +876,7 @@ export default function IACanvasViewport({
               selectedNodePositions={selectedNodePositions}
               onCardSelect={handleCardSelect}
               onOpenNodeDetail={onOpenNodeDetail}
+              onOpenTaskPicker={onOpenTaskPicker}
               onMultiNodeDrag={readOnly ? undefined : onMultipleNodesDrag}
               isWireDropTarget={activeWireDrag?.hoveredTargetNodeId === layoutNode.node.id}
               scale={transform.scale}
@@ -975,149 +966,95 @@ export default function IACanvasViewport({
         />
       )}
 
-      {/* Floating Bottom Selection Status Pill (Chỉ hiển thị khi có quyền Edit) */}
-      {!readOnly && selectedNodeIds.size > 0 && (
-        <div
-          data-testid="ia-canvas-selection-pill"
-          className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-4 py-2 bg-slate-900/90 text-white backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200 select-none"
-        >
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            <span>
-              Đã chọn <strong className="text-blue-300 font-bold">{selectedNodeIds.size}</strong> thẻ
-            </span>
-          </div>
-          <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-          <span className="text-[11px] text-slate-300 hidden sm:inline">
-            Kéo bất kỳ thẻ nào để di chuyển cả nhóm
-          </span>
-          <div className="w-px h-3.5 bg-slate-700 mx-0.5 hidden sm:inline" />
-          <motion.button
-            type="button"
-            data-testid="ia-clear-selection-btn"
-            onClick={() => setSelectedNodeIds(new Set())}
-            title="Bỏ chọn (Esc)"
-            className="px-2 py-0.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            {...tactileProps.button}
-          >
-            Bỏ chọn (Esc)
-          </motion.button>
-        </div>
-      )}
 
       {/* Floating Bottom-Right Canvas Control Toolbar */}
       <div
         data-testid="ia-canvas-floating-controls"
         className="absolute bottom-5 right-5 z-30 flex items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-lg text-slate-700"
       >
-        {/* Tool Mode Switcher: Select (V) vs Pan (H) - Ẩn khi ở chế độ xem */}
-        {!readOnly && (
-          <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl mr-1">
-            <motion.button
-              type="button"
-              data-testid="ia-tool-select-btn"
-              onClick={() => setToolMode("select")}
-              title="Công cụ quét chọn thẻ (Phím V)"
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                toolMode === "select"
-                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900"
-              }`}
-              {...tactileProps.button}
-            >
-              <MousePointer className="w-4 h-4" />
-            </motion.button>
-            <motion.button
-              type="button"
-              data-testid="ia-tool-pan-btn"
-              onClick={() => setToolMode("pan")}
-              title="Công cụ bàn tay kéo nền (Phím H / Giữ Space)"
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                toolMode === "pan"
-                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900"
-              }`}
-              {...tactileProps.button}
-            >
-              <Hand className="w-4 h-4" />
-            </motion.button>
-          </div>
-        )}
-
         {/* Snap to Grid button (Requirement 6) - Ẩn khi ở chế độ xem */}
         {!readOnly && (
           <>
-            <motion.button
-              type="button"
-              data-testid="ia-snap-grid-btn"
-              onClick={() => setSnapToGrid(!snapToGrid)}
-              title={snapToGrid ? "Đang bật hít lưới 20px (Click để tắt)" : "Đang tắt hít lưới (Click để bật)"}
-              className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                snapToGrid
-                  ? "bg-blue-50 text-[#1057FB] border border-blue-200/80 font-semibold"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-              }`}
-              {...tactileProps.button}
+            <Tooltip
+              content={snapToGrid ? "Đang bật hít lưới 20px (Click để tắt)" : "Đang tắt hít lưới (Click để bật)"}
+              shortcut="G"
+              side="top"
             >
-              <Grid className="w-4 h-4" />
-            </motion.button>
+              <motion.button
+                type="button"
+                data-testid="ia-snap-grid-btn"
+                onClick={() => setSnapToGrid(!snapToGrid)}
+                className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                  snapToGrid
+                    ? "bg-blue-50 text-[#1057FB] border border-blue-200/80 font-semibold"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                }`}
+                {...tactileProps.button}
+              >
+                <Grid className="w-4 h-4" />
+              </motion.button>
+            </Tooltip>
             <div className="w-px h-4 bg-slate-200 mx-0.5" />
           </>
         )}
 
         {/* Auto Align / Reset Layout (Requirement 6) */}
         {!readOnly && onAutoAlign && (
-          <motion.button
-            type="button"
-            data-testid="ia-auto-align-btn"
-            onClick={onAutoAlign}
-            title="Căn chuẩn tự động vị trí các nhánh sitemap dạng cột"
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
-            {...tactileProps.button}
-          >
-            <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
-            <span>Căn chuẩn</span>
-          </motion.button>
+          <Tooltip content="Căn chuẩn tự động vị trí các nhánh sitemap dạng cột" shortcut="L" side="top">
+            <motion.button
+              type="button"
+              data-testid="ia-auto-align-btn"
+              onClick={onAutoAlign}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
+              {...tactileProps.button}
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
+              <span>Căn chuẩn</span>
+            </motion.button>
+          </Tooltip>
         )}
 
-        <motion.button
-          type="button"
-          data-testid="ia-zoom-in-btn"
-          onClick={zoomIn}
-          title="Phóng to tỉ lệ (Zoom In)"
-          className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <ZoomIn className="w-4 h-4" />
-        </motion.button>
+        <Tooltip content="Phóng to tỉ lệ (Zoom In)" shortcut="+" side="top">
+          <motion.button
+            type="button"
+            data-testid="ia-zoom-in-btn"
+            onClick={zoomIn}
+            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <ZoomIn className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
 
-        <motion.button
-          type="button"
-          data-testid="ia-zoom-out-btn"
-          onClick={zoomOut}
-          title="Thu nhỏ tỉ lệ (Zoom Out)"
-          className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-          {...tactileProps.button}
-        >
-          <ZoomOut className="w-4 h-4" />
-        </motion.button>
+        <Tooltip content="Thu nhỏ tỉ lệ (Zoom Out)" shortcut="-" side="top">
+          <motion.button
+            type="button"
+            data-testid="ia-zoom-out-btn"
+            onClick={zoomOut}
+            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            {...tactileProps.button}
+          >
+            <ZoomOut className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
 
         {/* Magnific-style Zoom % and menu popover */}
         <div className="relative" ref={zoomMenuRef}>
-          <motion.button
-            type="button"
-            data-testid="ia-zoom-reset-btn"
-            onClick={() => setIsZoomMenuOpen((v) => !v)}
-            title="Tùy chọn thu phóng (Click để mở menu chi tiết)"
-            className={`px-2.5 py-1 text-xs font-bold font-mono rounded-xl transition-colors cursor-pointer select-none ${
-              isZoomMenuOpen
-                ? "bg-blue-50 text-blue-700 font-semibold"
-                : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-            }`}
-            {...tactileProps.button}
-          >
-            {zoomPercent}%
-          </motion.button>
+          <Tooltip content="Tùy chọn thu phóng (Click để mở menu chi tiết)" side="top">
+            <motion.button
+              type="button"
+              data-testid="ia-zoom-reset-btn"
+              onClick={() => setIsZoomMenuOpen((v) => !v)}
+              className={`px-2.5 py-1 text-xs font-bold font-mono rounded-xl transition-colors cursor-pointer select-none ${
+                isZoomMenuOpen
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+              {...tactileProps.button}
+            >
+              {zoomPercent}%
+            </motion.button>
+          </Tooltip>
 
           {isZoomMenuOpen && (
             <div className="absolute right-0 bottom-full mb-2.5 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
@@ -1196,52 +1133,58 @@ export default function IACanvasViewport({
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
-        <motion.button
-          type="button"
-          data-testid="ia-fit-view-btn"
-          onClick={onFitToView}
-          title="Căn giữa toàn bộ sơ đồ (Fit to View)"
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
-          {...tactileProps.button}
-        >
-          <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
-          <span>Căn giữa</span>
-        </motion.button>
+        <Tooltip content="Căn giữa toàn bộ sơ đồ (Fit to View)" shortcut="F" side="top">
+          <motion.button
+            type="button"
+            data-testid="ia-fit-view-btn"
+            onClick={onFitToView}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
+            {...tactileProps.button}
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
+            <span>Căn giữa</span>
+          </motion.button>
+        </Tooltip>
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
         {/* Fullscreen Button (Requirement 3: Nút phóng to toàn màn hình) */}
-        <motion.button
-          type="button"
-          data-testid="ia-fullscreen-btn"
-          onClick={toggleFullscreen}
-          title={isFullscreen ? "Thu nhỏ (Thoát toàn màn hình)" : "Phóng to toàn màn hình (Fullscreen)"}
-          className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
-            isFullscreen
-              ? "bg-blue-50 text-blue-600 font-semibold"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          }`}
-          {...tactileProps.button}
+        <Tooltip
+          content={isFullscreen ? "Thu nhỏ (Thoát toàn màn hình)" : "Phóng to toàn màn hình (Fullscreen)"}
+          side="top"
         >
-          {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
-        </motion.button>
-
-        {/* Minimap Toggle Button (Requirement 6: Bản đồ nhỏ) - Ẩn khi ở chế độ xem */}
-        {!readOnly && (
           <motion.button
             type="button"
-            data-testid="ia-toggle-minimap-btn"
-            onClick={() => setShowMinimap(!showMinimap)}
-            title="Bật/tắt bản đồ nhỏ (Minimap)"
+            data-testid="ia-fullscreen-btn"
+            onClick={toggleFullscreen}
             className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
-              showMinimap
+              isFullscreen
                 ? "bg-blue-50 text-blue-600 font-semibold"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             }`}
             {...tactileProps.button}
           >
-            <MapIcon className="w-4 h-4" />
+            {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
           </motion.button>
+        </Tooltip>
+
+        {/* Minimap Toggle Button (Requirement 6: Bản đồ nhỏ) - Ẩn khi ở chế độ xem */}
+        {!readOnly && (
+          <Tooltip content="Bật/tắt bản đồ nhỏ (Minimap)" side="top">
+            <motion.button
+              type="button"
+              data-testid="ia-toggle-minimap-btn"
+              onClick={() => setShowMinimap(!showMinimap)}
+              className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                showMinimap
+                  ? "bg-blue-50 text-blue-600 font-semibold"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+              {...tactileProps.button}
+            >
+              <MapIcon className="w-4 h-4" />
+            </motion.button>
+          </Tooltip>
         )}
 
       </div>

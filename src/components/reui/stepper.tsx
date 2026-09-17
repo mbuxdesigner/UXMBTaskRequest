@@ -141,13 +141,23 @@ export function Step({
             currentStatus === "complete" &&
               "bg-neutral-900 border border-neutral-900 text-white shadow-2xs",
             currentStatus === "current" &&
-              "bg-neutral-100/80 border border-dashed border-neutral-400 text-neutral-900 font-bold shadow-2xs ring-2 ring-neutral-900/10",
+              "bg-white border border-neutral-300 text-neutral-900 font-bold shadow-2xs ring-2 ring-neutral-900/10",
             currentStatus === "upcoming" &&
               "bg-neutral-100/90 border border-neutral-200/60 text-neutral-400 group-hover:border-neutral-300 group-hover:text-neutral-600",
             currentStatus === "error" &&
               "bg-rose-500 border border-rose-500 text-white shadow-2xs"
           )}
         >
+          {/* Live Sonar Pulse Animation for Current Step - Sits strictly behind (-z-10) with no layout shift */}
+          {currentStatus === "current" && (
+            <>
+              {/* Radar Sonar Wave strictly behind the UI */}
+              <span className="absolute -inset-1.5 rounded-full bg-neutral-900/10 -z-10 animate-pulse pointer-events-none" />
+              {/* Rotating Dashed Outer Ring (Single outer dashed ring, none inside) */}
+              <span className="absolute -inset-1 rounded-full border border-dashed border-neutral-400/90 animate-[spin_8s_linear_infinite] pointer-events-none z-0" />
+            </>
+          )}
+
           {currentStatus === "complete" ? (
             <Check className="size-3.5 stroke-[2.5]" />
           ) : currentStatus === "error" ? (
@@ -155,7 +165,7 @@ export function Step({
           ) : icon ? (
             icon
           ) : (
-            <span className="tabular-nums">{step + 1}</span>
+            <span className="tabular-nums relative z-10">{step + 1}</span>
           )}
         </div>
 
@@ -163,14 +173,19 @@ export function Step({
         <div className="flex flex-col text-left">
           <span
             className={cn(
-              "text-xs sm:text-[13px] tracking-tight transition-colors whitespace-nowrap",
+              "text-xs sm:text-[13px] tracking-tight transition-colors whitespace-nowrap flex items-center gap-1.5",
               currentStatus === "current" && "text-neutral-900 font-bold",
               currentStatus === "complete" && "text-neutral-900 font-semibold",
               currentStatus === "upcoming" && "text-neutral-500 font-medium group-hover:text-neutral-800",
               currentStatus === "error" && "text-rose-600 font-bold"
             )}
           >
-            {title}
+            <span>{title}</span>
+            {currentStatus === "current" && (
+              <span className="inline-flex items-center shrink-0" title="Khâu đang diễn ra">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </span>
+            )}
           </span>
           {description && (
             <span

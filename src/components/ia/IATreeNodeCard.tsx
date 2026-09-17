@@ -4,10 +4,6 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
-  Pencil,
-  Trash2,
-  ExternalLink,
-  Sparkles,
   Layers,
   Smartphone,
   Layout,
@@ -18,13 +14,13 @@ import {
   Clock,
   AlertTriangle,
   Lock,
-  GripHorizontal,
   Tag,
   Users,
   ListTodo,
   Check,
 } from "lucide-react"
 import { springs, tactileProps } from "@/lib/motion"
+import { Tooltip } from "@/components/ui/tooltip"
 import { IANode, IATier, IATouchpointType, IAPortPosition, getTierDefaultDisplaySettings } from "@/types/ia"
 import { LayoutNode, computeSubtreeMetrics } from "@/hooks/useIATreeState"
 import { UXRequest } from "@/data/mockData"
@@ -45,6 +41,7 @@ interface IATreeNodeCardProps {
   onUpdateNode?: (nodeId: string, nodeData: Partial<IANode>) => void
   onDeleteNode: (node: IANode) => void
   onOpenNodeDetail?: (node: IANode) => void
+  onOpenTaskPicker?: (node: IANode) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
   onNodeDragEnd?: (nodeId: string, x: number, y: number) => void
   isSelected?: boolean
@@ -200,6 +197,7 @@ function IATreeNodeCardComponent({
   onUpdateNode,
   onDeleteNode,
   onOpenNodeDetail,
+  onOpenTaskPicker,
   onNodeDrag,
   onNodeDragEnd,
   isSelected = false,
@@ -228,9 +226,10 @@ function IATreeNodeCardComponent({
   }, [node.name])
 
   useEffect(() => {
-    if (isInlineEditing) {
-      inlineInputRef.current?.focus()
-      inlineInputRef.current?.select()
+    if (isInlineEditing && inlineInputRef.current) {
+      inlineInputRef.current.focus()
+      const len = inlineInputRef.current.value.length
+      inlineInputRef.current.setSelectionRange(len, len)
     }
   }, [isInlineEditing])
 
@@ -548,12 +547,6 @@ function IATreeNodeCardComponent({
     }
   }
 
-  const handleFigmaClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (effectiveFigmaUrl) {
-      window.open(effectiveFigmaUrl, "_blank", "noopener,noreferrer")
-    }
-  }
 
   const highlightClass = isHighlighted
     ? "ring-2 ring-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.6)] border-blue-500"
@@ -599,32 +592,65 @@ function IATreeNodeCardComponent({
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-xl border bg-white p-3.5 pt-4 text-left flex flex-col justify-between ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
+      className={`group relative rounded-2xl border bg-white p-3 pt-3.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
     >
+      {/* Level Label ngay trên thẻ (không box, không nền) */}
+      <div className="absolute -top-5 left-1 flex items-center select-none pointer-events-none">
+        <Tooltip
+          content={
+            node.tier === 1
+              ? "Cấp 1: Nút gốc / Sản phẩm"
+              : node.tier === 2
+              ? "Cấp 2: Luồng nghiệp vụ chính"
+              : node.tier === 3
+              ? "Cấp 3: Màn hình chi tiết / Chức năng"
+              : "Cấp 4: Trạng thái / Modal / Điểm chạm cuối"
+          }
+          side="top"
+        >
+          <span
+            data-testid={`ia-node-level-badge-${node.id}`}
+            className={`text-[11px] font-bold tracking-tight inline-flex items-center gap-1 pointer-events-auto select-none ${
+              node.tier === 1
+                  ? "text-[#1057FB]"
+                  : node.tier === 2
+                  ? "text-indigo-600"
+                  : node.tier === 3
+                  ? "text-emerald-600"
+                  : "text-amber-600"
+            }`}
+          >
+            {node.tier === 1 ? "✨ Lv1" : `Lv${node.tier}`}
+            {node.tier === 4 && getTouchpointIcon(node.touchpointType)}
+          </span>
+        </Tooltip>
+      </div>
+
       {/* Selected Indicator Badge */}
       {isSelected && (
-        <div
-          data-testid={`ia-node-selected-badge-${node.id}`}
-          className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md ring-2 ring-white z-40 pointer-events-none animate-in zoom-in-75 duration-150"
-          title="Thẻ đang được chọn"
-        >
-          <Check className="w-3 h-3 stroke-[3]" />
-        </div>
+        <Tooltip content="Thẻ đang được chọn" side="top">
+          <div
+            data-testid={`ia-node-selected-badge-${node.id}`}
+            className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md ring-2 ring-white z-40 pointer-events-auto animate-in zoom-in-75 duration-150"
+          >
+            <Check className="w-3 h-3 stroke-[3]" />
+          </div>
+        </Tooltip>
       )}
 
       {/* Top Accent Stripe indicating Tier (Clipped cleanly to inner rounded corners) */}
-      <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
         <div className={`h-1 w-full ${themeStyles.stripe}`} />
       </div>
 
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
-      {/* CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN (Selection-Driven)                    */}
+      {/* CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN VÀ CHƯA ĐẠT CẤP 4 (Lv4 Capping)        */}
       {/* ───────────────────────────────────────────────────────────────── */}
-      {!readOnly && isSelected && (
+      {!readOnly && isSelected && node.tier < 4 && (
         <>
           {/* TOP PORT */}
           <div
@@ -632,25 +658,26 @@ function IATreeNodeCardComponent({
             data-port="top"
             className="absolute -top-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
-            <button
-              type="button"
-              data-port-action="true"
-              data-testid={`ia-port-add-top-${node.id}`}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                onPortDragStart?.(node.id, "top", e)
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!onPortDragStart) {
-                  onAddChildInDirection?.(node.id, "top")
-                }
-              }}
-              title="Kéo mũi tên nối node hoặc click để thêm node phía trên"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[3]" />
-            </button>
+            <Tooltip content="Kéo mũi tên nối node hoặc click để thêm node phía trên" side="top">
+              <button
+                type="button"
+                data-port-action="true"
+                data-testid={`ia-port-add-top-${node.id}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onPortDragStart?.(node.id, "top", e)
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!onPortDragStart) {
+                    onAddChildInDirection?.(node.id, "top")
+                  }
+                }}
+                className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              >
+                <Plus className="w-2.5 h-2.5 stroke-[3]" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* BOTTOM PORT */}
@@ -659,25 +686,26 @@ function IATreeNodeCardComponent({
             data-port="bottom"
             className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
-            <button
-              type="button"
-              data-port-action="true"
-              data-testid={`ia-port-add-bottom-${node.id}`}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                onPortDragStart?.(node.id, "bottom", e)
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!onPortDragStart) {
-                  onAddChildInDirection?.(node.id, "bottom")
-                }
-              }}
-              title="Kéo mũi tên nối node hoặc click để thêm node phía dưới"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[3]" />
-            </button>
+            <Tooltip content="Kéo mũi tên nối node hoặc click để thêm node phía dưới" side="bottom">
+              <button
+                type="button"
+                data-port-action="true"
+                data-testid={`ia-port-add-bottom-${node.id}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onPortDragStart?.(node.id, "bottom", e)
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!onPortDragStart) {
+                    onAddChildInDirection?.(node.id, "bottom")
+                  }
+                }}
+                className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              >
+                <Plus className="w-2.5 h-2.5 stroke-[3]" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* LEFT PORT */}
@@ -686,25 +714,26 @@ function IATreeNodeCardComponent({
             data-port="left"
             className="absolute top-1/2 -left-2 -translate-y-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
-            <button
-              type="button"
-              data-port-action="true"
-              data-testid={`ia-port-add-left-${node.id}`}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                onPortDragStart?.(node.id, "left", e)
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!onPortDragStart) {
-                  onAddChildInDirection?.(node.id, "left")
-                }
-              }}
-              title="Kéo mũi tên nối node hoặc click để thêm node bên trái"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[3]" />
-            </button>
+            <Tooltip content="Kéo mũi tên nối node hoặc click để thêm node bên trái" side="left">
+              <button
+                type="button"
+                data-port-action="true"
+                data-testid={`ia-port-add-left-${node.id}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onPortDragStart?.(node.id, "left", e)
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!onPortDragStart) {
+                    onAddChildInDirection?.(node.id, "left")
+                  }
+                }}
+                className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              >
+                <Plus className="w-2.5 h-2.5 stroke-[3]" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* RIGHT PORT */}
@@ -713,25 +742,26 @@ function IATreeNodeCardComponent({
             data-port="right"
             className="absolute top-1/2 -right-2 -translate-y-1/2 flex items-center justify-center z-30 animate-in fade-in zoom-in-75 duration-150"
           >
-            <button
-              type="button"
-              data-port-action="true"
-              data-testid={`ia-port-add-right-${node.id}`}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                onPortDragStart?.(node.id, "right", e)
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!onPortDragStart) {
-                  onAddChildInDirection?.(node.id, "right")
-                }
-              }}
-              title="Kéo mũi tên nối node hoặc click để thêm node bên phải"
-              className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[3]" />
-            </button>
+            <Tooltip content="Kéo mũi tên nối node hoặc click để thêm node bên phải" side="right">
+              <button
+                type="button"
+                data-port-action="true"
+                data-testid={`ia-port-add-right-${node.id}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onPortDragStart?.(node.id, "right", e)
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!onPortDragStart) {
+                    onAddChildInDirection?.(node.id, "right")
+                  }
+                }}
+                className={`w-3.5 h-3.5 rounded-full bg-white border-2 shadow-xs flex items-center justify-center text-slate-500 hover:text-blue-600 hover:scale-125 transition-all opacity-100 cursor-crosshair ${themeStyles.portBorder}`}
+              >
+                <Plus className="w-2.5 h-2.5 stroke-[3]" />
+              </button>
+            </Tooltip>
           </div>
         </>
       )}
@@ -740,100 +770,8 @@ function IATreeNodeCardComponent({
       {/* NODE CARD CONTENT (User-Authored First)                          */}
       {/* ───────────────────────────────────────────────────────────────── */}
 
-      {/* Row 1: thanh kéo - squad (thay cho phần cấp phân hệ màu đi theo màu đã chọn trong setting) - cụm icon */}
-      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-          {!readOnly && (
-            <div
-              className="flex items-center text-slate-400 group-hover:text-slate-600 cursor-grab active:cursor-grabbing shrink-0"
-              title="Kéo di chuyển node"
-            >
-              <GripHorizontal className="w-3.5 h-3.5" />
-            </div>
-          )}
-
-          {/* Row 1 header icons & touchpoint */}
-
-          {node.code && (
-            <span
-              className="text-[10px] font-mono font-bold text-slate-500 tracking-tight shrink-0 truncate max-w-[80px]"
-              title={node.code}
-            >
-              {node.code}
-            </span>
-          )}
-
-          {node.isCriticalPath && (
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200 shrink-0 shadow-2xs"
-              title="Tính năng trọng yếu"
-            >
-              Critical
-            </span>
-          )}
-        </div>
-
-        {/* Cụm Action Icons - CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN (Selection-Driven) */}
-        {!readOnly && isSelected && (
-          <div className="flex items-center gap-0.5 opacity-100 shrink-0 animate-in fade-in zoom-in-90 duration-150">
-            {effectiveFigmaUrl && (
-              <button
-                type="button"
-                data-testid={`ia-figma-btn-${node.id}`}
-                onClick={handleFigmaClick}
-                title="Mở thiết kế Figma"
-                className="p-1 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-            )}
-
-            {node.tier < 4 && (
-              <button
-                type="button"
-                data-testid={`ia-add-child-btn-${node.id}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onAddChild(node)
-                }}
-                title="Thêm node con"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              data-testid={`ia-edit-node-btn-${node.id}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                onEditNode(node)
-              }}
-              title="Chỉnh sửa node"
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              data-testid={`ia-delete-node-btn-${node.id}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                onDeleteNode(node)
-              }}
-              title="Xóa node"
-              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Row 2: Tên */}
-      <div className="my-1">
+      {/* Top section: Tên Node (Click để sửa tên trực tiếp) & Mô tả */}
+      <div>
         {isInlineEditing && !readOnly ? (
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <input
@@ -850,205 +788,252 @@ function IATreeNodeCardComponent({
                 }
               }}
               onBlur={handleCommitInlineEdit}
-              className="w-full text-[13px] font-bold text-slate-900 bg-white border border-blue-500 rounded-md px-1.5 py-0.5 outline-none shadow-xs ring-2 ring-blue-500/20"
+              className="w-full text-[13px] font-bold text-slate-900 bg-transparent border-0 outline-none ring-0 focus:ring-0 p-0 m-0 leading-snug tracking-tight cursor-text caret-slate-900"
             />
           </div>
         ) : (
-          <h4
-            className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight line-clamp-2 hover:text-blue-600 cursor-text transition-colors"
-            title={node.name + (readOnly ? "" : " (Double-click để sửa tên trực tiếp)")}
-            onDoubleClick={(e) => {
-              if (!readOnly) {
-                e.stopPropagation()
-                setIsInlineEditing(true)
-              }
-            }}
-          >
-            {node.name}
-          </h4>
+          <Tooltip content={node.name + (readOnly ? "" : " (Click để sửa tên trực tiếp)")} side="top">
+            <h4
+              className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight line-clamp-3 hover:text-blue-600 cursor-text transition-colors"
+              onClick={(e) => {
+                if (!readOnly) {
+                  e.stopPropagation()
+                  setIsInlineEditing(true)
+                }
+              }}
+              onDoubleClick={(e) => {
+                if (!readOnly) {
+                  e.stopPropagation()
+                  setIsInlineEditing(true)
+                }
+              }}
+            >
+              {node.name}
+            </h4>
+          </Tooltip>
         )}
-        {node.description && (
-          <p
-            className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 font-normal leading-relaxed"
-            title={node.description}
-          >
-            {node.description}
-          </p>
+        {/* Bỏ sub ở Lv1: chỉ render description khi node.tier !== 1 */}
+        {node.description && node.tier !== 1 && (
+          <Tooltip content={node.description} side="top">
+            <p
+              className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 font-normal leading-relaxed"
+            >
+              {node.description}
+            </p>
+          </Tooltip>
         )}
       </div>
 
+      {/* Bottom section: Căn dưới - Working progress bar & Footer */}
+      <div className="mt-auto pt-2 flex flex-col gap-1.5">
+        {/* Row 4: Dòng 2 là Track task -> Working (Căn dưới) */}
+        {displaySettings.showProgress !== false && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+              <span className="flex items-center gap-1 text-slate-600">
+                <ListTodo className="w-3.5 h-3.5 text-slate-400" />
+                <span>Working</span>
+              </span>
+              <span className="font-mono text-slate-700 text-[10px]">
+                {totalTasks > 0 ? (
+                  <>
+                    {completedTasksCount}/{totalTasks} - {taskPercent}%
+                    {isRollup && inProgressCount > 0 && (
+                      <span className="text-blue-600 font-medium ml-1">({inProgressCount} đang làm)</span>
+                    )}
+                  </>
+                ) : (
+                  `${taskPercent}%`
+                )}
+              </span>
+            </div>
+            {/* Sleek Progress Bar */}
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${taskPercent}%`,
+                  backgroundColor: themeStyles.accentHex || "#3b82f6",
+                }}
+              />
+            </div>
 
-      {/* Row 4: Dòng 2 là Track task */}
-      {displaySettings.showProgress !== false && (
-        <div className="flex flex-col gap-1 my-1.5">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-            <span className="flex items-center gap-1 text-slate-600">
-              <ListTodo className="w-3.5 h-3.5 text-slate-400" />
-              <span>{isRollup ? "Track task tổng hợp" : "Track task"}</span>
-            </span>
-            <span className="font-mono text-slate-700 text-[10px]">
-              {totalTasks > 0 ? (
-                <>
-                  {completedTasksCount}/{totalTasks} - {taskPercent}%
-                  {isRollup && inProgressCount > 0 && (
-                    <span className="text-blue-600 font-medium ml-1">({inProgressCount} đang làm)</span>
+            {/* Task Chips */}
+            {isRollup && taskIdsList.length === 0 ? (
+              /* Subtree Rollup summary chips when no direct tasks attached */
+              totalTasks > 0 && (
+                <div className="flex flex-wrap items-center gap-1 mt-0.5" data-testid={`ia-task-rollup-chips-${node.id}`}>
+                  {inProgressCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span>{inProgressCount} đang làm</span>
+                    </span>
                   )}
-                </>
-              ) : (
-                `${taskPercent}%`
-              )}
-            </span>
+                  {completedTasksCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                      <span>{completedTasksCount} hoàn thành</span>
+                    </span>
+                  )}
+                  {pendingCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                      <span>{pendingCount} chờ làm</span>
+                    </span>
+                  )}
+                </div>
+              )
+            ) : (
+              /* Linked Direct Task Chips */
+              taskIdsList.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 mt-0.5" data-testid={`ia-task-list-${node.id}`}>
+                  {taskIdsList.slice(0, 3).map((tid, idx) => {
+                    const req = requestsMap?.get(tid) || (linkedRequest?.request_id === tid ? linkedRequest : undefined)
+                    const badgeStyle = getStatusBadgeStyle(req?.status)
+                    return (
+                      <Tooltip
+                        key={`task-chip-${node.id}-${tid || idx}`}
+                        content={req ? `${tid}: ${req.title} (${req.status})` : tid}
+                        side="top"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (req && onOpenDetail) onOpenDetail(req)
+                          }}
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border shadow-2xs transition-all hover:scale-105 cursor-pointer ${badgeStyle}`}
+                        >
+                          <span>{tid}</span>
+                        </button>
+                      </Tooltip>
+                    )
+                  })}
+                  {taskIdsList.length > 3 && (
+                    <Tooltip content={taskIdsList.slice(3).join(", ")} side="top">
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono font-bold"
+                      >
+                        +{taskIdsList.length - 3}
+                      </span>
+                    </Tooltip>
+                  )}
+                </div>
+              )
+            )}
           </div>
-          {/* Sleek Progress Bar */}
-          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${taskPercent}%`,
-                backgroundColor: themeStyles.accentHex || "#3b82f6",
-              }}
-            />
-          </div>
+        )}
 
-          {/* Task Chips */}
-          {isRollup && taskIdsList.length === 0 ? (
-            /* Subtree Rollup summary chips when no direct tasks attached */
-            totalTasks > 0 && (
-              <div className="flex flex-wrap items-center gap-1 mt-1" data-testid={`ia-task-rollup-chips-${node.id}`}>
-                {inProgressCount > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    <span>{inProgressCount} đang làm</span>
-                  </span>
-                )}
-                {completedTasksCount > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                    <span>{completedTasksCount} hoàn thành</span>
-                  </span>
-                )}
-                {pendingCount > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
-                    <span>{pendingCount} chờ làm</span>
-                  </span>
-                )}
-              </div>
-            )
-          ) : (
-            /* Linked Direct Task Chips */
-            taskIdsList.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1 mt-1" data-testid={`ia-task-list-${node.id}`}>
-                {taskIdsList.slice(0, 3).map((tid, idx) => {
-                  const req = requestsMap?.get(tid) || (linkedRequest?.request_id === tid ? linkedRequest : undefined)
-                  const badgeStyle = getStatusBadgeStyle(req?.status)
-                  return (
-                    <button
-                      key={`task-chip-${node.id}-${tid || idx}`}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (req && onOpenDetail) onOpenDetail(req)
-                      }}
-                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border shadow-2xs transition-all hover:scale-105 cursor-pointer ${badgeStyle}`}
-                      title={req ? `${tid}: ${req.title} (${req.status})` : tid}
-                    >
-                      <span>{tid}</span>
-                    </button>
-                  )
-                })}
-                {taskIdsList.length > 3 && (
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono font-bold"
-                    title={taskIdsList.slice(3).join(", ")}
-                  >
-                    +{taskIdsList.length - 3}
-                  </span>
-                )}
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      {/* Row 5: Divider --------------- */}
-      <div className="border-t border-slate-100 my-1" />
-
-      {/* Row 6: Trạng thái có task thực hiện ----- số lượng nhánh con */}
-      <div className="flex items-center justify-between gap-1.5 pt-0.5 text-[10px]">
+        {/* Row 5 & 6: Divider & Footer (Trạng thái có task thực hiện ----- số lượng nhánh con) */}
+        <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1.5 text-[10px]">
         {/* Trạng thái có task thực hiện */}
         <div className="flex items-center">
           {displaySettings.showStatus !== false && (
             hasActiveTask ? (
-              <span
-                data-testid={`ia-task-status-active-${node.id}`}
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs"
-                title={isRollup ? "Có tính năng nhánh con đang triển khai" : "Tính năng đang có bài toán thiết kế đang triển khai"}
+              <Tooltip
+                content={isRollup ? "Có tính năng nhánh con đang triển khai" : "Tính năng đang có bài toán thiết kế đang triển khai - Click để quản lý task"}
+                side="top"
               >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span>Đang có task làm</span>
-              </span>
+                <button
+                  type="button"
+                  data-testid={`ia-task-status-active-${node.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!readOnly && onOpenTaskPicker) {
+                      onOpenTaskPicker(node)
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>Đang có task làm</span>
+                </button>
+              </Tooltip>
             ) : allTasksCompleted ? (
-              <span
-                data-testid={`ia-task-status-done-${node.id}`}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-300"
-                title="Tất cả các task đã hoàn thành"
-              >
-                <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                <span>Đã hoàn thành</span>
-              </span>
+              <Tooltip content="Tất cả các task đã hoàn thành - Click để quản lý task" side="top">
+                <button
+                  type="button"
+                  data-testid={`ia-task-status-done-${node.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!readOnly && onOpenTaskPicker) {
+                      onOpenTaskPicker(node)
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-300 hover:bg-blue-100 transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                  <span>Đã hoàn thành</span>
+                </button>
+              </Tooltip>
             ) : (
-              <span
-                data-testid={`ia-task-status-idle-${node.id}`}
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200"
-                title="Hiện chưa có task nào đang làm"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                <span>Không có task</span>
-              </span>
+              <Tooltip content="Chưa có task - Click để mở bảng chọn bài toán" side="top">
+                <button
+                  type="button"
+                  data-testid={`ia-task-status-idle-${node.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!readOnly) {
+                      if (onOpenTaskPicker) {
+                        onOpenTaskPicker(node)
+                      } else if (onEditNode) {
+                        onEditNode(node)
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-all border border-slate-200 cursor-pointer group/task-btn"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 group-hover/task-btn:bg-blue-500 transition-colors"></span>
+                  <span>Không có task</span>
+                  <Plus className="w-2.5 h-2.5 text-slate-400 group-hover/task-btn:text-blue-600 transition-colors" />
+                </button>
+              </Tooltip>
             )
           )}
         </div>
 
         {/* Số lượng nhánh con */}
         {hasChildren && displaySettings.showBranchCount !== false && (
-          <button
-            type="button"
-            data-testid={`ia-collapse-toggle-${node.id}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleCollapse(node.id)
-            }}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer select-none ${
-              isCollapsed
-                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-2xs"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80"
-            }`}
-            title={isCollapsed ? `Mở rộng ${childCount} nhánh con` : "Thu gọn nhánh"}
-          >
-            <span>{childCount}</span>
-            {isCollapsed ? (
-              <ChevronRight className="w-3 h-3 shrink-0" />
-            ) : (
-              <ChevronDown className="w-3 h-3 shrink-0" />
-            )}
-          </button>
+          <Tooltip content={isCollapsed ? `Mở rộng ${childCount} nhánh con` : "Thu gọn nhánh"} side="top">
+            <button
+              type="button"
+              data-testid={`ia-collapse-toggle-${node.id}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleCollapse(node.id)
+              }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer select-none ${
+                isCollapsed
+                  ? "bg-blue-600 text-white hover:bg-blue-700 shadow-2xs"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80"
+              }`}
+            >
+              <span>{childCount}</span>
+              {isCollapsed ? (
+                <ChevronRight className="w-3 h-3 shrink-0" />
+              ) : (
+                <ChevronDown className="w-3 h-3 shrink-0" />
+              )}
+            </button>
+          </Tooltip>
         )}
+        </div>
       </div>
 
       {/* Interactive Right-Edge Horizontal Resize Handle (Kéo ngang mở rộng / thu hẹp thẻ) */}
       {!readOnly && (
-        <div
-          data-testid={`ia-resize-handle-${node.id}`}
-          data-resize-handle="true"
-          onPointerDown={handleResizePointerDown}
-          title="Kéo sang trái / phải để điều chỉnh chiều rộng thẻ"
-          className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-10 cursor-ew-resize flex items-center justify-center group/resize z-30 select-none opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <div className="w-1 h-6 rounded-full bg-slate-300 group-hover/resize:bg-blue-500 group-hover/resize:w-1.5 group-hover/resize:h-8 transition-all shadow-xs" />
-        </div>
+        <Tooltip content="Kéo sang trái / phải để điều chỉnh chiều rộng thẻ" side="right">
+          <div
+            data-testid={`ia-resize-handle-${node.id}`}
+            data-resize-handle="true"
+            onPointerDown={handleResizePointerDown}
+            className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-10 cursor-ew-resize flex items-center justify-center group/resize z-30 select-none opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <div className="w-1 h-6 rounded-full bg-slate-300 group-hover/resize:bg-blue-500 group-hover/resize:w-1.5 group-hover/resize:h-8 transition-all shadow-xs" />
+          </div>
+        </Tooltip>
       )}
     </motion.div>
   )

@@ -4,6 +4,7 @@ import { Map, X, Maximize2 } from "lucide-react"
 import { LayoutNode } from "@/hooks/useIATreeState"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
 import { springs } from "@/lib/motion"
+import { Tooltip } from "@/components/ui/tooltip"
 
 interface IAMinimapProps {
   isOpen: boolean
@@ -132,18 +133,19 @@ export default function IAMinimap({
               <Map className="w-3 h-3 text-blue-600" />
               <span>Bản đồ nhỏ</span>
             </div>
-            <button
-              type="button"
-              data-testid="ia-minimap-close-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggle()
-              }}
-              title="Đóng bản đồ nhỏ"
-              className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition-colors cursor-pointer"
-            >
-              <X className="w-3 h-3" />
-            </button>
+            <Tooltip content="Đóng bản đồ nhỏ" side="left">
+              <button
+                type="button"
+                data-testid="ia-minimap-close-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggle()
+                }}
+                className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* SVG Map of all nodes */}

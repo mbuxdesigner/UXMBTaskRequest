@@ -7,8 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "oxfmt",
-    "test": "node test-smart-diffing.mjs"
+    "test": "node test-smart-diffing.mjs && node --experimental-strip-types test-kpi-dashboard-metrics.mjs",
+    "test:kpi": "node --experimental-strip-types test-kpi-dashboard-metrics.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.3.3",

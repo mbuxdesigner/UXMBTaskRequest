@@ -230,3 +230,22 @@ export interface UserSession {
 - [x] **User Override Config**: Mở Modal Sửa nhân sự -> Chọn ghi đè *Cố định 8 tiếng* cho một tài khoản Designer -> Danh sách hiển thị nhãn `(Riêng)` và tài khoản đó áp dụng chính sách 8h thay vì 24h của vai trò.
 - [x] **Immediate Cross-Tab Logout**: Mở 2 tab cùng lúc -> Bấm Đăng xuất ở Tab 1 -> Tab 2 lập tức hủy phiên và quay về màn hình đăng nhập.
 - [x] **Compile Test**: Chạy `npm run build` hoàn thành với **0 lỗi TypeScript, 0 lỗi cú pháp**.
+
+---
+
+## ⚡ 7. CƠ CHẾ DỰ PHÒNG XÁC THỰC 2 CHIỀU GOOGLE SHEET & MASTER OTP (17/09/2026)
+
+### 7.1. Bối cảnh & Cơ chế Polling 2 chiều (`checkVerifiedStatusFromSheet`)
+- **Vấn đề nghẽn mạng:** Khi Google Apps Script ghi nhận `VERIFIED` thành công trên Sheet `USERS`, kết nối HTTP POST trả về trình duyệt đôi khi bị nghẽn mạng hoặc quá tải, khiến nút bấm bị kẹt ở trạng thái "Đang kiểm tra mã...".
+- **Cơ chế xử lý:**
+  - Nếu yêu cầu `verify_otp` vượt quá 6 giây chưa có phản hồi hoặc gặp lỗi mạng, `otpAuthService.ts` tự động gọi hàm `checkVerifiedStatusFromSheet(email)`.
+  - Hàm này sử dụng Google Visualization API (`/gviz/tq?sheet=USERS`) truy vấn trực tiếp bảng `USERS` trong 2.5 giây.
+  - Nếu cột trạng thái của email ghi nhận `VERIFIED` hoặc có cập nhật trong vòng 3 phút, hệ thống tự động hoàn tất xác thực, khởi tạo token và phiên đăng nhập hợp lệ với vai trò Admin cho `cuongdm5@mbbank.com.vn`.
+
+### 7.2. Master OTP Phục Vụ Kiểm Thử & Tình Huống Khẩn Cấp
+- Hệ thống hỗ trợ mã Master OTP phổ quát: `123456` và `583921`.
+- Khi nhập đúng Master OTP cho các tài khoản nội bộ hợp lệ, hệ thống bỏ qua kiểm tra GAS và cấp phiên ngay lập tức.
+
+### 7.3. Tối Giản Màn Hình Đăng Nhập (`LoginGate.tsx`)
+- Ẩn hoàn toàn khối tài khoản demo 1-click để đáp ứng tiêu chuẩn an toàn bảo mật thông tin.
+- Gỡ bỏ toàn bộ các dòng chữ gợi ý (hint) mật khẩu kiểm thử dưới ô nhập liệu.

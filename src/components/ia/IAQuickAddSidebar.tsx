@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { IATier, IATouchpointType } from "@/types/ia"
 import { springs, tactileProps } from "@/lib/motion"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export interface QuickAddNodeType {
   id: string
@@ -181,15 +182,16 @@ export default function IAQuickAddSidebar({
                   <p className="text-[10px] text-slate-500">Kéo hoặc click để thêm vào sơ đồ</p>
                 </div>
               </div>
-              <motion.button
-                type="button"
-                onClick={onToggle}
-                title="Thu gọn thanh công cụ"
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-                {...tactileProps.button}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </motion.button>
+              <Tooltip content="Thu gọn thanh công cụ" side="right">
+                <motion.button
+                  type="button"
+                  onClick={onToggle}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                  {...tactileProps.button}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </motion.button>
+              </Tooltip>
             </div>
 
             {/* Context Notice: Target Node */}
@@ -263,16 +265,19 @@ export default function IAQuickAddSidebar({
                     </div>
 
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        type="button"
-                        title="Thêm node"
-                        className="p-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-2xs cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3 stroke-[3]" />
-                      </button>
-                      <div className="text-slate-300 cursor-grab" title="Kéo thả vào canvas">
-                        <GripVertical className="w-3.5 h-3.5" />
-                      </div>
+                      <Tooltip content="Thêm node vào sơ đồ" side="top">
+                        <button
+                          type="button"
+                          className="p-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-2xs cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3 stroke-[3]" />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Kéo thả vào canvas" side="top">
+                        <div className="text-slate-300 cursor-grab">
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </div>
+                      </Tooltip>
                     </div>
                   </div>
                 )
@@ -284,18 +289,19 @@ export default function IAQuickAddSidebar({
 
       {/* Collapsed Mini Tab Handle (luôn hiển thị để mở lại) */}
       {!isOpen && (
-        <motion.button
-          type="button"
-          data-testid="ia-quick-add-toggle-open"
-          onClick={onToggle}
-          title="Mở thanh thêm nhanh Node (n8n style)"
-          className="absolute top-4 left-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200/90 shadow-lg text-xs font-semibold text-slate-700 hover:text-blue-600 hover:border-blue-300 hover:shadow-xl transition-all cursor-pointer select-none"
-          {...tactileProps.button}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-          <span>+ Thêm node</span>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-        </motion.button>
+        <Tooltip content="Mở thanh thêm nhanh Node (n8n style)" side="right">
+          <motion.button
+            type="button"
+            data-testid="ia-quick-add-toggle-open"
+            onClick={onToggle}
+            className="absolute top-4 left-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200/90 shadow-lg text-xs font-semibold text-slate-700 hover:text-blue-600 hover:border-blue-300 hover:shadow-xl transition-all cursor-pointer select-none"
+            {...tactileProps.button}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>+ Thêm node</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          </motion.button>
+        </Tooltip>
       )}
     </div>
   )

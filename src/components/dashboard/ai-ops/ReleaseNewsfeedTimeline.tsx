@@ -256,7 +256,7 @@ export default function ReleaseNewsfeedTimeline({
 
       const user = resolveSettingUser(r.assigned_designer || r.ux_owner || "MB Designer")
       taskMap.get(formatted)!.tasks.push({
-        id: r.request_id || r.id,
+        id: r.request_id || r.id || "",
         title: r.title,
         designerName: user.name,
         designerAvatar: user.avatarUrl,

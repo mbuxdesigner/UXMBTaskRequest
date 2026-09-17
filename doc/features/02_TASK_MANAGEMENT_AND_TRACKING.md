@@ -182,6 +182,35 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
   - Nhãn định danh hiển thị chuẩn: **Yêu cầu tư vấn trải nghiệm: {request_id}** (ở cả breadcrumb và pill badge).
   - Sử dụng component `IconStackLarge` (`@reui/c-icon-stack-2`) kích thước lớn với icon tam giác có dấu chấm than `TriangleAlert` 3D isometric màu vàng hổ phách.
   - Đã loại bỏ hoàn toàn khối hộp thông tin bảo mật bên dưới (Trạng thái, Tiêu đề, Hỗ trợ kỹ thuật).
-  - Có đủ nút *"Đóng cửa sổ"* và nút *"Liên hệ Admin"*.
 - [x] **Kiểm tra Build & Compile:** Chạy `npm run build` hoàn thành với 0 cảnh báo hoặc lỗi cú pháp (exit code 0).
+
+---
+
+## 🚀 6. CÁC NÂNG CẤP CHI TIẾT TASK & HOẠT HỌA STEPPER (17/09/2026)
+
+### 6.1. Khôi Phục Huy Hiệu & Mục "Release Dự Kiến" (`RequestDetail.tsx`)
+- **Vị trí Row 1 Header:** Đặt huy hiệu màu tím pastel `bg-purple-50 text-purple-700 border-purple-200/80` bên cạnh loại yêu cầu `[Tính năng mới]`:
+  ```tsx
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[12px] font-medium bg-purple-50 text-purple-700 border border-purple-200/80">
+    <Calendar className="w-3.5 h-3.5" />
+    Release: {formatDate(req.release_target_date)}
+  </span>
+  ```
+- **Mục 5 trong nội dung chi tiết:** Hiển thị khối "Kế hoạch Release dự kiến" với thời gian phát hành Golive của PO, môi trường Staging/Production và thông tin đợt release.
+
+### 6.2. Chuẩn Hóa Nhận Diện Breadcrumb & Status Pill
+- Thêm icon `Building` kích thước `w-3.5 h-3.5` cạnh tên sản phẩm số (`App MBBank`).
+- Badge mã bài toán: Làm mỏng viền với `border-slate-200/80`, font mono `11.5px`, màu chữ trung tính `text-slate-600` chống cảm giác thô cứng.
+- Status pill: Tích hợp chấm chỉ báo tròn đồng màu (`w-1.5 h-1.5 rounded-full`) theo chuẩn ReUI.
+
+### 6.3. Hoạt Họa Stepper & Chống Hiện Tượng Co Giật (Layout Anti-Jitter)
+- **Sóng Sonar / Radar Ping Wave sau UI:** Thiết lập `absolute inset-0 -z-10 rounded-full bg-blue-500/20`, đảm bảo sóng phát ra từ phía sau nút tròn thay vì đè lên icon.
+- **Opacity Pulse thay vì Transform Scale:** Sử dụng `animate-pulse` thuần độ mờ (opacity), không làm biến dạng kích thước phần tử ảo, triệt tiêu lỗi layout recalculation.
+- **Một vòng xoay nét đứt ngoài duy nhất:** Bỏ viền nét đứt bên trong, giữ nguyên lõi solid và 1 vòng xoay ngoài chậm `animate-[spin_8s_linear_infinite]`.
+- **Live Pulse Beacon:** Chấm xanh lá nhấp nháy (`animate-pulse`) cạnh tiêu đề khâu đang hoạt động.
+- **Chặn tràn dọc `overflow-y-hidden`:** Đảm bảo thanh cuộn ngang Stepper không bao giờ bị thụt thò hay giật khung hình.
+
+### 6.4. Phân Định Rõ Ràng Về Mặt Nghiệp Vụ
+- **Hạn UX (Design Timeline):** Thời hạn nội bộ của UX Team (từ ngày tiếp nhận đến khi hoàn thành nghiệm thu thiết kế trên Figma).
+- **Release dự kiến (PO Production Target):** Thời điểm sản phẩm số được đóng gói và phát hành Golive trên Store/Web cho khách hàng cuối.
 

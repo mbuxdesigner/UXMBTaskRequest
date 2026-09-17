@@ -83,7 +83,29 @@ export default function TaskFilterPopover({
     return counts
   }, [requests])
 
-  const availableProducts = Object.keys(productCounts)
+  const availableProducts = React.useMemo(() => {
+    const keys = Object.keys(productCounts)
+    try {
+      const raw = localStorage.getItem("mbbank_admin_products")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const orderMap = new Map<string, number>()
+          parsed.forEach((p: any, idx: number) => {
+            const name = (p?.name || "").trim().toLowerCase()
+            if (name) orderMap.set(name, idx)
+          })
+          return [...keys].sort((a, b) => {
+            const idxA = orderMap.has(a.trim().toLowerCase()) ? orderMap.get(a.trim().toLowerCase())! : 9999
+            const idxB = orderMap.has(b.trim().toLowerCase()) ? orderMap.get(b.trim().toLowerCase())! : 9999
+            if (idxA !== idxB) return idxA - idxB
+            return a.localeCompare(b)
+          })
+        }
+      }
+    } catch {}
+    return keys
+  }, [productCounts])
 
   // Unique Squads & count
   const squadCounts = React.useMemo(() => {
@@ -97,7 +119,29 @@ export default function TaskFilterPopover({
     return counts
   }, [requests])
 
-  const availableSquads = Object.keys(squadCounts)
+  const availableSquads = React.useMemo(() => {
+    const keys = Object.keys(squadCounts)
+    try {
+      const raw = localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const orderMap = new Map<string, number>()
+          parsed.forEach((s: any, idx: number) => {
+            const name = (s?.name || s?.squad_name || "").trim().toLowerCase()
+            if (name) orderMap.set(name, idx)
+          })
+          return [...keys].sort((a, b) => {
+            const idxA = orderMap.has(a.trim().toLowerCase()) ? orderMap.get(a.trim().toLowerCase())! : 9999
+            const idxB = orderMap.has(b.trim().toLowerCase()) ? orderMap.get(b.trim().toLowerCase())! : 9999
+            if (idxA !== idxB) return idxA - idxB
+            return a.localeCompare(b)
+          })
+        }
+      }
+    } catch {}
+    return keys
+  }, [squadCounts])
 
   const togglePhase = (phase: string) => {
     if (selectedPhases.includes(phase)) {
