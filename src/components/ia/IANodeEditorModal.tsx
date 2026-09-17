@@ -295,6 +295,30 @@ export default function IANodeEditorModal({
     return list
   }, [availableRequests, filterBySquadOnly, effectiveSquadName, taskSearchQuery])
 
+  // Linked requests for targetNode (used in view mode and details)
+  const targetNodeTasks = useMemo(() => {
+    if (!targetNode) return []
+    const ids = targetNode.taskIds && targetNode.taskIds.length > 0
+      ? targetNode.taskIds
+      : targetNode.requestId
+      ? [targetNode.requestId]
+      : []
+    return ids.map((id) => {
+      const match = availableRequests.find((r) => r.request_id === id)
+      if (match) return match
+      return ({
+        request_id: id,
+        title: `Bài toán ${id}`,
+        status: "Đang thực hiện",
+        squad: targetNode.squad || "Chưa gán",
+        squad_name: targetNode.squad || "Chưa gán",
+        requester_name: "Hệ thống",
+        assigned_designer: "Chưa gán",
+        created_at: new Date().toISOString(),
+      } as unknown) as UXRequest
+    })
+  }, [targetNode, availableRequests])
+
   const toggleTaskId = (id: string) => {
     const cleanId = id.trim()
     if (!cleanId) return
@@ -363,36 +387,10 @@ export default function IANodeEditorModal({
     }
   }
 
-  if (!isOpen || !mode) return null
-
   const isViewMode = mode === "view"
   const isFormMode = mode === "add" || mode === "edit"
   const isDeleteMode = mode === "delete"
   const isResetMode = mode === "reset"
-
-  // Linked requests for targetNode (used in view mode and details)
-  const targetNodeTasks = useMemo(() => {
-    if (!targetNode) return []
-    const ids = targetNode.taskIds && targetNode.taskIds.length > 0
-      ? targetNode.taskIds
-      : targetNode.requestId
-      ? [targetNode.requestId]
-      : []
-    return ids.map((id) => {
-      const match = availableRequests.find((r) => r.request_id === id)
-      if (match) return match
-      return ({
-        request_id: id,
-        title: `Bài toán ${id}`,
-        status: "Đang thực hiện",
-        squad: targetNode.squad || "Chưa gán",
-        squad_name: targetNode.squad || "Chưa gán",
-        requester_name: "Hệ thống",
-        assigned_designer: "Chưa gán",
-        created_at: new Date().toISOString(),
-      } as unknown) as UXRequest
-    })
-  }, [targetNode, availableRequests])
 
   const showTouchpointSelect =
     (mode === "add" && targetNode?.tier === 3) ||
@@ -400,7 +398,8 @@ export default function IANodeEditorModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end overflow-hidden select-none">
+      {isOpen && Boolean(mode) && (
+        <div className="fixed inset-0 z-50 flex justify-end overflow-hidden select-none">
         {/* Backdrop Overlay */}
         <motion.div
           variants={dialogOverlayVariants}
@@ -1371,6 +1370,7 @@ export default function IANodeEditorModal({
           </form>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   )
 }

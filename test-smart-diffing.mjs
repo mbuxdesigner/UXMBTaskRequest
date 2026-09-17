@@ -506,5 +506,59 @@ assert.equal(computeGroupVisibility(0, 0, true), true, "Group remains visible du
 assert.equal(computeGroupVisibility(0, 0, false), false, "Group cleanly unmounts after grace period expires")
 console.log("✓ Test 19: Grace period for empty status groups retains visibility so exit animation can complete")
 
-console.log("\nALL 19 TESTS PASSED SUCCESSFULLY!")
+// Scenario 20: IA Node View & Edit Modal hook integrity guard (Rules of Hooks)
+import fs from "node:fs"
+const modalSource = fs.readFileSync("src/components/ia/IANodeEditorModal.tsx", "utf-8")
+const lines = modalSource.split("\n")
+let componentScopeEarlyReturn = false
+let earlyReturnIdx = -1
+for (let i = 0; i < lines.length; i++) {
+  const line = lines[i]
+  // Component level early returns have exactly 2 spaces indentation: e.g. "  if (!isOpen...) return null"
+  if (/^  (if\s*\(.*return\s+null|return\s+null)/.test(line)) {
+    componentScopeEarlyReturn = true
+    earlyReturnIdx = i + 1
+  }
+  // Check if any hook is called at component level (2 spaces) after an early return
+  if (componentScopeEarlyReturn && /^  const\s+.*=\s+use[A-Z]/.test(line)) {
+    assert.fail(`Hook called after early return at line ${i + 1} (return at line ${earlyReturnIdx})`)
+  }
+}
+assert.equal(componentScopeEarlyReturn, false, "IANodeEditorModal must have no component-level early return before hooks")
+console.log("✓ Test 20: IANodeEditorModal conforms strictly to Rules of Hooks with 0 conditional hooks")
+
+// Scenario 21: Target node linked task resolver partitions taskIds correctly
+function resolveNodeTasks(targetNode, availableRequests) {
+  if (!targetNode) return []
+  const ids = targetNode.taskIds && targetNode.taskIds.length > 0
+    ? targetNode.taskIds
+    : targetNode.requestId
+    ? [targetNode.requestId]
+    : []
+  return ids.map((id) => {
+    const match = availableRequests.find((r) => r.request_id === id)
+    if (match) return match
+    return {
+      request_id: id,
+      title: `Bài toán ${id}`,
+      status: "Đang thực hiện",
+      squad: targetNode.squad || "Chưa gán",
+    }
+  })
+}
+
+const mockReqs = [
+  { request_id: "REQ-01", title: "Thiết kế Onboarding", status: "Đang thực hiện" },
+  { request_id: "REQ-02", title: "Mở tài khoản số đẹp", status: "Nghiệm thu" }
+]
+const resolvedEmpty = resolveNodeTasks(null, mockReqs)
+assert.equal(resolvedEmpty.length, 0, "Null node resolves to 0 tasks safely")
+
+const resolvedMulti = resolveNodeTasks({ id: "node-1", taskIds: ["REQ-01", "REQ-02", "REQ-99"] }, mockReqs)
+assert.equal(resolvedMulti.length, 3, "Node with 3 taskIds resolves to 3 tasks")
+assert.equal(resolvedMulti[0].title, "Thiết kế Onboarding")
+assert.equal(resolvedMulti[2].title, "Bài toán REQ-99")
+console.log("✓ Test 21: Target node linked task resolver accurately resolves tasks in view mode")
+
+console.log("\nALL 21 TESTS PASSED SUCCESSFULLY!")
 
