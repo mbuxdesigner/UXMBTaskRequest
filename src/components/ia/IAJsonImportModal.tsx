@@ -102,7 +102,8 @@ export function parseAndNormalizeIaJson(rawObj: any, defaultProductName: string)
       if (tier === 1) tier1Count++
 
       const id = (raw.id && String(raw.id).trim()) || `imported-node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-      const name = (raw.name && String(raw.name).trim()) || (tier === 1 ? defaultProductName : `Node cấp ${tier}`)
+      const rawName = raw.name ?? raw.title ?? raw.label ?? raw.text ?? raw.nodeName
+      const name = (rawName && String(rawName).trim()) || (tier === 1 ? defaultProductName : `Node cấp ${tier}`)
       const description = raw.description || ""
       const code = raw.code || ""
       const squad = raw.squad || undefined
@@ -111,9 +112,10 @@ export function parseAndNormalizeIaJson(rawObj: any, defaultProductName: string)
         tier === 4 ? (raw.touchpointType || "screen") : undefined
 
       const children: IANode[] = []
-      if (Array.isArray(raw.children) && tier < 4) {
+      const rawChildList = raw.children ?? raw.items ?? raw.subnodes ?? raw.childs
+      if (Array.isArray(rawChildList) && tier < 4) {
         const nextTier = (tier + 1) as IATier
-        for (const ch of raw.children) {
+        for (const ch of rawChildList) {
           if (ch && typeof ch === "object") {
             children.push(normalizeNode(ch, nextTier, id))
           }
