@@ -4,10 +4,11 @@ import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye, CloudUpload, CloudDownloa
 import { toast } from "@/components/ui/toast"
 import { springs } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { getProductColorDef } from "@/lib/colorUtils"
 import PageHeader from "@/components/common/PageHeader"
 import { useIATreeState } from "@/hooks/useIATreeState"
 import { useCanvasTransform } from "@/hooks/useCanvasTransform"
-import IAToolbar from "@/components/ia/IAToolbar"
 import IACanvasViewport from "@/components/ia/IACanvasViewport"
 import IANodeEditorModal, { ModalMode } from "@/components/ia/IANodeEditorModal"
 import IASettingsModal from "@/components/ia/IASettingsModal"
@@ -125,6 +126,56 @@ export default function IAPage() {
   // Search match navigation index
   const [currentMatchIndex, setCurrentMatchIndex] = useState<number>(0)
   const matchedIdList = useMemo(() => Array.from(searchResult.matchedIds), [searchResult.matchedIds])
+
+  // Ensure concrete product is selected (remove "Tất cả")
+  useEffect(() => {
+    if (selectedProductId === "all" && products.length > 0) {
+      setSelectedProductId(products[0].id)
+    }
+  }, [selectedProductId, products, setSelectedProductId])
+
+  useEffect(() => {
+    console.error("DIAGNOSTIC_IA_PAGE:", JSON.stringify({
+      activeTree: activeTree ? { id: activeTree.id, name: activeTree.name, childrenCount: activeTree.children?.length } : null,
+      selectedProductId,
+      layoutNodesCount: layoutNodes.length,
+      bounds,
+      transform,
+    }))
+  })
+
+  // Count nodes in each product's tree for c-tabs-5 badge display
+  const productNodeCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    if (!trees) return map
+
+    function countNodes(root: IANode): number {
+      let count = 0
+      function dfs(n: IANode) {
+        count++
+        if (n.children) {
+          for (const c of n.children) dfs(c)
+        }
+      }
+      dfs(root)
+      if (root.siblingRoots) {
+        for (const sr of root.siblingRoots) dfs(sr)
+      }
+      return count
+    }
+
+    for (const prod of products) {
+      const tree =
+        trees[prod.id] ||
+        (prod.code === "APP_MB" ? trees["app-mbbank"] : prod.code === "BIZ_MB" ? trees["biz-mb"] : undefined)
+      if (tree) {
+        map[prod.id] = countNodes(tree)
+      } else {
+        map[prod.id] = 0
+      }
+    }
+    return map
+  }, [products, trees])
 
   // Active product info
   const activeProduct = useMemo(() => {
@@ -388,14 +439,18 @@ export default function IAPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="flex flex-col w-full h-full min-h-[calc(100vh-8.5rem)] space-y-4 min-w-0 max-w-full outline-none">
-      {/* 1. Page Header Synchronized with Track Task & System Style */}
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="flex flex-col w-full h-full flex-1 min-h-0 min-w-0 max-w-full outline-none overflow-hidden select-none bg-slate-50"
+    >
+      {/* 1. Page Header: Title on Left, c-tabs-5 Product Switcher on Right */}
       <PageHeader
         breadcrumb={{
-          parent: "MBBank UX Platform",
-          current: "IA map",
+          parent: "Platform",
+          current: "Information architecture",
         }}
-        title="IA map"
+        title="Information architecture"
         badge={
           !canEdit ? (
             <span
@@ -414,181 +469,134 @@ export default function IAPage() {
           )
         }
         actions={
-          canEdit ? (
-            <div className="flex items-center gap-2">
-              {/* Nút Cài đặt sơ đồ */}
-              <Button
-                variant="outline"
-                size="sm"
-                data-testid="ia-settings-btn"
-                onClick={() => setIsSettingsOpen(true)}
-                title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Cài đặt sơ đồ</span>
-              </Button>
+          /* c-tabs-5 Product Switcher with Admin Color Dots */
+          <div
+            role="tablist"
+            aria-label="Lọc sơ đồ IA theo sản phẩm"
+            className="inline-flex h-9 items-center justify-center rounded-xl bg-slate-100/90 p-1 text-slate-500 border border-slate-200/80 shadow-2xs overflow-x-auto max-w-full"
+          >
+            {products.map((prod, idx) => {
+              const tabKey = prod?.id?.trim() || prod?.code?.trim() || `ia-prod-${idx}`
+              const isSelected =
+                selectedProductId === prod.id ||
+                (selectedProductId === "app-mbbank" && prod.code === "APP_MB")
+              const colorDef = getProductColorDef(prod.name, prod.color)
+              const dotColor = colorDef.hex || prod.color || "#2563EB"
+              const nodeCount = productNodeCounts[prod.id] ?? 0
 
-              {/* Nút Tải từ Cloud */}
-              <Button
-                variant="outline"
-                size="sm"
-                data-testid="ia-pull-cloud-btn"
-                onClick={handlePullCloud}
-                disabled={isPullingCloud}
-                title="Tải sơ đồ IA từ Google Sheets Cloud"
-              >
-                <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
-                <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
-              </Button>
-
-              {/* Nút Lưu lên Cloud (chỉ khi có quyền edit) - Primary Action */}
-              <Button
-                variant="default"
-                size="sm"
-                data-testid="ia-sync-cloud-btn"
-                onClick={handleSyncCloud}
-                disabled={isSyncingCloud}
-                title="Lưu đồng bộ sơ đồ IA lên Google Sheets Cloud"
-              >
-                <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
-                <span>{isSyncingCloud ? "Đang lưu..." : "Lưu lên Cloud"}</span>
-              </Button>
-
-              {/* Menu tùy chọn thêm (...) */}
-              <div className="relative" ref={moreMenuRef}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="ia-more-menu-btn"
-                  onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-                  title="Tùy chọn khác"
-                  className="px-2"
+              return (
+                <button
+                  key={`ia-tab-${tabKey}-${idx}`}
+                  role="tab"
+                  type="button"
+                  id={`ia-product-tab-${prod.id}`}
+                  data-testid={`ia-product-tab-${prod.id}`}
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedProductId(prod.id)}
+                  className={cn(
+                    "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
+                    isSelected
+                      ? "bg-white text-slate-900 shadow-xs font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                  )}
                 >
-                  <MoreHorizontal className="w-4 h-4 text-slate-500" />
-                </Button>
-
-                {isMoreMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <button
-                      type="button"
-                      data-testid="ia-more-import-json"
-                      onClick={() => {
-                        setIsMoreMenuOpen(false)
-                        setIsJsonImportOpen(true)
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 text-left transition-colors cursor-pointer"
+                  {/* Chấm tròn theo màu cài đặt trong Admin */}
+                  <span
+                    className="w-2 h-2 rounded-full mr-1.5 shrink-0 transition-transform"
+                    style={{ backgroundColor: dotColor }}
+                  />
+                  <span>{prod.name}</span>
+                  {nodeCount > 0 && (
+                    <span
+                      className={cn(
+                        "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
+                        isSelected
+                          ? "bg-slate-100 text-slate-700 font-semibold"
+                          : "bg-slate-200/70 text-slate-500"
+                      )}
                     >
-                      <FileCode className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Nhập JSON / Đẩy map nhanh</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid="ia-more-copy-json"
-                      onClick={() => {
-                        setIsMoreMenuOpen(false)
-                        handleCopyJson()
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Sao chép sơ đồ (JSON)</span>
-                    </button>
-
-                    <div className="my-1 border-t border-slate-100" />
-
-                    <button
-                      type="button"
-                      data-testid="ia-more-reset"
-                      onClick={() => {
-                        setIsMoreMenuOpen(false)
-                        handleOpenReset()
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-left transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Khôi phục sơ đồ mặc định</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : undefined
+                      {nodeCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         }
+        className="px-4 py-2 sm:px-6 bg-white border-b border-slate-200/80 shrink-0 select-none"
       />
 
-      {/* 2. Top Command Bar: Product Selector & Search */}
-      <IAToolbar
-        products={products}
-        selectedProductId={selectedProductId}
-        onSelectProduct={setSelectedProductId}
-        metrics={metrics}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        matchCount={searchResult.matchCount}
-        currentMatchIndex={currentMatchIndex}
-        onNextMatch={handleNextMatch}
-        onPrevMatch={handlePrevMatch}
-        onResetToDefault={handleOpenReset}
-        readOnly={!canEdit}
-        trees={trees}
-      />
-
-      {/* 3. Main IA Interactive Canvas Workspace (Flex layout with QuickAdd Sidebar & Canvas) */}
-      <div className="relative flex-1 flex w-full h-[calc(100vh-14rem)] min-h-[640px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-50">
-        {/* Left Quick Add Sidebar for Design Admin / Design Owner (Requirement 5) */}
-        {isDesignAdminOrOwner && (
-          <IAQuickAddSidebar
-            isOpen={isQuickAddOpen}
-            onToggle={() => setIsQuickAddOpen((prev) => !prev)}
-            onAddNode={handleAddFromSidebar}
-            selectedNodeId={selectedNode?.id}
-            selectedNodeName={selectedNode?.name}
-            selectedNodeTier={selectedNode?.tier}
+      {/* 2. Main Full-Screen Canvas Workspace (Magnific UI) */}
+      <div
+        className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#F8FAFC]"
+        style={{ height: "calc(100vh - 7rem)", minHeight: "500px" }}
+      >
+        {/* Full-Screen Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden">
+          <IACanvasViewport
+            transform={transform}
+            setTransform={setTransform}
+            isPanning={isPanning}
+            layoutNodes={layoutNodes}
+            connectors={connectors}
+            matchedIds={searchResult.matchedIds}
+            requestsMap={requestsMap}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onWheel={handleWheel}
+            zoomIn={zoomIn}
+            zoomOut={zoomOut}
+            resetZoom={resetZoom}
+            onFitToView={handleFitToView}
+            onToggleCollapse={toggleCollapse}
+            onOpenDetail={(req) => setSelectedRequest(req)}
+            onOpenNodeDetail={handleOpenViewNode}
+            onAddChild={handleOpenAdd}
+            onAddChildInDirection={canEdit ? addChildInDirection : undefined}
+            onConnectNodes={canEdit ? connectNodes : undefined}
+            onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
+            onEditNode={handleOpenEdit}
+            onUpdateNode={canEdit ? updateNode : undefined}
+            onDeleteNode={handleOpenDelete}
+            onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
+            onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
+            onMultipleNodesDrag={canEdit ? updateMultipleNodePositions : undefined}
+            onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
+            onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
+            onTrunkDrag={canEdit ? updateTrunkOffset : undefined}
+            onNodePositionChange={canEdit ? updateNodePosition : undefined}
+            onAutoAlign={canEdit ? autoAlignTree : undefined}
+            readOnly={!canEdit}
+            bounds={bounds}
+            onCopyJson={handleCopyJson}
+            onOpenImportJson={() => setIsJsonImportOpen(true)}
+            onSelectNode={setSelectedNode}
+            onAddNodeAtPosition={canEdit ? handleAddNodeAtPosition : undefined}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onPullCloud={handlePullCloud}
+            isPullingCloud={isPullingCloud}
+            onSyncCloud={handleSyncCloud}
+            isSyncingCloud={isSyncingCloud}
+            onResetToDefault={handleOpenReset}
           />
-        )}
+        </div>
 
-        {/* Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
-        <IACanvasViewport
-          transform={transform}
-          setTransform={setTransform}
-          isPanning={isPanning}
-          layoutNodes={layoutNodes}
-          connectors={connectors}
-          matchedIds={searchResult.matchedIds}
-          requestsMap={requestsMap}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onWheel={handleWheel}
-          zoomIn={zoomIn}
-          zoomOut={zoomOut}
-          resetZoom={resetZoom}
-          onFitToView={handleFitToView}
-          onToggleCollapse={toggleCollapse}
-          onOpenDetail={(req) => setSelectedRequest(req)}
-          onOpenNodeDetail={handleOpenViewNode}
-          onAddChild={handleOpenAdd}
-          onAddChildInDirection={canEdit ? addChildInDirection : undefined}
-          onConnectNodes={canEdit ? connectNodes : undefined}
-          onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
-          onEditNode={handleOpenEdit}
-          onDeleteNode={handleOpenDelete}
-          onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
-          onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}
-          onMultipleNodesDrag={canEdit ? updateMultipleNodePositions : undefined}
-          onNodeResize={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, false) : undefined}
-          onNodeResizeEnd={canEdit ? (id, w, h) => updateNodeDimensions(id, w, h, true) : undefined}
-          onTrunkDrag={canEdit ? updateTrunkOffset : undefined}
-          onNodePositionChange={canEdit ? updateNodePosition : undefined}
-          onAutoAlign={canEdit ? autoAlignTree : undefined}
-          readOnly={!canEdit}
-          bounds={bounds}
-          onCopyJson={handleCopyJson}
-          onOpenImportJson={() => setIsJsonImportOpen(true)}
-          onSelectNode={setSelectedNode}
-          onAddNodeAtPosition={canEdit ? handleAddNodeAtPosition : undefined}
-        />
+        {/* Left Quick Add Sidebar - Floats on top of canvas */}
+        {isDesignAdminOrOwner && (
+          <div className="absolute top-0 left-0 bottom-0 z-30 pointer-events-none flex items-stretch">
+            <div className="pointer-events-auto flex items-stretch h-full">
+              <IAQuickAddSidebar
+                isOpen={isQuickAddOpen}
+                onToggle={() => setIsQuickAddOpen((prev) => !prev)}
+                onAddNode={handleAddFromSidebar}
+                selectedNodeId={selectedNode?.id}
+                selectedNodeName={selectedNode?.name}
+                selectedNodeTier={selectedNode?.tier}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}

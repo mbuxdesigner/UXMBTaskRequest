@@ -21,6 +21,7 @@ import { Frame } from "@/components/reui/frame"
 import { Button } from "@/components/ui/button"
 
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 import { Plus, ArrowLeft, LogOut } from "lucide-react"
 
@@ -367,7 +368,14 @@ export default function App() {
           />
 
           {/* Main Content View */}
-          <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+          <div
+            className={cn(
+              "flex-1 w-full min-w-0 max-w-full",
+              page === "ia"
+                ? "p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden"
+                : "px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+            )}
+          >
             <ErrorBoundary>
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -376,7 +384,10 @@ export default function App() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15, ease: "easeInOut" }}
-                  className="w-full min-w-0 max-w-full"
+                  className={cn(
+                    "w-full min-w-0 max-w-full",
+                    page === "ia" && "h-full flex flex-col flex-1"
+                  )}
                 >
                   {page === "overview" && <TongQuanPage />}
                   {page === "create" && (
@@ -396,10 +407,12 @@ export default function App() {
             </ErrorBoundary>
           </div>
 
-          {/* ReUI App Shell 12 Footer */}
-          <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
-            <div>2026 © MBBank UX Platform</div>
-          </footer>
+          {/* ReUI App Shell 12 Footer (Ẩn trên trang IA để Canvas full màn hình theo UI Magnific) */}
+          {page !== "ia" && (
+            <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
+              <div>2026 © MBBank UX Platform</div>
+            </footer>
+          )}
         </div>
 
         {/* Global Toast Provider */}

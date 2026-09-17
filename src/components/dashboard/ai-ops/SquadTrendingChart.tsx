@@ -222,7 +222,7 @@ export default function SquadTrendingChart({
                             {chartConfig[name as keyof typeof chartConfig]?.label || name}
                           </span>
                         </div>
-                        <span className="text-slate-900 font-bold font-mono tabular-nums text-xs">
+                        <span className="text-slate-900 font-normal font-mono tabular-nums text-xs">
                           {value != null ? `${Number(value).toLocaleString()} tasks` : "—"}
                         </span>
                       </div>

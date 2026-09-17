@@ -1,13 +1,14 @@
 {
-  "title": "UX Request Portal - MB Bank UX Team",
-  "description": "Cổng tiếp nhận, quản lý và theo dõi tiến độ các yêu cầu thiết kế trải nghiệm người dùng (UX/UI) cho các sản phẩm số MB Bank.",
+  "title": "MBUX Request | Project Management for UXTeam",
+  "description": "Plan, track, and manage UXTeam MBBank’s work in one place. Keep tasks, progress, documents, and collaboration organized and visible to the whole team.",
   "language": "vi",
   "robots": {
     "index": true
   },
   "openGraph": {
-    "title": "UX Request Portal - MB Bank UX Team",
-    "description": "Cổng tiếp nhận, quản lý và theo dõi tiến độ các yêu cầu thiết kế trải nghiệm người dùng (UX/UI) cho các sản phẩm số MB Bank."
+    "title": "MBUX Request | Project Management for UXTeam",
+    "description": "Plan, track, and manage UXTeam MBBank’s work in one place. Keep tasks, progress, documents, and collaboration organized and visible to the whole team.",
+    "image": "https://uxmb-task-request.vercel.app/img-ThumbWeb-UXTeamWith.png"
   },
   "accessibility": {
     "addBypassLinks": false,

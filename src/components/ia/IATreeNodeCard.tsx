@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useMemo } from "react"
+import React, { memo, useState, useRef, useMemo, useEffect } from "react"
 import { motion } from "framer-motion"
 import {
   ChevronRight,
@@ -42,6 +42,7 @@ interface IATreeNodeCardProps {
   onPortDragStart?: (nodeId: string, port: IAPortPosition, e: React.PointerEvent) => void
   isWireDropTarget?: boolean
   onEditNode: (node: IANode) => void
+  onUpdateNode?: (nodeId: string, nodeData: Partial<IANode>) => void
   onDeleteNode: (node: IANode) => void
   onOpenNodeDetail?: (node: IANode) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
@@ -196,6 +197,7 @@ function IATreeNodeCardComponent({
   onPortDragStart,
   isWireDropTarget = false,
   onEditNode,
+  onUpdateNode,
   onDeleteNode,
   onOpenNodeDetail,
   onNodeDrag,
@@ -215,6 +217,41 @@ function IATreeNodeCardComponent({
   const { node, x, y, width, isCollapsed, hasChildren, childCount } = layoutNode
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null)
+
+  // Inline Node Name Editing (Double-click or Enter)
+  const [isInlineEditing, setIsInlineEditing] = useState(false)
+  const [inlineName, setInlineName] = useState(node.name)
+  const inlineInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setInlineName(node.name)
+  }, [node.name])
+
+  useEffect(() => {
+    if (isInlineEditing) {
+      inlineInputRef.current?.focus()
+      inlineInputRef.current?.select()
+    }
+  }, [isInlineEditing])
+
+  const handleCommitInlineEdit = () => {
+    const trimmed = inlineName.trim()
+    if (trimmed && trimmed !== node.name) {
+      if (onUpdateNode) {
+        onUpdateNode(node.id, { name: trimmed })
+      } else {
+        onEditNode({ ...node, name: trimmed })
+      }
+    } else {
+      setInlineName(node.name)
+    }
+    setIsInlineEditing(false)
+  }
+
+  const handleCancelInlineEdit = () => {
+    setInlineName(node.name)
+    setIsInlineEditing(false)
+  }
 
   // Resolve all linked tasks (from node.taskIds or node.requestId)
   const taskIdsList = useMemo(() => {
@@ -548,6 +585,9 @@ function IATreeNodeCardComponent({
       data-node-id={node.id}
       data-is-drop-target={isWireDropTarget ? "true" : undefined}
       data-is-selected={isSelected ? "true" : undefined}
+      initial={{ opacity: 0, scale: 0.88, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
       transition={isMotionFast ? { duration: 0 } : springs.snappy}
       onPointerDown={readOnly ? undefined : handlePointerDown}
       style={{
@@ -794,12 +834,39 @@ function IATreeNodeCardComponent({
 
       {/* Row 2: Tên */}
       <div className="my-1">
-        <h4
-          className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight line-clamp-2"
-          title={node.name}
-        >
-          {node.name}
-        </h4>
+        {isInlineEditing && !readOnly ? (
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <input
+              ref={inlineInputRef}
+              type="text"
+              value={inlineName}
+              onChange={(e) => setInlineName(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === "Enter") {
+                  handleCommitInlineEdit()
+                } else if (e.key === "Escape") {
+                  handleCancelInlineEdit()
+                }
+              }}
+              onBlur={handleCommitInlineEdit}
+              className="w-full text-[13px] font-bold text-slate-900 bg-white border border-blue-500 rounded-md px-1.5 py-0.5 outline-none shadow-xs ring-2 ring-blue-500/20"
+            />
+          </div>
+        ) : (
+          <h4
+            className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight line-clamp-2 hover:text-blue-600 cursor-text transition-colors"
+            title={node.name + (readOnly ? "" : " (Double-click để sửa tên trực tiếp)")}
+            onDoubleClick={(e) => {
+              if (!readOnly) {
+                e.stopPropagation()
+                setIsInlineEditing(true)
+              }
+            }}
+          >
+            {node.name}
+          </h4>
+        )}
         {node.description && (
           <p
             className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 font-normal leading-relaxed"

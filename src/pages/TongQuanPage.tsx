@@ -378,14 +378,15 @@ export default function TongQuanPage() {
           </span>
         </button>
 
-        {products.map((prod) => {
+        {products.map((prod, pIdx) => {
+          const tabKey = prod.id || (prod as any).code || `overview-prod-${pIdx}`
           const count = displayRequests.filter((r) => isRequestMatchingProduct(r, prod.name)).length
           const isSelected = selectedProduct === prod.id || selectedProduct === prod.name
           const isHovered = hoveredProduct === prod.id
 
           return (
             <button
-              key={prod.id}
+              key={tabKey}
               role="tab"
               type="button"
               id={`product-tab-${prod.id}`}

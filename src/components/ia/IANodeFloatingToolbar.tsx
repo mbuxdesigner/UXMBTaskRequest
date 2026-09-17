@@ -90,7 +90,7 @@ export default function IANodeFloatingToolbar({
       <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
 
       {/* Xem chi tiết Node (Luôn khả dụng cho cả View và Edit) */}
-      <button
+      <motion.button
         type="button"
         data-testid={`ia-float-view-${node.id}`}
         onClick={(e) => {
@@ -103,11 +103,11 @@ export default function IANodeFloatingToolbar({
       >
         <Eye className="w-3.5 h-3.5" />
         <span>Xem chi tiết</span>
-      </button>
+      </motion.button>
 
       {/* Xem bài toán liên kết (nếu có) */}
       {linkedRequest && onOpenTask && (
-        <button
+        <motion.button
           type="button"
           data-testid={`ia-float-task-${node.id}`}
           onClick={(e) => {
@@ -120,12 +120,12 @@ export default function IANodeFloatingToolbar({
         >
           <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
           <span>Bài toán</span>
-        </button>
+        </motion.button>
       )}
 
       {/* Add Child (Tier 1-3) - Chỉ khi có quyền Edit */}
       {!readOnly && node.tier < 4 && (
-        <button
+        <motion.button
           type="button"
           data-testid={`ia-float-add-${node.id}`}
           onClick={(e) => {
@@ -138,12 +138,12 @@ export default function IANodeFloatingToolbar({
         >
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Thêm con</span>
-        </button>
+        </motion.button>
       )}
 
       {/* Edit Node - Chỉ khi có quyền Edit */}
       {!readOnly && (
-        <button
+        <motion.button
           type="button"
           data-testid={`ia-float-edit-${node.id}`}
           onClick={(e) => {
@@ -155,12 +155,12 @@ export default function IANodeFloatingToolbar({
           {...tactileProps.button}
         >
           <Pencil className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
       )}
 
       {/* Figma link if present */}
       {node.figmaUrl && (
-        <button
+        <motion.button
           type="button"
           data-testid={`ia-float-figma-${node.id}`}
           onClick={handleFigma}
@@ -169,11 +169,11 @@ export default function IANodeFloatingToolbar({
           {...tactileProps.button}
         >
           <ExternalLink className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
       )}
 
       {/* Copy ID */}
-      <button
+      <motion.button
         type="button"
         data-testid={`ia-float-copy-${node.id}`}
         onClick={handleCopyId}
@@ -182,11 +182,11 @@ export default function IANodeFloatingToolbar({
         {...tactileProps.button}
       >
         {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-      </button>
+      </motion.button>
 
       {/* Center view on this node */}
       {onCenterNode && (
-        <button
+        <motion.button
           type="button"
           data-testid={`ia-float-center-${node.id}`}
           onClick={(e) => {
@@ -198,14 +198,14 @@ export default function IANodeFloatingToolbar({
           {...tactileProps.button}
         >
           <Maximize2 className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
       )}
 
       {/* Delete Node */}
       {!readOnly && (
         <>
           <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-          <button
+          <motion.button
             type="button"
             data-testid={`ia-float-delete-${node.id}`}
             onClick={(e) => {
@@ -217,7 +217,7 @@ export default function IANodeFloatingToolbar({
             {...tactileProps.button}
           >
             <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
         </>
       )}
     </motion.div>

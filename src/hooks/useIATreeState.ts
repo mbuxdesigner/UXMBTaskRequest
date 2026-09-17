@@ -232,6 +232,34 @@ export function computeSubtreeMetrics(
   }
 }
 
+// Helper: Tìm key sản phẩm chứa một node bất kỳ
+export function findTreeKeyContainingNode(treeMap: Record<string, IANode>, nodeId: string): string | null {
+  for (const [key, root] of Object.entries(treeMap)) {
+    let found = false
+    function dfs(n: IANode) {
+      if (n.id === nodeId) {
+        found = true
+        return
+      }
+      if (n.children) {
+        for (const c of n.children) {
+          if (found) return
+          dfs(c)
+        }
+      }
+      if (n.siblingRoots) {
+        for (const sr of n.siblingRoots) {
+          if (found) return
+          dfs(sr)
+        }
+      }
+    }
+    dfs(root)
+    if (found) return key
+  }
+  return null
+}
+
 // Helper: Load from localStorage safely with dynamic admin products reconciliation
 export function loadSavedTrees(): Record<string, IANode> {
   const currentAdminProds = getAdminIAProducts()
@@ -486,8 +514,9 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   // Helper: Retrieve or dynamically initialize tree for a product
   const getTargetTree = useCallback(
     (treeMap: Record<string, IANode>, prodId: string): IANode => {
-      if (treeMap[prodId]) return treeMap[prodId]
-      const prod = products.find((p) => p.id === prodId)
+      const effectiveId = prodId === "all" ? (products[0]?.id || "app-mbbank") : prodId
+      if (treeMap[effectiveId]) return treeMap[effectiveId]
+      const prod = products.find((p) => p.id === effectiveId)
       if (prod) {
         if (prod.code === "APP_MB" && treeMap["app-mbbank"]) return treeMap["app-mbbank"]
         if (prod.code === "BIZ_MB" && treeMap["biz-mb"]) return treeMap["biz-mb"]
@@ -495,12 +524,11 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         if (prod.code === "BAAS" && treeMap["baas"]) return treeMap["baas"]
         return createCleanRootNodeForProduct(prod)
       }
-      return DEFAULT_IA_TREES[prodId] || DEFAULT_IA_TREES["app-mbbank"]
+      return DEFAULT_IA_TREES[effectiveId] || DEFAULT_IA_TREES["app-mbbank"]
     },
     [products]
   )
 
-  // Active Tree for current product
   // Active Tree for current product
   const activeTree: IANode = useMemo(() => {
     return getTargetTree(trees, selectedProductId)
@@ -508,12 +536,27 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
   // All root nodes (Primary LV1 + Sibling LV1s)
   const rootNodes = useMemo<IANode[]>(() => {
+    if (selectedProductId === "all") {
+      const allRoots: IANode[] = []
+      for (const prod of products) {
+        const t =
+          trees[prod.id] ||
+          (prod.code === "APP_MB" ? trees["app-mbbank"] : prod.code === "BIZ_MB" ? trees["biz-mb"] : undefined)
+        if (t) {
+          allRoots.push(t)
+          if (t.siblingRoots && t.siblingRoots.length > 0) {
+            allRoots.push(...t.siblingRoots)
+          }
+        }
+      }
+      return allRoots.length > 0 ? allRoots : [activeTree]
+    }
     const roots = [activeTree]
     if (activeTree.siblingRoots && activeTree.siblingRoots.length > 0) {
       roots.push(...activeTree.siblingRoots)
     }
     return roots
-  }, [activeTree])
+  }, [activeTree, selectedProductId, products, trees])
 
   // Quản lý danh sách bài toán thực tế (loại bỏ hoàn toàn demo data)
   const [requestsList, setRequestsList] = useState<UXRequest[]>(() => {

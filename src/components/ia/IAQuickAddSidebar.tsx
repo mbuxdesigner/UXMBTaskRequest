@@ -181,7 +181,7 @@ export default function IAQuickAddSidebar({
                   <p className="text-[10px] text-slate-500">Kéo hoặc click để thêm vào sơ đồ</p>
                 </div>
               </div>
-              <button
+              <motion.button
                 type="button"
                 onClick={onToggle}
                 title="Thu gọn thanh công cụ"
@@ -189,7 +189,7 @@ export default function IAQuickAddSidebar({
                 {...tactileProps.button}
               >
                 <ChevronLeft className="w-4 h-4" />
-              </button>
+              </motion.button>
             </div>
 
             {/* Context Notice: Target Node */}
@@ -284,7 +284,7 @@ export default function IAQuickAddSidebar({
 
       {/* Collapsed Mini Tab Handle (luôn hiển thị để mở lại) */}
       {!isOpen && (
-        <button
+        <motion.button
           type="button"
           data-testid="ia-quick-add-toggle-open"
           onClick={onToggle}
@@ -295,7 +295,7 @@ export default function IAQuickAddSidebar({
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
           <span>+ Thêm node</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-        </button>
+        </motion.button>
       )}
     </div>
   )

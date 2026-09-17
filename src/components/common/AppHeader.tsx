@@ -73,7 +73,7 @@ const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },
   compressor: { title: "Nén & Tối ưu ảnh", section: "Resources" },
-  ia: { title: "IA map", section: "Platform" },
+  ia: { title: "Information architecture", section: "Platform" },
 }
 
 export default function AppHeader({
@@ -1244,7 +1244,7 @@ export default function AppHeader({
 
                             return (
                               <motion.div
-                                key={item.id}
+                                key={item.id || item.requestId || `search-task-${flatIdx}`}
                                 variants={staggerItemVariants}
                                 whileHover={{ x: 3 }}
                                 whileTap={{ scale: 0.98 }}
@@ -1335,7 +1335,7 @@ export default function AppHeader({
 
                             return (
                               <motion.div
-                                key={item.id}
+                                key={item.id || item.name || `search-member-${flatIdx}`}
                                 variants={staggerItemVariants}
                                 whileHover={{ x: 3 }}
                                 whileTap={{ scale: 0.98 }}
@@ -1412,7 +1412,7 @@ export default function AppHeader({
 
                             return (
                               <motion.div
-                                key={item.id}
+                                key={item.id || item.title || `search-nav-${flatIdx}`}
                                 variants={staggerItemVariants}
                                 whileHover={{ x: 3 }}
                                 whileTap={{ scale: 0.98 }}

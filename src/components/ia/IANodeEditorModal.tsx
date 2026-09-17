@@ -381,15 +381,16 @@ export default function IANodeEditorModal({
     return ids.map((id) => {
       const match = availableRequests.find((r) => r.request_id === id)
       if (match) return match
-      return {
+      return ({
         request_id: id,
         title: `Bài toán ${id}`,
         status: "Đang thực hiện",
         squad: targetNode.squad || "Chưa gán",
-        requester: "Hệ thống",
-        designer: "Chưa gán",
+        squad_name: targetNode.squad || "Chưa gán",
+        requester_name: "Hệ thống",
+        assigned_designer: "Chưa gán",
         created_at: new Date().toISOString(),
-      } as UXRequest
+      } as unknown) as UXRequest
     })
   }, [targetNode, availableRequests])
 
@@ -613,7 +614,7 @@ export default function IANodeEditorModal({
                                 {req.title}
                               </div>
                               <div className="text-[11px] text-slate-500">
-                                {req.squad || "Chưa gán squad"} · {req.designer || "Chưa có designer"}
+                                {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
                               </div>
                             </div>
 

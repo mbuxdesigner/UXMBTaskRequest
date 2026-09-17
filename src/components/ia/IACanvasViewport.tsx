@@ -17,6 +17,9 @@ import {
   FileCode,
   CheckSquare,
   Check,
+  SlidersHorizontal,
+  CloudDownload,
+  CloudUpload,
 } from "lucide-react"
 import { tactileProps } from "@/lib/motion"
 import { CanvasTransform } from "@/hooks/useCanvasTransform"
@@ -56,6 +59,7 @@ interface IACanvasViewportProps {
     nodeData?: Partial<IANode>
   ) => void
   onEditNode: (node: IANode) => void
+  onUpdateNode?: (nodeId: string, nodeData: Partial<IANode>) => void
   onDeleteNode: (node: IANode) => void
   onNodePositionChange?: (nodeId: string, x: number, y: number, persist?: boolean) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
@@ -72,6 +76,12 @@ interface IACanvasViewportProps {
   onSelectNode?: (node: IANode | null) => void
   onAddNodeAtPosition?: (position: { x: number; y: number }, nodeData: Partial<IANode>) => void
   onOpenNodeDetail?: (node: IANode) => void
+  onOpenSettings?: () => void
+  onPullCloud?: () => void
+  isPullingCloud?: boolean
+  onSyncCloud?: () => void
+  isSyncingCloud?: boolean
+  onResetToDefault?: () => void
 }
 
 export default function IACanvasViewport({
@@ -96,6 +106,7 @@ export default function IACanvasViewport({
   onConnectNodes,
   onCreateConnectedNodeAt,
   onEditNode,
+  onUpdateNode,
   onDeleteNode,
   onNodePositionChange,
   onNodeDrag,
@@ -112,9 +123,35 @@ export default function IACanvasViewport({
   onSelectNode,
   onAddNodeAtPosition,
   onOpenNodeDetail,
+  onOpenSettings,
+  onPullCloud,
+  isPullingCloud = false,
+  onSyncCloud,
+  isSyncingCloud = false,
+  onResetToDefault,
   readOnly = false,
 }: IACanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+
+
+  // Auto-fit on initial mount when dimensions become available
+  const initialFitRef = useRef(false)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        if (width > 100 && height > 100 && !initialFitRef.current && layoutNodes.length > 0) {
+          initialFitRef.current = true
+          onFitToView()
+        }
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [layoutNodes.length, onFitToView])
 
   // Fullscreen Mode state
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -125,6 +162,14 @@ export default function IACanvasViewport({
   // Canvas Menu dropdown state (...)
   const [isCanvasMenuOpen, setIsCanvasMenuOpen] = useState(false)
   const canvasMenuRef = useRef<HTMLDivElement>(null)
+
+  // Top Floating Actions Menu (...)
+  const [isTopMenuOpen, setIsTopMenuOpen] = useState(false)
+  const topMenuRef = useRef<HTMLDivElement>(null)
+
+  // Magnific-style Zoom Popover Menu
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false)
+  const zoomMenuRef = useRef<HTMLDivElement>(null)
 
   // Fullscreen toggle handler
   const toggleFullscreen = useCallback(() => {
@@ -152,11 +197,17 @@ export default function IACanvasViewport({
     return () => document.removeEventListener("fullscreenchange", handleFsChange)
   }, [])
 
-  // Close canvas menu on click outside
+  // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (canvasMenuRef.current && !canvasMenuRef.current.contains(e.target as Node)) {
         setIsCanvasMenuOpen(false)
+      }
+      if (topMenuRef.current && !topMenuRef.current.contains(e.target as Node)) {
+        setIsTopMenuOpen(false)
+      }
+      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
+        setIsZoomMenuOpen(false)
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
@@ -245,6 +296,34 @@ export default function IACanvasViewport({
       } else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
         e.preventDefault()
         setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
+      } else if (e.key === "Tab" && selectedNodeIds.size === 1 && !readOnly) {
+        // Tab: Fast add child node
+        e.preventDefault()
+        const selectedId = Array.from(selectedNodeIds)[0]
+        const target = layoutNodes.find((n) => n.node.id === selectedId)
+        if (target) {
+          onAddChild(target.node)
+        }
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeIds.size === 1 && !readOnly) {
+        // Delete: Remove selected node
+        e.preventDefault()
+        const selectedId = Array.from(selectedNodeIds)[0]
+        const target = layoutNodes.find((n) => n.node.id === selectedId)
+        if (target) {
+          onDeleteNode(target.node)
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
+        e.preventDefault()
+        zoomIn()
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) {
+        e.preventDefault()
+        zoomOut()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault()
+        resetZoom()
+      } else if ((e.key === "f" || e.key === "F") && (e.shiftKey || (!e.ctrlKey && !e.metaKey))) {
+        e.preventDefault()
+        onFitToView()
       }
     }
 
@@ -620,14 +699,136 @@ export default function IACanvasViewport({
       className={`${
         isFullscreen
           ? "fixed inset-0 z-50 w-screen h-screen rounded-none"
-          : "relative flex-1 w-full h-full min-h-[640px] rounded-2xl border border-slate-200/80 shadow-inner"
-      } overflow-hidden select-none bg-slate-50/50 ${cursorClass}`}
+          : "relative w-full h-full rounded-none border-0"
+      } overflow-hidden select-none bg-[#F8FAFC] ${cursorClass}`}
       style={{
+        width: "100%",
+        height: "100%",
         backgroundImage: "radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px)",
         backgroundSize: "28px 28px",
         backgroundPosition: `${transform.x % 28}px ${transform.y % 28}px`,
       }}
     >
+      {/* Floating Top-Right Canvas Actions (Cài đặt, Cloud Sync, Import/Export, Reset) */}
+      {!readOnly && (
+        <div className="absolute top-3.5 right-3.5 z-30 flex items-center gap-2 select-none">
+          <div className="flex items-center gap-1.5 p-1 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200/80 shadow-md">
+            {/* Cài đặt sơ đồ */}
+            {onOpenSettings && (
+              <motion.button
+                type="button"
+                data-testid="ia-settings-btn"
+                onClick={onOpenSettings}
+                title="Cài đặt cấu trúc, kích thước và hiển thị sơ đồ"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                {...tactileProps.button}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Cài đặt sơ đồ</span>
+              </motion.button>
+            )}
+
+            {/* Tải từ Cloud */}
+            {onPullCloud && (
+              <motion.button
+                type="button"
+                data-testid="ia-pull-cloud-btn"
+                onClick={onPullCloud}
+                disabled={isPullingCloud}
+                title="Tải sơ đồ IA từ Google Sheets Cloud"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                {...tactileProps.button}
+              >
+                <CloudDownload className={`w-3.5 h-3.5 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
+                <span className="hidden sm:inline">{isPullingCloud ? "Đang tải..." : "Tải từ Cloud"}</span>
+              </motion.button>
+            )}
+
+            {/* Lưu lên Cloud */}
+            {onSyncCloud && (
+              <motion.button
+                type="button"
+                data-testid="ia-sync-cloud-btn"
+                onClick={onSyncCloud}
+                disabled={isSyncingCloud}
+                title="Lưu đồng bộ sơ đồ IA lên Google Sheets Cloud"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#1B3A6B] hover:bg-[#152e54] rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                {...tactileProps.button}
+              >
+                <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
+                <span>{isSyncingCloud ? "Đang lưu..." : "Lưu lên Cloud"}</span>
+              </motion.button>
+            )}
+
+            {/* Menu tùy chọn thêm (...) */}
+            <div className="relative" ref={topMenuRef}>
+              <motion.button
+                type="button"
+                data-testid="ia-more-menu-btn"
+                onClick={() => setIsTopMenuOpen((v) => !v)}
+                title="Tùy chọn sơ đồ khác"
+                className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                {...tactileProps.button}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </motion.button>
+
+              {isTopMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
+                  {onOpenImportJson && (
+                    <button
+                      type="button"
+                      data-testid="ia-more-import-json"
+                      onClick={() => {
+                        setIsTopMenuOpen(false)
+                        onOpenImportJson()
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-blue-50 hover:text-blue-600 text-left transition-colors cursor-pointer font-medium"
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Nhập JSON / Đẩy map nhanh</span>
+                    </button>
+                  )}
+
+                  {onCopyJson && (
+                    <button
+                      type="button"
+                      data-testid="ia-more-copy-json"
+                      onClick={() => {
+                        setIsTopMenuOpen(false)
+                        onCopyJson()
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer font-medium"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Sao chép sơ đồ (JSON)</span>
+                    </button>
+                  )}
+
+                  {onResetToDefault && (
+                    <>
+                      <div className="my-1 border-t border-slate-100" />
+                      <button
+                        type="button"
+                        data-testid="ia-more-reset"
+                        onClick={() => {
+                          setIsTopMenuOpen(false)
+                          onResetToDefault()
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 text-left transition-colors cursor-pointer font-medium"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Khôi phục sơ đồ mặc định</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hardware-Accelerated Mindmap Canvas Transformation Layer */}
       <div
         data-testid="ia-canvas-transform-layer"
@@ -688,6 +889,7 @@ export default function IACanvasViewport({
               onAddChildInDirection={readOnly ? undefined : onAddChildInDirection}
               onPortDragStart={readOnly ? undefined : handlePortDragStart}
               onEditNode={onEditNode}
+              onUpdateNode={onUpdateNode}
               onDeleteNode={onDeleteNode}
               onNodeDrag={readOnly ? undefined : onNodeDrag || ((id, x, y) => onNodePositionChange?.(id, x, y, false))}
               onNodeDragEnd={readOnly ? undefined : onNodeDragEnd || ((id, x, y) => onNodePositionChange?.(id, x, y, true))}
@@ -784,7 +986,7 @@ export default function IACanvasViewport({
             Kéo bất kỳ thẻ nào để di chuyển cả nhóm
           </span>
           <div className="w-px h-3.5 bg-slate-700 mx-0.5 hidden sm:inline" />
-          <button
+          <motion.button
             type="button"
             data-testid="ia-clear-selection-btn"
             onClick={() => setSelectedNodeIds(new Set())}
@@ -793,7 +995,7 @@ export default function IACanvasViewport({
             {...tactileProps.button}
           >
             Bỏ chọn (Esc)
-          </button>
+          </motion.button>
         </div>
       )}
 
@@ -805,7 +1007,7 @@ export default function IACanvasViewport({
         {/* Tool Mode Switcher: Select (V) vs Pan (H) - Ẩn khi ở chế độ xem */}
         {!readOnly && (
           <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl mr-1">
-            <button
+            <motion.button
               type="button"
               data-testid="ia-tool-select-btn"
               onClick={() => setToolMode("select")}
@@ -818,8 +1020,8 @@ export default function IACanvasViewport({
               {...tactileProps.button}
             >
               <MousePointer className="w-4 h-4" />
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               type="button"
               data-testid="ia-tool-pan-btn"
               onClick={() => setToolMode("pan")}
@@ -832,14 +1034,14 @@ export default function IACanvasViewport({
               {...tactileProps.button}
             >
               <Hand className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         )}
 
         {/* Snap to Grid button (Requirement 6) - Ẩn khi ở chế độ xem */}
         {!readOnly && (
           <>
-            <button
+            <motion.button
               type="button"
               data-testid="ia-snap-grid-btn"
               onClick={() => setSnapToGrid(!snapToGrid)}
@@ -852,14 +1054,14 @@ export default function IACanvasViewport({
               {...tactileProps.button}
             >
               <Grid className="w-4 h-4" />
-            </button>
+            </motion.button>
             <div className="w-px h-4 bg-slate-200 mx-0.5" />
           </>
         )}
 
         {/* Auto Align / Reset Layout (Requirement 6) */}
         {!readOnly && onAutoAlign && (
-          <button
+          <motion.button
             type="button"
             data-testid="ia-auto-align-btn"
             onClick={onAutoAlign}
@@ -869,10 +1071,10 @@ export default function IACanvasViewport({
           >
             <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
             <span>Căn chuẩn</span>
-          </button>
+          </motion.button>
         )}
 
-        <button
+        <motion.button
           type="button"
           data-testid="ia-zoom-in-btn"
           onClick={zoomIn}
@@ -881,9 +1083,9 @@ export default function IACanvasViewport({
           {...tactileProps.button}
         >
           <ZoomIn className="w-4 h-4" />
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
           type="button"
           data-testid="ia-zoom-out-btn"
           onClick={zoomOut}
@@ -892,22 +1094,103 @@ export default function IACanvasViewport({
           {...tactileProps.button}
         >
           <ZoomOut className="w-4 h-4" />
-        </button>
+        </motion.button>
 
-        <button
-          type="button"
-          data-testid="ia-zoom-reset-btn"
-          onClick={resetZoom}
-          title="Khôi phục tỉ lệ 100%"
-          className="px-2.5 py-1 text-xs font-bold font-mono text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors cursor-pointer select-none"
-          {...tactileProps.button}
-        >
-          {zoomPercent}%
-        </button>
+        {/* Magnific-style Zoom % and menu popover */}
+        <div className="relative" ref={zoomMenuRef}>
+          <motion.button
+            type="button"
+            data-testid="ia-zoom-reset-btn"
+            onClick={() => setIsZoomMenuOpen((v) => !v)}
+            title="Tùy chọn thu phóng (Click để mở menu chi tiết)"
+            className={`px-2.5 py-1 text-xs font-bold font-mono rounded-xl transition-colors cursor-pointer select-none ${
+              isZoomMenuOpen
+                ? "bg-blue-50 text-blue-700 font-semibold"
+                : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+            {...tactileProps.button}
+          >
+            {zoomPercent}%
+          </motion.button>
+
+          {isZoomMenuOpen && (
+            <div className="absolute right-0 bottom-full mb-2.5 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
+              <button
+                type="button"
+                onClick={() => {
+                  zoomIn()
+                  setIsZoomMenuOpen(false)
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span>Zoom in</span>
+                <span className="font-mono text-[10px] text-slate-400">⌘ +</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  zoomOut()
+                  setIsZoomMenuOpen(false)
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span>Zoom out</span>
+                <span className="font-mono text-[10px] text-slate-400">⌘ -</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetZoom()
+                  setIsZoomMenuOpen(false)
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span>Zoom 100%</span>
+                <span className="font-mono text-[10px] text-slate-400">⌘ 0</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onFitToView()
+                  setIsZoomMenuOpen(false)
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+              >
+                <span>Zoom to fit</span>
+                <span className="font-mono text-[10px] text-slate-400">D</span>
+              </button>
+              {selectedNodeIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selectedId = Array.from(selectedNodeIds)[0]
+                    const target = layoutNodes.find((ln) => ln.node.id === selectedId)
+                    if (target && setTransform && containerRef.current) {
+                      const vpW = containerRef.current.clientWidth
+                      const vpH = containerRef.current.clientHeight
+                      const nodeCenterX = target.x + target.width / 2
+                      const nodeCenterY = target.y + target.height / 2
+                      setTransform({
+                        scale: 1,
+                        x: Number((vpW / 2 - nodeCenterX).toFixed(2)),
+                        y: Number((vpH / 2 - nodeCenterY).toFixed(2)),
+                      })
+                    }
+                    setIsZoomMenuOpen(false)
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer font-medium"
+                >
+                  <span>Zoom to selection</span>
+                  <span className="font-mono text-[10px] text-blue-400">F</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
-        <button
+        <motion.button
           type="button"
           data-testid="ia-fit-view-btn"
           onClick={onFitToView}
@@ -917,12 +1200,12 @@ export default function IACanvasViewport({
         >
           <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
           <span>Căn giữa</span>
-        </button>
+        </motion.button>
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
         {/* Fullscreen Button (Requirement 3: Nút phóng to toàn màn hình) */}
-        <button
+        <motion.button
           type="button"
           data-testid="ia-fullscreen-btn"
           onClick={toggleFullscreen}
@@ -935,11 +1218,11 @@ export default function IACanvasViewport({
           {...tactileProps.button}
         >
           {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
-        </button>
+        </motion.button>
 
         {/* Minimap Toggle Button (Requirement 6: Bản đồ nhỏ) - Ẩn khi ở chế độ xem */}
         {!readOnly && (
-          <button
+          <motion.button
             type="button"
             data-testid="ia-toggle-minimap-btn"
             onClick={() => setShowMinimap(!showMinimap)}
@@ -952,13 +1235,13 @@ export default function IACanvasViewport({
             {...tactileProps.button}
           >
             <MapIcon className="w-4 h-4" />
-          </button>
+          </motion.button>
         )}
 
         {/* Canvas Menu Dropdown (...) Khớp Mockup Ảnh 5 - Ẩn khi ở chế độ xem */}
         {!readOnly && (
           <div className="relative" ref={canvasMenuRef}>
-            <button
+            <motion.button
               type="button"
               data-testid="ia-canvas-more-menu-btn"
               onClick={() => setIsCanvasMenuOpen(!isCanvasMenuOpen)}
@@ -967,7 +1250,7 @@ export default function IACanvasViewport({
               {...tactileProps.button}
             >
               <MoreHorizontal className="w-4 h-4" />
-            </button>
+            </motion.button>
 
             {isCanvasMenuOpen && (
               <div className="absolute right-0 bottom-full mb-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">

@@ -27,6 +27,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
   X,
   CheckCircle2,
   LayoutGrid,
@@ -39,6 +40,10 @@ import {
   FileCheck2,
   Plus,
   RefreshCw,
+  Move,
+  RotateCcw,
+  Columns2,
+  SplitSquareVertical,
 } from "lucide-react"
 
 export interface OriginalImageItem {
@@ -59,6 +64,7 @@ export interface ConvertedImageItem {
   originalSize: number
   convertedSize: number
   originalUrl: string
+  originalFile?: File
   dataUrl: string
   blobUrl: string
   isPriority: boolean
@@ -168,24 +174,27 @@ export default function ImageCompressorPage() {
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState<boolean>(false)
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [compareMode, setCompareMode] = useState<"side-by-side" | "slider">("side-by-side")
+  const [sliderPosition, setSliderPosition] = useState<number>(50)
+  const [isDraggingSlider, setIsDraggingSlider] = useState<boolean>(false)
+  const [isFullscreenModal, setIsFullscreenModal] = useState<boolean>(false)
 
+  const sliderContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const activeUrlsRef = useRef<Set<string>>(new Set())
 
-  // Dọn dẹp URL khi unmount
+  // Dọn dẹp URL khi unmount (chỉ chạy khi rời trang)
   useEffect(() => {
+    const urls = activeUrlsRef.current
     return () => {
-      originalImages.forEach((img) => {
+      urls.forEach((u) => {
         try {
-          URL.revokeObjectURL(img.previewUrl)
+          URL.revokeObjectURL(u)
         } catch {}
       })
-      convertedImages.forEach((img) => {
-        try {
-          if (img.blobUrl) URL.revokeObjectURL(img.blobUrl)
-        } catch {}
-      })
+      urls.clear()
     }
-  }, [originalImages, convertedImages])
+  }, [])
 
   // Xử lý nạp ảnh từ input / kéo thả
   const handleAddFiles = (files: FileList | null) => {
@@ -201,13 +210,16 @@ export default function ImageCompressorPage() {
         const nameWithoutExt = file.name.replace(/\.(png|jpe?g|webp)$/i, "")
         const cleanName = nameWithoutExt.replace(/\.priority$/i, "")
 
+        const previewUrl = URL.createObjectURL(file)
+        activeUrlsRef.current.add(previewUrl)
+
         validItems.push({
           id: `orig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           file,
           name: file.name,
           cleanName,
           size: file.size,
-          previewUrl: URL.createObjectURL(file),
+          previewUrl,
           isPriority,
         })
       } else {
@@ -342,6 +354,7 @@ export default function ImageCompressorPage() {
 
               const blob = dataURLtoBlob(dataUrl)
               const blobUrl = blob ? URL.createObjectURL(blob) : dataUrl
+              if (blob) activeUrlsRef.current.add(blobUrl)
 
               const reduction = Math.round(((item.size - approxSize) / item.size) * 100)
 
@@ -353,6 +366,7 @@ export default function ImageCompressorPage() {
                 originalSize: item.size,
                 convertedSize: approxSize,
                 originalUrl: item.previewUrl,
+                originalFile: item.file,
                 dataUrl,
                 blobUrl,
                 isPriority: item.isPriority,
@@ -483,10 +497,21 @@ export default function ImageCompressorPage() {
     }
   }
 
-  // Zoom modal controls
+  // Zoom & Comparison modal controls
   const openCompareModal = (item: ConvertedImageItem) => {
+    const orig = originalImages.find((o) => o.id === item.originalId)
+    const file = orig?.file || item.originalFile
+    let validOrigUrl = item.originalUrl
+
+    if (file) {
+      try {
+        validOrigUrl = URL.createObjectURL(file)
+        activeUrlsRef.current.add(validOrigUrl)
+      } catch {}
+    }
+
     setPreviewItem({
-      originalUrl: item.originalUrl,
+      originalUrl: validOrigUrl,
       convertedUrl: item.blobUrl || item.dataUrl,
       title: item.name,
       originalSize: item.originalSize,
@@ -495,6 +520,75 @@ export default function ImageCompressorPage() {
     })
     setZoomLevel(1)
     setPanPosition({ x: 0, y: 0 })
+    setSliderPosition(50)
+  }
+
+  // Zoom bằng con lăn chuột (Wheel)
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    e.preventDefault()
+    const zoomDelta = e.deltaY < 0 ? 0.2 : -0.2
+    setZoomLevel((prev) => +(Math.min(5, Math.max(0.5, prev + zoomDelta))).toFixed(2))
+  }
+
+  // Bắt đầu kéo (Pointer Down trên khung ảnh)
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setIsPanning(true)
+    setPanStart({
+      x: e.clientX - panPosition.x,
+      y: e.clientY - panPosition.y,
+    })
+  }
+
+  // Đang kéo (Pointer Move) - dịch chuyển cả 2 ảnh đồng bộ
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPanning) return
+    setPanPosition({
+      x: Math.round(e.clientX - panStart.x),
+      y: Math.round(e.clientY - panStart.y),
+    })
+  }
+
+  // Kết thúc kéo (Pointer Up / Cancel)
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPanning) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+      setIsPanning(false)
+    }
+  }
+
+  // Reset vị trí và mức zoom
+  const handleResetZoomPan = () => {
+    setZoomLevel(1)
+    setPanPosition({ x: 0, y: 0 })
+  }
+
+  // Kéo thanh chia Before/After trong chế độ slider
+  const handleSliderPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setIsDraggingSlider(true)
+  }
+
+  const handleSliderPointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingSlider || !sliderContainerRef.current) return
+    const rect = sliderContainerRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)))
+    setSliderPosition(percentage)
+  }
+
+  const handleSliderPointerUp = (e: React.PointerEvent) => {
+    if (isDraggingSlider) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+      setIsDraggingSlider(false)
+    }
   }
 
   // Tính toán số liệu thống kê
@@ -1302,104 +1396,410 @@ totalOriginalSize > 0 && convertedImages.length > 0
 
       {/* 7. Zoom & Comparison Modal */}
       {previewItem && (
-        <Dialog open={Boolean(previewItem)} onClose={() => setPreviewItem(null)} size="2xl">
-          <DialogBody className="p-0 bg-white rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-slate-200/70 flex items-center justify-center text-slate-700">
+        <Dialog
+          open={Boolean(previewItem)}
+          onClose={() => {
+            setPreviewItem(null)
+            setIsFullscreenModal(false)
+          }}
+          size="full"
+        >
+          <DialogBody
+            className={cn(
+              "p-0 bg-white rounded-2xl overflow-hidden flex flex-col shadow-2xl transition-all",
+              isFullscreenModal ? "h-[98vh] max-h-[98vh]" : "h-[92vh] max-h-[92vh]"
+            )}
+          >
+            {/* Modal Header */}
+            <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50 shrink-0 select-none">
+              {/* Left Info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1B3A6B] shrink-0">
                   <Eye className="w-4 h-4" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 truncate max-w-md">
-                    So sánh: {previewItem.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-normal">
-                    Gốc: {formatBytes(previewItem.originalSize)} ➔ Sau nén: {formatBytes(previewItem.convertedSize)} (Tiết kiệm -{previewItem.reduction}%)
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900 truncate max-w-xs sm:max-w-md" title={previewItem.title}>
+                      So sánh: {previewItem.title}
+                    </h3>
+                    <Badge variant={previewItem.reduction > 0 ? "success" : "secondary"} size="xs" className="font-mono font-semibold">
+                      {previewItem.reduction > 0 ? `-${previewItem.reduction}%` : "0%"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Gốc: <span className="font-medium text-slate-700">{formatBytes(previewItem.originalSize)}</span> ➔ Sau nén:{" "}
+                    <span className="font-medium text-emerald-700">{formatBytes(previewItem.convertedSize)}</span>
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
-                  className="w-7 h-7 p-0"
-                  title="Thu nhỏ"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </Button>
-                <span className="text-xs font-mono font-medium text-slate-600 w-10 text-center">
-                  {Math.round(zoomLevel * 100)}%
-                </span>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setZoomLevel((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
-                  className="w-7 h-7 p-0"
-                  title="Phóng to"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => {
-                    setZoomLevel(1)
-                    setPanPosition({ x: 0, y: 0 })
-                  }}
-                  className="text-xs font-medium px-2 h-7"
-                >
-                  Reset
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewItem(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 ml-1 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              {/* Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg border border-slate-200/80 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setCompareMode("side-by-side")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer font-medium",
+                      compareMode === "side-by-side"
+                        ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                    title="Xem 2 ảnh song song đồng bộ"
+                  >
+                    <Columns2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Song song</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompareMode("slider")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer font-medium",
+                      compareMode === "slider"
+                        ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                    title="Thanh trượt so sánh trực tiếp Before / After"
+                  >
+                    <SplitSquareVertical className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Thanh trượt</span>
+                  </button>
+                </div>
+
+                <div className="h-5 w-px bg-slate-200 hidden sm:block" />
+
+                {/* Quick Presets */}
+                <div className="hidden lg:flex items-center gap-1">
+                  {[0.5, 1, 2, 3].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setZoomLevel(level)}
+                      className={cn(
+                        "text-xs px-2 py-1 rounded-md font-mono transition-colors cursor-pointer",
+                        zoomLevel === level
+                          ? "bg-[#1B3A6B] text-white font-semibold shadow-2xs"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                      )}
+                    >
+                      {Math.round(level * 100)}%
+                    </button>
+                  ))}
+                </div>
+
+                {/* Zoom Controller */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+                    disabled={zoomLevel <= 0.5}
+                    className="w-7 h-7 p-0 cursor-pointer text-slate-600 hover:text-slate-900"
+                    title="Thu nhỏ con lăn hoặc bấm (-)"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </Button>
+                  <span className="text-xs font-mono font-semibold text-slate-700 w-12 text-center select-none">
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setZoomLevel((z) => Math.min(5, +(z + 0.25).toFixed(2)))}
+                    disabled={zoomLevel >= 5}
+                    className="w-7 h-7 p-0 cursor-pointer text-slate-600 hover:text-slate-900"
+                    title="Phóng to con lăn hoặc bấm (+)"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={handleResetZoomPan}
+                    className="h-7 px-2 text-xs font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
+                    title="Đặt lại mức zoom & vị trí (Reset)"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    <span>Fit</span>
+                  </Button>
+                </div>
+
+                {/* Fullscreen & Close */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreenModal((prev) => !prev)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                    title={isFullscreenModal ? "Thu nhỏ cửa sổ" : "Mở rộng tối đa"}
+                  >
+                    {isFullscreenModal ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewItem(null)
+                      setIsFullscreenModal(false)
+                    }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer ml-0.5"
+                    title="Đóng popup"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 sm:p-6 overflow-auto flex-1 bg-slate-100/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
-                {/* Original Image */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-medium text-slate-700">
-                    <span>Ảnh gốc (Original)</span>
-                    <Badge variant="secondary" size="xs">
-                      {formatBytes(previewItem.originalSize)}
-                    </Badge>
+            {/* Instruction / Hint Bar */}
+            <div className="bg-blue-50/70 px-4 py-1.5 border-b border-blue-100/80 flex items-center justify-between text-[11px] text-blue-800 shrink-0 select-none">
+              <div className="flex items-center gap-2">
+                <Move className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>
+                  <strong>Hướng dẫn:</strong> Cuộn con lăn chuột (Wheel) để Phóng to / Thu nhỏ • Nhấp giữ chuột và kéo trên bất kỳ ảnh nào để di chuyển cả 2 ảnh đồng bộ
+                </span>
+              </div>
+              {(panPosition.x !== 0 || panPosition.y !== 0 || zoomLevel !== 1) && (
+                <button
+                  type="button"
+                  onClick={handleResetZoomPan}
+                  className="text-[11px] text-blue-600 hover:text-blue-900 font-medium underline cursor-pointer shrink-0 ml-2"
+                >
+                  Về vị trí gốc
+                </button>
+              )}
+            </div>
+
+            {/* Main Interactive Comparison Body */}
+            <div className="flex-1 min-h-0 bg-slate-950/5 p-3 sm:p-4 overflow-hidden flex flex-col">
+              {compareMode === "side-by-side" ? (
+                /* 1. SIDE-BY-SIDE SYNCHRONIZED VIEW */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-full min-h-0">
+                  {/* Original Image Pane */}
+                  <div className="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between shrink-0 select-none">
+                      <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        Ảnh gốc (Original)
+                      </span>
+                      <Badge variant="secondary" size="xs" className="font-mono">
+                        {formatBytes(previewItem.originalSize)}
+                      </Badge>
+                    </div>
+
+                    <div
+                      onWheel={handleWheelZoom}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerCancel={handlePointerUp}
+                      className={cn(
+                        "flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none",
+                        isPanning ? "cursor-grabbing" : "cursor-grab",
+                        "bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] bg-[size:16px_16px]"
+                      )}
+                    >
+                      <img
+                        src={previewItem.originalUrl}
+                        alt="Original"
+                        style={{
+                          transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                          transformOrigin: "center center",
+                        }}
+                        className={cn(
+                          "max-h-[96%] max-w-[96%] object-contain pointer-events-none select-none",
+                          isPanning ? "transition-none" : "transition-transform duration-100"
+                        )}
+                        draggable={false}
+                        onError={(e) => {
+                          const orig = originalImages.find(
+                            (o) =>
+                              o.name === previewItem.title ||
+                              o.cleanName === previewItem.title.replace(/\.[^/.]+$/, "")
+                          )
+                          if (orig?.file) {
+                            try {
+                              const freshUrl = URL.createObjectURL(orig.file)
+                              activeUrlsRef.current.add(freshUrl)
+                              ;(e.target as HTMLImageElement).src = freshUrl
+                            } catch {}
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
+
+                  {/* Compressed Image Pane */}
+                  <div className="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between shrink-0 select-none">
+                      <span className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        Ảnh sau nén (Compressed)
+                      </span>
+                      <Badge variant="success" size="xs" className="font-mono font-semibold">
+                        {formatBytes(previewItem.convertedSize)} (-{previewItem.reduction}%)
+                      </Badge>
+                    </div>
+
+                    <div
+                      onWheel={handleWheelZoom}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerCancel={handlePointerUp}
+                      className={cn(
+                        "flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none",
+                        isPanning ? "cursor-grabbing" : "cursor-grab",
+                        "bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] bg-[size:16px_16px]"
+                      )}
+                    >
+                      <img
+                        src={previewItem.convertedUrl}
+                        alt="Compressed"
+                        style={{
+                          transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                          transformOrigin: "center center",
+                        }}
+                        className={cn(
+                          "max-h-[96%] max-w-[96%] object-contain pointer-events-none select-none",
+                          isPanning ? "transition-none" : "transition-transform duration-100"
+                        )}
+                        draggable={false}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* 2. INTERACTIVE BEFORE / AFTER SLIDER VIEW */
+                <div
+                  ref={sliderContainerRef}
+                  onPointerMove={(e) => {
+                    if (isDraggingSlider) {
+                      handleSliderPointerMove(e)
+                    } else if (isPanning) {
+                      handlePointerMove(e)
+                    }
+                  }}
+                  onPointerUp={(e) => {
+                    if (isDraggingSlider) handleSliderPointerUp(e)
+                    if (isPanning) handlePointerUp(e)
+                  }}
+                  className="flex-1 flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden"
+                >
+                  <div className="px-3 py-2 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between shrink-0 select-none">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <span>So sánh trực diện Before / After</span>
+                      <span className="text-[11px] font-normal text-slate-400">
+                        (Kéo thanh trượt hoặc kéo con trượt ở ảnh để soi chi tiết)
+                      </span>
+                    </div>
+
+                    {/* Quick Range Slider input in header */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-amber-700">Gốc ({sliderPosition}%)</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={sliderPosition}
+                        onChange={(e) => setSliderPosition(Number(e.target.value))}
+                        className="w-28 sm:w-36 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#1B3A6B]"
+                      />
+                      <span className="text-[11px] font-mono text-emerald-700">Nén ({100 - sliderPosition}%)</span>
+                    </div>
+                  </div>
+
+                  {/* Overlaid view canvas */}
+                  <div
+                    onWheel={handleWheelZoom}
+                    onPointerDown={handlePointerDown}
+                    className={cn(
+                      "flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none",
+                      isPanning ? "cursor-grabbing" : isDraggingSlider ? "cursor-ew-resize" : "cursor-grab",
+                      "bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] bg-[size:16px_16px]"
+                    )}
+                  >
+                    {/* Layer 1 (Bottom): Original Image */}
                     <img
                       src={previewItem.originalUrl}
                       alt="Original"
-                      style={{ transform: `scale(${zoomLevel})` }}
-                      className="max-h-full max-w-full object-contain transition-transform"
+                      style={{
+                        transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                        transformOrigin: "center center",
+                      }}
+                      className={cn(
+                        "max-h-[96%] max-w-[96%] object-contain pointer-events-none select-none",
+                        isPanning ? "transition-none" : "transition-transform duration-100"
+                      )}
+                      draggable={false}
+                      onError={(e) => {
+                        const orig = originalImages.find(
+                          (o) =>
+                            o.name === previewItem.title ||
+                            o.cleanName === previewItem.title.replace(/\.[^/.]+$/, "")
+                        )
+                        if (orig?.file) {
+                          try {
+                            const freshUrl = URL.createObjectURL(orig.file)
+                            activeUrlsRef.current.add(freshUrl)
+                            ;(e.target as HTMLImageElement).src = freshUrl
+                          } catch {}
+                        }
+                      }}
                     />
-                  </div>
-                </div>
 
-                {/* Compressed Image */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-medium text-slate-700">
-                    <span className="text-emerald-700 font-semibold">Ảnh sau nén (Compressed)</span>
-                    <Badge variant="success" size="xs">
-                      {formatBytes(previewItem.convertedSize)} (-{previewItem.reduction}%)
-                    </Badge>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 aspect-square flex items-center justify-center overflow-hidden">
-                    <img
-                      src={previewItem.convertedUrl}
-                      alt="Compressed"
-                      style={{ transform: `scale(${zoomLevel})` }}
-                      className="max-h-full max-w-full object-contain transition-transform"
-                    />
+                    {/* Layer 2 (Top): Compressed Image with clip-path */}
+                    <div
+                      style={{
+                        clipPath: `inset(0 0 0 ${sliderPosition}%)`,
+                      }}
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    >
+                      <img
+                        src={previewItem.convertedUrl}
+                        alt="Compressed"
+                        style={{
+                          transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                          transformOrigin: "center center",
+                        }}
+                        className={cn(
+                          "max-h-[96%] max-w-[96%] object-contain pointer-events-none select-none",
+                          isPanning ? "transition-none" : "transition-transform duration-100"
+                        )}
+                        draggable={false}
+                      />
+                    </div>
+
+                    {/* Floating Badges */}
+                    <div className="absolute top-3 left-3 pointer-events-none">
+                      <Badge variant="secondary" size="xs" className="shadow-xs font-medium bg-white/90 backdrop-blur-xs">
+                        Ảnh gốc: {formatBytes(previewItem.originalSize)}
+                      </Badge>
+                    </div>
+                    <div className="absolute top-3 right-3 pointer-events-none">
+                      <Badge variant="success" size="xs" className="shadow-xs font-semibold bg-white/90 backdrop-blur-xs">
+                        Ảnh sau nén: {formatBytes(previewItem.convertedSize)} (-{previewItem.reduction}%)
+                      </Badge>
+                    </div>
+
+                    {/* Vertical Divider Line */}
+                    <div
+                      style={{ left: `${sliderPosition}%` }}
+                      className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.4)] pointer-events-none z-10"
+                    >
+                      {/* Interactive Drag Handle Button */}
+                      <div
+                        onPointerDown={handleSliderPointerDown}
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center cursor-ew-resize pointer-events-auto hover:scale-110 active:scale-95 transition-transform"
+                        title="Kéo sang trái/phải để so sánh trực diện"
+                      >
+                        <div className="flex items-center text-slate-700 text-xs font-bold select-none">
+                          ◀▶
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </DialogBody>
         </Dialog>

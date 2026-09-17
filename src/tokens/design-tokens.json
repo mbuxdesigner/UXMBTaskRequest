@@ -450,7 +450,7 @@
         "fontSize": "0.75rem",
         "fontSizePx": "12px",
         "lineHeight": "1rem",
-        "fontWeight": 500,
+        "fontWeight": 400,
         "description": "Văn bản hiển thị mã Request ID, hash hoặc code snippet"
       }
     }
