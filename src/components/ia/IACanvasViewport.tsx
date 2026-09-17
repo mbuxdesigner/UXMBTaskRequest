@@ -159,10 +159,6 @@ export default function IACanvasViewport({
   const [snapToGrid, setSnapToGrid] = useState(true)
   // Minimap state (default: false)
   const [showMinimap, setShowMinimap] = useState(false)
-  // Canvas Menu dropdown state (...)
-  const [isCanvasMenuOpen, setIsCanvasMenuOpen] = useState(false)
-  const canvasMenuRef = useRef<HTMLDivElement>(null)
-
   // Top Floating Actions Menu (...)
   const [isTopMenuOpen, setIsTopMenuOpen] = useState(false)
   const topMenuRef = useRef<HTMLDivElement>(null)
@@ -200,9 +196,6 @@ export default function IACanvasViewport({
   // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (canvasMenuRef.current && !canvasMenuRef.current.contains(e.target as Node)) {
-        setIsCanvasMenuOpen(false)
-      }
       if (topMenuRef.current && !topMenuRef.current.contains(e.target as Node)) {
         setIsTopMenuOpen(false)
       }
@@ -805,6 +798,19 @@ export default function IACanvasViewport({
                     </button>
                   )}
 
+                  <button
+                    type="button"
+                    data-testid="ia-more-select-all"
+                    onClick={() => {
+                      setIsTopMenuOpen(false)
+                      setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left transition-colors cursor-pointer font-medium"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Chọn tất cả thẻ (Ctrl + A)</span>
+                  </button>
+
                   {onResetToDefault && (
                     <>
                       <div className="my-1 border-t border-slate-100" />
@@ -1238,124 +1244,6 @@ export default function IACanvasViewport({
           </motion.button>
         )}
 
-        {/* Canvas Menu Dropdown (...) Khớp Mockup Ảnh 5 - Ẩn khi ở chế độ xem */}
-        {!readOnly && (
-          <div className="relative" ref={canvasMenuRef}>
-            <motion.button
-              type="button"
-              data-testid="ia-canvas-more-menu-btn"
-              onClick={() => setIsCanvasMenuOpen(!isCanvasMenuOpen)}
-              title="Tùy chọn Canvas khác"
-              className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-              {...tactileProps.button}
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </motion.button>
-
-            {isCanvasMenuOpen && (
-              <div className="absolute right-0 bottom-full mb-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                  Canvas
-                </div>
-                <button
-                  type="button"
-                  data-testid="ia-menu-snap-grid"
-                  onClick={() => {
-                    setSnapToGrid(!snapToGrid)
-                    setIsCanvasMenuOpen(false)
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <Grid className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Snap to grid</span>
-                  </div>
-                  {snapToGrid && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                </button>
-
-                {onAutoAlign && (
-                  <button
-                    type="button"
-                    data-testid="ia-menu-reset-layout"
-                    onClick={() => {
-                      onAutoAlign()
-                      setIsCanvasMenuOpen(false)
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Reset layout</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  data-testid="ia-menu-minimap"
-                  onClick={() => {
-                    setShowMinimap(!showMinimap)
-                    setIsCanvasMenuOpen(false)
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <MapIcon className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Bản đồ nhỏ</span>
-                  </div>
-                  {showMinimap && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                </button>
-
-                <div className="h-px bg-slate-100 my-1" />
-
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                  Sơ đồ & JSON
-                </div>
-
-                <button
-                  type="button"
-                  data-testid="ia-menu-select-all"
-                  onClick={() => {
-                    setSelectedNodeIds(new Set(layoutNodes.map((n) => n.node.id)))
-                    setIsCanvasMenuOpen(false)
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                >
-                  <CheckSquare className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Select all steps</span>
-                </button>
-
-                {onCopyJson && (
-                  <button
-                    type="button"
-                    data-testid="ia-menu-copy-json"
-                    onClick={() => {
-                      onCopyJson()
-                      setIsCanvasMenuOpen(false)
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Copy as JSON</span>
-                  </button>
-                )}
-
-                {onOpenImportJson && (
-                  <button
-                    type="button"
-                    data-testid="ia-menu-import-json"
-                    onClick={() => {
-                      onOpenImportJson()
-                      setIsCanvasMenuOpen(false)
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-600 font-semibold hover:bg-blue-50 transition-colors cursor-pointer text-left"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Nhập JSON / Đẩy map</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
