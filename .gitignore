@@ -25,4 +25,5 @@ ORIGINAL_REQUEST.md
 !/test-card-compaction-and-100-audit.mjs
 !/test-ia-auto-layout-lv3-horizontal.mjs
 !/test-ia-performance-viewport-culling.mjs
+!/test-ia-cloud-autochunk-and-sanitizer.mjs
 /*.webp

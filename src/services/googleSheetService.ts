@@ -1424,6 +1424,47 @@ export async function syncTeamMembersToSheet(
 }
 
 /**
+ * Làm sạch Node IA trước khi lưu lên Google Sheet:
+ * - Bỏ qua thuộc tính runtime (metrics)
+ * - Bỏ qua các thuộc tính undefined, null hoặc rỗng ("")
+ * - Bỏ qua các mảng rỗng []
+ * - Đệ quy làm sạch các node con (children)
+ */
+function sanitizeNodeForStorage(node: any): any {
+  if (!node || typeof node !== "object") return node
+  const clean: Record<string, any> = {}
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "metrics") continue
+    if (value === undefined || value === null || value === "") continue
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue
+      if (key === "children") {
+        clean.children = value.map(sanitizeNodeForStorage)
+      } else {
+        clean[key] = value
+      }
+    } else if (typeof value === "object") {
+      const cleanedObj = sanitizeNodeForStorage(value)
+      if (Object.keys(cleanedObj).length > 0) {
+        clean[key] = cleanedObj
+      }
+    } else {
+      clean[key] = value
+    }
+  }
+  return clean
+}
+
+function sanitizeIATrees(trees: Record<string, any>): Record<string, any> {
+  if (!trees || typeof trees !== "object") return trees
+  const clean: Record<string, any> = {}
+  for (const [key, root] of Object.entries(trees)) {
+    clean[key] = sanitizeNodeForStorage(root)
+  }
+  return clean
+}
+
+/**
  * Đồng bộ Master Data (Squads, Products, Phases, Form Config) lên Google Sheet
  */
 export async function syncMasterDataToSheet(params: {
@@ -1452,9 +1493,11 @@ export async function syncMasterDataToSheet(params: {
 
   try {
     const session = getStoredSession()
+    const sanitizedIATrees = params.ia_trees ? sanitizeIATrees(params.ia_trees) : undefined
     const payload = {
       action: "sync_master_data",
       ...params,
+      ...(sanitizedIATrees ? { ia_trees: sanitizedIATrees } : {}),
       user_email: params.actorEmail || session?.teamsEmail || session?.personalEmail || "admin@mbbank.com.vn",
       updated_by: session?.displayName || "Admin Portal",
     }

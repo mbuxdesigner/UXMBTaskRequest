@@ -2146,12 +2146,22 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     try {
       const res = await fetchMasterDataFromSheet()
       if (res.success && res.data?.ia_trees) {
-        setTrees((prev) => {
-          const updated = { ...prev, ...res.data!.ia_trees }
-          saveTreesToStorage(updated)
-          return updated
-        })
-        return { success: true, message: "Đã tải cấu trúc IA mới nhất từ Google Sheet!" }
+        let loadedTrees = res.data.ia_trees
+        if (typeof loadedTrees === "string") {
+          try {
+            loadedTrees = JSON.parse(loadedTrees)
+          } catch (e) {
+            console.warn("Failed to parse ia_trees string from cloud", e)
+          }
+        }
+        if (typeof loadedTrees === "object" && loadedTrees !== null) {
+          setTrees((prev) => {
+            const updated = { ...prev, ...loadedTrees }
+            saveTreesToStorage(updated)
+            return updated
+          })
+          return { success: true, message: "Đã tải cấu trúc IA mới nhất từ Google Sheet!" }
+        }
       }
       return { success: false, message: res.message || "Không có dữ liệu IA trên Cloud" }
     } catch (err: any) {

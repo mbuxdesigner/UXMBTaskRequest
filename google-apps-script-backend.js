@@ -304,21 +304,7 @@ function doGet(e) {
         initCoreSheets();
         rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
       }
-      const masterData = {};
-      if (rawSettings && rawSettings.getLastRow() > 1) {
-        const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 4).getValues();
-        for (let i = 0; i < rows.length; i++) {
-          const key = String(rows[i][0] || "").trim();
-          const jsonVal = String(rows[i][1] || "").trim();
-          if (key && jsonVal) {
-            try {
-              masterData[key] = JSON.parse(jsonVal);
-            } catch (err) {
-              masterData[key] = jsonVal;
-            }
-          }
-        }
-      }
+      const masterData = readMasterDataFromSettingsSheet(rawSettings);
       const members = getOrInitTeamMembers(ss);
       return createJsonResponse({
         status: "success",
@@ -435,21 +421,7 @@ function doPost(e) {
         initCoreSheets();
         rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
       }
-      const masterData = {};
-      if (rawSettings && rawSettings.getLastRow() > 1) {
-        const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 4).getValues();
-        for (let i = 0; i < rows.length; i++) {
-          const key = String(rows[i][0] || "").trim();
-          const jsonVal = String(rows[i][1] || "").trim();
-          if (key && jsonVal) {
-            try {
-              masterData[key] = JSON.parse(jsonVal);
-            } catch (err) {
-              masterData[key] = jsonVal;
-            }
-          }
-        }
-      }
+      const masterData = readMasterDataFromSettingsSheet(rawSettings);
       const members = getOrInitTeamMembers(ss);
       return createJsonResponse({
         status: "success",
@@ -636,6 +608,56 @@ function getOrInitRawSettingsSheet(ss) {
     ]);
   }
   return sheet;
+}
+
+/**
+ * Đọc toàn bộ Master Data từ sheet RAW_SETTINGS, tự động ghép nối các cấu hình bị phân mảnh (Auto-Reassemble Chunks)
+ */
+function readMasterDataFromSettingsSheet(rawSettings) {
+  const masterData = {};
+  if (!rawSettings || rawSettings.getLastRow() <= 1) return masterData;
+
+  const rows = rawSettings.getRange(2, 1, rawSettings.getLastRow() - 1, 4).getValues();
+  const rawMap = {};
+  for (let i = 0; i < rows.length; i++) {
+    const key = String(rows[i][0] || "").trim();
+    if (key) {
+      rawMap[key] = String(rows[i][1] || "");
+    }
+  }
+
+  for (const key in rawMap) {
+    // Bỏ qua các key phụ của chunk để tránh sinh rác trong masterData
+    if (key.endsWith("_CHUNKS") || /_CHUNK_\d+$/.test(key)) {
+      continue;
+    }
+    // Nếu key có cấu hình phân mảnh Auto-Chunking
+    if (rawMap[key + "_CHUNKS"]) {
+      const chunkCount = parseInt(rawMap[key + "_CHUNKS"], 10) || 0;
+      if (chunkCount > 0) {
+        let fullStr = "";
+        for (let c = 0; c < chunkCount; c++) {
+          fullStr += (rawMap[key + "_CHUNK_" + c] || "");
+        }
+        try {
+          masterData[key] = JSON.parse(fullStr);
+        } catch (e) {
+          masterData[key] = fullStr;
+        }
+        continue;
+      }
+    }
+    // Giá trị đơn ô thông thường
+    const valStr = rawMap[key];
+    if (valStr && !valStr.startsWith("[MULTI_CHUNK:")) {
+      try {
+        masterData[key] = JSON.parse(valStr);
+      } catch (err) {
+        masterData[key] = valStr;
+      }
+    }
+  }
+  return masterData;
 }
 
 /**
@@ -998,7 +1020,7 @@ function handleLogRequest(data) {
       ];
     }
 
-    const jsonPayloadString = JSON.stringify(rawObj, null, 2);
+    const jsonPayloadString = JSON.stringify(rawObj);
 
     // Ghi 1 hàng vào RAW_TASKS
     rawSheet.appendRow([
@@ -1312,7 +1334,17 @@ function handleUpdateTaskProgress(data) {
         rawSheet.getRange(i + 2, 4).setValue(item.current_phase);
         rawSheet.getRange(i + 2, 5).setValue(item.status);
         rawSheet.getRange(i + 2, 7).setValue(item.assigned_designer || "");
-        rawSheet.getRange(i + 2, 8).setValue(JSON.stringify(item, null, 2));
+        
+        let itemPayload = JSON.stringify(item);
+        if (itemPayload.length > 45000 && item.task_updates && item.task_updates.length > 30) {
+          // Bảo vệ chống tràn ô 50,000 ký tự: giữ 30 cập nhật/tin nhắn gần nhất trong JSON của task
+          // Toàn bộ lịch sử chi tiết vĩnh viễn đã được lưu tại Sheet TASK_UPDATES & Activity_Logs_View
+          const trimmedItem = Object.assign({}, item);
+          trimmedItem.task_updates = item.task_updates.slice(0, 30);
+          trimmedItem._updates_truncated = true;
+          itemPayload = JSON.stringify(trimmedItem);
+        }
+        rawSheet.getRange(i + 2, 8).setValue(itemPayload);
         rawSheet.getRange(i + 2, 10).setValue(formattedDate);
         updatedItem = item;
         break;
@@ -1424,7 +1456,7 @@ function getAllRequestsFromSheet() {
         if (isRawTasks) {
           try {
             rawSheet.getRange(i + 2, 1).setValue(curId); // Cột A: Request_ID
-            rawSheet.getRange(i + 2, 8).setValue(JSON.stringify(item, null, 2)); // Cột H: Payload_JSON
+            rawSheet.getRange(i + 2, 8).setValue(JSON.stringify(item)); // Cột H: Payload_JSON
           } catch (err) {
             Logger.log("Could not auto-repair duplicate row in RAW_TASKS: " + err);
           }
@@ -3200,15 +3232,44 @@ function handleSyncMasterData(data) {
     }
   }
 
-  for (const configKey in configsToSave) {
-    const payloadStr = JSON.stringify(configsToSave[configKey], null, 2);
-    if (existingKeys[configKey]) {
-      const rowIdx = existingKeys[configKey];
-      rawSettings.getRange(rowIdx, 2).setValue(payloadStr);
+  function writeSettingRow(key, valStr) {
+    if (existingKeys[key]) {
+      const rowIdx = existingKeys[key];
+      rawSettings.getRange(rowIdx, 2).setValue(valStr);
       rawSettings.getRange(rowIdx, 3).setValue(formattedDate);
       rawSettings.getRange(rowIdx, 4).setValue(updatedBy);
     } else {
-      rawSettings.appendRow([configKey, payloadStr, formattedDate, updatedBy]);
+      rawSettings.appendRow([key, valStr, formattedDate, updatedBy]);
+      existingKeys[key] = rawSettings.getLastRow();
+    }
+  }
+
+  const MAX_CELL_LIMIT = 40000; // Ngưỡng an toàn tuyệt đối dưới giới hạn 50,000 ký tự của Google Sheets
+
+  for (const configKey in configsToSave) {
+    // Không dùng null, 2 để tránh làm phình dữ liệu với các khoảng trắng thụt lề
+    const payloadStr = JSON.stringify(configsToSave[configKey]);
+    if (payloadStr.length <= MAX_CELL_LIMIT) {
+      writeSettingRow(configKey, payloadStr);
+      // Nếu trước đó key này từng bị chunk, reset CHUNKS về 0
+      if (existingKeys[configKey + "_CHUNKS"]) {
+        writeSettingRow(configKey + "_CHUNKS", "0");
+      }
+    } else {
+      // Tự động phân mảnh (Auto-Chunking) sang các dòng _CHUNK_0, _CHUNK_1...
+      const numChunks = Math.ceil(payloadStr.length / MAX_CELL_LIMIT);
+      writeSettingRow(configKey, "[MULTI_CHUNK:" + numChunks + "]");
+      writeSettingRow(configKey + "_CHUNKS", String(numChunks));
+      for (let c = 0; c < numChunks; c++) {
+        const chunkPart = payloadStr.substring(c * MAX_CELL_LIMIT, (c + 1) * MAX_CELL_LIMIT);
+        writeSettingRow(configKey + "_CHUNK_" + c, chunkPart);
+      }
+      // Dọn dẹp các chunk thừa cũ nếu lần lưu mới ít chunk hơn lần trước
+      let excess = numChunks;
+      while (existingKeys[configKey + "_CHUNK_" + excess]) {
+        writeSettingRow(configKey + "_CHUNK_" + excess, "");
+        excess++;
+      }
     }
   }
 
