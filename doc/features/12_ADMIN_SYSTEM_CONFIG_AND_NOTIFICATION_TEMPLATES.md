@@ -128,6 +128,27 @@ Bao quát 100% các điểm chạm tương tác giữa PO, Designer, Design Owne
 13. `comment_mention`: Thông báo khi có thành viên đề cập `@tên` trong thảo luận.
 14. `system_announcement`: Thông báo bảo trì hoặc chỉ đạo nghiệp vụ từ Quản trị viên.
 
+### 3.9. Phân hệ Lịch Làm Việc & Ngày Nghỉ Lễ (`workSchedule`)
+Quản lý chế độ làm việc và ngày nghỉ hành chính đồng bộ hóa vào động cơ tính hạn SLA:
+- `workDays` (Mặc định `[1, 2, 3, 4, 5]`): Danh sách các ngày làm việc trong tuần (Thứ Hai đến Thứ Sáu, tương ứng `[Mo, Tu, We, Th, Fr]`).
+- `workHours`: Khung giờ làm việc chuẩn:
+  - `start` (Mặc định `"08:00"`): Giờ bắt đầu làm việc buổi sáng.
+  - `end` (Mặc định `"17:30"`): Giờ kết thúc làm việc buổi chiều.
+- `lunchBreak`: Cấu hình thời gian nghỉ trưa:
+  - `enabled` (Mặc định `true`): Bật khấu trừ thời gian nghỉ trưa.
+  - `start` (Mặc định `"12:00"`): Giờ bắt đầu nghỉ trưa.
+  - `end` (Mặc định `"13:30"`): Giờ kết thúc nghỉ trưa (thời lượng: 1h 30m).
+- `holidays`: Danh mục ngày nghỉ lễ & ngoại lệ (`HolidayScheduleEntry`):
+  - Tích hợp sẵn 11 ngày nghỉ lễ Quốc gia Việt Nam 2026 (`VIETNAM_PUBLIC_HOLIDAYS_2026`).
+  - Hỗ trợ thêm ngày nghỉ nội bộ MBBank, ngày kỷ niệm hoặc team-building.
+- **Các hàm tính toán toán học chuẩn xác:**
+  - `isBusinessDay(date, schedule)`: Kiểm tra một ngày bất kỳ có phải là ngày làm việc hành chính hay không.
+  - `getDailyWorkingMinutes(schedule)`: Tính số phút làm việc chuẩn/ngày sau khi trừ nghỉ trưa (480 phút = 8h00m).
+  - `getWeeklyCapacityHours(schedule)`: Định mức công suất tuần (40.0 giờ/tuần).
+  - `calculateBusinessHoursBetween(start, end, schedule)`: Tính chính xác số giờ làm việc giữa 2 mốc thời gian, loại bỏ ngày nghỉ và giờ nghỉ trưa.
+  - `calculateSlaElapsedHours(start, end, schedule)`: Tính số giờ đã trôi qua phục vụ SLA PO Pending, tự động khấu trừ 48h cuối tuần và ngày lễ.
+  - `addBusinessDays(start, days, schedule)`: Cộng ngày làm việc tự động nhảy cóc qua cuối tuần và ngày lễ.
+
 Mỗi mẫu thông báo hỗ trợ:
 - `titleTemplate`: Chuỗi tiêu đề có hỗ trợ placeholder.
 - `messageTemplate`: Chuỗi nội dung chi tiết có hỗ trợ placeholder.

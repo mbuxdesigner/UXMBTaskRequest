@@ -369,7 +369,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       new_phase: newPhase,
       new_progress: newProgress,
       previous_phase: targetReq?.current_phase,
-      note: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+      note: `Chuyển sang khâu [${newPhase}] qua Kanban Board.`,
     }
 
     // Optimistic UI update
@@ -385,7 +385,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             latest_update: {
               date: formattedDate,
               phase: newPhase,
-              message: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+              message: `Chuyển sang khâu [${newPhase}] qua Kanban Board.`,
             },
             task_updates: [newLogRecord, ...(r.task_updates || [])],
           }
@@ -404,7 +404,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         new_status: newStatus,
         new_phase: newPhase,
         new_progress: newProgress,
-        note: `Chuyển sang khâu [${newPhase}] (${newProgress}%) qua Kanban Board.`,
+        note: `Chuyển sang khâu [${newPhase}] qua Kanban Board.`,
         assigned_designer: target?.assigned_designer,
       })
 
@@ -412,7 +412,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         triggerMutationHighlight(requestId)
         toast.success(
           "Cập nhật trạng thái thành công!",
-          `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}] (${newProgress}%).`,
+          `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}].`,
           { id: toastId }
         )
         dispatchNotification({

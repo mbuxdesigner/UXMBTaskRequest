@@ -196,6 +196,7 @@ function IATreeNodeCardComponent({
   requestsMap,
   isHighlighted = false,
   scale = 1.0,
+  getScale,
   onToggleCollapse,
   onOpenDetail,
   onAddChild,
@@ -307,8 +308,9 @@ function IATreeNodeCardComponent({
 
   // Subtree Metrics (Rollup from lower-level descendants)
   const subtreeMetrics = useMemo(() => {
+    if (layoutNode.metrics) return layoutNode.metrics
     return computeSubtreeMetrics(node, requestsMap)
-  }, [node, requestsMap])
+  }, [layoutNode.metrics, node, requestsMap])
 
   // Rollup is active when enabled in displaySettings AND the node has child branches
   const isRollup = Boolean(displaySettings.rollupProgress && hasChildren)
@@ -391,7 +393,7 @@ function IATreeNodeCardComponent({
       initY: y,
     }
 
-    const currentScale = Math.max(0.1, scale)
+    const currentScale = getScale ? Math.max(0.05, getScale()) : Math.max(0.05, scale || 1)
     let rafId: number | null = null
     let latestClientX = e.clientX
     let latestClientY = e.clientY
@@ -488,7 +490,7 @@ function IATreeNodeCardComponent({
 
     setIsResizing(true)
     onDragStateChange?.(true)
-    const currentScale = Math.max(0.1, scale)
+    const currentScale = getScale ? Math.max(0.05, getScale()) : Math.max(0.05, scale || 1)
     const currentW = width
 
     resizeRef.current = {

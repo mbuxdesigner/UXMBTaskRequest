@@ -17,4 +17,12 @@ scratch/
 .agents/
 ORIGINAL_REQUEST.md
 /test-*.mjs
+!/test-smart-diffing.mjs
+!/test-system-config.mjs
+!/test-work-schedule-engine.mjs
+!/test-e2e-design-system.mjs
+!/test-lv5-and-squad-badge.mjs
+!/test-card-compaction-and-100-audit.mjs
+!/test-ia-auto-layout-lv3-horizontal.mjs
+!/test-ia-performance-viewport-culling.mjs
 /*.webp

@@ -169,15 +169,30 @@ export default function IACanvasViewport({
   )
 
 
-  // Auto-fit on initial mount when dimensions become available
+  const transformRef = useRef(transform)
+  transformRef.current = transform
+  const getCanvasScale = useCallback(() => transformRef.current.scale, [])
+
+  // Track container dimensions for viewport culling and auto-fit
+  const [viewportSize, setViewportSize] = useState({ width: 1400, height: 900 })
   const initialFitRef = useRef(false)
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
+    const updateSize = () => {
+      const w = el.clientWidth || 1400
+      const h = el.clientHeight || 900
+      setViewportSize({ width: w, height: h })
+    }
+    updateSize()
+
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect
+        if (width > 50 && height > 50) {
+          setViewportSize({ width, height })
+        }
         if (width > 100 && height > 100 && !initialFitRef.current && layoutNodes.length > 0) {
           initialFitRef.current = true
           onFitToView()
@@ -733,6 +748,55 @@ export default function IACanvasViewport({
     }
   }, [])
 
+  // High-performance Viewport Culling for large trees (200+ nodes)
+  const shouldCull = layoutNodes.length > 40
+  const visibleBounds = useMemo(() => {
+    if (!shouldCull) return null
+    const scale = Math.max(0.05, transform.scale)
+    // 400px safety buffer in canvas coordinates so user never sees pop-in during pan
+    const pad = Math.max(400, 400 / scale)
+    return {
+      minX: -transform.x / scale - pad,
+      maxX: (viewportSize.width - transform.x) / scale + pad,
+      minY: -transform.y / scale - pad,
+      maxY: (viewportSize.height - transform.y) / scale + pad,
+    }
+  }, [shouldCull, transform.x, transform.y, transform.scale, viewportSize.width, viewportSize.height])
+
+  const culledNodes = useMemo(() => {
+    if (!visibleBounds) return layoutNodes
+    return layoutNodes.filter((ln) => {
+      // Always keep selected, highlighted, or actively interacted nodes
+      if (selectedNodeIds.has(ln.node.id)) return true
+      if (ln.isHighlighted) return true
+      if (activeWireDrag && (activeWireDrag.sourceNodeId === ln.node.id || activeWireDrag.hoveredTargetNodeId === ln.node.id)) return true
+      const h = ln.height || 68
+      const inX = ln.x + ln.width >= visibleBounds.minX && ln.x <= visibleBounds.maxX
+      const inY = ln.y + h >= visibleBounds.minY && ln.y <= visibleBounds.maxY
+      return inX && inY
+    })
+  }, [visibleBounds, layoutNodes, selectedNodeIds, activeWireDrag])
+
+  const culledConnectors = useMemo(() => {
+    if (!visibleBounds) return connectors
+    const visibleIdSet = new Set(culledNodes.map((n) => n.node.id))
+    return connectors.filter((c) => {
+      if (visibleIdSet.has(c.parentId) || visibleIdSet.has(c.childId)) return true
+      if (selectedNodeIds.has(c.parentId) || selectedNodeIds.has(c.childId)) return true
+      if (matchedIds.has(c.parentId) || matchedIds.has(c.childId)) return true
+      const minConnX = Math.min(c.x1, c.x2)
+      const maxConnX = Math.max(c.x1, c.x2)
+      const minConnY = Math.min(c.y1, c.y2)
+      const maxConnY = Math.max(c.y1, c.y2)
+      return (
+        maxConnX >= visibleBounds.minX &&
+        minConnX <= visibleBounds.maxX &&
+        maxConnY >= visibleBounds.minY &&
+        minConnY <= visibleBounds.maxY
+      )
+    })
+  }, [visibleBounds, connectors, culledNodes, selectedNodeIds, matchedIds])
+
   const zoomPercent = Math.round(transform.scale * 100)
   const isHandMode = toolMode === "pan" || isSpacePressed
   const cursorClass = activeWireDrag
@@ -837,7 +901,7 @@ export default function IACanvasViewport({
       >
         {/* SVG Cubic Bezier Connectors Layer */}
         <IABezierConnectors
-          connectors={connectors}
+          connectors={culledConnectors}
           highlightedIds={matchedIds}
           activeWireDrag={activeWireDrag}
           scale={transform.scale}
@@ -860,7 +924,7 @@ export default function IACanvasViewport({
         )}
 
         {/* 4-Tier Interactive Node Cards Layer */}
-        {layoutNodes.map((layoutNode) => {
+        {culledNodes.map((layoutNode) => {
           const linkedRequest = layoutNode.node.requestId
             ? requestsMap.get(layoutNode.node.requestId)
             : undefined
@@ -879,7 +943,7 @@ export default function IACanvasViewport({
               onOpenTaskPicker={onOpenTaskPicker}
               onMultiNodeDrag={readOnly ? undefined : onMultipleNodesDrag}
               isWireDropTarget={activeWireDrag?.hoveredTargetNodeId === layoutNode.node.id}
-              scale={transform.scale}
+              getScale={getCanvasScale}
               onToggleCollapse={onToggleCollapse}
               onOpenDetail={onOpenDetail}
               onAddChild={onAddChild}

@@ -96,7 +96,7 @@ export default function UpdateProgressModal({
       if (res.success) {
         toast.success(
           "Cập nhật tiến độ thành công!",
-          `Yêu cầu ${request.request_id} đã cập nhật sang khâu [${phase}] (${progress}%).`
+          `Yêu cầu ${request.request_id} đã cập nhật sang khâu [${phase}].`
         )
         dispatchNotification({
           type: "phase_changed",

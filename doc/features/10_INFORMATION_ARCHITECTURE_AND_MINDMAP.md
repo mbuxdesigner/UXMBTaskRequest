@@ -184,16 +184,30 @@ src/
 
 ---
 
-## ⚡ 5. ĐỘNG CƠ BỐ TRÍ CÂY DẠNG CỘT (COLUMNAR HIERARCHY LAYOUT ENGINE)
+## ⚡ 5. ĐỘNG CƠ TỰ ĐỘNG BỐ TRÍ CÂY NÂNG CẤP (HYBRID HIERARCHICAL LAYOUT ENGINE)
 
-Layout engine trong `useIATreeState.ts` sử dụng thuật toán bố trí theo phả hệ dạng cột tối ưu:
-1. **Tier 1:** Đặt tại đỉnh, tự động trải dài theo chiều ngang để che phủ toàn bộ chiều rộng của các phân hệ Tier 2 con.
-2. **Tier 2 (Phân hệ):** Xếp ngang theo từng cột nghiệp vụ riêng biệt.
-3. **Tier 3 (Luồng tính năng):** Xếp dọc dưới Tier 2 tương ứng, thụt lề sang phải `INDENT_LV3 = 48px`.
-4. **Tier 4 (Màn hình & Điểm chạm):** Xếp dọc dưới Tier 3 tương ứng, thụt lề sang phải `INDENT_LV4 = 40px`.
-5. **Tier 5 (Thành phần & Chi tiết):** Xếp dọc dưới Tier 4 tương ứng, thụt lề sang phải `INDENT_LV5 = 36px`.
-6. **Khoảng cách dọc tối ưu (`VERTICAL_GAP = 20px`):** Tối ưu hóa không gian hiển thị, loại bỏ khoảng cách thừa giữa các cấp con.
-7. **Khoảng cách linh hoạt:** Cho phép người dùng tùy chỉnh khoảng cách dọc và ngang thông qua `IASettingsModal.tsx`.
+Layout engine trong `useIATreeState.ts` sử dụng thuật toán bố trí lai (Hybrid) trực quan hóa theo chuẩn kiến trúc thông tin hiện đại:
+1. **Tier 1 (Gốc sản phẩm):** Đặt tại đỉnh (`START_Y = 60`), tự động trải dài theo chiều ngang (`root.width`) bao trùm toàn bộ các phân hệ Lv2 và luồng Lv3 bên dưới. Chiều cao tiêu chuẩn được cố định **68px** (loại bỏ lỗi bị ép dẹp 52px).
+2. **Tier 2 (Phân hệ / Module — BAO TRÙM TOÀN BỘ LV3):** Chiều rộng `module.width` của Lv2 tự động kéo dài từ mép trái nhánh Lv3 đầu tiên đến mép phải nhánh Lv3 cuối cùng:
+   $$\text{module.width} = \max(\text{DEFAULT\_WIDTH}, \text{totalLuongsWidth}), \quad \text{module.x} = \text{firstLuongX}$$
+   Tạo thành dải banner phân hệ bao bọc trực quan toàn bộ các luồng tính năng Lv3 trực thuộc, hoàn toàn tương đồng với phong cách dải banner của Lv1.
+3. **Tier 3 (Luồng tính năng — XẾP NGANG):** Các node Lv3 thuộc cùng một Lv2 được dàn thành hàng ngang (`JOURNEY_GAP = 28px`), tạo thành các cột tính năng độc lập, không bị chồng đè hay thụt dọc dưới nhau.
+4. **Tier 4 (Màn hình & Điểm chạm — XẾP DỌC):** Xếp chồng dọc bên dưới nhánh Lv3 tương ứng, thụt lề sang phải `INDENT_LV4 = 40px`, khoảng cách dọc `VERTICAL_GAP = 20px`.
+5. **Tier 5 (Thành phần & Chi tiết — XẾP DỌC):** Xếp chồng dọc bên dưới màn hình Lv4 tương ứng, thụt lề sang phải `INDENT_LV5 = 36px`, khoảng cách dọc `VERTICAL_GAP = 20px`.
+6. **Hệ thống Đường Nối Trực Giao (Orthogonal Connectors):**
+   - **Lv1 $\rightarrow$ Lv2:** Bus line ngang chia nhánh từ đáy Lv1 xuống đỉnh từng thẻ Lv2 (`fromPort: "bottom"`, `toPort: "top"`).
+   - **Lv2 $\rightarrow$ Lv3:** Bus line ngang chia nhánh từ đáy Lv2 xuống đỉnh từng thẻ Lv3 (`fromPort: "bottom"`, `toPort: "top"`).
+   - **Lv3 $\rightarrow$ Lv4:** Trunk dọc thả từ đáy-trái của Lv3, rẽ vuông góc `└─>` vào mép trái từng thẻ Lv4 (`fromPort: "bottom"`, `toPort: "left"`), hỗ trợ handle kéo chỉnh trục dọc.
+   - **Lv4 $\rightarrow$ Lv5:** Trunk dọc thả từ đáy-trái của Lv4, rẽ vuông góc `└─>` vào mép trái từng thẻ Lv5 (`fromPort: "bottom"`, `toPort: "left"`).
+7. **Khắc phục lỗi điểm đầu mũi tên:** Xóa bỏ thẻ `<circle>` SVG thừa tại `(x1, y1)`; mũi tên nối vào mép trái card con trỏ chính xác vào đúng tâm trục đứng (`height / 2`).
+
+### 5.1. Tối Ưu Hóa Hiệu Năng Cho Bản Đồ Lớn (256+ Nodes & 8.600px Canvas)
+1. **Tách biệt Scale Getter (`getScale`):** `IATreeNodeCard` không còn nhận prop `scale` dạng biến nguyên thủy liên tục thay đổi. Thao tác Zoom được chuyển 100% sang GPU thông qua CSS hardware transform `translate3d(...) scale(...)`. Tương tác drag/resize truy vấn `getScale()` tức thời khi bắt đầu tương tác, bảo toàn tuyệt đối `React.memo` cho tất cả các thẻ node khi Zoom/Pan.
+2. **Cắt Tỉa Khung Nhìn Tự Động (Viewport Culling & Virtual Windowing):** Khi cây có trên 40 nodes, `IACanvasViewport.tsx` tính toán `visibleBounds` với vùng đệm an toàn `400px` xung quanh màn hình. Chỉ các node và connector nằm trong tầm nhìn mới được đưa vào DOM (`culledNodes`, `culledConnectors`).
+   - Giảm tải DOM: Giảm số phần tử hoạt động từ 6.500+ DOM elements xuống còn ~800 elements (giảm **83.6%**).
+   - Bảo toàn trạng thái tương tác: Giữ lại 100% các node đang chọn (`selectedNodeIds`), kết quả tìm kiếm (`isHighlighted`), và node nối dây (`activeWireDrag`).
+   - Giữ mũi tên thông minh: Bất kỳ mũi tên nào kết nối vào các node đang hiển thị (`visibleIdSet`) đều được giữ lại 100%.
+3. **Tiền Tính Toán Chỉ Số Cây Con trong $O(1)$ (`Precalculated Subtree Metrics`):** Các chỉ số hoàn thành, tiến độ, số task con được tính toán 1 lần bottom-up trong `useIATreeState.ts` và gán vào `layoutNode.metrics`, loại bỏ hoàn toàn đệ quy duyệt cây lặp lại khi render thẻ.
 
 ---
 

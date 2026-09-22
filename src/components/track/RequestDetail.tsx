@@ -2572,7 +2572,7 @@ export default function RequestDetail({
         new_phase: newPhase,
         new_status: nextStatus,
         new_progress: progressVal,
-        note: `Chuyển tiến độ sang khâu [${newPhase}] (${progressVal}%) - Tự động gỡ trạng thái chờ PO`,
+        note: `Chuyển tiến độ sang khâu [${newPhase}] - Tự động gỡ trạng thái chờ PO`,
         assigned_designer: request.assigned_designer,
         sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO khi chuyển khâu UX
         is_comment: false,
@@ -2587,7 +2587,7 @@ export default function RequestDetail({
         dispatchNotification({
           type: "phase_changed",
           title: `Chuyển khâu: ${request.request_id}`,
-          message: `Đã chuyển sang khâu [${newPhase}] (${progressVal}%)`,
+          message: `Đã chuyển sang khâu [${newPhase}]`,
           requestId: request.request_id,
           taskTitle: request.title,
           actorName: session?.displayName || "Designer",
@@ -3048,7 +3048,9 @@ export default function RequestDetail({
 
     if (allUpdates.length > 0) {
       allUpdates.forEach((u, idx) => {
-        const noteRaw = (u.note || "").trim()
+        let noteRaw = (u.note || "").trim()
+        // Loại bỏ ghi % trong log chuyển khâu (ví dụ: "(40%)", "(70%)", "(100%)")
+        noteRaw = noteRaw.replace(/(Chuyển\s+(?:tiến\s+độ\s+)?sang\s+khâu\s+\[[^\]]+\])\s*\(\d+%\)/gi, "$1")
         const noteLower = noteRaw.toLowerCase()
 
         // Bỏ qua log khởi tạo dạng thô vì đã được EVT-CREATE hiển thị ở đầu dòng thời gian
@@ -3128,7 +3130,8 @@ export default function RequestDetail({
         }
       })
     } else if (request.latest_update) {
-      const msg = (request.latest_update.message || "").trim()
+      let msg = (request.latest_update.message || "").trim()
+      msg = msg.replace(/(Chuyển\s+(?:tiến\s+độ\s+)?sang\s+khâu\s+\[[^\]]+\])\s*\(\d+%\)/gi, "$1")
       const isSys = isSystemActivityNote(msg)
       if (isSys) {
         events.push({
