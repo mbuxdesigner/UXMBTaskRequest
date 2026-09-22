@@ -22,7 +22,7 @@ import { UserAvatar, getAvatarColorClass, getMemberDisplayName, getDesignerAvata
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
-import { getSystemConfig } from "@/config/systemConfig"
+import { getSystemConfig, calculateBusinessHoursBetween, calculateSlaElapsedHours } from "@/config/systemConfig"
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { dispatchNotification } from "@/services/notificationService"
@@ -42,6 +42,7 @@ import {
   TimelineDescription,
 } from "@/components/reui/timeline"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
+import { CCalendar15 } from "@/components/reui/c-calendar-15"
 import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
 import { SmartLinkChip } from "@/components/common/SmartLinkChip"
 import { 
@@ -3453,11 +3454,17 @@ export default function RequestDetail({
     const rawTime = request.sent_to_po_at || new Date().toISOString()
     const sentMs = parseDateToMs(rawTime) || Date.now()
     const now = Date.now()
-    const elapsedMs = Math.max(0, now - sentMs)
-    const elapsedHours = elapsedMs / (1000 * 60 * 60)
+    const sysConfig = getSystemConfig()
+    const excludeWeekends = sysConfig.sla?.excludeWeekendsInSla ?? true
+    let elapsedHours = 0
+    if (excludeWeekends && sysConfig.workSchedule) {
+      elapsedHours = calculateSlaElapsedHours(sentMs, now, sysConfig.workSchedule)
+    } else {
+      elapsedHours = Math.max(0, (now - sentMs) / (1000 * 60 * 60))
+    }
 
     // Trong thời hạn quy định: Hiện Banner 1 (Tím: Đang trong hạn chờ PO phản hồi)
-    const poTimeoutHours = getSystemConfig().sla?.poPendingTimeoutHours ?? 24
+    const poTimeoutHours = sysConfig.sla?.poPendingTimeoutHours ?? 24
     if (elapsedHours < poTimeoutHours) {
       const hoursRemaining = Math.max(0, Math.ceil(poTimeoutHours - elapsedHours))
       const sentDate = new Date(sentMs)
@@ -4229,134 +4236,93 @@ export default function RequestDetail({
                       </div>
                     </div>
 
-                    {/* 3. Dates (Lịch trình thiết kế UX: Bắt đầu -> Hạn hoàn thành thiết kế) */}
-                    <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0" title="Lịch trình thiết kế UX của Designer">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>Hạn UX</span>
-                      </div>
-                      <div className="flex-1 relative flex items-center gap-2 font-normal text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
-                        <span className="text-slate-500 flex items-center gap-1 shrink-0 whitespace-nowrap" title="Thời gian Design bắt đầu nhận task">
-                          <span>{request.submitted_at || "Bắt đầu"}</span>
-                        </span>
-                        <span className="text-slate-300 font-medium">→</span>
-                        <button
-                          type="button"
-                          onClick={() => setOpenDropdown(openDropdown === "date" ? null : "date")}
-                          className="text-[#1057FB] font-medium flex items-center gap-1 bg-blue-50/80 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
-                          title="Hạn hoàn thành thiết kế UX (Design End Date - Bấm để đổi hạn)"
-                        >
-                          <Calendar className="w-3.5 h-3.5 text-[#1057FB] shrink-0" />
-                          <span>{customDeadline || "Hạn thiết kế"}</span>
-                        </button>
+                    {/* 3. Dates – Phase-aware date field (Start / Gửi wireframe / Gửi UI / Hand off / Design done) */}
+                    {(() => {
+                      const rawPhaseKey = (request.current_phase || "").trim()
+                      const isEarlyPhase = [
+                        "Chờ xác nhận", "1. Chờ xác nhận",
+                        "Define đầu bài", "2. Define đầu bài",
+                      ].includes(rawPhaseKey)
+                      const isDonePhase = [
+                        "Nghiệm thu UI", "6. Nghiệm thu UI",
+                        "Hoàn thành", "7. Hoàn thành",
+                      ].includes(rawPhaseKey)
+                      const isWireframe = rawPhaseKey === "Wireframe" || rawPhaseKey === "3. Wireframe"
+                      const isUIDesign = rawPhaseKey === "UI Design" || rawPhaseKey === "4. UI Design"
+                      const isReadyToDev = rawPhaseKey === "Ready to dev" || rawPhaseKey === "5. Ready to dev" || rawPhaseKey === "Ready to Dev"
+                      const isPickable = isWireframe || isUIDesign || isReadyToDev
 
-                        {/* ReUI Date Picker Popover */}
-                        <AnimatePresence>
-                          {openDropdown === "date" && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                              className="absolute top-full left-0 mt-1.5 z-50 w-64 bg-white border border-slate-200/90 rounded-2xl shadow-2xl shadow-slate-900/10 p-3 select-none"
-                            >
-                              {/* Header Month/Year Selector */}
-                              <div className="flex items-center justify-between mb-3 px-1">
-                                <div>
-                                  <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Hạn thiết kế UX</span>
-                                  <span className="text-xs font-semibold text-slate-900">
-                                    {monthNamesVi[calMonth]} {calYear}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={prevCalMonth}
-                                    className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                                  >
-                                    <ChevronLeft className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={nextCalMonth}
-                                    className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                                  >
-                                    <ChevronRight className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
+                      let dateLabel = "Hạn UX"
+                      let calendarTitle = "Hạn thiết kế UX"
+                      if (isEarlyPhase) { dateLabel = "Start" }
+                      else if (isWireframe) { dateLabel = "Gửi wireframe"; calendarTitle = "Hạn gửi Wireframe" }
+                      else if (isUIDesign) { dateLabel = "Gửi UI"; calendarTitle = "Hạn gửi UI Design" }
+                      else if (isReadyToDev) { dateLabel = "Hand off"; calendarTitle = "Ngày Hand off" }
+                      else if (isDonePhase) { dateLabel = "Design done" }
 
-                              {/* Weekday headers */}
-                              <div className="grid grid-cols-7 gap-1 mb-1 text-center">
-                                {dayHeadersVi.map((dh) => (
-                                  <span key={dh} className="text-[10px] font-medium text-slate-400">
-                                    {dh}
-                                  </span>
-                                ))}
-                              </div>
+                      return (
+                        <div className="flex items-center gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
+                          {/* Label cột trái: 1 dòng duy nhất, không xuống dòng */}
+                          <div className="flex items-center gap-2 text-slate-500 font-normal shrink-0 whitespace-nowrap" title="Lịch trình thiết kế UX của Designer">
+                            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="whitespace-nowrap">{dateLabel}</span>
+                          </div>
 
-                              {/* Days Grid */}
-                              <div className="grid grid-cols-7 gap-1 text-center">
-                                {calDays.map((d, index) => {
-                                  if (d === null) {
-                                    return <div key={`empty-${index}`} className="h-7 w-7" />
-                                  }
+                          <div className="relative flex items-center gap-2 font-normal text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
+                            {/* === Khâu đầu (Chờ xác nhận / Define): chỉ hiển thị 1 ngày Start === */}
+                            {isEarlyPhase && (
+                              <span className="text-slate-500 font-normal" title="Thời gian Designer bắt đầu nhận task">
+                                {request.submitted_at || "—"}
+                              </span>
+                            )}
 
-                                  const isSelected =
-                                    customDeadline &&
-                                    new Date(customDeadline).getFullYear() === calYear &&
-                                    new Date(customDeadline).getMonth() === calMonth &&
-                                    new Date(customDeadline).getDate() === d
+                            {/* === Khâu giữa (Wireframe / UI Design / Ready to dev): datepicker với c-calendar-15 === */}
+                            {isPickable && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenDropdown(openDropdown === "date" ? null : "date")}
+                                  className="text-[#1057FB] font-medium flex items-center gap-1 bg-blue-50/80 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                                  title={`${calendarTitle} (Bấm để chọn ngày)`}
+                                >
+                                  <Calendar className="w-3.5 h-3.5 text-[#1057FB] shrink-0" />
+                                  <span>{customDeadline || "Chọn ngày"}</span>
+                                </button>
 
-                                  const isToday =
-                                    new Date().getFullYear() === calYear &&
-                                    new Date().getMonth() === calMonth &&
-                                    new Date().getDate() === d
-
-                                  return (
-                                    <button
-                                      key={`day-${d}`}
-                                      type="button"
-                                      onClick={() => handleSelectCalDay(d)}
-                                      className={`h-7 w-7 rounded-lg text-xs font-medium flex items-center justify-center transition-all cursor-pointer ${
-                                        isSelected
-                                          ? "bg-[#1E5AF6] text-white font-semibold shadow-xs"
-                                          : isToday
-                                          ? "border border-[#1E5AF6] text-[#1E5AF6] font-semibold"
-                                          : "text-slate-700 hover:bg-slate-100"
-                                      }`}
+                                {/* ReUI c-calendar-15 Popover (Presets + Month Grid) */}
+                                <AnimatePresence>
+                                  {openDropdown === "date" && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                                      className="absolute top-full left-0 mt-1.5 z-50 select-none max-w-[calc(100vw-32px)]"
                                     >
-                                      {d}
-                                    </button>
-                                  )
-                                })}
-                              </div>
+                                      <CCalendar15
+                                        value={customDeadline}
+                                        title={calendarTitle}
+                                        onChange={(formatted) => handleSaveDeadline(formatted)}
+                                        onClose={() => setOpenDropdown(null)}
+                                      />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </>
+                            )}
 
-                              {/* Quick Clear / Today Buttons */}
-                              <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveDeadline("")}
-                                  className="text-slate-400 hover:text-rose-500 font-normal cursor-pointer"
-                                >
-                                  Xóa chọn
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const today = new Date()
-                                    const formatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
-                                    handleSaveDeadline(formatted)
-                                  }}
-                                  className="text-[#1E5AF6] hover:underline font-medium cursor-pointer"
-                                >
-                                  Hôm nay
-                                </button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </div>
+                            {/* === Khâu cuối (Nghiệm thu UI / Hoàn thành): read-only Design done === */}
+                            {isDonePhase && (
+                              <span
+                                className={`font-medium tabular-nums ${customDeadline ? "text-emerald-700" : "text-slate-400 italic"}`}
+                                title={customDeadline ? `Ngày Design hoàn thành: ${customDeadline}` : "Chưa có ngày hand off"}
+                              >
+                                {customDeadline || "—"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {/* 4. Priority (Click to select) */}
                     <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>

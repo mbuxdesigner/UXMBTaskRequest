@@ -458,24 +458,82 @@ function parseTimeMs(dateStr?: string | null): number {
   return 0
 }
 
-/**
- * Helper lấy thời hạn PO Pending động từ Admin System Config (mặc định: 24h)
- */
-export function getPoPendingTimeoutHours(): number {
+function getStoredSystemConfig(): any {
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       const raw = localStorage.getItem("mb_system_config_v1")
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (typeof parsed?.sla?.poPendingTimeoutHours === "number") {
-          return parsed.sla.poPendingTimeoutHours
-        }
-      }
+      if (raw) return JSON.parse(raw)
     } catch {
       // ignore
     }
   }
+  return null
+}
+
+/**
+ * Helper lấy thời hạn PO Pending động từ Admin System Config (mặc định: 24h)
+ */
+export function getPoPendingTimeoutHours(): number {
+  const cfg = getStoredSystemConfig()
+  if (typeof cfg?.sla?.poPendingTimeoutHours === "number") {
+    return cfg.sla.poPendingTimeoutHours
+  }
   return 24
+}
+
+function isWeekendOrHoliday(date: Date, workSchedule?: any): boolean {
+  const day = date.getDay()
+  const workweek = Array.isArray(workSchedule?.workweek) && workSchedule.workweek.length > 0
+    ? workSchedule.workweek
+    : ["Mo", "Tu", "We", "Th", "Fr"]
+  const dayKeys = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+  if (!workweek.includes(dayKeys[day])) {
+    return true
+  }
+  if (Array.isArray(workSchedule?.holidays) && workSchedule.holidays.length > 0) {
+    const yyyy = date.getFullYear()
+    const mm = String(date.getMonth() + 1).padStart(2, "0")
+    const dd = String(date.getDate()).padStart(2, "0")
+    const dateStr = `${yyyy}-${mm}-${dd}`
+    return workSchedule.holidays.some((h: any) => {
+      if (!h.endDate || h.endDate === h.date) return h.date === dateStr
+      return dateStr >= h.date && dateStr <= h.endDate
+    })
+  }
+  return false
+}
+
+function calculateSlaElapsedHoursInternal(
+  startMs: number,
+  endMs: number,
+  workSchedule?: any,
+  excludeWeekends: boolean = true
+): number {
+  if (startMs <= 0 || endMs <= startMs) return 0
+  const totalMs = endMs - startMs
+  if (!excludeWeekends) {
+    return Math.max(0, totalMs / (1000 * 60 * 60))
+  }
+  let nonWorkingMs = 0
+  const start = new Date(startMs)
+  const end = new Date(endMs)
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+
+  while (cur.getTime() <= endDay.getTime()) {
+    if (isWeekendOrHoliday(cur, workSchedule)) {
+      const dayStartMs = cur.getTime()
+      const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000
+      const overlapStart = Math.max(startMs, dayStartMs)
+      const overlapEnd = Math.min(endMs, dayEndMs)
+      if (overlapEnd > overlapStart) {
+        nonWorkingMs += (overlapEnd - overlapStart)
+      }
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+  const netMs = Math.max(0, totalMs - nonWorkingMs)
+  return Math.round((netMs / (1000 * 60 * 60)) * 10) / 10
 }
 
 /**
@@ -529,16 +587,19 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
   let sentMs = 0
   let elapsedHours = 0
   let sentTimeStr = ""
+  const sysConfig = getStoredSystemConfig()
+  const excludeWeekends = sysConfig?.sla?.excludeWeekendsInSla ?? true
+
   if (hasSentToPo || rawStatus === "đã gửi po") {
     sentMs = parseTimeMs(req.sent_to_po_at) || (rawStatus === "đã gửi po" ? Date.now() : 0)
     if (sentMs > 0) {
-      elapsedHours = Math.max(0, (Date.now() - sentMs) / (1000 * 60 * 60))
+      elapsedHours = calculateSlaElapsedHoursInternal(sentMs, Date.now(), sysConfig?.workSchedule, excludeWeekends)
       const sentDate = new Date(sentMs)
       sentTimeStr = !isNaN(sentDate.getTime()) ? sentDate.toLocaleString("vi-VN") : ""
     }
   }
 
-  const poTimeoutHours = getPoPendingTimeoutHours()
+  const poTimeoutHours = sysConfig?.sla?.poPendingTimeoutHours ?? 24
   const isExplicitPoPending = rawStatus === "po pending" || rawStatus === "pending po" || rawStatus.includes("po pending")
   const isOverduePo = (rawStatus === "đã gửi po" || hasSentToPo) && elapsedHours >= poTimeoutHours && rawStatus !== "đang thực hiện"
 
@@ -547,7 +608,7 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
       isPending: true,
       type: "po_pending",
       label: "PO Pending",
-      reason: `Quá hạn ${poTimeoutHours}h PO chưa phản hồi duyệt phương án`,
+      reason: `Quá hạn ${poTimeoutHours}h làm việc PO chưa phản hồi duyệt phương án`,
       sentTimeStr,
       elapsedHours: Math.round(elapsedHours * 10) / 10,
       hoursRemaining: 0,
@@ -557,6 +618,21 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
         border: "border-amber-300",
         dot: "bg-amber-500",
       },
+    }
+  }
+
+  // Nếu đang chờ PO và chưa quá hạn: trả về số giờ làm việc còn lại
+  if (rawStatus === "đã gửi po" || (hasSentToPo && rawStatus !== "đang thực hiện")) {
+    const hoursRemaining = Math.max(0, Math.round((poTimeoutHours - elapsedHours) * 10) / 10)
+    return {
+      isPending: false,
+      type: null,
+      label: "",
+      reason: `Đang chờ PO phản hồi (còn ~${hoursRemaining}h làm việc)`,
+      sentTimeStr,
+      elapsedHours: Math.round(elapsedHours * 10) / 10,
+      hoursRemaining,
+      badgeClasses: { bg: "", text: "", border: "", dot: "" },
     }
   }
 

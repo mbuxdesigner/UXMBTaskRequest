@@ -16,6 +16,12 @@ import {
   importSystemConfigJson,
   SYSTEM_CONFIG_EVENT_NAME,
   PriorityLevelConfig,
+  VIETNAM_PUBLIC_HOLIDAYS_2026,
+  DEFAULT_WORK_SCHEDULE,
+  HolidayException,
+  DayOfWeekKey,
+  getDailyWorkingMinutes,
+  getWeeklyCapacityHours,
 } from "@/config/systemConfig"
 import {
   Clock,
@@ -44,13 +50,20 @@ import {
   ChevronRight,
   RefreshCw,
   Eye,
+  Plus,
+  Trash2,
+  CalendarDays,
+  CheckCircle2,
+  Lock,
+  Coffee,
+  X,
 } from "lucide-react"
 
 interface SystemParamsTabProps {
   onLogAction?: (action: string, target: string, details: string, type: "workflow" | "masterdata" | "security") => void
 }
 
-type SubTabKey = "sla" | "capacity" | "priorities" | "evaluation" | "assessment" | "portal"
+type SubTabKey = "sla" | "work_schedule" | "capacity" | "priorities" | "evaluation" | "assessment" | "portal"
 
 export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
   const [config, setConfig] = useState<SystemConfig>(() => getSystemConfig())
@@ -61,6 +74,14 @@ export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
   const [showImportModal, setShowImportModal] = useState(false)
   const [importJsonText, setImportJsonText] = useState("")
   const [importError, setImportError] = useState("")
+
+  // State cho modal Thêm ngày nghỉ ngoại lệ
+  const [showAddHolidayModal, setShowAddHolidayModal] = useState(false)
+  const [newHolidayName, setNewHolidayName] = useState("")
+  const [newHolidayDate, setNewHolidayDate] = useState("")
+  const [newHolidayEndDate, setNewHolidayEndDate] = useState("")
+  const [newHolidayType, setNewHolidayType] = useState<"public_holiday" | "internal_holiday" | "day_off">("internal_holiday")
+  const [newHolidayDesc, setNewHolidayDesc] = useState("")
 
   // Lắng nghe sự kiện đồng bộ chéo
   useEffect(() => {
@@ -154,6 +175,7 @@ export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
 
   const subTabs = [
     { id: "sla", label: "SLA & Thời gian", icon: Clock },
+    { id: "work_schedule", label: "Lịch làm việc & Ngày nghỉ", icon: Calendar },
     { id: "capacity", label: "Định mức Tải việc", icon: Users },
     { id: "priorities", label: "Cấp độ Ưu tiên", icon: Zap },
     { id: "evaluation", label: "Trọng số KPI", icon: Sparkles },
@@ -561,6 +583,411 @@ export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
               </div>
             </div>
           </Frame>
+        </div>
+      )}
+
+      {/* SUB-TAB: LỊCH LÀM VIỆC & NGÀY NGHỈ (WORK SCHEDULE) */}
+      {activeSubTab === "work_schedule" && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-xs space-y-7">
+            {/* Header */}
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                Work Schedule
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Tailor your workspace's work schedule to anticipate the impact of days off on your project planning.
+                <span className="block text-slate-400 text-xs mt-0.5">
+                  (Thiết lập thời gian biểu của tổ chức để dự trù tác động của ngày nghỉ cuối tuần và ngày lễ lên tiến độ cam kết SLA và Lộ trình Gantt).
+                </span>
+              </p>
+            </div>
+
+            {/* Section 1: Workweek */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold text-slate-900">Workweek</span>
+                <span className="text-slate-400 text-xs cursor-help" title="Các ngày làm việc tiêu chuẩn trong tuần của tổ chức">ⓘ</span>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {[
+                  { key: "Mo" as DayOfWeekKey, label: "Mo", sub: "Thứ 2" },
+                  { key: "Tu" as DayOfWeekKey, label: "Tu", sub: "Thứ 3" },
+                  { key: "We" as DayOfWeekKey, label: "We", sub: "Thứ 4" },
+                  { key: "Th" as DayOfWeekKey, label: "Th", sub: "Thứ 5" },
+                  { key: "Fr" as DayOfWeekKey, label: "Fr", sub: "Thứ 6" },
+                  { key: "Sa" as DayOfWeekKey, label: "Sa", sub: "Thứ 7" },
+                  { key: "Su" as DayOfWeekKey, label: "Su", sub: "Chủ Nhật" },
+                ].map((d) => {
+                  const isSelected = (config.workSchedule?.workweek || []).includes(d.key)
+                  return (
+                    <button
+                      key={d.key}
+                      type="button"
+                      onClick={() => {
+                        updateConfig((prev) => {
+                          const curr = prev.workSchedule?.workweek || ["Mo", "Tu", "We", "Th", "Fr"]
+                          const next = curr.includes(d.key)
+                            ? curr.filter((k) => k !== d.key)
+                            : [...curr, d.key]
+                          return {
+                            ...prev,
+                            workSchedule: {
+                              ...prev.workSchedule,
+                              workweek: next,
+                            },
+                          }
+                        })
+                      }}
+                      className={`flex flex-col items-center justify-center min-w-[52px] h-[52px] px-3 rounded-xl text-sm font-semibold transition-all cursor-pointer border ${
+                        isSelected
+                          ? "bg-indigo-50/70 border-indigo-400 text-indigo-700 shadow-2xs ring-2 ring-indigo-200/50"
+                          : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      }`}
+                    >
+                      <span className="leading-tight">{d.label}</span>
+                      <span className="text-[10px] font-normal opacity-75">{d.sub}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Section 2: Working hours */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold text-slate-900">Working hours</span>
+                <span className="text-slate-400 text-xs cursor-help" title="Khung giờ bắt đầu và kết thúc làm việc trong ngày">ⓘ</span>
+              </div>
+
+              {/* Option 1: Same time for all days */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="workingHoursMode"
+                    checked={config.workSchedule?.workingHoursMode === "same_all_days" || !config.workSchedule?.workingHoursMode}
+                    onChange={() => {
+                      updateConfig((prev) => ({
+                        ...prev,
+                        workSchedule: { ...prev.workSchedule, workingHoursMode: "same_all_days" },
+                      }))
+                    }}
+                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium text-slate-800">Same time for all days (Cùng khung giờ cho tất cả các ngày)</span>
+                </label>
+
+                <div className="pl-6 space-y-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Input
+                      type="time"
+                      value={config.workSchedule?.startTime || "08:00"}
+                      onChange={(e) => {
+                        updateConfig((prev) => ({
+                          ...prev,
+                          workSchedule: { ...prev.workSchedule, startTime: e.target.value },
+                        }))
+                      }}
+                      className="w-32 h-10 px-3 bg-white border-slate-200 text-sm font-medium rounded-lg"
+                    />
+                    <span className="text-sm text-slate-500 font-medium">to</span>
+                    <Input
+                      type="time"
+                      value={config.workSchedule?.endTime || "17:30"}
+                      onChange={(e) => {
+                        updateConfig((prev) => ({
+                          ...prev,
+                          workSchedule: { ...prev.workSchedule, endTime: e.target.value },
+                        }))
+                      }}
+                      className="w-32 h-10 px-3 bg-white border-slate-200 text-sm font-medium rounded-lg"
+                    />
+
+                    {/* Lunch Break Toggle */}
+                    <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(config.workSchedule?.lunchBreak?.enabled)}
+                          onChange={(e) => {
+                            updateConfig((prev) => ({
+                              ...prev,
+                              workSchedule: {
+                                ...prev.workSchedule,
+                                lunchBreak: {
+                                  ...prev.workSchedule?.lunchBreak,
+                                  enabled: e.target.checked,
+                                  startTime: prev.workSchedule?.lunchBreak?.startTime || "12:00",
+                                  endTime: prev.workSchedule?.lunchBreak?.endTime || "13:30",
+                                },
+                              },
+                            }))
+                          }}
+                          className="rounded text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="flex items-center gap-1">
+                          <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                          Trừ giờ nghỉ trưa:
+                        </span>
+                      </label>
+                      {config.workSchedule?.lunchBreak?.enabled && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="time"
+                            value={config.workSchedule?.lunchBreak?.startTime || "12:00"}
+                            onChange={(e) => {
+                              updateConfig((prev) => ({
+                                ...prev,
+                                workSchedule: {
+                                  ...prev.workSchedule,
+                                  lunchBreak: {
+                                    ...prev.workSchedule.lunchBreak,
+                                    startTime: e.target.value,
+                                  },
+                                },
+                              }))
+                            }}
+                            className="w-24 h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium"
+                          />
+                          <span className="text-slate-400">-</span>
+                          <input
+                            type="time"
+                            value={config.workSchedule?.lunchBreak?.endTime || "13:30"}
+                            onChange={(e) => {
+                              updateConfig((prev) => ({
+                                ...prev,
+                                workSchedule: {
+                                  ...prev.workSchedule,
+                                  lunchBreak: {
+                                    ...prev.workSchedule.lunchBreak,
+                                    endTime: e.target.value,
+                                  },
+                                },
+                              }))
+                            }}
+                            className="w-24 h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Live Capacity calculation text */}
+                  {(() => {
+                    const dailyMins = getDailyWorkingMinutes(config.workSchedule)
+                    const dailyH = Math.floor(dailyMins / 60)
+                    const dailyM = dailyMins % 60
+                    const weeklyH = getWeeklyCapacityHours(config.workSchedule)
+                    return (
+                      <p className="text-xs text-slate-500 font-medium">
+                        Daily capacity: {dailyH}h {dailyM > 0 ? `${dailyM}m` : "00m"}
+                        {config.workSchedule?.lunchBreak?.enabled ? " (đã trừ giờ nghỉ trưa)" : ""} • Weekly capacity: {weeklyH}h
+                      </p>
+                    )
+                  })()}
+                </div>
+
+                {/* Option 2: Custom working hours (Locked) */}
+                <div className="flex items-center gap-2.5 pt-1 text-slate-400 select-none">
+                  <input type="radio" disabled className="w-4 h-4 text-slate-300" />
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    Custom working hours
+                    <Lock className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Non-working days & Public holidays */}
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                    Non-working days
+                    <span className="text-slate-400 text-xs font-normal">(& Ngày nghỉ lễ ngoại lệ)</span>
+                  </span>
+                  <Badge variant="secondary" size="sm" className="font-mono text-xs font-normal">
+                    {config.workSchedule?.holidays?.length || 0} ngày
+                  </Badge>
+                </div>
+
+                {config.workSchedule?.holidays && config.workSchedule.holidays.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updateConfig((prev) => ({
+                          ...prev,
+                          workSchedule: {
+                            ...prev.workSchedule,
+                            holidays: VIETNAM_PUBLIC_HOLIDAYS_2026,
+                          },
+                        }))
+                        toast.success("Đã nạp 11 ngày lễ VN 2026", "Lịch nghỉ lễ ngân hàng Việt Nam đã được cập nhật.")
+                      }}
+                      className="text-xs h-8 gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Nạp 11 ngày lễ VN 2026</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setShowAddHolidayModal(true)}
+                      className="text-xs h-8 gap-1.5 bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Thêm ngày nghỉ</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* EMPTY STATE - Match User Image 100% */}
+              {(!config.workSchedule?.holidays || config.workSchedule.holidays.length === 0) ? (
+                <div className="border border-slate-200 rounded-2xl bg-white p-10 text-center flex flex-col items-center justify-center space-y-4 shadow-2xs">
+                  {/* Calendar Illustration */}
+                  <div className="relative w-16 h-16 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <Calendar className="w-8 h-8 stroke-[1.5]" />
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                      <Clock className="w-3 h-3" />
+                    </div>
+                  </div>
+
+                  <div className="max-w-md space-y-1">
+                    <h4 className="text-base font-semibold text-slate-900">
+                      Customize your team's work schedule
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Add non-working days or exceptions to align tasks with your team's availability.
+                      <span className="block text-slate-400 mt-0.5">
+                        (Thêm ngày nghỉ lễ hoặc ngoại lệ để đồng bộ hóa bài toán với thời gian thực tế của nhân sự).
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updateConfig((prev) => ({
+                          ...prev,
+                          workSchedule: {
+                            ...prev.workSchedule,
+                            holidays: VIETNAM_PUBLIC_HOLIDAYS_2026,
+                          },
+                        }))
+                        toast.success("Đã nạp 11 ngày lễ VN 2026", "Toàn bộ lịch nghỉ lễ quốc gia 2026 đã được đưa vào hệ thống.")
+                      }}
+                      className="text-xs h-9 px-4 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer font-medium shadow-2xs"
+                    >
+                      Select public holidays
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddHolidayModal(true)}
+                      className="text-xs h-9 px-4 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer font-medium shadow-2xs"
+                    >
+                      Add days off
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* HOLIDAYS LIST TABLE */
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="px-4 py-3">Tên ngày nghỉ / Sự kiện</th>
+                          <th className="px-4 py-3">Ngày diễn ra</th>
+                          <th className="px-4 py-3">Phân loại</th>
+                          <th className="px-4 py-3">Ghi chú</th>
+                          <th className="px-4 py-3 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {config.workSchedule.holidays.map((h, idx) => (
+                          <tr key={h.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="px-4 py-3 font-medium text-slate-900">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                <span>{h.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-slate-600">
+                              {h.endDate && h.endDate !== h.date ? `${h.date} → ${h.endDate}` : h.date}
+                            </td>
+                            <td className="px-4 py-3">
+                              {h.type === "public_holiday" ? (
+                                <Badge variant="success" size="sm" className="font-normal text-[11px]">Lễ Quốc Gia</Badge>
+                              ) : h.type === "internal_holiday" ? (
+                                <Badge variant="info" size="sm" className="font-normal text-[11px]">Nội Bộ MB</Badge>
+                              ) : (
+                                <Badge variant="secondary" size="sm" className="font-normal text-[11px]">Nghỉ Phép</Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 max-w-xs truncate">
+                              {h.description || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateConfig((prev) => ({
+                                    ...prev,
+                                    workSchedule: {
+                                      ...prev.workSchedule,
+                                      holidays: prev.workSchedule.holidays.filter((item) => item.id !== h.id),
+                                    },
+                                  }))
+                                  toast.info("Đã xóa ngày nghỉ", `Đã xóa ${h.name} khỏi danh sách.`)
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Xóa ngày nghỉ này"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="p-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span>Tổng cộng: <strong className="text-slate-800">{config.workSchedule.holidays.length}</strong> ngày nghỉ trong năm 2026</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateConfig((prev) => ({
+                          ...prev,
+                          workSchedule: {
+                            ...prev.workSchedule,
+                            holidays: [],
+                          },
+                        }))
+                        toast.info("Đã xóa toàn bộ ngày nghỉ")
+                      }}
+                      className="text-xs text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Xóa toàn bộ
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1585,6 +2012,152 @@ export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
                 className="text-xs bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
               >
                 Áp dụng cấu hình
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Thêm ngày nghỉ ngoại lệ / lễ */}
+      {showAddHolidayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-indigo-600" />
+                <span>Thêm Ngày Nghỉ / Ngoại Lệ (Add Day Off)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddHolidayModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Thêm các ngày nghỉ nội bộ, team-building hoặc ngoại lệ để hệ thống loại trừ khi tính hạn xử lý SLA của bài toán.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">
+                  Tên ngày nghỉ / Sự kiện <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  placeholder="Ví dụ: Team Building MBBank, Kỷ niệm ngày thành lập..."
+                  value={newHolidayName}
+                  onChange={(e) => setNewHolidayName(e.target.value)}
+                  className="text-xs h-9"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Phân loại</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { type: "internal_holiday", label: "Nội bộ MB" },
+                    { type: "public_holiday", label: "Lễ Quốc Gia" },
+                    { type: "day_off", label: "Nghỉ phép" },
+                  ].map((item) => (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => setNewHolidayType(item.type as any)}
+                      className={`py-1.5 px-2 rounded-lg border text-center transition-all cursor-pointer ${
+                        newHolidayType === item.type
+                          ? "border-indigo-600 bg-indigo-50/70 text-indigo-700 font-semibold"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">
+                    Từ ngày <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    type="date"
+                    value={newHolidayDate}
+                    onChange={(e) => setNewHolidayDate(e.target.value)}
+                    className="text-xs h-9"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Đến ngày (nếu có)</label>
+                  <Input
+                    type="date"
+                    value={newHolidayEndDate}
+                    onChange={(e) => setNewHolidayEndDate(e.target.value)}
+                    className="text-xs h-9"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Ghi chú</label>
+                <Input
+                  placeholder="Ghi chú chi tiết hoặc quyết định ban hành..."
+                  value={newHolidayDesc}
+                  onChange={(e) => setNewHolidayDesc(e.target.value)}
+                  className="text-xs h-9"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddHolidayModal(false)}
+                className="text-xs cursor-pointer"
+              >
+                Hủy
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  if (!newHolidayName.trim()) {
+                    toast.error("Vui lòng nhập tên ngày nghỉ")
+                    return
+                  }
+                  if (!newHolidayDate) {
+                    toast.error("Vui lòng chọn ngày")
+                    return
+                  }
+                  const newHoliday: HolidayException = {
+                    id: `hol-${Date.now()}`,
+                    name: newHolidayName.trim(),
+                    date: newHolidayDate,
+                    endDate: newHolidayEndDate ? newHolidayEndDate : undefined,
+                    type: newHolidayType,
+                    description: newHolidayDesc.trim() || undefined,
+                  }
+                  updateConfig((prev) => ({
+                    ...prev,
+                    workSchedule: {
+                      ...prev.workSchedule,
+                      holidays: [...(prev.workSchedule?.holidays || []), newHoliday],
+                    },
+                  }))
+                  setShowAddHolidayModal(false)
+                  setNewHolidayName("")
+                  setNewHolidayDate("")
+                  setNewHolidayEndDate("")
+                  setNewHolidayDesc("")
+                  toast.success("Đã thêm ngày nghỉ", `Đã lưu "${newHoliday.name}" vào lịch làm việc.`)
+                }}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
+              >
+                Lưu ngày nghỉ
               </Button>
             </div>
           </div>

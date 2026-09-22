@@ -369,11 +369,11 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
     const raw = window.localStorage.getItem(IA_TIER_DIMENSIONS_KEY)
     if (!raw) return DEFAULT_TIER_DIMENSIONS
     const parsed = JSON.parse(raw)
-    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao cũ bị thổi phồng (> 150) hoặc quá nhỏ (< 90)
+    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao cũ bị thổi phồng (> 85 cho compact) hoặc quá nhỏ (< 40)
     if (
-      !parsed[1]?.height || parsed[1].height > 150 || parsed[1].height < 90 ||
-      !parsed[2]?.height || parsed[2].height > 160 || parsed[2].height < 90 ||
-      !parsed[3]?.height || parsed[3].height > 165 || parsed[3].height < 90 ||
+      !parsed[1]?.height || parsed[1].height > 85 || parsed[1].height < 40 ||
+      !parsed[2]?.height || parsed[2].height > 95 || parsed[2].height < 50 ||
+      !parsed[3]?.height || parsed[3].height > 95 || parsed[3].height < 50 ||
       !parsed.verticalGapJourney ||
       !parsed.columnGap || parsed.columnGap < 80
     ) {
@@ -412,31 +412,34 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
 
   const ds = node.displaySettings || getTierDefaultDisplaySettings(node.tier)
 
-  // 1. Padding và viền khung thẻ (p-2.5: 20px, border: 2px)
-  let h = 22
-
-  // 2. Hàng: Tên tính năng + Mô tả (nếu có, Lv1 không có mô tả)
-  h += (node.description && node.tier !== 1) ? 32 : 20
-
-  // 3. Hàng 3: Thông tin Designer hoặc Touchpoint
-  const showDesigner = ds.showDesigner !== false && (node.assignedDesigner || node.tier >= 3)
-  const showTouchpoint = Boolean(node.touchpointType) || node.tier === 4
-  if (showDesigner || showTouchpoint) {
-    h += 18
+  if (node.tier === 1) {
+    return tierDimensions?.[1]?.height || 52
   }
 
-  // 4. Hàng 4: Thanh tiến độ siêu gọn (chỉ còn thanh bar, bỏ text Working & chips)
+  // Thẻ đã được tinh giản tối đa (compacted) theo yêu cầu tối ưu không gian hiển thị
+  // 1. Padding trên/dưới: 16px, viền: 2px
+  let h = 18
+
+  // 2. Tiêu đề 15px bold leading-tight (~20px)
+  h += 20
+
+  // 3. Mô tả phụ (nếu có)
+  if (node.description && node.tier !== 1) {
+    h += 16
+  }
+
+  // 4. Thanh tiến độ siêu gọn
   if (ds.showProgress !== false) {
-    h += 12
+    h += 8
   }
 
-  // 5. Hàng 5 & 6: Đường kẻ chia cách + Footer trạng thái & Đếm nhánh
+  // 5. Footer trạng thái có task & đếm nhánh
   if (ds.showStatus !== false || ds.showBranchCount !== false) {
-    h += 24
+    h += 22
   }
 
-  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 85 : node.tier === 2 ? 85 : node.tier === 3 ? 80 : 75)
-  return Math.max(64, Math.min(defaultDim, Math.round(h)))
+  const defaultDim = tierDimensions?.[node.tier]?.height || (node.description ? 84 : 68)
+  return Math.max(54, Math.min(defaultDim, Math.round(h)))
 }
 
 const VERTICAL_GAP = 20

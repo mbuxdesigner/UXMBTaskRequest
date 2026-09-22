@@ -597,7 +597,8 @@ function IATreeNodeCardComponent({
         left: x,
         top: y,
         width,
-        minHeight: Math.min(layoutNode.height, 68),
+        height: layoutNode.height,
+        minHeight: layoutNode.height,
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}

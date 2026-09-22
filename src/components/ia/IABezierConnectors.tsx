@@ -184,43 +184,22 @@ function IABezierConnectorsComponent({
             markerId = "ia-arrow-indigo"
           }
 
-          // Deduplicate port circle endpoints so multiple children sharing the same parent port don't overdraw
-          const originKey = `${conn.x1.toFixed(1)},${conn.y1.toFixed(1)}`
-          const isOriginNew = !renderedOrigins.has(originKey)
-          if (isOriginNew) {
-            renderedOrigins.add(originKey)
-          }
-
           return (
-            <g key={`group-${conn.id}`}>
-              <path
-                data-testid={`ia-connector-${conn.id}`}
-                data-from-port={conn.fromPort}
-                data-to-port={conn.toPort}
-                d={conn.path}
-                fill="none"
-                stroke={strokeColor}
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                markerEnd={`url(#${markerId})`}
-                filter={filter}
-                className="transition-colors duration-200"
-              />
-
-              {/* FigJam Port Circle Endpoints: One crisp dot per connection source */}
-              {isOriginNew && (
-                <circle
-                  cx={conn.x1}
-                  cy={conn.y1}
-                  r={3.5}
-                  fill="#ffffff"
-                  stroke={strokeColor}
-                  strokeWidth={2}
-                  className="pointer-events-none"
-                />
-              )}
-            </g>
+            <path
+              key={`connector-${conn.id}`}
+              data-testid={`ia-connector-${conn.id}`}
+              data-from-port={conn.fromPort}
+              data-to-port={conn.toPort}
+              d={conn.path}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              markerEnd={`url(#${markerId})`}
+              filter={filter}
+              className="transition-colors duration-200"
+            />
           )
         })
       })()}

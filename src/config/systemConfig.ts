@@ -142,6 +142,36 @@ export interface AttachmentConfig {
   allowScreenshotsPaste: boolean
 }
 
+export type DayOfWeekKey = "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa" | "Su"
+
+export interface HolidayException {
+  id: string
+  name: string
+  date: string // "YYYY-MM-DD"
+  endDate?: string // "YYYY-MM-DD"
+  type: "public_holiday" | "internal_holiday" | "day_off"
+  description?: string
+}
+
+export interface WorkScheduleConfig {
+  /** Các ngày làm việc trong tuần */
+  workweek: DayOfWeekKey[]
+  /** Chế độ giờ làm việc: Cùng khung giờ cho mọi ngày hoặc tùy biến từng ngày */
+  workingHoursMode: "same_all_days" | "custom"
+  /** Giờ bắt đầu làm việc (mặc định: "08:00") */
+  startTime: string
+  /** Giờ kết thúc làm việc (mặc định: "17:30") */
+  endTime: string
+  /** Cấu hình thời gian nghỉ trưa */
+  lunchBreak: {
+    enabled: boolean
+    startTime: string // "12:00"
+    endTime: string // "13:30"
+  }
+  /** Danh sách ngày nghỉ lễ quốc gia & ngày nghỉ ngoại lệ */
+  holidays: HolidayException[]
+}
+
 export interface SystemConfig {
   version: string
   lastUpdated: string
@@ -154,6 +184,7 @@ export interface SystemConfig {
   assessment: AssessmentExamConfig
   portal: PortalConfig
   attachments: AttachmentConfig
+  workSchedule: WorkScheduleConfig
 }
 
 export const SYSTEM_CONFIG_STORAGE_KEY = "mb_system_config_v1"
@@ -409,6 +440,99 @@ export const DEFAULT_NOTIFICATION_SETTINGS: Record<string, NotificationTemplateS
   },
 }
 
+export const VIETNAM_PUBLIC_HOLIDAYS_2026: HolidayException[] = [
+  {
+    id: "tet_duong_lich_2026",
+    name: "Tết Dương lịch 2026",
+    date: "2026-01-01",
+    type: "public_holiday",
+    description: "Nghỉ Tết Dương lịch theo Luật Lao động",
+  },
+  {
+    id: "tet_am_lich_2026_1",
+    name: "Tết Nguyên Đán Bính Ngọ (29 Tết)",
+    date: "2026-02-16",
+    type: "public_holiday",
+    description: "Nghỉ Tết Nguyên Đán",
+  },
+  {
+    id: "tet_am_lich_2026_2",
+    name: "Tết Nguyên Đán (Mùng 1 Tết)",
+    date: "2026-02-17",
+    type: "public_holiday",
+    description: "Nghỉ Tết Nguyên Đán",
+  },
+  {
+    id: "tet_am_lich_2026_3",
+    name: "Tết Nguyên Đán (Mùng 2 Tết)",
+    date: "2026-02-18",
+    type: "public_holiday",
+    description: "Nghỉ Tết Nguyên Đán",
+  },
+  {
+    id: "tet_am_lich_2026_4",
+    name: "Tết Nguyên Đán (Mùng 3 Tết)",
+    date: "2026-02-19",
+    type: "public_holiday",
+    description: "Nghỉ Tết Nguyên Đán",
+  },
+  {
+    id: "tet_am_lich_2026_5",
+    name: "Tết Nguyên Đán (Mùng 4 Tết)",
+    date: "2026-02-20",
+    type: "public_holiday",
+    description: "Nghỉ Tết Nguyên Đán",
+  },
+  {
+    id: "gio_to_hung_vuong_2026",
+    name: "Giỗ Tổ Hùng Vương (10/03 ÂL)",
+    date: "2026-04-26",
+    type: "public_holiday",
+    description: "Nghỉ Giỗ Tổ Hùng Vương",
+  },
+  {
+    id: "ngay_thong_nhat_2026",
+    name: "Ngày Giải phóng miền Nam (30/04)",
+    date: "2026-04-30",
+    type: "public_holiday",
+    description: "Kỷ niệm ngày Giải phóng miền Nam",
+  },
+  {
+    id: "quoc_te_lao_dong_2026",
+    name: "Ngày Quốc tế Lao động (01/05)",
+    date: "2026-05-01",
+    type: "public_holiday",
+    description: "Kỷ niệm ngày Quốc tế Lao động",
+  },
+  {
+    id: "quoc_khanh_2026_1",
+    name: "Nghỉ liền kề Quốc khánh",
+    date: "2026-09-01",
+    type: "public_holiday",
+    description: "Nghỉ lễ Quốc khánh liền kề theo quy định Nhà nước",
+  },
+  {
+    id: "quoc_khanh_2026_2",
+    name: "Quốc khánh nước CHXHCN Việt Nam (02/09)",
+    date: "2026-09-02",
+    type: "public_holiday",
+    description: "Nghỉ lễ Quốc khánh chính thức",
+  },
+]
+
+export const DEFAULT_WORK_SCHEDULE: WorkScheduleConfig = {
+  workweek: ["Mo", "Tu", "We", "Th", "Fr"],
+  workingHoursMode: "same_all_days",
+  startTime: "08:00",
+  endTime: "17:30",
+  lunchBreak: {
+    enabled: true,
+    startTime: "12:00",
+    endTime: "13:30",
+  },
+  holidays: VIETNAM_PUBLIC_HOLIDAYS_2026,
+}
+
 export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   version: "1.0.0",
   lastUpdated: new Date().toISOString(),
@@ -474,6 +598,7 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     allowedExtensions: [".png", ".jpg", ".jpeg", ".gif", ".pdf", ".fig", ".zip", ".xlsx", ".docx"],
     allowScreenshotsPaste: true,
   },
+  workSchedule: DEFAULT_WORK_SCHEDULE,
 }
 
 /**
@@ -520,6 +645,17 @@ export function getSystemConfig(): SystemConfig {
         },
       },
       attachments: { ...DEFAULT_SYSTEM_CONFIG.attachments, ...(parsed.attachments || {}) },
+      workSchedule: {
+        ...DEFAULT_SYSTEM_CONFIG.workSchedule,
+        ...(parsed.workSchedule || {}),
+        lunchBreak: {
+          ...DEFAULT_SYSTEM_CONFIG.workSchedule.lunchBreak,
+          ...(parsed.workSchedule?.lunchBreak || {}),
+        },
+        holidays: Array.isArray(parsed.workSchedule?.holidays)
+          ? parsed.workSchedule.holidays
+          : DEFAULT_SYSTEM_CONFIG.workSchedule.holidays,
+      },
     }
 
     memoryConfigCache = merged
@@ -556,6 +692,17 @@ export function saveSystemConfig(partialOrFull: Partial<SystemConfig>, actorName
       },
     },
     attachments: { ...current.attachments, ...(partialOrFull.attachments || {}) },
+    workSchedule: {
+      ...current.workSchedule,
+      ...(partialOrFull.workSchedule || {}),
+      lunchBreak: {
+        ...current.workSchedule.lunchBreak,
+        ...(partialOrFull.workSchedule?.lunchBreak || {}),
+      },
+      holidays: Array.isArray(partialOrFull.workSchedule?.holidays)
+        ? partialOrFull.workSchedule.holidays
+        : current.workSchedule.holidays,
+    },
   }
 
   memoryConfigCache = updated
@@ -646,3 +793,237 @@ if (typeof window !== "undefined") {
     }
   })
 }
+
+// ─── WORK SCHEDULE CALCULATION ENGINE ───────────────────────────────────────
+
+/**
+ * Chuyển đổi mã ngày trong tuần (Date.getDay(): 0=Sun, 1=Mon, ..., 6=Sat)
+ */
+export function getDayOfWeekKey(date: Date): DayOfWeekKey {
+  const day = date.getDay()
+  const map: Record<number, DayOfWeekKey> = {
+    0: "Su",
+    1: "Mo",
+    2: "Tu",
+    3: "We",
+    4: "Th",
+    5: "Fr",
+    6: "Sa",
+  }
+  return map[day]
+}
+
+/**
+ * Kiểm tra xem ngày có phải ngày làm việc không (nằm trong workweek và không phải ngày nghỉ lễ)
+ */
+export function isBusinessDay(
+  dateInput: Date | string,
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): boolean {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput
+  if (isNaN(date.getTime())) return false
+
+  // 1. Kiểm tra ngày trong tuần
+  const dayKey = getDayOfWeekKey(date)
+  if (!schedule.workweek.includes(dayKey)) {
+    return false
+  }
+
+  // 2. Kiểm tra ngày nghỉ lễ / ngày nghỉ ngoại lệ (YYYY-MM-DD)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
+  const dateStr = `${yyyy}-${mm}-${dd}`
+
+  const isOff = (schedule.holidays || []).some((h) => {
+    if (!h.endDate || h.endDate === h.date) {
+      return h.date === dateStr
+    }
+    return dateStr >= h.date && dateStr <= h.endDate
+  })
+
+  return !isOff
+}
+
+/**
+ * Tính số phút làm việc tiêu chuẩn trong một ngày làm việc bình thường
+ */
+export function getDailyWorkingMinutes(
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): number {
+  const [startH, startM] = (schedule.startTime || "08:00").split(":").map(Number)
+  const [endH, endM] = (schedule.endTime || "17:30").split(":").map(Number)
+  const workMinutes = (endH * 60 + endM) - (startH * 60 + startM)
+
+  let lunchMinutes = 0
+  if (schedule.lunchBreak?.enabled) {
+    const [lsh, lsm] = (schedule.lunchBreak.startTime || "12:00").split(":").map(Number)
+    const [leh, lem] = (schedule.lunchBreak.endTime || "13:30").split(":").map(Number)
+    lunchMinutes = Math.max(0, (leh * 60 + lem) - (lsh * 60 + lsm))
+  }
+
+  return Math.max(0, workMinutes - lunchMinutes)
+}
+
+/**
+ * Tính tổng số giờ làm việc trong 1 tuần (Weekly capacity hours)
+ */
+export function getWeeklyCapacityHours(
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): number {
+  const dailyMinutes = getDailyWorkingMinutes(schedule)
+  const daysCount = schedule.workweek?.length || 5
+  return Math.round(((dailyMinutes * daysCount) / 60) * 10) / 10
+}
+
+/**
+ * Tính số giờ làm việc thực tế giữa 2 thời điểm (đã loại trừ ngày nghỉ cuối tuần và ngày lễ)
+ */
+export function calculateBusinessHoursBetween(
+  startDateInput: Date | string,
+  endDateInput: Date | string,
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): number {
+  const start = typeof startDateInput === "string" ? new Date(startDateInput) : startDateInput
+  const end = typeof endDateInput === "string" ? new Date(endDateInput) : endDateInput
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+    return 0
+  }
+
+  // Khung giờ chuẩn theo phút trong ngày
+  const [startH, startM] = (schedule.startTime || "08:00").split(":").map(Number)
+  const [endH, endM] = (schedule.endTime || "17:30").split(":").map(Number)
+  const workStartMinutes = startH * 60 + startM
+  const workEndMinutes = endH * 60 + endM
+
+  // Giờ nghỉ trưa
+  let lunchStartMin = 0
+  let lunchEndMin = 0
+  if (schedule.lunchBreak?.enabled) {
+    const [lsh, lsm] = (schedule.lunchBreak.startTime || "12:00").split(":").map(Number)
+    const [leh, lem] = (schedule.lunchBreak.endTime || "13:30").split(":").map(Number)
+    lunchStartMin = lsh * 60 + lsm
+    lunchEndMin = leh * 60 + lem
+  }
+
+  const getDayWorkingMinutes = (curr: Date, fromMin: number, toMin: number): number => {
+    if (!isBusinessDay(curr, schedule)) return 0
+    const clampedFrom = Math.max(workStartMinutes, Math.min(workEndMinutes, fromMin))
+    const clampedTo = Math.max(workStartMinutes, Math.min(workEndMinutes, toMin))
+    if (clampedTo <= clampedFrom) return 0
+
+    let total = clampedTo - clampedFrom
+    if (schedule.lunchBreak?.enabled && lunchEndMin > lunchStartMin) {
+      const overlapStart = Math.max(clampedFrom, lunchStartMin)
+      const overlapEnd = Math.min(clampedTo, lunchEndMin)
+      if (overlapEnd > overlapStart) {
+        total -= (overlapEnd - overlapStart)
+      }
+    }
+    return Math.max(0, total)
+  }
+
+  // Nếu cùng ngày
+  const isSameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate()
+
+  if (isSameDay) {
+    const fromMin = start.getHours() * 60 + start.getMinutes()
+    const toMin = end.getHours() * 60 + end.getMinutes()
+    const mins = getDayWorkingMinutes(start, fromMin, toMin)
+    return Math.round((mins / 60) * 10) / 10
+  }
+
+  let totalMinutes = 0
+  const current = new Date(start)
+
+  // Ngày đầu tiên
+  const firstDayFromMin = current.getHours() * 60 + current.getMinutes()
+  totalMinutes += getDayWorkingMinutes(current, firstDayFromMin, workEndMinutes)
+
+  // Các ngày ở giữa
+  current.setDate(current.getDate() + 1)
+  current.setHours(0, 0, 0, 0)
+  const endDayStart = new Date(end)
+  endDayStart.setHours(0, 0, 0, 0)
+
+  while (current < endDayStart) {
+    totalMinutes += getDayWorkingMinutes(current, workStartMinutes, workEndMinutes)
+    current.setDate(current.getDate() + 1)
+  }
+
+  // Ngày cuối cùng
+  const lastDayToMin = end.getHours() * 60 + end.getMinutes()
+  totalMinutes += getDayWorkingMinutes(end, workStartMinutes, lastDayToMin)
+
+  return Math.round((totalMinutes / 60) * 10) / 10
+}
+
+/**
+ * Cộng thêm n ngày làm việc vào một ngày cho trước
+ */
+export function addBusinessDays(
+  startDateInput: Date | string,
+  days: number,
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): Date {
+  const result = typeof startDateInput === "string" ? new Date(startDateInput) : new Date(startDateInput)
+  if (isNaN(result.getTime()) || days <= 0) return result
+
+  let added = 0
+  while (added < days) {
+    result.setDate(result.getDate() + 1)
+    if (isBusinessDay(result, schedule)) {
+      added++
+    }
+  }
+  return result
+}
+
+/**
+ * Tính số giờ trôi qua theo chuẩn SLA (đã loại trừ toàn bộ thời gian của các ngày nghỉ cuối tuần và ngày lễ).
+ * Ví dụ: Gửi lúc 15:00 Thứ Sáu, đến 10:00 Thứ Hai:
+ * Tổng thời gian 67h - (24h T7 + 24h CN) = 19h thực tính SLA (chưa quá hạn 24h).
+ */
+export function calculateSlaElapsedHours(
+  startDateInput: Date | number | string,
+  endDateInput: Date | number | string = new Date(),
+  schedule: WorkScheduleConfig = getSystemConfig().workSchedule || DEFAULT_WORK_SCHEDULE
+): number {
+  const startMs = typeof startDateInput === "number" ? startDateInput : new Date(startDateInput).getTime()
+  const endMs = typeof endDateInput === "number" ? endDateInput : new Date(endDateInput).getTime()
+  if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) {
+    return 0
+  }
+
+  const start = new Date(startMs)
+  const end = new Date(endMs)
+  const totalMs = endMs - startMs
+
+  // Lặp qua từng ngày giữa start và end để tìm các ngày không làm việc
+  let nonWorkingMs = 0
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+
+  while (cur.getTime() <= endDay.getTime()) {
+    if (!isBusinessDay(cur, schedule)) {
+      // Ngày này là ngày nghỉ (cuối tuần hoặc lễ).
+      // Tính phần giao giữa [cur 00:00, cur 23:59:59.999] và [startMs, endMs]
+      const dayStartMs = cur.getTime()
+      const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000
+      const overlapStart = Math.max(startMs, dayStartMs)
+      const overlapEnd = Math.min(endMs, dayEndMs)
+      if (overlapEnd > overlapStart) {
+        nonWorkingMs += (overlapEnd - overlapStart)
+      }
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+
+  const netMs = Math.max(0, totalMs - nonWorkingMs)
+  return Math.round((netMs / (1000 * 60 * 60)) * 10) / 10
+}
+
+
