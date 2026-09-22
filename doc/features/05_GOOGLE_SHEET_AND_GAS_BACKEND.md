@@ -146,3 +146,43 @@ Mỗi bài toán là 1 hàng duy nhất. Cột `Payload` chứa toàn bộ objec
 5. Bấm vào biểu tượng cây bút (Chỉnh sửa) -> Tại mục **Version**, chọn **New version** (Bắt buộc).
 6. Bấm **Deploy** -> Giữ nguyên Web App URL hiện tại.
 7. Vào Web App -> Tab Integrations (hoặc `googleSheetConfig.ts`) xác nhận URL khớp và bấm "Kiểm tra kết nối".
+
+---
+
+## 🧩 7. CƠ CHẾ AUTO-CHUNKING & BẢO VỆ DỮ LIỆU LỚN VƯỢT GIỚI HẠN 50.000 KÝ TỰ
+
+### 7.1. Bối cảnh & Thách thức Giới Hạn Cứng của Google Sheets
+Google Sheets áp dụng một quy tắc cứng bất biến: **Một ô tính (single cell) chỉ có thể chứa tối đa 50.000 ký tự**. Khi một cấu trúc dữ liệu vượt quá giới hạn này và script cố gắng ghi qua lệnh `setValue()` hoặc `appendRow()`, Google Sheets sẽ ném ngoại lệ:
+> *"Đã xảy ra lỗi: Dữ liệu đầu vào của bạn có chứa nhiều hơn tối đa 50000 ký tự trong một ô đơn nhất."*
+
+Khi ngoại lệ này xảy ra, toàn bộ giao dịch ghi bị hủy bỏ (aborted), khiến dữ liệu mới không thể cập nhật lên Cloud, người dùng khác khi tải về chỉ nhận được dữ liệu cũ hoặc rỗng.
+
+### 7.2. Giải pháp 1: Frontend Payload Sanitizer & Minification
+Trước khi gửi dữ liệu cấu trúc IA lên Cloud, hàm `sanitizeIATrees()` tại `src/services/googleSheetService.ts` tự động duyệt đệ quy toàn bộ cây:
+1. **Lược bỏ thuộc tính tính toán runtime:** Bỏ cache `metrics` (`subtreeCount`, `maxSubtreeDepth`).
+2. **Lược bỏ mảng rỗng:** Bỏ các thuộc tính `taskIds: []`, `children: []` tại các node lá.
+3. **Lược bỏ giá trị rỗng:** Loại bỏ các trường `undefined`, `null`, chuỗi rỗng `""` (`description: ""`, `figmaUrl: ""`).
+4. **Loại bỏ thụt lề thừa:** Backend không dùng `JSON.stringify(..., null, 2)` mà dùng `JSON.stringify(...)`, cắt giảm ngay **40% – 55%** dung lượng payload.
+
+### 7.3. Giải pháp 2: Cơ chế Tự Động Phân Mảnh (Auto-Chunking) tại Backend
+Tại hàm `handleSyncMasterData()` trong `google-apps-script-backend.js`:
+- Thiết lập ngưỡng an toàn `MAX_CELL_LIMIT = 40000` (dưới xa giới hạn 50.000 ký tự).
+- **Trường hợp $\le 40.000$ ký tự:** Lưu bình thường vào 1 ô, đồng thời reset key `[CONFIG_KEY]_CHUNKS = "0"`.
+- **Trường hợp $> 40.000$ ký tự (ví dụ: Sitemap 256 node $\approx 150.000$ ký tự):**
+  - Ô chính lưu con trỏ tham chiếu: `[MULTI_CHUNK: 4]`.
+  - Ô số lượng mảnh: `[CONFIG_KEY]_CHUNKS` lưu giá trị `4`.
+  - Các ô dữ liệu phân đoạn: `[CONFIG_KEY]_CHUNK_0`, `[CONFIG_KEY]_CHUNK_1`, `[CONFIG_KEY]_CHUNK_2`, `[CONFIG_KEY]_CHUNK_3`... mỗi ô chứa tối đa 40.000 ký tự.
+  - Tự động xóa sạch các chunk dư thừa cũ nếu lần lưu mới có kích thước co nhỏ lại.
+
+### 7.4. Giải pháp 3: Tự Động Ghép Nối Dữ Liệu Khi Đọc (Auto-Reassembly)
+Hàm thống nhất `readMasterDataFromSettingsSheet(rawSettings)` được tích hợp trong cả `doGet` và `doPost`:
+- Tự động quét và phát hiện nếu key có cấu hình `_CHUNKS`.
+- Đọc tuần tự các ô `_CHUNK_0` đến `_CHUNK_{N-1}`, ghép nối chuỗi hoàn chỉnh và parse ngược lại thành JSON Object nguyên bản.
+- Trả về đối tượng `ia_trees` trong suốt 100% cho client, không làm thay đổi bất kỳ logic tiêu thụ nào ở Frontend.
+
+### 7.5. Giải pháp 4: Cơ Chế Double Persistence & Overflow Guard Cho Lịch Sử Chat Của Task
+Đối với dữ liệu trao đổi, bình luận và cập nhật trạng thái (`task_updates`) của từng task:
+1. **Lớp 1 (`RAW_TASKS`):** Mỗi task là 1 dòng độc lập. Cột H (`Payload_JSON`) lưu chi tiết task.
+2. **Lớp 2 (`TASK_UPDATES` & `Activity_Logs_View`):** Mỗi tin nhắn/cập nhật là **1 dòng riêng biệt (Row-by-Row)**, không bị giới hạn 50.000 ký tự của 1 ô ràng buộc.
+3. **Overflow Guard:** Tại `handleUpdateTaskProgress()`, nếu tổng chuỗi JSON của task vượt quá 45.000 ký tự, hệ thống tự động giữ lại 30 trao đổi mới nhất trong JSON của task để render tức thì, trong khi **100% toàn bộ lịch sử đầy đủ từ trước đến nay đều được bảo lưu vĩnh viễn không sót tin nào** tại sheet `TASK_UPDATES` và `Activity_Logs_View`.
+
