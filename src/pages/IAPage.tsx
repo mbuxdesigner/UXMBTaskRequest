@@ -1,12 +1,27 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
-import { motion } from "framer-motion"
-import { ShieldAlert, Lock, Maximize2, RotateCcw, Eye, CloudUpload, CloudDownload, RefreshCw, LayoutGrid, Plus, SlidersHorizontal, MoreHorizontal, FileCode, Copy } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  ShieldAlert,
+  Lock,
+  Maximize2,
+  RotateCcw,
+  Eye,
+  CloudUpload,
+  CloudDownload,
+  RefreshCw,
+  LayoutGrid,
+  SlidersHorizontal,
+  FileCode,
+  Copy,
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import { springs } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getProductColorDef } from "@/lib/colorUtils"
-import PageHeader from "@/components/common/PageHeader"
 import { useIATreeState } from "@/hooks/useIATreeState"
 import { useCanvasTransform } from "@/hooks/useCanvasTransform"
 import IACanvasViewport from "@/components/ia/IACanvasViewport"
@@ -23,6 +38,7 @@ import { getStoredSession, UserSession } from "@/services/otpAuthService"
 import { canRoleAccessCapability } from "@/lib/accessControl"
 
 export default function IAPage() {
+  const [isPagesPanelOpen, setIsPagesPanelOpen] = useState<boolean>(true)
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [canView, setCanView] = useState<boolean>(() => {
     const s = getStoredSession()
@@ -267,28 +283,37 @@ export default function IAPage() {
     }
   }, [canEdit, syncCloud])
 
-  // Cloud Pull Handler
-  const handlePullCloud = useCallback(async () => {
+  // Cloud Pull Handler (hỗ trợ cả bấm thủ công và tự động tải khi vào tab)
+  const handlePullCloud = useCallback(async (isAuto = false) => {
     setIsPullingCloud(true)
     const startTime = Date.now()
     try {
       const ok = await pullCloud()
       const elapsed = Date.now() - startTime
-      if (elapsed < 1200) {
-        await new Promise((r) => setTimeout(r, 1200 - elapsed))
+      if (elapsed < 800) {
+        await new Promise((r) => setTimeout(r, 800 - elapsed))
       }
       if (ok) {
-        toast.success("Đã tải dữ liệu sơ đồ IA mới nhất từ Cloud!")
+        toast.success("Đã đồng bộ dữ liệu Information Architecture mới nhất từ Cloud!")
         setTimeout(() => handleFitToView(), 150)
-      } else {
-        toast.info("Không có dữ liệu mới hơn trên Cloud hoặc đã khớp.")
+      } else if (!isAuto) {
+        toast.info("Dữ liệu sơ đồ hiện tại đã khớp với Cloud.")
       }
     } catch (e: any) {
-      toast.error(e?.message || "Lỗi tải từ Cloud")
+      if (!isAuto) toast.error(e?.message || "Lỗi tải từ Cloud")
     } finally {
       setIsPullingCloud(false)
     }
   }, [pullCloud, handleFitToView])
+
+  // Tự động kéo dữ liệu Cloud mới nhất về khi người dùng vào tab Information Architecture
+  const hasAutoPulledRef = useRef(false)
+  useEffect(() => {
+    if (!hasAutoPulledRef.current) {
+      hasAutoPulledRef.current = true
+      handlePullCloud(true)
+    }
+  }, [handlePullCloud])
 
   // Auto-align Tree Handler
   const handleAutoAlign = useCallback(() => {
@@ -461,125 +486,157 @@ export default function IAPage() {
     <main
       id="main-content"
       tabIndex={-1}
-      className="flex flex-col w-full h-full flex-1 min-h-0 min-w-0 max-w-full outline-none overflow-hidden select-none bg-slate-50"
+      className="relative w-full h-full flex-1 min-h-0 min-w-0 max-w-full outline-none overflow-hidden select-none bg-[#F8FAFC]"
     >
-      {/* 1. Page Header & Product Navigation: Synchronized with Overview and Design System */}
-      <div className="px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8 pb-3 bg-[#FCFCFD] border-b border-slate-200/80 shrink-0 select-none space-y-2.5">
-        <PageHeader
-          breadcrumb={{
-            parent: "Platform",
-            current: "IA map",
-          }}
-          title="IA map"
-          badge={
-            !canEdit ? (
-              <Tooltip content="Bạn đang ở chế độ chỉ xem, không thể chỉnh sửa hoặc di chuyển node">
-                <span
-                  data-testid="ia-readonly-badge"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold cursor-help"
+      {/* 1. FigJam-Style Floating Pages Panel (Top-Left, Collapsible) */}
+      <AnimatePresence mode="wait">
+        {isPagesPanelOpen ? (
+          <motion.div
+            key="figjam-pages-panel"
+            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -6 }}
+            transition={springs.snappy}
+            className="absolute top-3 sm:top-4 left-3 sm:left-4 z-40 w-64 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-xl p-3 select-none flex flex-col gap-2.5 max-h-[calc(100vh-80px)]"
+          >
+            {/* Row 1: FigJam Logo Dropdown & Collapse Toggle */}
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100/90">
+              <div
+                className="flex items-center gap-1.5 text-slate-700 hover:text-slate-900 cursor-pointer p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
+                title="MB UX Information Architecture"
+              >
+                {/* FigJam ❖ Brand Icon */}
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-purple-600 shrink-0"
                 >
-                  <Eye className="w-3 h-3 text-amber-600" />
-                  Chế độ chỉ xem
-                </span>
-              </Tooltip>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live Sync
-              </span>
-            )
-          }
-          actions={
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                tactile
-                onClick={handlePullCloud}
-                disabled={isPullingCloud || isSyncingCloud}
-                aria-label="Làm mới sơ đồ IA"
-                className={cn(
-                  "cursor-pointer shrink-0 select-none",
-                  isPullingCloud && "bg-slate-50 border-slate-300 text-slate-900"
-                )}
-              >
-                <RefreshCw
-                  className={cn(
-                    "w-3.5 h-3.5 mr-1.5 text-slate-500",
-                    isPullingCloud && "animate-spin text-slate-900"
-                  )}
-                />
-                <span>Làm mới</span>
-              </Button>
-            </div>
-          }
-          className="pb-0"
-        />
+                  <rect width="7" height="7" x="3" y="3" rx="1.5" />
+                  <rect width="7" height="7" x="14" y="3" rx="1.5" />
+                  <rect width="7" height="7" x="14" y="14" rx="1.5" />
+                  <rect width="7" height="7" x="3" y="14" rx="1.5" />
+                </svg>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </div>
 
-        {/* Product Navigation Tabs - Hàng dưới đồng bộ 100% với Overview */}
-        <div
-          role="tablist"
-          aria-label="Lọc sơ đồ IA theo sản phẩm"
-          aria-orientation="horizontal"
-          className="inline-flex h-9 items-center justify-start rounded-xl bg-slate-100/90 p-1 text-slate-500 border border-slate-200/80 shadow-2xs overflow-x-auto max-w-full select-none"
-        >
-          {products.map((prod, idx) => {
-            const tabKey = prod?.id?.trim() || prod?.code?.trim() || `ia-prod-${idx}`
-            const isSelected =
-              selectedProductId === prod.id ||
-              (selectedProductId === "app-mbbank" && prod.code === "APP_MB")
-            const colorDef = getProductColorDef(prod.name, prod.color)
-            const dotColor = colorDef.hex || prod.color || "#2563EB"
-            const nodeCount = productNodeCounts[prod.id] ?? 0
-
-            return (
-              <button
-                key={`ia-tab-${tabKey}-${idx}`}
-                role="tab"
-                type="button"
-                id={`ia-product-tab-${prod.id}`}
-                data-testid={`ia-product-tab-${prod.id}`}
-                aria-selected={isSelected}
-                onClick={() => setSelectedProductId(prod.id)}
-                className={cn(
-                  "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 sm:px-3 py-1 text-xs font-medium transition-all focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none",
-                  isSelected
-                    ? "bg-white text-slate-900 shadow-xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-                )}
-              >
-                {/* Chấm tròn theo màu cài đặt trong Admin */}
-                <span
-                  className="w-2 h-2 rounded-full mr-1.5 shrink-0 transition-transform"
-                  style={{ backgroundColor: dotColor }}
-                />
-                <span>{prod.name}</span>
-                {nodeCount > 0 && (
-                  <span
+              <div className="flex items-center gap-1">
+                {/* Cloud Refresh Action */}
+                <button
+                  type="button"
+                  onClick={() => handlePullCloud(false)}
+                  disabled={isPullingCloud || isSyncingCloud}
+                  title="Đồng bộ lại dữ liệu mới nhất từ Cloud"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <RefreshCw
                     className={cn(
-                      "ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums",
+                      "w-3.5 h-3.5",
+                      isPullingCloud && "animate-spin text-purple-600"
+                    )}
+                  />
+                </button>
+
+                {/* Collapse Panel Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsPagesPanelOpen(false)}
+                  title="Thu gọn bảng Pages (Collapse)"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2: Title & Status (Cloud Syncing / Read-only if applicable) */}
+            <div className="py-0.5">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
+                Information Architecture
+              </h2>
+              {(isPullingCloud || !canEdit) && (
+                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                  {isPullingCloud ? (
+                    <span className="inline-flex items-center gap-1 text-purple-600 font-medium">
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                      Đang đồng bộ dữ liệu Cloud...
+                    </span>
+                  ) : (
+                    <span className="text-amber-600 font-medium flex items-center gap-1">
+                      <Eye className="w-3 h-3" />
+                      Chế độ chỉ xem
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Row 3: Pages List (Synchronized with Sidebar styling) */}
+            <div className="flex flex-col gap-1 overflow-y-auto max-h-56 pr-0.5 custom-scrollbar pt-1 border-t border-slate-100/90">
+              {products.map((prod) => {
+                const isSelected =
+                  selectedProductId === prod.id ||
+                  (selectedProductId === "app-mbbank" && prod.code === "APP_MB")
+                const nodeCount = productNodeCounts[prod.id] ?? 0
+
+                return (
+                  <button
+                    key={`figjam-page-${prod.id}`}
+                    type="button"
+                    onClick={() => setSelectedProductId(prod.id)}
+                    className={cn(
+                      "w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all cursor-pointer select-none",
                       isSelected
-                        ? "bg-slate-100 text-slate-700 font-semibold"
-                        : "bg-slate-200/70 text-slate-500"
+                        ? "bg-[#E9EBEF] text-slate-900 font-semibold shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
                     )}
                   >
-                    {nodeCount}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+                    <span className="truncate">{prod.name}</span>
+                    {nodeCount > 0 && (
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.2 rounded-md text-[10px] font-mono tabular-nums shrink-0",
+                          isSelected
+                            ? "bg-slate-300/60 text-slate-800 font-semibold"
+                            : "text-slate-400"
+                        )}
+                      >
+                        {nodeCount}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        ) : (
+          /* Collapsed Floating Pill Button (FigJam Style) */
+          <motion.button
+            key="figjam-collapsed-pill"
+            type="button"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={springs.snappy}
+            onClick={() => setIsPagesPanelOpen(true)}
+            title="Mở danh sách Pages (Information Architecture)"
+            className="absolute top-3 sm:top-4 left-3 sm:left-4 z-40 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-md px-3 py-2 rounded-2xl flex items-center gap-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            <PanelLeftOpen className="w-4 h-4 text-purple-600 shrink-0" />
+            <span className="max-w-[150px] truncate">{activeProduct?.name || "Information Architecture"}</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
-      {/* 2. Main Full-Screen Canvas Workspace (Magnific UI) */}
-      <div
-        className="relative flex-1 min-h-0 w-full overflow-hidden bg-[#F8FAFC]"
-        style={{ minHeight: "450px" }}
-      >
-        {/* Full-Screen Hardware-Accelerated Interactive Mindmap Canvas Viewport */}
-        <div className="absolute inset-0 w-full h-full overflow-hidden">
-          <IACanvasViewport
+      {/* 2. Full-Screen Edge-to-Edge Mindmap Canvas Viewport */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden">
+        <IACanvasViewport
             transform={transform}
             setTransform={setTransform}
             isPanning={isPanning}
@@ -639,7 +696,6 @@ export default function IAPage() {
             onImportJson={handleImportJson}
           />
         </div>
-      </div>
 
       {/* 4. Inline Node Management & Confirmation Dialog Modal */}
       <IANodeEditorModal

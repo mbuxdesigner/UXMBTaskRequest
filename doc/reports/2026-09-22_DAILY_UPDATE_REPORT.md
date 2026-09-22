@@ -28,6 +28,13 @@
 >    - **Auto-Chunking & Auto-Reassembly Dữ Liệu IA Map (>256 Nodes):** Tự động phân mảnh payload lớn thành các chunk an toàn (`_CHUNK_0..N` $\le 40.000$ ký tự); tự động ghép nối nguyên vẹn khi kéo từ Cloud về.
 >    - **Bộ Lọc Payload Sanitizer:** Tự động lọc sạch metrics runtime, mảng rỗng và thuộc tính không xác định trước khi đẩy lên Google Sheet.
 >    - **Double Persistence & Overflow Guard Cho Lịch Sử Chat Task:** Bảo vệ Cột H của Task (giữ 30 updates gần nhất trong JSON task khi vượt 45.000 ký tự, 100% lịch sử đầy đủ lưu vĩnh viễn trên sheet `TASK_UPDATES` và `Activity_Logs_View`).
+> 5. **Tối Ưu Hoá Giao Diện & Điều Khiển IA Map Chuẩn Figma / Light Glass & Khắc Phục Lỗi Thẻ:**
+>    - **Hợp Nhất Thanh Đáy IABottomDock (Light Glass):** Gộp 2 bộ công cụ (cột trái và dock trên) thành 1 thanh Bottom Dock duy nhất nằm chính giữa đáy canvas theo phong cách Figma (`IABottomDock.tsx`), thiết kế kính mờ cao cấp (`bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.12)]`). Gồm 5 nhóm theo đúng thứ tự: Tương tác Canvas (V/H), Thêm Node (+), Dữ liệu & Hệ thống (Cloud & JSON), Auto layout (Căn chuẩn), Khung nhìn & Thu phóng (Fit-to-view icon-only, Zoom).
+>    - **Bộ Công Cụ View-Only Cho Người Dùng Chỉ Có Quyền Xem:** Tự động nhận diện chế độ xem và chuyển sang dock 3 nhóm: 1. Bàn tay Pan/Hand (H), 2. Đồng bộ (Chỉ cho phép tải dữ liệu về làm mới), 3. Khung nhìn & Thu phóng.
+>    - **Tái Thiết Kế Slide-Over Sheet Chuẩn UI Design System & Motion Guidelines:** Đổi toàn bộ các sheet mở từ bên phải; đổi tab "Kích thước sơ đồ" thành "Setting node"; loại bỏ triệt để từ "Sheet" (dùng "Cloud", "Đẩy dữ liệu lên cloud", "Đồng bộ"); cấu trúc lại JSON toolbar thành 2 cột đối xứng (`[↓ Tải file .json]` & `[📋 Sao chép JSON]`) không ngắt dòng; nút Primary Dark Navy `#0F172A` chuẩn MBBank.
+>    - **Thu Nhỏ Thẻ Cấp 5 (Lv5) Bằng Thẻ Cấp 4 (Lv4):** Chiều cao chuẩn chuyển từ 110px về 68px, chiều rộng 240px; tự động thanh lọc cache localStorage nếu từng lưu 110px cũ; xóa sạch khoảng trắng thừa bên trong thẻ.
+>    - **Khắc Phục Lỗi Viền Gạch Màu (Accent Stripe) Bị Thòi Ra Ngoài:** Sửa container 4px bị co ép border-radius bằng lớp bọc `inset-0 rounded-[11px] overflow-hidden`, gạch màu uốn cong ôm khít hoàn hảo viền thẻ.
+>    - **Tinh Giản Giao Diện Request Detail & Page Header:** Loại bỏ nút quay lại thừa trong Request Detail; tinh giản Information Architecture Header (bỏ icon mũi tên xuống, bỏ drafts, bỏ page +, bỏ menu 3 chấm; đồng bộ màu chọn page khớp sidebar).
 
 ---
 
@@ -58,6 +65,13 @@
 | **21** | **Loại Bỏ Ghi % Trong Log & Thông Báo Chuyển Khâu** | `src/components/track/RequestDetail.tsx`<br>`src/pages/TrackRequestPage.tsx`<br>`src/components/track/UpdateProgressModal.tsx` | ✅ Hoàn thành 100% | Bỏ ghi % trong log chuyển khâu (`Chuyển tiến độ sang khâu [X] - Tự động gỡ trạng thái chờ PO`); tự động làm sạch `(XX%)` khỏi các bản ghi lịch sử cũ trên timeline; đồng bộ thông báo và toast. |
 | **22** | **Cơ Chế Auto-Chunking & Tự Động Ghép Nối Dữ Liệu IA Map Lớn (>256 Nodes)** | `google-apps-script-backend.js`<br>`src/services/googleSheetService.ts`<br>`src/hooks/useIATreeState.ts` | ✅ Hoàn thành 100% | Giải quyết triệt để lỗi giới hạn 50.000 ký tự/ô của Google Sheets: tự động phân mảnh payload lớn thành `_CHUNK_0..N` (ngưỡng 40.000 ký tự); tự động ghép nối khi đọc; bộ lọc Sanitizer làm sạch runtime metrics và mảng rỗng giảm 40% dung lượng. |
 | **23** | **Cơ Chế Double Persistence & Overflow Guard Cho Lịch Sử Chat / Trao Đổi Của Task** | `google-apps-script-backend.js` | ✅ Hoàn thành 100% | Lưu trữ 2 lớp an toàn: `RAW_TASKS` (Row-by-Row) + `TASK_UPDATES` & `Activity_Logs_View` (từng tin nhắn 1 dòng độc lập); bỏ thụt lề `null, 2` giảm 50% dung lượng; cơ chế Overflow Guard giữ 30 log mới nhất trong JSON task khi vượt 45.000 ký tự, 100% lịch sử được bảo lưu vĩnh viễn trên View Sheet. |
+| **24** | **Hợp Nhất Thanh Công Cụ Đáy IABottomDock (Light Glass Figma Style)** | `src/components/ia/IABottomDock.tsx`<br>`src/components/ia/IACanvasViewport.tsx` | ✅ Hoàn thành 100% | Gộp 2 toolbar cũ thành 1 thanh Bottom Dock duy nhất căn giữa đáy canvas chuẩn Light Glass `bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.12)]`. Gồm 5 nhóm công cụ: 1. Tương tác Canvas (V/H), 2. Thêm Node (+), 3. Dữ liệu & Hệ thống, 4. Auto layout (Căn chuẩn & Lưới), 5. Khung nhìn & Thu phóng (Fit to view icon-only). |
+| **25** | **Bộ Công Cụ View-Only Dành Riêng Cho Người Dùng Quyền Xem** | `src/components/ia/IABottomDock.tsx`<br>`src/components/ia/IACanvasViewport.tsx` | ✅ Hoàn thành 100% | Nhận diện `readOnly` và tự động hiển thị dock 3 nhóm: 1. Bàn tay Pan/Hand (H), 2. Đồng bộ (Chỉ cho phép tải dữ liệu về làm mới sơ đồ qua icon RefreshCw), 3. Khung nhìn & Thu phóng (Fit to view, Zoom +/-/100%). Ẩn toàn bộ nút thêm/sửa/xóa/đẩy cloud. |
+| **26** | **Tái Thiết Kế Slide-Over Sheet Chuẩn UI Design System & Motion Guidelines** | `src/components/ia/IASlideOverSheet.tsx` | ✅ Hoàn thành 100% | Chuyển toàn bộ các sheet mở từ bên phải; đổi tab "Kích thước sơ đồ" thành "Setting node"; loại bỏ 100% từ "Sheet" (thay bằng "Cloud", "Đồng bộ", "Đẩy dữ liệu lên cloud"); bố trí JSON Toolbar 2 cột đối xứng `[↓ Tải file .json]` và `[📋 Sao chép JSON]` không ngắt dòng; màu nút Dark Navy `#0F172A` chuẩn MBBank. |
+| **27** | **Thu Nhỏ Thẻ Cấp 5 (Lv5) Bằng Thẻ Cấp 4 (Lv4)** | `src/hooks/useIATreeState.ts`<br>`src/components/ia/IASlideOverSheet.tsx`<br>`src/components/ia/IASettingsModal.tsx` | ✅ Hoàn thành 100% | Chiều cao chuẩn Lv5 giảm từ 110px xuống 68px, chiều rộng 240px; tự động thanh lọc localStorage nếu từng lưu 110px cũ; thuật toán `getNodeEstimatedHeight` và `buildInternal` tự động co gọn thẻ Lv5, loại bỏ hoàn toàn khoảng trắng thừa bên trong thẻ. |
+| **28** | **Khắc Phục Lỗi Viền Gạch Màu (Accent Stripe) Bị Thòi Ra Ngoài Góc Thẻ** | `src/components/ia/IATreeNodeCard.tsx` | ✅ Hoàn thành 100% | Sửa container 4px bị co ép border-radius bằng lớp bọc toàn thẻ `inset-0 rounded-[11px] overflow-hidden`; viền gạch màu tự động cắt gọt (clip) ôm khít hoàn hảo theo cung cong của góc thẻ, triệt tiêu 100% hiện tượng thòi ra ngoài viền. |
+| **29** | **Bỏ Nút Quay Lại Trong Chi Tiết Task (Request Detail)** | `src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Loại bỏ nút quay lại thừa trên thanh điều hướng chi tiết task theo yêu cầu người dùng, giữ giao diện sạch sẽ, tập trung tối đa vào nội dung bài toán. |
+| **30** | **Đồng Bộ Màu Chọn Page Và Tinh Giản Tiêu Đề Information Architecture** | `src/components/Sidebar.tsx`<br>`src/components/common/AppHeader.tsx`<br>`src/pages/IAPage.tsx` | ✅ Hoàn thành 100% | Bỏ icon mũi tên xuống ở text Information Architecture, bỏ chữ drafts, bỏ dòng page +, bỏ icon 3 chấm khi đang chọn page, đồng bộ màu nền và viền khi chọn page khớp hoàn toàn với màu chọn side bar. |
 
 ---
 
@@ -212,6 +226,49 @@
   - Task được lưu theo 2 lớp: Lớp 1 trong Cột H của `RAW_TASKS` (Row-by-Row); Lớp 2 trong sheet `TASK_UPDATES` và `Activity_Logs_View` (từng tin nhắn là 1 hàng độc lập, không giới hạn số lượng tin).
   - Bỏ định dạng `null, 2` khi lưu Task giúp giảm 50% kích thước JSON (chứa thoải mái 400 – 500 tin nhắn trong Cột H).
   - Cơ chế Overflow Guard: Nếu task trao đổi quá dài vượt 45.000 ký tự trong Cột H, hệ thống tự động giữ 30 tin nhắn mới nhất trong JSON của task để preview, trong khi 100% toàn bộ lịch sử đầy đủ từ trước đến nay được bảo lưu vĩnh viễn trên sheet `TASK_UPDATES` và `Activity_Logs_View`.
+
+---
+
+### 2.8. Chiến Dịch VIII: Tối Ưu Hoá Giao Diện & Điều Khiển IA Map Chuẩn Figma / Light Glass & Sửa Lỗi Hiển Thị
+
+#### A. Hợp Nhất Thanh Công Cụ Đáy `IABottomDock` (Light Glass)
+- **Bối cảnh:** Trước đây IA Map phân chia 2 thanh công cụ riêng biệt: 1 cột bên trái màn hình (`IAVerticalDock.tsx`) và 1 thanh công cụ ở phía trên (`IAToolbar.tsx`). Bố cục này chiếm dụng nhiều không gian canvas và phân tán sự chú ý của người dùng.
+- **Thiết kế mới theo phong cách Figma:**
+  - Hợp nhất toàn bộ vào 1 thanh Bottom Dock duy nhất (`src/components/ia/IABottomDock.tsx`), đặt nổi chính giữa đáy canvas.
+  - Phong cách thiết kế: **Light Glass** (`bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.12)]`).
+  - Gồm 5 nhóm công cụ phân chia bằng vạch ngăn tinh tế (`h-4 w-px bg-slate-200`):
+    1. **Tương tác Canvas:** Con trỏ Select (phím `V`) & Bàn tay Pan/Hand (phím `H`).
+    2. **Thêm Node:** Nút kích hoạt mở Slide-Over Sheet bên phải kèm tooltip phím tắt.
+    3. **Dữ liệu & Hệ thống:** Gộp quản lý dữ liệu JSON (nhập/xuất/sao chép) và đồng bộ Cloud (đẩy/kéo) vào 1 nút duy nhất.
+    4. **Auto layout:** Tự động căn chỉnh sơ đồ theo giải thuật Tidy Tree và nút bật/tắt Lưới toạ độ (Grid).
+    5. **Khung nhìn & Thu phóng:** Nút Fit to view (căn giữa toàn bộ cây, dạng icon-only trực quan) kết hợp bộ thu phóng Zoom In, Zoom Out, Reset 100%.
+
+#### B. Bộ Công Cụ View-Only Dành Cho Người Dùng Quyền Xem
+- **Phân quyền linh hoạt:** Khi người dùng ở chế độ chỉ đọc (`readOnly === true`), thanh Bottom Dock tự động chuyển sang layout 3 nhóm chuyên biệt:
+  1. **Bàn tay Pan/Hand (H):** Cho phép kéo cuộn canvas tự do.
+  2. **Đồng bộ:** Chỉ cho phép tải dữ liệu về để làm mới sơ đồ (`RefreshCw`), ẩn hoàn toàn nút đẩy lên cloud hoặc nạp JSON.
+  3. **Khung nhìn & Thu phóng:** Giữ nguyên toàn bộ tính năng Fit to view và Zoom.
+- Ẩn toàn bộ các nút thêm node, auto layout, chỉnh sửa và cấu hình.
+
+#### C. Tái Thiết Kế Slide-Over Sheet Chuẩn Design System & Motion Guidelines
+- Toàn bộ các sheet chuyển hướng mở từ mép phải màn hình thay vì bên trái, tạo sự thuận tay cho người dùng.
+- Chuẩn hóa Segmented Switcher: Đổi tab "Kích thước sơ đồ" thành "Setting node" và "Dữ liệu & Đồng bộ".
+- Xóa bỏ triệt để từ "Sheet" trên giao diện (chuyển sang "Cloud", "Đồng bộ", "Đẩy dữ liệu lên cloud").
+- Bố trí lại JSON Toolbar thành 2 cột đối xứng (`[↓ Tải file .json]` & `[📋 Sao chép JSON]`) không ngắt dòng; nút "Mẫu" đưa lên góc Header.
+- Nút bấm chính áp dụng chuẩn Primary Dark Navy `#0F172A`, nút phụ thẻ Card trắng viền xám, tích hợp phản hồi xúc giác vật lý `tactileProps.button`.
+
+#### D. Tinh Chỉnh Thẻ Cấp 5 (Lv5) Nhỏ Gọn Bằng Cấp 4 (Lv4)
+- Giảm chiều cao chuẩn Lv5 từ 110px xuống **68px** (bằng đúng Lv4), chiều rộng **240px** (nhỏ hơn Lv4 250px).
+- Tự động thanh lọc bộ nhớ cache `localStorage` nếu từng lưu 110px cũ.
+- Thuật toán `getNodeEstimatedHeight` và `buildInternal` tự động co gọn thẻ Lv5, loại bỏ hoàn toàn khoảng trắng thừa bên trong thẻ.
+
+#### E. Khắc Phục Lỗi Viền Gạch Màu (Accent Stripe) Bị Thòi Ra Ngoài Góc Thẻ
+- Thay thế container 4px bị co ép border-radius bằng lớp bọc toàn thẻ `inset-0 rounded-[11px] overflow-hidden`.
+- Thanh gạch màu được cắt gọt tự động theo đúng cung cong tròn của góc thẻ, ôm khít 100%, triệt tiêu hoàn toàn hiện tượng nhô ra ngoài viền.
+
+#### F. Tinh Giản Giao Diện Request Detail & Page Header
+- Bỏ nút quay lại thừa trong giao diện chi tiết bài toán (`RequestDetail.tsx`).
+- Tinh giản tiêu đề Information Architecture Header: bỏ icon mũi tên xuống, bỏ nhãn drafts, bỏ dòng page +, bỏ menu 3 chấm; đồng bộ màu chọn page khớp hoàn toàn với màu chọn của sidebar.
 
 ---
 
@@ -405,14 +462,33 @@ Running Test 5: Dynamic payload shrinkage & excess chunk cleanup...
 ================================================================================
 ```
 
-### 10. Kiểm tra Biên Dịch Bản Production (Vite Build)
+### 10. Kiểm thử Thanh Công Cụ Đáy IABottomDock & View-Only Mode (`test-ia-bottom-dock.mjs`)
+```
+================================================================================
+TEST SUITE: IA UNIFIED BOTTOM DOCK (LIGHT GLASS) VERIFICATION
+================================================================================
+✓ Test 1: IABottomDock component and types exported correctly
+✓ Test 2: Bottom center positioning & Light Glass styling verified
+✓ Test 3: Group 1 (Canvas Interaction - V & H) verified
+✓ Test 4: Group 2 (Creation - Thêm Node) verified
+✓ Test 5: Group 3 (Dữ liệu & Hệ thống - Unified Cloud & JSON) verified
+✓ Test 6: Group 4 (Auto layout & Grid) verified
+✓ Test 7: Group 5 (Viewport & Zoom - icon only fit to view) verified
+✓ Test 8: IACanvasViewport successfully replaced separate toolbars with unified IABottomDock
+✓ Test 10: View-Only mode toolbar (Pan H, RefreshCw sync pull, Viewport & Zoom) verified
+================================================================================
+🎉 ALL 10 TESTS PASSED (100%) - UNIFIED BOTTOM DOCK & VIEW-ONLY MODE VERIFIED!
+================================================================================
+```
+
+### 11. Kiểm tra Biên Dịch Bản Production (Vite Build)
 ```
 > vite build
 ✓ 2974 modules transformed.
 dist/index.html                                9.30 kB │ gzip:   2.81 kB
 dist/assets/vendor-charts-mp207rPl.js        409.44 kB │ gzip: 116.65 kB
-dist/assets/index-BvzLm9l3.js                352.70 kB │ gzip:  85.82 kB
-✓ built in 538ms (0 errors, 0 warnings)
+dist/assets/index-DklBgtFH.js                355.77 kB │ gzip:  86.43 kB
+✓ built in 1.48s (0 errors, 0 warnings)
 ```
 
 ---

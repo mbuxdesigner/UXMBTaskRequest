@@ -27,6 +27,8 @@ import {
   RefreshCw,
   Eye,
   Sliders,
+  Download,
+  Database,
 } from "lucide-react"
 import { IANode, IATier, IATouchpointType, IATierDimensionSettings, IAProductInfo } from "@/types/ia"
 import { QuickAddNodeType } from "./IAQuickAddSidebar"
@@ -229,7 +231,7 @@ export default function IASlideOverSheet({
       if (!target) return
 
       const isInsideSheet = target.closest("[data-testid='ia-slide-over-sheet']")
-      const isInsideDock = target.closest("[data-testid='ia-vertical-dock']")
+      const isInsideDock = target.closest("[data-testid='ia-vertical-dock']") || target.closest("[data-testid='ia-bottom-dock']")
 
       if (!isInsideSheet && !isInsideDock) {
         onClose()
@@ -240,17 +242,49 @@ export default function IASlideOverSheet({
     return () => document.removeEventListener("mousedown", handleGlobalMouseDown)
   }, [onClose])
 
+  // Data & System sub-tab state ("data-sync" or "dimensions")
+  const [dataSystemSubTab, setDataSystemSubTab] = useState<"data-sync" | "dimensions">("data-sync")
+
+  useEffect(() => {
+    if (activeTool === "settings") {
+      setDataSystemSubTab("dimensions")
+    } else if (activeTool === "data-system" || activeTool === "cloud" || activeTool === "json") {
+      setDataSystemSubTab("data-sync")
+    }
+  }, [activeTool])
+
+  // Download JSON file directly to user's computer
+  const handleDownloadJson = () => {
+    try {
+      const dataToExport = activeTree || SAMPLE_JSON_EXPORT
+      const jsonString = JSON.stringify(dataToExport, null, 2)
+      const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      const safeCode = (activeProduct?.code || activeProduct?.name || "sitemap").toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+      a.href = url
+      a.download = `sitemap-${safeCode}-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success("Đã xuất và tải file JSON sitemap thành công!")
+    } catch (err: any) {
+      toast.error(`Lỗi khi tải file JSON: ${err?.message || "Không xác định"}`)
+    }
+  }
+
   // Title for sheet header
   const sheetTitle = useMemo(() => {
     switch (activeTool) {
       case "add-node":
         return "Thêm Node vào sơ đồ"
+      case "data-system":
+      case "cloud":
+      case "json":
+        return "Dữ liệu & Hệ thống"
       case "settings":
         return "Cài đặt thông số sơ đồ"
-      case "cloud":
-        return "Đồng bộ Google Sheets Cloud"
-      case "json":
-        return "Dữ liệu & Quản lý JSON"
       default:
         return "Bảng công cụ IA"
     }
@@ -273,8 +307,9 @@ export default function IASlideOverSheet({
     })
   }, [searchQuery, activeCategoryTab])
 
-  // Lv5 selection context logic
-  const isSelectedNodeLv5 = selectedNode?.tier === 5
+  // Lv5 selection context logic (Lv5 is the terminal tier)
+  const isSelectedNodeLv5 = selectedNode ? selectedNode.tier >= 5 : false
+  const isSelectedNodeLv4 = isSelectedNodeLv5
   const canAddChild = selectedNode ? selectedNode.tier < 5 : false
 
   // Apply settings preset
@@ -287,11 +322,11 @@ export default function IASlideOverSheet({
       setSettingsLv5Width(240)
       setSettingsColumnGap(110)
       onSaveSettings({
-        1: { width: 320, height: tierDimensions[1]?.height || 115 },
-        2: { width: 280, height: tierDimensions[2]?.height || 120 },
-        3: { width: 260, height: tierDimensions[3]?.height || 125 },
-        4: { width: 250, height: tierDimensions[4]?.height || 115 },
-        5: { width: 240, height: tierDimensions[5]?.height || 110 },
+        1: { width: 320, height: tierDimensions[1]?.height || 68 },
+        2: { width: 280, height: tierDimensions[2]?.height || 68 },
+        3: { width: 260, height: tierDimensions[3]?.height || 68 },
+        4: { width: 250, height: tierDimensions[4]?.height || 68 },
+        5: { width: 240, height: (tierDimensions[5]?.height && tierDimensions[5].height <= 95) ? tierDimensions[5].height : 68 },
         columnGap: 110,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -304,11 +339,11 @@ export default function IASlideOverSheet({
       setSettingsLv5Width(260)
       setSettingsColumnGap(140)
       onSaveSettings({
-        1: { width: 360, height: tierDimensions[1]?.height || 115 },
-        2: { width: 310, height: tierDimensions[2]?.height || 120 },
-        3: { width: 285, height: tierDimensions[3]?.height || 125 },
-        4: { width: 265, height: tierDimensions[4]?.height || 115 },
-        5: { width: 260, height: tierDimensions[5]?.height || 110 },
+        1: { width: 360, height: tierDimensions[1]?.height || 68 },
+        2: { width: 310, height: tierDimensions[2]?.height || 68 },
+        3: { width: 285, height: tierDimensions[3]?.height || 68 },
+        4: { width: 265, height: tierDimensions[4]?.height || 68 },
+        5: { width: 260, height: (tierDimensions[5]?.height && tierDimensions[5].height <= 95) ? tierDimensions[5].height : 68 },
         columnGap: 140,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -321,11 +356,11 @@ export default function IASlideOverSheet({
       setSettingsLv5Width(210)
       setSettingsColumnGap(85)
       onSaveSettings({
-        1: { width: 280, height: tierDimensions[1]?.height || 115 },
-        2: { width: 250, height: tierDimensions[2]?.height || 120 },
-        3: { width: 235, height: tierDimensions[3]?.height || 125 },
-        4: { width: 220, height: tierDimensions[4]?.height || 115 },
-        5: { width: 210, height: tierDimensions[5]?.height || 110 },
+        1: { width: 280, height: tierDimensions[1]?.height || 68 },
+        2: { width: 250, height: tierDimensions[2]?.height || 68 },
+        3: { width: 235, height: tierDimensions[3]?.height || 68 },
+        4: { width: 220, height: tierDimensions[4]?.height || 68 },
+        5: { width: 210, height: (tierDimensions[5]?.height && tierDimensions[5].height <= 95) ? tierDimensions[5].height : 68 },
         columnGap: 85,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -371,11 +406,11 @@ export default function IASlideOverSheet({
   // Handle Save Settings from sliders
   const handleSaveSettingsValues = () => {
     onSaveSettings({
-      1: { width: Math.max(160, settingsLv1Width), height: tierDimensions[1]?.height || 115 },
-      2: { width: Math.max(160, settingsLv2Width), height: tierDimensions[2]?.height || 120 },
-      3: { width: Math.max(150, settingsLv3Width), height: tierDimensions[3]?.height || 125 },
-      4: { width: Math.max(140, settingsLv4Width), height: tierDimensions[4]?.height || 115 },
-      5: { width: Math.max(140, settingsLv5Width), height: tierDimensions[5]?.height || 110 },
+      1: { width: Math.max(160, settingsLv1Width), height: tierDimensions[1]?.height || 68 },
+      2: { width: Math.max(160, settingsLv2Width), height: tierDimensions[2]?.height || 68 },
+      3: { width: Math.max(150, settingsLv3Width), height: tierDimensions[3]?.height || 68 },
+      4: { width: Math.max(140, settingsLv4Width), height: tierDimensions[4]?.height || 68 },
+      5: { width: Math.max(140, settingsLv5Width), height: (tierDimensions[5]?.height && tierDimensions[5].height <= 95) ? tierDimensions[5].height : 68 },
       columnGap: Math.max(40, settingsColumnGap),
       verticalGapJourney: tierDimensions.verticalGapJourney,
       verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -418,13 +453,13 @@ export default function IASlideOverSheet({
     <motion.aside
       data-testid="ia-slide-over-sheet"
       aria-label={sheetTitle}
-      initial={{ x: -360, opacity: 0 }}
+      initial={{ x: 380, opacity: 0 /* initial={{ x: -360, opacity: 0 }} */ }}
       animate={{ x: 0, opacity: 1 }}
-      exit={{ x: -360, opacity: 0 }}
+      exit={{ x: 380, opacity: 0 /* exit={{ x: -360, opacity: 0 }} */ }}
       transition={{ type: "spring", damping: 26, stiffness: 280 }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute top-3.5 bottom-3.5 z-25 w-[360px] bg-white/98 backdrop-blur-xl border border-slate-200/90 shadow-2xl rounded-2xl flex flex-col select-none overflow-hidden"
-      style={{ left: "76px" /* style={{ left: "56px" }} */ }}
+      className="absolute top-4 bottom-24 z-35 w-[380px] /* w-[360px] */ bg-white/98 backdrop-blur-xl border border-slate-200/90 shadow-2xl rounded-2xl flex flex-col select-none overflow-hidden"
+      style={{ right: "16px" /* style={{ left: "56px" }} */ }}
     >
       {/* 1. Header Bar: Title and Close (X) */}
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
@@ -498,21 +533,56 @@ export default function IASlideOverSheet({
         </div>
       )}
 
+      {/* Sub-tabs for Data & System */}
+      {activeTool !== "add-node" && (
+        <div className="border-b border-slate-100 bg-white shrink-0 px-3.5 py-2.5">
+          <div className="w-full flex items-center p-1 rounded-xl bg-slate-100/90 border border-slate-200/80">
+            <button
+              type="button"
+              data-testid="ia-subtab-data-sync"
+              onClick={() => setDataSystemSubTab("data-sync")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                dataSystemSubTab === "data-sync"
+                  ? "bg-white text-slate-900 font-semibold shadow-2xs ring-1 ring-slate-200"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium"
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>Dữ liệu & Đồng bộ</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="ia-subtab-dimensions"
+              onClick={() => setDataSystemSubTab("dimensions")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                dataSystemSubTab === "dimensions"
+                  ? "bg-white text-slate-900 font-semibold shadow-2xs ring-1 ring-slate-200"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium"
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Setting node</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 3. Dynamic Sheet Panels */}
       <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
         {/* PANEL: ADD NODE */}
         {activeTool === "add-node" && (
           <div className="p-3 space-y-3">
             {/* Selection Context Banner */}
-            {isSelectedNodeLv4 ? (
+            {isSelectedNodeLv5 ? (
               <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 flex items-start gap-2 shadow-2xs">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="text-[11px] leading-relaxed">
                   <p className="font-semibold text-amber-950">
-                    ⚠️ Node Cấp 4 (Lv4) là điểm chạm cuối, không thể tạo thêm nhánh con.
+                    ⚠️ Node Cấp 5 (Lv5) là tầng chi tiết cuối cùng, không thể tạo thêm nhánh con.
                   </p>
                   <p className="text-amber-800/90 mt-0.5">
-                    Để mở rộng sơ đồ, hãy chọn node cha cấp 1–3 hoặc tạo một Node gốc Cấp 1 mới.
+                    Để mở rộng sơ đồ, hãy chọn node cha cấp 1–4 hoặc tạo một Node gốc Cấp 1 mới.
                   </p>
                 </div>
               </div>
@@ -539,15 +609,15 @@ export default function IASlideOverSheet({
               ) : (
                 filteredTemplates.map((item) => {
                   const IconComponent = item.icon
-                  const isBlockedByLv4 = isSelectedNodeLv4 && item.tier !== 1
+                  const isBlockedByLv5 = isSelectedNodeLv5 && item.tier !== 1
 
                   return (
                     <div
                       key={item.id}
                       data-testid={`ia-quick-add-${item.id}`}
-                      draggable={!isBlockedByLv4}
+                      draggable={!isBlockedByLv5}
                       onDragStart={(e) => {
-                        if (isBlockedByLv4) return
+                        if (isBlockedByLv5) return
                         e.dataTransfer.setData(
                           "application/json",
                           JSON.stringify({
@@ -560,14 +630,14 @@ export default function IASlideOverSheet({
                         e.dataTransfer.effectAllowed = "copy"
                       }}
                       onClick={() => {
-                        if (isBlockedByLv4) {
-                          toast.warning("Không thể tạo thêm nhánh con cho node Cấp 4 (Lv4)!")
+                        if (isBlockedByLv5) {
+                          toast.warning("Không thể tạo thêm nhánh con cho node Cấp 5 (Lv5)!")
                           return
                         }
                         onAddNode(item)
                       }}
                       className={`group relative p-2.5 rounded-xl border transition-all duration-150 flex items-start justify-between gap-2 ${
-                        isBlockedByLv4
+                        isBlockedByLv5
                           ? "opacity-45 bg-slate-50 border-slate-200 cursor-not-allowed"
                           : "bg-white border-slate-200/90 hover:border-blue-400 hover:bg-blue-50/20 hover:shadow-xs cursor-pointer"
                       }`}
@@ -597,17 +667,17 @@ export default function IASlideOverSheet({
                       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Tooltip
                           content={
-                            isBlockedByLv4
-                              ? "Cấp 4 không thể thêm nhánh con"
+                            isBlockedByLv5
+                              ? "Cấp 5 không thể thêm nhánh con"
                               : "Thêm vào sơ đồ"
                           }
                           side="top"
                         >
                           <button
                             type="button"
-                            disabled={isBlockedByLv4}
+                            disabled={isBlockedByLv5}
                             className={`p-1 rounded-md text-white shadow-2xs ${
-                              isBlockedByLv4
+                              isBlockedByLv5
                                 ? "bg-slate-400 cursor-not-allowed"
                                 : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
                             }`}
@@ -615,7 +685,7 @@ export default function IASlideOverSheet({
                             <Plus className="w-3 h-3 stroke-[3]" />
                           </button>
                         </Tooltip>
-                        {!isBlockedByLv4 && (
+                        {!isBlockedByLv5 && (
                           <Tooltip content="Kéo thả vào canvas" side="top">
                             <div className="text-slate-300 hover:text-slate-500 cursor-grab p-0.5">
                               <GripVertical className="w-3.5 h-3.5" />
@@ -631,8 +701,172 @@ export default function IASlideOverSheet({
           </div>
         )}
 
-        {/* PANEL: SETTINGS */}
-        {activeTool === "settings" && (
+        {/* PANEL: DATA & SYNC (Unified Cloud + JSON) */}
+        {activeTool !== "add-node" && dataSystemSubTab === "data-sync" && (
+          <div className="p-3.5 space-y-3.5 text-xs flex-1 overflow-y-auto">
+            {/* 1. KHỐI ĐỒNG BỘ CLOUD */}
+            <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                    <CloudUpload className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900 text-xs block leading-tight">Đồng bộ Cloud</span>
+                    <span className="text-[10px] text-slate-400">Lưu trữ & đồng bộ dữ liệu sơ đồ</span>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium text-[10px] border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Đang trực tuyến
+                </span>
+              </div>
+
+              <div className="text-[11px] text-slate-500 flex items-center justify-between pt-0.5">
+                <span>Sản phẩm: <strong className="text-slate-800 font-semibold">{activeProduct?.name || "MBBank"}</strong></span>
+                <span className="font-mono text-[10px] text-slate-400 bg-white border border-slate-200/80 px-1.5 py-0.5 rounded-md">MB_UX_IA_DATA</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <motion.button
+                  type="button"
+                  data-testid="ia-sheet-sync-cloud-btn"
+                  disabled={isSyncingCloud || isPullingCloud}
+                  onClick={onSyncCloud}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-[#0F172A] text-white hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 transition-colors font-semibold cursor-pointer shadow-xs text-xs"
+                  {...tactileProps.button}
+                >
+                  <CloudUpload className={`w-3.5 h-3.5 ${isSyncingCloud ? "animate-pulse" : ""}`} />
+                  <span className="truncate">{isSyncingCloud ? "Đang đẩy..." : "Đẩy dữ liệu lên cloud"}</span>
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  data-testid="ia-sheet-pull-cloud-btn"
+                  disabled={isPullingCloud || isSyncingCloud}
+                  onClick={onPullCloud}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 transition-colors font-semibold cursor-pointer shadow-2xs text-xs"
+                  {...tactileProps.button}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isPullingCloud ? "animate-spin text-blue-600" : ""}`} />
+                  <span className="truncate">{isPullingCloud ? "Đang đồng bộ..." : "Đồng bộ về"}</span>
+                </motion.button>
+              </div>
+
+              {/* Progress status */}
+              <AnimatePresence>
+                {(isSyncingCloud || isPullingCloud) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -4 }}
+                    animate={{ opacity: 1, height: "auto", y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -4 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <SyncProgressStatus
+                      active={isSyncingCloud || isPullingCloud}
+                      type={isSyncingCloud ? "push" : "pull"}
+                      label={isSyncingCloud ? "Đang đẩy dữ liệu sơ đồ lên Cloud..." : "Đang đồng bộ sơ đồ từ Cloud..."}
+                      className="border-blue-200/80 bg-blue-50/40 shadow-xs"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* 2. KHỐI QUẢN LÝ & XUẤT NHẬP DỮ LIỆU JSON */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
+                    <FileCode className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900 text-xs block leading-tight">Dữ liệu JSON Sitemap</span>
+                    <span className="text-[10px] text-slate-400">Xuất hoặc nạp cấu trúc cây sơ đồ</span>
+                  </div>
+                </div>
+
+                <motion.button
+                  type="button"
+                  onClick={handleLoadJsonSample}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 text-[11px] font-medium transition-colors cursor-pointer"
+                  {...tactileProps.button}
+                >
+                  Mẫu
+                </motion.button>
+              </div>
+
+              {/* Action Toolbar: Tải file .json & Sao chép JSON */}
+              <div className="grid grid-cols-2 gap-2">
+                <Tooltip content="Tải file .json trực tiếp về máy tính" side="top">
+                  <motion.button
+                    type="button"
+                    data-testid="ia-sheet-download-json-btn"
+                    onClick={handleDownloadJson}
+                    className="w-full py-2 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/70 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200/80 transition-colors cursor-pointer shadow-2xs"
+                    {...tactileProps.button}
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Tải file .json</span>
+                  </motion.button>
+                </Tooltip>
+
+                <Tooltip content="Sao chép JSON vào bộ nhớ tạm" side="top">
+                  <motion.button
+                    type="button"
+                    data-testid="ia-sheet-copy-json-btn"
+                    onClick={onCopyJson}
+                    className="w-full py-2 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/70 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200/80 transition-colors cursor-pointer shadow-2xs"
+                    {...tactileProps.button}
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Sao chép JSON</span>
+                  </motion.button>
+                </Tooltip>
+              </div>
+
+              {/* Textarea Input JSON */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <label className="font-semibold text-slate-700">
+                    Dán cấu trúc JSON (Input JSON):
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">Định dạng IANode</span>
+                </div>
+                <textarea
+                  value={rawJsonText}
+                  onChange={(e) => {
+                    setRawJsonText(e.target.value)
+                    setParseError(null)
+                  }}
+                  placeholder="Dán nội dung JSON vào đây hoặc bấm 'Mẫu'..."
+                  rows={6}
+                  className="w-full p-2.5 rounded-xl border border-slate-200/90 bg-slate-50/60 font-mono text-[11px] text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-900/10 outline-none transition-all resize-none leading-relaxed"
+                />
+              </div>
+
+              {parseError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[11px] flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{parseError}</span>
+                </div>
+              )}
+
+              <motion.button
+                type="button"
+                onClick={handleValidateAndImportJson}
+                className="w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-xs bg-[#0F172A] hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl transition-all"
+                {...tactileProps.button}
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Kiểm tra cú pháp & Nhập sơ đồ</span>
+              </motion.button>
+            </div>
+          </div>
+        )}
+
+        {/* PANEL: DIMENSIONS / SETTINGS */}
+        {activeTool !== "add-node" && dataSystemSubTab === "dimensions" && (
           <div className="flex-1 min-h-0 flex flex-col justify-between p-4 text-xs h-full">
             {/* Scrollable controls */}
             <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
@@ -684,14 +918,14 @@ export default function IASlideOverSheet({
                 </div>
               </div>
 
-              {/* Sliders Container */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                {/* Lv1 Root */}
+              {/* Slider controls */}
+              <div className="space-y-3 pt-1">
+                {/* Lv1 */}
                 <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#1057FB] shrink-0 shadow-2xs" />
-                      <span>Chiều rộng Cấp 1 (Root)</span>
+                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 shadow-2xs" />
+                      <span>Lv1 (Gốc)</span>
                     </span>
                     <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
                       {settingsLv1Width}px
@@ -703,7 +937,7 @@ export default function IASlideOverSheet({
                     step={10}
                     value={settingsLv1Width}
                     onChange={setSettingsLv1Width}
-                    color="#1057FB"
+                    color="#2563EB"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                     <span>200px</span>
@@ -711,12 +945,12 @@ export default function IASlideOverSheet({
                   </div>
                 </div>
 
-                {/* Lv2 Phân hệ */}
+                {/* Lv2 */}
                 <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 shadow-2xs" />
-                      <span>Chiều rộng Cấp 2 (Phân hệ)</span>
+                      <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0 shadow-2xs" />
+                      <span>Lv2 (Phân hệ)</span>
                     </span>
                     <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
                       {settingsLv2Width}px
@@ -724,24 +958,24 @@ export default function IASlideOverSheet({
                   </div>
                   <Slider
                     min={180}
-                    max={380}
+                    max={400}
                     step={10}
                     value={settingsLv2Width}
                     onChange={setSettingsLv2Width}
-                    color="#6366F1"
+                    color="#4F46E5"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                     <span>180px</span>
-                    <span>380px</span>
+                    <span>400px</span>
                   </div>
                 </div>
 
-                {/* Lv3 Hành trình */}
+                {/* Lv3 */}
                 <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-2xs" />
-                      <span>Chiều rộng Cấp 3 (Hành trình)</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 shadow-2xs" />
+                      <span>Lv3 (Luồng nghiệp vụ)</span>
                     </span>
                     <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
                       {settingsLv3Width}px
@@ -749,48 +983,48 @@ export default function IASlideOverSheet({
                   </div>
                   <Slider
                     min={160}
-                    max={340}
+                    max={360}
                     step={10}
                     value={settingsLv3Width}
                     onChange={setSettingsLv3Width}
-                    color="#10B981"
+                    color="#059669"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                     <span>160px</span>
-                    <span>340px</span>
+                    <span>360px</span>
                   </div>
                 </div>
 
-                {/* Lv4 Màn hình */}
+                {/* Lv4 */}
                 <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 shadow-2xs" />
-                      <span>Chiều rộng Cấp 4 (Màn hình)</span>
+                      <span>Lv4 (Màn hình)</span>
                     </span>
                     <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
                       {settingsLv4Width}px
                     </span>
                   </div>
                   <Slider
-                    min={160}
-                    max={320}
+                    min={150}
+                    max={340}
                     step={10}
                     value={settingsLv4Width}
                     onChange={setSettingsLv4Width}
-                    color="#F59E0B"
+                    color="#D97706"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                    <span>160px</span>
-                    <span>320px</span>
+                    <span>150px</span>
+                    <span>340px</span>
                   </div>
                 </div>
 
-                {/* Lv5 Thành phần & Chi tiết */}
+                {/* Lv5 */}
                 <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-slate-700 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0 shadow-2xs" />
+                      <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0 shadow-2xs" />
                       <span>Chiều rộng Cấp 5 (Thành phần)</span>
                     </span>
                     <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
@@ -803,7 +1037,7 @@ export default function IASlideOverSheet({
                     step={10}
                     value={settingsLv5Width}
                     onChange={setSettingsLv5Width}
-                    color="#8B5CF6"
+                    color="#7C3AED"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                     <span>140px</span>
@@ -847,129 +1081,6 @@ export default function IASlideOverSheet({
               >
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                 Áp dụng cài đặt kích thước
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* PANEL: CLOUD */}
-        {activeTool === "cloud" && (
-          <div className="p-3.5 space-y-4 text-xs">
-            {/* Status Header */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 text-[11px]">Trạng thái kết nối</span>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Đang trực tuyến
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-slate-700">
-                <span className="font-medium">Master Sheet:</span>
-                <span className="font-mono text-[11px] text-slate-600">MB_UX_IA_DATA</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                data-testid="ia-sheet-sync-cloud-btn"
-                disabled={isSyncingCloud || isPullingCloud}
-                onClick={onSyncCloud}
-                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0F172A] text-white hover:bg-slate-800 disabled:opacity-50 transition-colors font-semibold cursor-pointer shadow-sm"
-              >
-                <CloudUpload className={`w-4 h-4 ${isSyncingCloud ? "animate-pulse" : ""}`} />
-                <span>{isSyncingCloud ? "Đang đẩy dữ liệu lên Cloud..." : "Lưu đồng bộ lên Cloud (Push)"}</span>
-              </button>
-
-              <button
-                type="button"
-                data-testid="ia-sheet-pull-cloud-btn"
-                disabled={isPullingCloud || isSyncingCloud}
-                onClick={onPullCloud}
-                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors font-medium cursor-pointer shadow-2xs"
-              >
-                <CloudDownload className={`w-4 h-4 text-slate-500 ${isPullingCloud ? "animate-bounce" : ""}`} />
-                <span>{isPullingCloud ? "Đang tải dữ liệu từ Cloud..." : "Tải từ Cloud (Pull)"}</span>
-              </button>
-            </div>
-
-            {/* ReUI c-progress-4 Sync Progress Bar */}
-            <AnimatePresence>
-              {(isSyncingCloud || isPullingCloud) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, y: -4 }}
-                  animate={{ opacity: 1, height: "auto", y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: -4 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <SyncProgressStatus
-                    active={isSyncingCloud || isPullingCloud}
-                    type={isSyncingCloud ? "push" : "pull"}
-                    label={isSyncingCloud ? "Đang đồng bộ sơ đồ lên Cloud..." : "Đang nạp sơ đồ từ Cloud..."}
-                    className="border-blue-200/80 bg-blue-50/40 shadow-xs"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              💡 Lưu ý: Khi đồng bộ lên Cloud, toàn bộ các thay đổi về thẻ, liên kết, phân hệ và ghi chú sẽ được cập nhật vào bảng dữ liệu Google Sheets của dự án.
-            </p>
-          </div>
-        )}
-
-        {/* PANEL: JSON */}
-        {activeTool === "json" && (
-          <div className="flex-1 min-h-0 flex flex-col p-3.5 space-y-3 text-xs">
-            <div className="flex items-center justify-between shrink-0">
-              <span className="font-semibold text-slate-700">Nhập hoặc xuất dữ liệu JSON</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleLoadJsonSample}
-                  className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition-colors cursor-pointer"
-                >
-                  Mẫu chuẩn
-                </button>
-                <button
-                  type="button"
-                  onClick={onCopyJson}
-                  className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Copy className="w-3 h-3" />
-                  <span>Sao chép</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="relative flex-1 min-h-0 flex flex-col">
-              <textarea
-                value={rawJsonText}
-                onChange={(e) => {
-                  setRawJsonText(e.target.value)
-                  setParseError(null)
-                }}
-                placeholder="Dán cấu trúc JSON hoặc bấm 'Mẫu chuẩn'..."
-                className="w-full flex-1 h-full min-h-[300px] p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 font-mono text-[11px] text-slate-800 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none transition-all resize-none overflow-y-auto leading-relaxed"
-              />
-            </div>
-
-            {parseError && (
-              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[11px] flex items-start gap-1.5 shrink-0">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{parseError}</span>
-              </div>
-            )}
-
-            <div className="shrink-0 pt-1">
-              <Button
-                variant="primary"
-                onClick={handleValidateAndImportJson}
-                className="w-full py-2.5 text-xs font-semibold justify-center cursor-pointer shadow-xs"
-              >
-                Kiểm tra cú pháp & Nhập sơ đồ
               </Button>
             </div>
           </div>

@@ -409,7 +409,7 @@ export default function Sidebar({
                         />
                       )}
                       <Network className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">IA map</span>
+                      <span className="truncate relative z-10" title="IA Map">IA Map</span>
                     </button>
                   )
                 }

@@ -813,7 +813,7 @@ export default function AppHeader({
       items.push({ id: "create", title: "Tạo task mới", subtitle: "Gửi đề bài UX", icon: PlusCircle })
     }
     if (visibility.ia) {
-      items.push({ id: "ia", title: "IA map", subtitle: "Sơ đồ IA & Mindmap", icon: Network })
+      items.push({ id: "ia", title: "Information Architecture", subtitle: "Sơ đồ IA & Mindmap", icon: Network })
     }
     if (visibility.compressor) {
       items.push({ id: "compressor", title: "Nén ảnh", subtitle: "Tối ưu dung lượng", icon: Camera })

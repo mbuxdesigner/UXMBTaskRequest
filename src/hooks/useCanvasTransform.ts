@@ -290,20 +290,28 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
   const handleWheel = useCallback(
     (e: WheelEvent, containerRect: DOMRect) => {
       e.preventDefault()
-      const cursor = {
-        x: e.clientX - containerRect.left,
-        y: e.clientY - containerRect.top,
-      }
-      // Normalize wheel delta (trackpad pinch vs discrete wheel step)
-      let factor: number
+
+      // 1. Trackpad pinch gesture (or Ctrl + Wheel): Zoom in/out centered at cursor
       if (e.ctrlKey) {
-        // Trackpad pinch gesture
-        factor = 1 - e.deltaY * 0.01
-      } else {
-        // Standard wheel step
-        factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+        const cursor = {
+          x: e.clientX - containerRect.left,
+          y: e.clientY - containerRect.top,
+        }
+        const factor = 1 - e.deltaY * 0.01
+        setTransform((prev) => zoomAtPoint(prev, cursor, factor, minZoom, maxZoom))
+        return
       }
-      setTransform((prev) => zoomAtPoint(prev, cursor, factor, minZoom, maxZoom))
+
+      // 2. Trackpad two-finger move (or standard wheel): Pan canvas smoothly (like middle mouse click / space drag)
+      const dx = -e.deltaX
+      const dy = -e.deltaY
+      if (dx !== 0 || dy !== 0) {
+        setTransform((prev) => ({
+          ...prev,
+          x: Number((prev.x + dx).toFixed(4)),
+          y: Number((prev.y + dy).toFixed(4)),
+        }))
+      }
     },
     [minZoom, maxZoom]
   )

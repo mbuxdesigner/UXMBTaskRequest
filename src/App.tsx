@@ -200,7 +200,7 @@ export default function App() {
 
       compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
 
-      ia: "IA map — MB UX Request Portal",
+      ia: "Information Architecture — MB UX Request Portal",
     }
 
     document.title =

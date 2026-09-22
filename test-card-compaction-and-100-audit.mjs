@@ -25,9 +25,9 @@ console.log("✓ Test 1.2: Sleek progress bar is kept with hover tooltip")
 assert.ok(cardContent.includes('text-[15px] font-bold text-slate-900'), "IATreeNodeCard title must use text-[15px] font-bold")
 console.log("✓ Test 1.3: Node title font size increased to 15px bold")
 
-// Test 1.4: Card padding compacted to p-2 px-2.5 pt-2
-assert.ok(cardContent.includes('p-2 px-2.5 pt-2'), "IATreeNodeCard container must use compact padding")
-console.log("✓ Test 1.4: Node card padding and internal margins compacted")
+// Test 1.4: Card padding balanced (padding 2 bên và bottom đều nhau: px-2.5 pb-2.5 pt-2)
+assert.ok(cardContent.includes('px-2.5 pt-2 pb-2.5') || cardContent.includes('p-2 px-2.5 pb-2.5') || cardContent.includes('p-2.5'), "IATreeNodeCard container must use balanced padding")
+console.log("✓ Test 1.4: Node card padding balanced (2 bên và bottom đều nhau)")
 
 // Test 1.5: Status button integrated
 assert.ok(cardContent.includes("Đang làm"), "IATreeNodeCard must display 'Đang làm' in status button")

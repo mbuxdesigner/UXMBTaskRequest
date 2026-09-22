@@ -605,7 +605,7 @@ function IATreeNodeCardComponent({
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-xl border bg-white p-2 px-2.5 pt-2 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
+      className={`group relative rounded-xl border bg-white px-2.5 pt-2 pb-2.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
@@ -665,7 +665,7 @@ function IATreeNodeCardComponent({
       )}
 
       {/* Top Accent Stripe indicating Tier (Clipped cleanly to inner rounded corners) */}
-      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 rounded-[11px] overflow-hidden pointer-events-none">
         <div className={`h-1 w-full ${themeStyles.stripe}`} />
       </div>
 

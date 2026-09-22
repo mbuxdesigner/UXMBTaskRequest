@@ -375,6 +375,8 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
       !parsed[1]?.height || parsed[1].height > 95 || parsed[1].height < 65 ||
       !parsed[2]?.height || parsed[2].height > 95 || parsed[2].height < 50 ||
       !parsed[3]?.height || parsed[3].height > 95 || parsed[3].height < 50 ||
+      !parsed[4]?.height || parsed[4].height > 95 || parsed[4].height < 50 ||
+      !parsed[5]?.height || parsed[5].height > 95 || parsed[5].height < 50 ||
       !parsed.verticalGapJourney ||
       !parsed.columnGap || parsed.columnGap < 80
     ) {
@@ -388,7 +390,7 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
       2: { ...DEFAULT_TIER_DIMENSIONS[2], ...(parsed[2] || {}) },
       3: { ...DEFAULT_TIER_DIMENSIONS[3], ...(parsed[3] || {}) },
       4: { ...DEFAULT_TIER_DIMENSIONS[4], ...(parsed[4] || {}) },
-      5: { ...DEFAULT_TIER_DIMENSIONS[5], ...(parsed[5] || {}) },
+      5: { ...DEFAULT_TIER_DIMENSIONS[5], ...(parsed[5] || {}), height: Math.min(parsed[5]?.height || 68, 85) },
     }
   } catch {
     return DEFAULT_TIER_DIMENSIONS
@@ -415,13 +417,13 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
 
   if (node.tier === 1) {
     const dimH = tierDimensions?.[1]?.height
-    const defaultH = node.description ? 84 : 68
+    const defaultH = node.description ? 86 : 70
     return dimH && dimH >= 65 ? dimH : defaultH
   }
 
-  // Thẻ đã được tinh giản tối đa (compacted) theo yêu cầu tối ưu không gian hiển thị
-  // 1. Padding trên/dưới: 16px, viền: 2px
-  let h = 18
+  // Thẻ đã được tinh giản tối đa theo yêu cầu tối ưu không gian hiển thị
+  // 1. Padding trên: 8px, padding dưới: 10px, viền: 2px = 20px
+  let h = 20
 
   // 2. Tiêu đề 15px bold leading-tight (~20px)
   h += 20
@@ -433,16 +435,18 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
 
   // 4. Thanh tiến độ siêu gọn
   if (ds.showProgress !== false) {
-    h += 8
+    h += 6
   }
 
   // 5. Footer trạng thái có task & đếm nhánh
   if (ds.showStatus !== false || ds.showBranchCount !== false) {
-    h += 22
+    h += 24
   }
 
-  const defaultDim = tierDimensions?.[node.tier]?.height || (node.description ? 84 : 68)
-  return Math.max(54, Math.min(defaultDim, Math.round(h)))
+  // Cấp 5 thu gọn kích thước như Cấp 4 (chiều cao chuẩn ~68px)
+  const tierH = tierDimensions?.[node.tier]?.height
+  const defaultDim = (node.tier === 5 && tierH && tierH > 95) ? 68 : (tierH || (node.description ? 86 : 68))
+  return Math.max(54, Math.max(defaultDim, Math.round(h)))
 }
 
 const VERTICAL_GAP = 20
@@ -1522,8 +1526,13 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
     // 1. First pass: Build internal hierarchy with effective collapse state
     function buildInternal(node: IANode): InternalNode {
-      const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 120 }
-      const nodeWidth = node.customWidth || dim.width
+      const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 68 }
+      let nodeWidth = node.customWidth || dim.width
+      if (node.tier === 5 && !node.customWidth) {
+        // Cấp 5 nhỏ gọn như Cấp 4 (chiều rộng tối đa không vượt quá Cấp 4)
+        const lv4Width = tierDimensions[4]?.width || DEFAULT_TIER_DIMENSIONS[4].width
+        nodeWidth = Math.min(dim.width, lv4Width)
+      }
       const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
       const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 5)
       const childCount = node.children && node.tier < 5 ? node.children.length : 0

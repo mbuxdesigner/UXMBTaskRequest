@@ -47,7 +47,6 @@ import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
 import { SmartLinkChip } from "@/components/common/SmartLinkChip"
 import { 
   X, 
-  ArrowLeft, 
   Send, 
   PauseCircle, 
   ExternalLink, 
@@ -135,18 +134,71 @@ export interface ActivityEvent {
   progress?: number
   reactions?: Record<string, number>
   isPinned?: boolean
+  phase?: string
+}
+
+// Helper xác định tên gọi hạn thiết kế theo từng khâu (Wireframe -> Gửi Wireframe, UI Design -> Gửi UI, Ready to dev -> Hand off)
+export const getPhaseDeadlineInfo = (phase?: string) => {
+  const rawPhaseKey = (phase || "").trim()
+  const pLower = rawPhaseKey.toLowerCase()
+  const isEarlyPhase =
+    pLower.includes("chờ xác nhận") ||
+    pLower.includes("define đầu bài") ||
+    pLower.startsWith("1.") ||
+    pLower.startsWith("2.")
+  const isDonePhase =
+    pLower.includes("nghiệm thu") ||
+    pLower.includes("hoàn thành") ||
+    pLower.startsWith("6.") ||
+    pLower.startsWith("7.")
+  const isWireframe = pLower.includes("wireframe") || pLower.startsWith("3.")
+  const isReadyToDev = pLower.includes("ready to dev") || pLower.includes("ready") || pLower.startsWith("5.")
+  const isUIDesign = (!isEarlyPhase && !isDonePhase && !isWireframe && !isReadyToDev) || pLower.includes("ui design") || pLower.includes("ui") || pLower.startsWith("4.")
+  const isPickable = isWireframe || isUIDesign || isReadyToDev
+
+  let dateLabel = "Gửi UI"
+  let calendarTitle = "Hạn gửi UI Design"
+  let actionText = "ngày gửi UI"
+
+  if (isEarlyPhase) {
+    dateLabel = "Start"
+    calendarTitle = "Ngày tiếp nhận yêu cầu"
+    actionText = "ngày bắt đầu"
+  } else if (isWireframe) {
+    dateLabel = "Gửi wireframe"
+    calendarTitle = "Hạn gửi Wireframe"
+    actionText = "ngày gửi Wireframe"
+  } else if (isReadyToDev) {
+    dateLabel = "Hand off"
+    calendarTitle = "Ngày Hand off"
+    actionText = "ngày Hand off"
+  } else if (isDonePhase) {
+    dateLabel = "Design done"
+    calendarTitle = "Ngày hoàn thành thiết kế"
+    actionText = "ngày hoàn thành"
+  } else {
+    dateLabel = "Gửi UI"
+    calendarTitle = "Hạn gửi UI Design"
+    actionText = "ngày gửi UI"
+  }
+
+  return {
+    isEarlyPhase,
+    isDonePhase,
+    isWireframe,
+    isUIDesign,
+    isReadyToDev,
+    isPickable,
+    dateLabel,
+    calendarTitle,
+    actionText,
+  }
 }
 
 // Kiểm tra ghi chú có phải là nhật ký thao tác tự động của hệ thống (dạng text ngắn gọn) thay vì tin nhắn người dùng tự chat
-export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean): boolean => {
-  const raw = (text || "").trim()
-  if (!raw) return true
-  const lower = raw.toLowerCase()
-
-  // Cú pháp lệnh do người dùng tự gõ trong ô chat: @SenToPO:, @Pending:
-  if (/^@se(?:n)?(?:d)?(?:_)?to(?:_)?po:|^@(po_)?pending:/i.test(lower)) {
-    return false
-  }
+export const isSystemActivityNote = (note?: string, isCommentExplicit?: boolean): boolean => {
+  if (!note || !note.trim()) return false
+  const lower = note.toLowerCase().trim()
 
   // Cập nhật người theo dõi luôn là hành động hệ thống (UI text gọn), không dùng UI box
   if (
@@ -162,10 +214,22 @@ export const isSystemActivityNote = (text: string, isCommentExplicit?: boolean):
 
   // Khớp tất cả các câu thông báo hành động hệ thống được tạo tự động khi thao tác trên giao diện:
   if (
-    // 1. Cập nhật ngày hạn deadline / design end date
+    // 1. Cập nhật ngày hạn deadline / design end date / ngày gửi UI / wireframe / hand off
     lower.includes("design end date") ||
     lower.includes("hạn thiết kế") ||
+    lower.includes("hạn ux") ||
     lower.startsWith("cập nhật hạn") ||
+    lower.startsWith("gỡ bỏ hạn") ||
+    lower.includes("ngày gửi ui") ||
+    lower.includes("hạn gửi ui") ||
+    lower.includes("ngày gửi wireframe") ||
+    lower.includes("hạn gửi wireframe") ||
+    lower.includes("ngày hand off") ||
+    lower.includes("hạn hand off") ||
+    lower.startsWith("cập nhật ngày gửi") ||
+    lower.startsWith("gỡ bỏ ngày gửi") ||
+    lower.startsWith("cập nhật ngày hand off") ||
+    lower.startsWith("gỡ bỏ ngày hand off") ||
 
     // 2. PO cập nhật tài liệu đầu bài
     lower.includes("cập nhật đầu bài") ||
@@ -2212,28 +2276,68 @@ export default function RequestDetail({
     setOpenDropdown(null)
     request.design_deadline = formatted
 
-    const toastId = toast.loading(`Đang cập nhật Hạn thiết kế UX...`)
+    const deadlineInfo = getPhaseDeadlineInfo(request.current_phase)
+    const actionLabel = deadlineInfo.actionText // "ngày gửi UI", "ngày gửi Wireframe", "ngày Hand off"
+    const noteText = formatted ? `Cập nhật ${actionLabel} sang: ${formatted}` : `Gỡ bỏ ${actionLabel}`
+
+    // Optimistic Update in Activity Stream (0ms Latency)
+    const now = new Date()
+    const formattedTimestamp = `${String(now.getDate()).padStart(2, "0")}/${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`
+
+    const optRecord: TaskUpdateRecord = {
+      id: `OPT-DL-${Date.now()}`,
+      request_id: request.request_id,
+      timestamp: formattedTimestamp,
+      updated_by: session ? (session.displayName || session.teamsEmail) : displayName,
+      author_role: (session ? session.role : "Designer") as any,
+      new_phase: request.current_phase,
+      new_progress: request.progress,
+      note: noteText,
+      is_comment: false,
+    }
+    setOptimisticUpdates((prev) => [...prev, optRecord])
+
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        const updated = list.map((r) =>
+          r.request_id === request.request_id
+            ? { ...r, design_deadline: formatted }
+            : r
+        )
+        localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+      }
+    } catch (e) {
+      console.warn("Could not cache updated deadline in localStorage", e)
+    }
+
+    const toastId = toast.loading(`Đang cập nhật ${actionLabel}...`)
     try {
       const res = await updateTaskProgress(request.request_id, {
         new_phase: request.current_phase,
         new_status: request.status,
         new_progress: request.progress,
-        note: formatted ? `Cập nhật Hạn thiết kế UX (Design End Date) sang: ${formatted}` : "Gỡ bỏ Hạn thiết kế UX",
+        note: noteText,
         assigned_designer: request.assigned_designer,
         design_deadline: formatted,
         is_comment: false,
       })
       setRequirementUpdateTick((c) => c + 1)
       if (res.success) {
-        toast.success(formatted ? `Đã cập nhật Hạn thiết kế UX: ${formatted}` : "Đã gỡ bỏ Hạn thiết kế UX!", undefined, { id: toastId })
+        toast.success(formatted ? `Đã cập nhật ${actionLabel}: ${formatted}` : `Đã gỡ bỏ ${actionLabel}!`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
       } else {
-        toast.warning(res.message || `Đã cập nhật Hạn thiết kế UX: ${formatted}`, undefined, { id: toastId })
+        toast.warning(res.message || `Đã cập nhật ${actionLabel}: ${formatted}`, undefined, { id: toastId })
         if (onUpdated) onUpdated()
       }
     } catch {
       setRequirementUpdateTick((c) => c + 1)
-      toast.success(formatted ? `Đã cập nhật Hạn thiết kế UX: ${formatted}` : "Đã gỡ bỏ Hạn thiết kế UX!", undefined, { id: toastId })
+      toast.success(formatted ? `Đã cập nhật ${actionLabel}: ${formatted}` : `Đã gỡ bỏ ${actionLabel}!`, undefined, { id: toastId })
       if (onUpdated) onUpdated()
     }
   }
@@ -3112,6 +3216,7 @@ export default function RequestDetail({
             author: formatDesignerDisplayName(u.updated_by),
             authorRole: u.author_role || "Designer",
             toValue: noteRaw,
+            phase: u.new_phase || request.current_phase,
           })
         }
 
@@ -3126,6 +3231,7 @@ export default function RequestDetail({
             content: noteRaw,
             link: u.deliverable_link,
             progress: u.new_progress,
+            phase: u.new_phase || request.current_phase,
           })
         }
       })
@@ -3142,6 +3248,7 @@ export default function RequestDetail({
           authorRole: "Designer",
           toValue: msg,
           progress: request.progress,
+          phase: request.current_phase,
         })
       } else if (msg) {
         events.push({
@@ -4241,27 +4348,13 @@ export default function RequestDetail({
 
                     {/* 3. Dates – Phase-aware date field (Start / Gửi wireframe / Gửi UI / Hand off / Design done) */}
                     {(() => {
-                      const rawPhaseKey = (request.current_phase || "").trim()
-                      const isEarlyPhase = [
-                        "Chờ xác nhận", "1. Chờ xác nhận",
-                        "Define đầu bài", "2. Define đầu bài",
-                      ].includes(rawPhaseKey)
-                      const isDonePhase = [
-                        "Nghiệm thu UI", "6. Nghiệm thu UI",
-                        "Hoàn thành", "7. Hoàn thành",
-                      ].includes(rawPhaseKey)
-                      const isWireframe = rawPhaseKey === "Wireframe" || rawPhaseKey === "3. Wireframe"
-                      const isUIDesign = rawPhaseKey === "UI Design" || rawPhaseKey === "4. UI Design"
-                      const isReadyToDev = rawPhaseKey === "Ready to dev" || rawPhaseKey === "5. Ready to dev" || rawPhaseKey === "Ready to Dev"
-                      const isPickable = isWireframe || isUIDesign || isReadyToDev
-
-                      let dateLabel = "Hạn UX"
-                      let calendarTitle = "Hạn thiết kế UX"
-                      if (isEarlyPhase) { dateLabel = "Start" }
-                      else if (isWireframe) { dateLabel = "Gửi wireframe"; calendarTitle = "Hạn gửi Wireframe" }
-                      else if (isUIDesign) { dateLabel = "Gửi UI"; calendarTitle = "Hạn gửi UI Design" }
-                      else if (isReadyToDev) { dateLabel = "Hand off"; calendarTitle = "Ngày Hand off" }
-                      else if (isDonePhase) { dateLabel = "Design done" }
+                      const {
+                        isEarlyPhase,
+                        isDonePhase,
+                        isPickable,
+                        dateLabel,
+                        calendarTitle,
+                      } = getPhaseDeadlineInfo(request.current_phase)
 
                       return (
                         <div className="flex items-center gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
@@ -5377,6 +5470,67 @@ export default function RequestDetail({
                                                 </>
                                               )
                                             }
+
+                                            // Cập nhật hạn / ngày gửi / hand off theo khâu (phase-aware deadline log)
+                                            const isDeadlineUpdate =
+                                              valLower.includes("hạn thiết kế") ||
+                                              valLower.includes("design end date") ||
+                                              valLower.includes("hạn ux") ||
+                                              valLower.includes("ngày gửi ui") ||
+                                              valLower.includes("hạn gửi ui") ||
+                                              valLower.includes("ngày gửi wireframe") ||
+                                              valLower.includes("hạn gửi wireframe") ||
+                                              valLower.includes("ngày hand off") ||
+                                              valLower.includes("hạn hand off") ||
+                                              (valLower.startsWith("cập nhật") && (valLower.includes("hạn") || valLower.includes("ngày gửi") || valLower.includes("hand off"))) ||
+                                              (valLower.startsWith("gỡ bỏ") && (valLower.includes("hạn") || valLower.includes("ngày gửi") || valLower.includes("hand off")))
+
+                                            if (isDeadlineUpdate) {
+                                              let deadlineAction = "ngày gửi UI"
+                                              if (valLower.includes("wireframe")) {
+                                                deadlineAction = "ngày gửi Wireframe"
+                                              } else if (valLower.includes("hand off") || valLower.includes("handoff")) {
+                                                deadlineAction = "ngày Hand off"
+                                              } else if (valLower.includes("gửi ui") || valLower.includes("ui design")) {
+                                                deadlineAction = "ngày gửi UI"
+                                              } else {
+                                                const targetPhase = event.phase || request.current_phase
+                                                deadlineAction = getPhaseDeadlineInfo(targetPhase).actionText
+                                              }
+
+                                              const isRemoval = valLower.startsWith("gỡ bỏ") || valLower.includes("gỡ bỏ")
+                                              const dateMatch =
+                                                val.match(/(?:sang:|\:)\s*([0-9]{4}[-\/][0-9]{2}[-\/][0-9]{2}|[0-9]{2}[-\/][0-9]{2}[-\/][0-9]{4})/i) ||
+                                                val.match(/sang:\s*([^\s]+)/i)
+
+                                              if (isRemoval || !dateMatch) {
+                                                return (
+                                                  <>
+                                                    {displayAuthor && (
+                                                      <span className="font-medium text-slate-700">{displayAuthor}</span>
+                                                    )}
+                                                    <span className="text-slate-500">đã gỡ bỏ</span>
+                                                    <span className="font-medium text-slate-700">{deadlineAction}</span>
+                                                  </>
+                                                )
+                                              }
+
+                                              return (
+                                                <>
+                                                  {displayAuthor && (
+                                                    <span className="font-medium text-slate-700">{displayAuthor}</span>
+                                                  )}
+                                                  <span className="text-slate-500">đã cập nhật</span>
+                                                  <span className="font-medium text-slate-700">{deadlineAction}</span>
+                                                  <span className="text-slate-500">sang</span>
+                                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                                    <Calendar className="w-3 h-3 text-[#1057FB] shrink-0" />
+                                                    <span>{dateMatch[1]}</span>
+                                                  </span>
+                                                </>
+                                              )
+                                            }
+
                                             const hasAuthor = displayAuthor && val.toLowerCase().includes(displayAuthor.toLowerCase())
                                             return (
                                               <>
@@ -5469,21 +5623,10 @@ export default function RequestDetail({
 
               </div>
 
-              {/* 4. Sheet Sticky Footer Action Bar */}
-              <div className="px-6 py-3.5 bg-white border-t border-slate-200/80 flex items-center justify-between gap-3 shrink-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="default"
-                  onClick={handleDismiss}
-                  className="gap-2 rounded-xl font-bold text-xs h-9 px-4 bg-white border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Quay lại</span>
-                </Button>
-
-                <div className="flex items-center gap-2">
-                  {customDeliverables?.figma_url && (
+              {/* 4. Sheet Sticky Footer Action Bar (hiển thị khi có liên kết kết quả) */}
+              {customDeliverables?.figma_url && (
+                <div className="px-6 py-3.5 bg-white border-t border-slate-200/80 flex items-center justify-end gap-3 shrink-0">
+                  <div className="flex items-center gap-2">
                     <a
                       href={customDeliverables.figma_url}
                       target="_blank"
@@ -5497,9 +5640,9 @@ export default function RequestDetail({
                           : "Mở liên kết"}
                       </span>
                     </a>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </React.Fragment>
           )}
         </motion.aside>

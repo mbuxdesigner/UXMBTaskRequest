@@ -10,7 +10,7 @@ export const DEFAULT_TIER_DIMENSIONS: IATierDimensionSettings = {
   2: { width: 280, height: 68 },
   3: { width: 260, height: 68 },
   4: { width: 250, height: 68 },
-  5: { width: 240, height: 110 },
+  5: { width: 240, height: 68 /* 5: { width: 240, height: 110 } */ },
   columnGap: 110,
   verticalGapJourney: 44,
   verticalGapScreen: 32,

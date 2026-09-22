@@ -31,7 +31,8 @@ import IABezierConnectors from "./IABezierConnectors"
 import IATreeNodeCard from "./IATreeNodeCard"
 import IAMinimap from "./IAMinimap"
 import IANodeFloatingToolbar from "./IANodeFloatingToolbar"
-import IAVerticalDock, { IADockTool } from "./IAVerticalDock"
+import IABottomDock from "./IABottomDock"
+import { IADockTool } from "./IAVerticalDock"
 import IASlideOverSheet from "./IASlideOverSheet"
 import { DEFAULT_TIER_DIMENSIONS } from "./IASettingsModal"
 import { QuickAddNodeType } from "./IAQuickAddSidebar"
@@ -210,10 +211,6 @@ export default function IACanvasViewport({
   // Minimap state (default: false)
   const [showMinimap, setShowMinimap] = useState(false)
 
-  // Magnific-style Zoom Popover Menu
-  const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false)
-  const zoomMenuRef = useRef<HTMLDivElement>(null)
-
   // Fullscreen toggle handler
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -240,19 +237,8 @@ export default function IACanvasViewport({
     return () => document.removeEventListener("fullscreenchange", handleFsChange)
   }, [])
 
-  // Close menus on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
-        setIsZoomMenuOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
   // Canvas Tool Mode: "select" (Marquee selection box) or "pan" (Hand pan)
-  const [toolMode, setToolMode] = useState<"select" | "pan">("select")
+  const [toolMode, setToolMode] = useState<"select" | "pan">(readOnly ? "pan" : "select")
   const [isSpacePressed, setIsSpacePressed] = useState(false)
 
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
@@ -440,7 +426,7 @@ export default function IACanvasViewport({
       // Ignore if pointer down originated on a card, port, button, input, or floating toolbar
       if (
         target.closest(
-          "[data-node-id], [data-port-action], [data-resize-handle], button, a, input, textarea, [data-testid='ia-canvas-floating-controls'], [data-testid='ia-canvas-selection-pill']"
+          "[data-node-id], [data-port-action], [data-resize-handle], button, a, input, textarea, [data-testid='ia-canvas-floating-controls'], [data-testid='ia-bottom-dock'], [data-testid='ia-canvas-selection-pill']"
         )
       ) {
         return
@@ -448,7 +434,11 @@ export default function IACanvasViewport({
 
       // Dismiss active slide-over sheet when left-clicking canvas backdrop outside sheet & dock
       if (e.button === 0 && currentDockTool) {
-        if (!target.closest("[data-testid='ia-slide-over-sheet']") && !target.closest("[data-testid='ia-vertical-dock']")) {
+        if (
+          !target.closest("[data-testid='ia-slide-over-sheet']") &&
+          !target.closest("[data-testid='ia-bottom-dock']") &&
+          !target.closest("[data-testid='ia-vertical-dock']")
+        ) {
           handleSelectDockTool(null)
         }
       }
@@ -798,7 +788,7 @@ export default function IACanvasViewport({
   }, [visibleBounds, connectors, culledNodes, selectedNodeIds, matchedIds])
 
   const zoomPercent = Math.round(transform.scale * 100)
-  const isHandMode = toolMode === "pan" || isSpacePressed
+  const isHandMode = readOnly || toolMode === "pan" || isSpacePressed
   const cursorClass = activeWireDrag
     ? "cursor-crosshair"
     : isPanning
@@ -852,23 +842,11 @@ export default function IACanvasViewport({
         backgroundPosition: `${transform.x % 28}px ${transform.y % 28}px`,
       }}
     >
-      {/* Magnific UI Left Lateral Dock */}
-      <IAVerticalDock
-        activeTool={currentDockTool}
-        onSelectTool={handleSelectDockTool}
-        onAutoAlign={!readOnly ? onAutoAlign : undefined}
-        onCopyJson={onCopyJson}
-        onResetToDefault={onResetToDefault}
-        isSyncingCloud={isSyncingCloud}
-        isPullingCloud={isPullingCloud}
-        readOnly={readOnly}
-        toolMode={toolMode}
-        onSelectToolMode={setToolMode}
-      />
+
 
       {/* Magnific UI Left Slide-Over Sheet */}
       <AnimatePresence>
-        {currentDockTool && (
+        {!readOnly && currentDockTool && (
           <IASlideOverSheet
             activeTool={currentDockTool}
             onClose={() => handleSelectDockTool(null)}
@@ -1031,227 +1009,47 @@ export default function IACanvasViewport({
       )}
 
 
-      {/* Floating Bottom-Right Canvas Control Toolbar */}
-      <div
-        data-testid="ia-canvas-floating-controls"
-        className="absolute bottom-5 right-5 z-30 flex items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-lg text-slate-700"
-      >
-        {/* Snap to Grid button (Requirement 6) - Ẩn khi ở chế độ xem */}
-        {!readOnly && (
-          <>
-            <Tooltip
-              content={snapToGrid ? "Đang bật hít lưới 20px (Click để tắt)" : "Đang tắt hít lưới (Click để bật)"}
-              shortcut="G"
-              side="top"
-            >
-              <motion.button
-                type="button"
-                data-testid="ia-snap-grid-btn"
-                onClick={() => setSnapToGrid(!snapToGrid)}
-                className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                  snapToGrid
-                    ? "bg-blue-50 text-[#1057FB] border border-blue-200/80 font-semibold"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-                {...tactileProps.button}
-              >
-                <Grid className="w-4 h-4" />
-              </motion.button>
-            </Tooltip>
-            <div className="w-px h-4 bg-slate-200 mx-0.5" />
-          </>
-        )}
-
-        {/* Auto Align / Reset Layout (Requirement 6) */}
-        {!readOnly && onAutoAlign && (
-          <Tooltip content="Căn chuẩn tự động vị trí các nhánh sitemap dạng cột" shortcut="L" side="top">
-            <motion.button
-              type="button"
-              data-testid="ia-auto-align-btn"
-              onClick={onAutoAlign}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
-              {...tactileProps.button}
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
-              <span>Căn chuẩn</span>
-            </motion.button>
-          </Tooltip>
-        )}
-
-        <Tooltip content="Phóng to tỉ lệ (Zoom In)" shortcut="+" side="top">
-          <motion.button
-            type="button"
-            data-testid="ia-zoom-in-btn"
-            onClick={zoomIn}
-            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            {...tactileProps.button}
-          >
-            <ZoomIn className="w-4 h-4" />
-          </motion.button>
-        </Tooltip>
-
-        <Tooltip content="Thu nhỏ tỉ lệ (Zoom Out)" shortcut="-" side="top">
-          <motion.button
-            type="button"
-            data-testid="ia-zoom-out-btn"
-            onClick={zoomOut}
-            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            {...tactileProps.button}
-          >
-            <ZoomOut className="w-4 h-4" />
-          </motion.button>
-        </Tooltip>
-
-        {/* Magnific-style Zoom % and menu popover */}
-        <div className="relative" ref={zoomMenuRef}>
-          <Tooltip content="Tùy chọn thu phóng (Click để mở menu chi tiết)" side="top">
-            <motion.button
-              type="button"
-              data-testid="ia-zoom-reset-btn"
-              onClick={() => setIsZoomMenuOpen((v) => !v)}
-              className={`px-2.5 py-1 text-xs font-bold font-mono rounded-xl transition-colors cursor-pointer select-none ${
-                isZoomMenuOpen
-                  ? "bg-blue-50 text-blue-700 font-semibold"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-              {...tactileProps.button}
-            >
-              {zoomPercent}%
-            </motion.button>
-          </Tooltip>
-
-          {isZoomMenuOpen && (
-            <div className="absolute right-0 bottom-full mb-2.5 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs select-none">
-              <button
-                type="button"
-                onClick={() => {
-                  zoomIn()
-                  setIsZoomMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span>Zoom in</span>
-                <span className="font-mono text-[10px] text-slate-400">⌘ +</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  zoomOut()
-                  setIsZoomMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span>Zoom out</span>
-                <span className="font-mono text-[10px] text-slate-400">⌘ -</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  resetZoom()
-                  setIsZoomMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span>Zoom 100%</span>
-                <span className="font-mono text-[10px] text-slate-400">⌘ 0</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onFitToView()
-                  setIsZoomMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer font-medium"
-              >
-                <span>Zoom to fit</span>
-                <span className="font-mono text-[10px] text-slate-400">D</span>
-              </button>
-              {selectedNodeIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selectedId = Array.from(selectedNodeIds)[0]
-                    const target = layoutNodes.find((ln) => ln.node.id === selectedId)
-                    if (target && setTransform && containerRef.current) {
-                      const vpW = containerRef.current.clientWidth
-                      const vpH = containerRef.current.clientHeight
-                      const nodeCenterX = target.x + target.width / 2
-                      const nodeCenterY = target.y + target.height / 2
-                      setTransform({
-                        scale: 1,
-                        x: Number((vpW / 2 - nodeCenterX).toFixed(2)),
-                        y: Number((vpH / 2 - nodeCenterY).toFixed(2)),
-                      })
-                    }
-                    setIsZoomMenuOpen(false)
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer font-medium"
-                >
-                  <span>Zoom to selection</span>
-                  <span className="font-mono text-[10px] text-blue-400">F</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="w-px h-4 bg-slate-200 mx-0.5" />
-
-        <Tooltip content="Căn giữa toàn bộ sơ đồ (Fit to View)" shortcut="F" side="top">
-          <motion.button
-            type="button"
-            data-testid="ia-fit-view-btn"
-            onClick={onFitToView}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none"
-            {...tactileProps.button}
-          >
-            <Maximize2 className="w-3.5 h-3.5 text-slate-500" />
-            <span>Căn giữa</span>
-          </motion.button>
-        </Tooltip>
-
-        <div className="w-px h-4 bg-slate-200 mx-0.5" />
-
-        {/* Fullscreen Button (Requirement 3: Nút phóng to toàn màn hình) */}
-        <Tooltip
-          content={isFullscreen ? "Thu nhỏ (Thoát toàn màn hình)" : "Phóng to toàn màn hình (Fullscreen)"}
-          side="top"
-        >
-          <motion.button
-            type="button"
-            data-testid="ia-fullscreen-btn"
-            onClick={toggleFullscreen}
-            className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
-              isFullscreen
-                ? "bg-blue-50 text-blue-600 font-semibold"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            }`}
-            {...tactileProps.button}
-          >
-            {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
-          </motion.button>
-        </Tooltip>
-
-        {/* Minimap Toggle Button (Requirement 6: Bản đồ nhỏ) - Ẩn khi ở chế độ xem */}
-        {!readOnly && (
-          <Tooltip content="Bật/tắt bản đồ nhỏ (Minimap)" side="top">
-            <motion.button
-              type="button"
-              data-testid="ia-toggle-minimap-btn"
-              onClick={() => setShowMinimap(!showMinimap)}
-              className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
-                showMinimap
-                  ? "bg-blue-50 text-blue-600 font-semibold"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-              {...tactileProps.button}
-            >
-              <MapIcon className="w-4 h-4" />
-            </motion.button>
-          </Tooltip>
-        )}
-
-      </div>
+      {/* Unified FigJam/Figma-Style Floating Bottom Dock */}
+      <IABottomDock
+        activeTool={currentDockTool}
+        onSelectTool={handleSelectDockTool}
+        toolMode={toolMode}
+        onSelectToolMode={setToolMode}
+        onAutoAlign={!readOnly ? onAutoAlign : undefined}
+        snapToGrid={snapToGrid}
+        onToggleSnapToGrid={!readOnly ? () => setSnapToGrid(!snapToGrid) : undefined}
+        isSyncingCloud={Boolean(isSyncingCloud)}
+        isPullingCloud={Boolean(isPullingCloud)}
+        onPullCloud={onPullCloud}
+        onCopyJson={onCopyJson}
+        onResetToDefault={!readOnly ? onResetToDefault : undefined}
+        readOnly={readOnly}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
+        zoomPercent={zoomPercent}
+        resetZoom={resetZoom}
+        onFitToView={onFitToView}
+        onZoomToSelection={() => {
+          const selectedId = Array.from(selectedNodeIds)[0]
+          const target = layoutNodes.find((ln) => ln.node.id === selectedId)
+          if (target && setTransform && containerRef.current) {
+            const vpW = containerRef.current.clientWidth
+            const vpH = containerRef.current.clientHeight
+            const nodeCenterX = target.x + target.width / 2
+            const nodeCenterY = target.y + target.height / 2
+            setTransform({
+              scale: 1,
+              x: Number((vpW / 2 - nodeCenterX).toFixed(2)),
+              y: Number((vpH / 2 - nodeCenterY).toFixed(2)),
+            })
+          }
+        }}
+        hasSelectedNodes={selectedNodeIds.size > 0}
+        isFullscreen={isFullscreen}
+        toggleFullscreen={toggleFullscreen}
+        showMinimap={showMinimap}
+        onToggleMinimap={!readOnly ? () => setShowMinimap(!showMinimap) : undefined}
+      />
     </div>
   )
 }
