@@ -214,3 +214,52 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
 - **Hạn UX (Design Timeline):** Thời hạn nội bộ của UX Team (từ ngày tiếp nhận đến khi hoàn thành nghiệm thu thiết kế trên Figma).
 - **Release dự kiến (PO Production Target):** Thời điểm sản phẩm số được đóng gói và phát hành Golive trên Store/Web cho khách hàng cuối.
 
+---
+
+## 🚀 7. CÁC NÂNG CẤP CHI TIẾT TASK DETAIL & GIAO DIỆN NÂNG CAO (21/09 - 22/09/2026)
+
+### 7.1. Khắc Phục Triệt Để Lỗi Lem Màu Nền Avatar Trong Activity Timeline
+- **Vấn đề phát hiện:** `TimelineIcon` có background mặc định theo trạng thái (`bg-emerald-500` hoặc `bg-slate-900`). Khi đặt avatar tròn bên trong, màu nền bị lộ viền xung quanh avatar.
+- **Giải pháp:**
+  - Bổ sung `variant="plain"` / `status="plain"` vào `TimelineIconProps` trong [`timeline.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/reui/timeline.tsx), loại bỏ màu trạng thái và chuyển về `bg-white`.
+  - Trong `RequestDetail.tsx`, cấu hình `<UserAvatar size="lg" className="w-8 h-8" showBorder={false} />` khớp hoàn toàn kích thước slot 32px trên nền trắng, triệt tiêu 100% hiện tượng lem màu.
+
+### 7.2. Tinh Giản Nhật Ký Hoạt Động Hệ Thống (System Activity - Chuẩn ClickUp/Jira)
+- **Phân tách 2 nhóm Activity:**
+  - **Thảo luận / Chat:** Giữ nguyên thẻ bình luận đầy đủ với Avatar tác giả, badge vai trò, văn bản Markdown và file đính kèm.
+  - **Hoạt động hệ thống (Chuyển khâu, phân công, đổi trạng thái, đính kèm bàn giao...):** Tinh giản hoàn toàn.
+- **Thiết kế Bullet Dot & Căn phải thời gian:**
+  - Thay thế icon vòng tròn cồng kềnh bằng Bullet Dot nhỏ gọn `<span className="w-1.5 h-1.5 rounded-full bg-slate-400 ring-4 ring-white" />` căn chính xác trên trục dọc 16px của timeline.
+  - Bố cục 1 dòng: Nội dung sự kiện bên trái với badge pill thu nhỏ (`px-1.5 py-0.5 rounded-md text-[11px]`), thời gian `{event.timestamp}` căn sang tận cùng bên phải (`text-[11px] text-slate-400 font-normal whitespace-nowrap`). Tự động hiển thị `"Bạn"` nếu tác giả trùng với người đang đăng nhập.
+
+### 7.3. Hệ Thống Smart Link Chip Đa Nguồn (`SmartLinkChip.tsx`)
+- Tạo mới component [`SmartLinkChip.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/common/SmartLinkChip.tsx):
+  - **Tự động nhận diện Logo thương hiệu chính thức:**
+    - **Figma:** Vector 5 màu nhận diện. Tự động bóc tách tên file từ đường dẫn URL (ví dụ: `/design/:id/MB-App-V5` -> `MB App V5`, `/proto/` -> `(Prototype)`).
+    - **Google:** Logo "G" 4 màu chuẩn xác. Tự động nhận diện chuỗi tìm kiếm hoặc tên đường dẫn.
+    - **Google Drive, Docs, Sheets, Slides:** Icon vector đặc trưng.
+    - **GitHub, GitLab, Jira, Miro, Notion, YouTube...:** Tích hợp icon vector tương ứng.
+    - **Mọi trang web khác:** Tra cứu Favicon tự động qua Google Favicon API (`https://www.google.com/s2/favicons?domain=...`) kèm fallback icon địa cầu `Globe`.
+  - **Định dạng chuẩn:** Pill màu xám dịu `bg-slate-100 hover:bg-slate-200/90 border border-slate-200/80 rounded-md px-2 py-0.5`, tên nguồn in đậm `font-semibold text-slate-900 text-[11.5px]`, tiêu đề trang `truncate text-slate-600 text-[11.5px]`, mở tab mới với `rel="noopener noreferrer"`.
+  - Tích hợp vào nội dung comment, tài liệu đính kèm và hoạt động hệ thống.
+
+### 7.4. Tinh Giản Deliverables & Tài Liệu Bàn Giao
+- **Khi chưa có link bàn giao (`!figma_url`):** Ẩn hoàn toàn toàn bộ khối tiêu đề `DELIVERABLES & TÀI LIỆU BÀN GIAO` và nút bấm `+ Đính kèm` trống, giúp thanh bên liền mạch và không bị chiếm diện tích.
+- **Khi đã có link bàn giao (`figma_url`):** Bỏ nút `+ Thêm link` ở góc phải tiêu đề, chỉ hiển thị duy nhất thẻ Figma Canvas tinh tế kèm icon `ExternalLink` mở ngoài.
+
+### 7.5. Chuyển Đổi "Hạn UX" Thành Trường Ngày Theo Khâu (Phase-aware Date Field)
+- Thay vì luôn hiển thị cố định nhãn "Hạn UX" với 2 ngày dạng `Start → End`, trường ngày tự động điều chỉnh theo khâu hiện tại của bài toán:
+  - **Khâu `Chờ xác nhận` & `Define đầu bài`:** Nhãn **`Start`**, hiển thị 1 ngày `{request.submitted_at || "—"}` dạng text thuần xám, không hiển thị nút và không mở lịch.
+  - **Khâu `Wireframe`:** Nhãn **`Gửi wireframe`**, nút bấm mở lịch chọn ngày, lưu vào `design_deadline`.
+  - **Khâu `UI Design`:** Nhãn **`Gửi UI`**, nút bấm mở lịch chọn ngày, lưu vào `design_deadline`.
+  - **Khâu `Ready to dev`:** Nhãn **`Hand off`**, nút bấm mở lịch chọn ngày, lưu vào `design_deadline`.
+  - **Khâu `Nghiệm thu UI` & `Hoàn thành`:** Nhãn **`Design done`**, hiển thị ngày chốt bàn giao với màu xanh lục `{customDeadline || "—"}` ở chế độ chỉ đọc (read-only).
+- **Chống ngắt dòng:** Loại bỏ giới hạn cứng `w-20 sm:w-24`, cấu hình vùng nhãn `shrink-0 whitespace-nowrap` đảm bảo toàn bộ nhãn luôn nằm trên **1 dòng duy nhất** liền kề nút chọn ngày.
+
+### 7.6. Tích Hợp Component ReUI `@reui/c-calendar-15` (Calendar with Presets)
+- Xây dựng component [`c-calendar-15.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/reui/c-calendar-15.tsx):
+  - **Cột trái (Presets linh hoạt):** 8 lựa chọn nhanh (`Today`, `Later`, `Tomorrow`, `This weekend`, `Next week`, `Next weekend`, `2 weeks`, `4 weeks`) kèm nhãn phụ (thứ trong tuần, giờ, ngày) và nút *"Xóa chọn"*.
+  - **Cột phải (Month Grid):** Header tháng/năm chuẩn tiếng Anh (`October 2026`), nút `Today`, nút điều hướng `^` và `v`, hàng thứ từ Thứ Hai (`Mo Tu We Th Fr Sa Su`), ô ngày được chọn tô nền đen bo góc tròn (`bg-slate-900 text-white rounded-md`).
+  - **Cơ chế lưu trữ:** Mọi thao tác chọn ngày lập tức lưu vào `design_deadline`, đồng bộ lên Google Sheets, LocalStorage và Lịch sử hoạt động (Activity log), **hoàn toàn không cần thay đổi hay cập nhật backend**.
+
+

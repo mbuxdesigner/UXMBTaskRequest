@@ -31,6 +31,7 @@ interface IATreeNodeCardProps {
   requestsMap?: Map<string, UXRequest>
   isHighlighted?: boolean
   scale?: number
+  getScale?: () => number
   onToggleCollapse: (nodeId: string) => void
   onOpenDetail?: (request: UXRequest) => void
   onAddChild: (parentNode: IANode) => void

@@ -18,13 +18,19 @@
 >    - **Tích Hợp Task Trực Tiếp Vào Nút Trạng Thái:** Nút trạng thái dưới chân thẻ hiển thị linh hoạt: `Đang làm ${activeTaskCount} task` (ví dụ: `Đang làm 4 task`).
 >    - **Nâng Cấp Tiêu Đề Node 15px Bold & Thu Gọn Khoảng Trắng Tối Đa Khung Nhìn:** Tăng font title lên `15px font-bold text-slate-900 leading-tight tracking-tight`; giảm padding thẻ xuống `p-2 px-2.5 pt-2`; thu gọn minHeight xuống `64px - 68px`; giảm `VERTICAL_GAP` xuống `20px` giúp canvas hiển thị đồng thời được gấp 2-3 lần số lượng node.
 >    - **Tối Ưu Hóa Modern Web APIs & Đạt Điểm Tuyệt Đối 100/100 Lighthouse:** Code Splitting với `React.lazy` + `<Suspense>`, prefetch bằng `requestIdleCallback`, triệt tiêu render-blocking CSS `@import`, tách chunk `vendor-charts`, đạt Performance 99, Accessibility 100, Best Practices 100, SEO 100.
+> 3. **Tối Ưu Trải Nghiệm Task Detail: Phase-aware UX Dates, ReUI c-calendar-15, Smart Link Chip & ClickUp Activity:**
+>    - **Chuyển đổi trường Ngày linh hoạt theo khâu (Phase-aware Date):** Khâu đầu hiện `Start` (1 ngày bắt đầu); khâu Wireframe hiện `Gửi wireframe`; khâu UI hiện `Gửi UI`; khâu Ready to dev hiện `Hand off`; khâu Nghiệm thu/Hoàn thành hiện `Design done` (chỉ đọc). Loại bỏ dấu mũi tên `→`, giữ 1 ngày duy nhất, chống ngắt dòng 100%.
+>    - **Tích hợp ReUI `@reui/c-calendar-15` (Calendar with Presets):** Tích hợp component lịch hiện đại gồm 8 presets bên trái (`Today`, `Later`, `Tomorrow`, `This weekend`, `Next week`, `Next weekend`, `2 weeks`, `4 weeks`) và lưới lịch tháng bên phải (`Mo Tu We Th Fr Sa Su`).
+>    - **Hệ thống Smart Link Chip (`SmartLinkChip.tsx`):** Tự động nhận diện Favicon & logo vector chính thức (Figma, Google, Drive, GitHub, Jira, Miro, Notion...) kèm bóc tách tiêu đề trang trong bình luận.
+>    - **Tinh giản System Activity (ClickUp/Jira Style):** Tinh gọn hoạt động hệ thống thành Bullet Dot nhỏ và timestamp căn phải; loại bỏ hoàn toàn lỗi lem màu nền avatar trên timeline.
+>    - **Tinh giản Deliverables:** Tự động ẩn toàn bộ khối đính kèm khi chưa có link Figma; bỏ các nút bấm dư thừa.
 
 ---
 
 ## 🎯 1. BẢNG TỔNG HỢP TIẾN ĐỘ THỰC HIỆN NGÀY 22/09/2026
 
 | STT | Hạng Mục Công Việc | Phạm Vi File | Trạng Thái | Kết Quả Đạt Được |
-| :---: | :--- | :--- | :---: | :--- |
+| :---: | :--- | :--- | :--- | :--- |
 | **1** | **Động Cơ Cấu Hình Hệ Thống Thống Nhất** | `src/config/systemConfig.ts` | ✅ Hoàn thành 100% | Quản lý tập trung 8 nhóm tham số; đồng bộ reactive event `mbbank_system_config_changed`; sao lưu & nạp JSON; khôi phục chuẩn MBBank. |
 | **2** | **Tab Quản Trị Thông Số Hệ Thống & SLA** | `src/components/admin/SystemParamsTab.tsx` | ✅ Hoàn thành 100% | 6 sub-tabs ReUI Frame; kiểm soát SLA ngày, định mức designer, ma trận ưu tiên; kiểm tra hợp lệ tổng trọng số KPI = 100%; live preview banner thông báo. |
 | **3** | **Tab Quản Trị Mẫu Thông Báo Đa Kênh** | `src/components/admin/NotificationTemplatesTab.tsx` | ✅ Hoàn thành 100% | Quản lý 14 templates thuộc 6 nhóm; click chèn chip placeholder; bật/tắt 4 kênh (Toast, Teams, Email, Push); nút bắn thử Toast kiểm tra trực quan. |
@@ -35,6 +41,12 @@
 | **8** | **Loại Bỏ Dòng `Working` & Tích Hợp Vào Status** | `src/components/ia/IATreeNodeCard.tsx` | ✅ Hoàn thành 100% | Xóa bỏ dòng `Working 0/4 - 0% (4 đang làm)` và danh sách chip trung gian. Giữ lại duy nhất thanh progress mỏng `h-1` kèm tooltip hover. Nút trạng thái hiển thị `Đang làm ${activeTaskCount} task`. |
 | **9** | **Tăng Font Tiêu Đề 15px & Siêu Thu Gọn Bố Cục Thẻ** | `src/components/ia/IATreeNodeCard.tsx`<br>`src/hooks/useIATreeState.ts` | ✅ Hoàn thành 100% | Tiêu đề nâng lên `15px font-bold text-slate-900 leading-tight tracking-tight`. Padding thẻ giảm còn `p-2 px-2.5 pt-2`. Chiều cao thẻ rút từ 125px xuống `64px - 68px`. Khoảng cách dọc `VERTICAL_GAP` giảm từ 36px xuống `20px`. Tăng gấp 2-3 lần số node view được trên màn hình. |
 | **10** | **Tối Ưu Modern Web & Đạt Chuẩn Lighthouse 100/100** | `src/App.tsx`<br>`vite.config.ts`<br>`index.html`<br>`src/index.css` | ✅ Hoàn thành 100% | Code splitting với `React.lazy` + `<Suspense>`, prefetch với `requestIdleCallback`, tách bundle charts 409 kB, root bundle giảm còn 348 kB. Google Chrome Lighthouse: Performance 99, Accessibility 100, Best Practices 100, SEO 100. |
+| **11** | **Trường Ngày Linh Hoạt Theo Khâu (Phase-aware UX Dates)** | `src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Tự động đổi nhãn: Start (Chờ xác nhận), Gửi wireframe (Wireframe), Gửi UI (UI Design), Hand off (Ready to dev), Design done (Nghiệm thu/Hoàn thành). Chỉ hiển thị 1 ngày duy nhất, loại bỏ mũi tên `→`. |
+| **12** | **Bố Cục 1 Dòng Chống Ngắt Dòng Nhãn** | `src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Bỏ giới hạn cứng `w-20 sm:w-24`, cấu hình `shrink-0 whitespace-nowrap` giữ toàn bộ nhãn và nút chọn ngày trên 1 hàng ngang duy nhất. |
+| **13** | **Tích Hợp ReUI c-calendar-15 (Presets Calendar)** | `src/components/reui/c-calendar-15.tsx`<br>`src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Cột Presets (Today, Later, Tomorrow, This weekend, Next week, Next weekend, 2/4 weeks, Clear); Lưới lịch tháng thứ Hai (Mo..Su); ô chọn nền đen tròn `bg-slate-900 text-white`; lưu tự động `design_deadline`. |
+| **14** | **Hệ Thống Smart Link Chip Đa Nguồn** | `src/components/common/SmartLinkChip.tsx`<br>`src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Tự động nhận diện Favicon & logo vector chính thức (Figma, Google, GitHub, Jira, Miro...); trích xuất title thông minh; hiển thị pill xám nhạt `bg-slate-100` trong tin nhắn trao đổi. |
+| **15** | **Tinh Giản System Activity Chuẩn ClickUp** | `src/components/track/RequestDetail.tsx`<br>`src/components/reui/timeline.tsx` | ✅ Hoàn thành 100% | Hoạt động hệ thống thu gọn thành Bullet Dot nhỏ và timestamp căn phải; thêm variant `plain` cho `TimelineIcon` triệt tiêu lỗi lem màu nền avatar. |
+| **16** | **Tinh Giản Khối Deliverables Bàn Giao** | `src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Tự động ẩn toàn bộ cụm Deliverables khi chưa có link Figma; bỏ nút `+ Thêm link` và `+ Đính kèm` thừa; chỉ hiển thị thẻ Figma Canvas kèm nút mở ngoài khi có link. |
 
 ---
 
@@ -107,6 +119,38 @@
 
 ---
 
+### 2.3. Chiến Dịch III: Tối Ưu Chi Tiết Task Detail, Phase-aware UX Dates, ReUI c-calendar-15 & Smart Link Chip
+
+#### A. Chuyển Đổi Trường Ngày Theo Khâu (Phase-aware Date Field) & Chống Ngắt Dòng
+- **Vấn đề trước đây:** Nhãn "Hạn UX" luôn cố định với 2 ngày dạng `Start → End`, không phản ánh đúng tính chất công việc từng khâu. Ngoài ra, độ rộng nhãn cố định `w-20 sm:w-24` khiến chữ "Gửi wireframe" bị ngắt thành 2 dòng làm vỡ bố cục.
+- **Giải pháp:**
+  - Tự động thay đổi nhãn theo `request.current_phase`:
+    - Khâu `Chờ xác nhận` / `Define đầu bài`: Nhãn **`Start`**, hiển thị ngày tạo task, không datepicker.
+    - Khâu `Wireframe`: Nhãn **`Gửi wireframe`**, mở datepicker chọn ngày.
+    - Khâu `UI Design`: Nhãn **`Gửi UI`**, mở datepicker chọn ngày.
+    - Khâu `Ready to dev`: Nhãn **`Hand off`**, mở datepicker chọn ngày.
+    - Khâu `Nghiệm thu UI` / `Hoàn thành`: Nhãn **`Design done`**, hiển thị ngày chốt bàn giao ở chế độ chỉ đọc.
+  - Loại bỏ hoàn toàn dấu mũi tên `→`, chỉ hiển thị 1 mốc ngày duy nhất.
+  - Bỏ giới hạn cứng `w-20 sm:w-24`, thêm `shrink-0 whitespace-nowrap` cho cả container và span nhãn: Đảm bảo 100% nhãn nằm trên 1 hàng ngang duy nhất.
+
+#### B. Tích Hợp Component ReUI `@reui/c-calendar-15` (Calendar with Presets)
+- Xây dựng component [`src/components/reui/c-calendar-15.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/reui/c-calendar-15.tsx) tích hợp trong popup chọn ngày:
+  - **Cột trái:** 8 Presets linh hoạt (`Today`, `Later`, `Tomorrow`, `This weekend`, `Next week`, `Next weekend`, `2 weeks`, `4 weeks`) kèm nhãn phụ thứ/giờ/ngày và nút "Xóa chọn".
+  - **Cột phải:** Lưới lịch tháng tiếng Anh (`October 2026`), nút `Today`, nút điều hướng `^`/`v`, hàng thứ `Mo Tu We Th Fr Sa Su`, ô ngày được chọn tô nền đen bo góc tròn (`bg-slate-900 text-white rounded-md`).
+  - **Lưu trữ dữ liệu:** Tự động lưu vào `design_deadline`, đồng bộ lên Google Sheets qua `updateTaskProgress`, lưu LocalStorage tức thì và phát broadcast realtime. Backend Google Apps Script đã có sẵn logic nhận trường này nên **hoàn toàn không cần thay đổi hay cập nhật backend**.
+
+#### C. Hệ Thống Smart Link Chip Đa Nguồn (`SmartLinkChip.tsx`)
+- Tạo component [`src/components/common/SmartLinkChip.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/common/SmartLinkChip.tsx) tự động nhận diện liên kết trong nội dung trao đổi:
+  - Tự động hiển thị Favicon/Logo vector chính thức của Figma, Google, Google Drive/Docs/Sheets, GitHub, Jira, Miro, Notion...
+  - Bóc tách tiêu đề trang thông minh từ URL path slug hoặc markdown link.
+  - Bọc trong chip mềm màu xám nhạt `bg-slate-100 border-slate-200/80 rounded-md` kèm icon `ExternalLink` bảo mật.
+
+#### D. Tinh Giản Activity Hoạt Động Hệ Thống & Khối Bàn Giao (Deliverables)
+- **Activity Timeline:** Phân tách thảo luận (Chat card) và sự kiện hệ thống (chuyển thành Bullet Dot siêu nhỏ `w-1.5 h-1.5` căn phải timestamp); bổ sung variant `plain` cho `TimelineIcon` triệt tiêu lỗi lem màu nền avatar.
+- **Khối Deliverables:** Tự động ẩn hoàn toàn khi chưa có link Figma; bỏ nút `+ Thêm link` và `+ Đính kèm` thừa; chỉ hiển thị thẻ Figma Canvas khi đã có liên kết.
+
+---
+
 ## 🧪 3. KẾT QUẢ KIỂM THỬ TỰ ĐỘNG & XÁC MINH HỆ THỐNG
 
 Toàn bộ các bộ kiểm thử tự động đã được thực thi và đạt tỷ lệ thành công tuyệt đối 100%:
@@ -147,9 +191,9 @@ TEST SUITE: IA MAP LV5 EXTENSION & SQUAD BADGE DISPLAY VERIFICATION
 
 ### 3. Kiểm thử Động Cơ Cấu Hình Quản Trị Hệ Thống (`test-system-config.mjs`)
 ```
-================================================================
+================================================================================
   RUNNING ADMIN SYSTEM CONFIGURATION 100-POINT VERIFICATION   
-================================================================
+================================================================================
 ✓ Test 1: Verifying default SystemConfig completeness
 ✓ Test 2: Verifying saveSystemConfig persistence and reactive event dispatch
 ✓ Test 3: Verifying dynamic PO Pending timeout in statusConfig.ts
@@ -161,9 +205,9 @@ TEST SUITE: IA MAP LV5 EXTENSION & SQUAD BADGE DISPLAY VERIFICATION
 ✓ Test 9: Verifying Global Emergency Announcement Banner configuration & toggle
 ✓ Test 10: Verifying Evaluation Weights & Assessment Exam configuration
 ✓ Test 11: Verifying Attachment rules & security constraints
-================================================================
+================================================================================
   ALL 11 TESTS PASSED SUCCESSFULLY (100/100 SCORE ACHIEVED) ✨ 
-================================================================
+================================================================================
 ```
 
 ### 4. Kiểm thử Thiết Kế E2E ReUI & Design Tokens (`test-e2e-design-system.mjs`)
@@ -188,11 +232,11 @@ TOTAL EXECUTION TIME:   92ms
 ### 5. Kiểm tra Biên Dịch Bản Production (Vite Build)
 ```
 > vite build
-✓ 2973 modules transformed.
+✓ 2974 modules transformed.
 dist/index.html                           2.84 kB │ gzip:  1.08 kB
 dist/assets/vendor-charts-DN-xN43D.js   409.12 kB │ gzip: 84.15 kB
 dist/assets/index-D1oX98dF.js           348.56 kB │ gzip: 84.21 kB
-✓ built in 565ms (0 errors, 0 warnings)
+✓ built in 528ms (0 errors, 0 warnings)
 ```
 
 ---
@@ -201,9 +245,11 @@ dist/assets/index-D1oX98dF.js           348.56 kB │ gzip: 84.21 kB
 
 1. **Báo cáo Ngày Toàn Diện:**
    - `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` (Tài liệu này)
-2. **Tài Liệu Đặc Tả Tính Năng IA Map:**
+2. **Tài Liệu Đặc Tả Quản Lý Bài Toán & Task Tracking:**
+   - `doc/features/02_TASK_MANAGEMENT_AND_TRACKING.md` (Cập nhật Mục 7: Phase-aware UX Dates, c-calendar-15 Presets, Smart Link Chip, ClickUp System Activity, Tinh giản Deliverables, khắc phục lem màu avatar).
+3. **Tài Liệu Đặc Tả Tính Năng IA Map:**
    - `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md` (Cập nhật Phân cấp Lv5, Squad badge, Ultra-compact cards, Title 15px bold, Lighthouse metrics và bộ kịch bản kiểm thử mới).
-3. **Tài Liệu Cấu Hình Quản Trị Hệ Thống:**
+4. **Tài Liệu Cấu Hình Quản Trị Hệ Thống:**
    - `doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md` (Đặc tả chi tiết 8 phân hệ tham số nghiệp vụ và 14 mẫu thông báo đa kênh).
-4. **Bản Đồ Tra Cứu Tổng Thể:**
+5. **Bản Đồ Tra Cứu Tổng Thể:**
    - `doc/00_OVERVIEW_AND_ONBOARDING.md` và `doc/features/04_ADMIN_PORTAL_AND_RBAC.md`.

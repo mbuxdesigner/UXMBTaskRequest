@@ -28,6 +28,7 @@ export interface LayoutNode {
   childCount: number
   isVisible: boolean
   isHighlighted: boolean
+  metrics?: SubtreeMetrics
 }
 
 export interface LayoutConnector {
@@ -369,9 +370,9 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
     const raw = window.localStorage.getItem(IA_TIER_DIMENSIONS_KEY)
     if (!raw) return DEFAULT_TIER_DIMENSIONS
     const parsed = JSON.parse(raw)
-    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao cũ bị thổi phồng (> 85 cho compact) hoặc quá nhỏ (< 40)
+    // Tự động nâng cấp nếu dữ liệu lưu trước đó có chiều cao cũ bị thổi phồng (> 95) hoặc quá nhỏ (< 65 cho Lv1)
     if (
-      !parsed[1]?.height || parsed[1].height > 85 || parsed[1].height < 40 ||
+      !parsed[1]?.height || parsed[1].height > 95 || parsed[1].height < 65 ||
       !parsed[2]?.height || parsed[2].height > 95 || parsed[2].height < 50 ||
       !parsed[3]?.height || parsed[3].height > 95 || parsed[3].height < 50 ||
       !parsed.verticalGapJourney ||
@@ -413,7 +414,9 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
   const ds = node.displaySettings || getTierDefaultDisplaySettings(node.tier)
 
   if (node.tier === 1) {
-    return tierDimensions?.[1]?.height || 52
+    const dimH = tierDimensions?.[1]?.height
+    const defaultH = node.description ? 84 : 68
+    return dimH && dimH >= 65 ? dimH : defaultH
   }
 
   // Thẻ đã được tinh giản tối đa (compacted) theo yêu cầu tối ưu không gian hiển thị
@@ -1594,12 +1597,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    // 2. Second pass: Calculate Columnar Indented Vertical Hierarchy Positions (Matching User Diagram)
+    // 2. Second pass: Calculate Columnar Indented Hierarchy Positions
     // - LV1 (Product Root): Stretches horizontally to cover all its child LV2s!
     // - LV2 (Domain Modules): Arranged horizontally across columns
-    // - LV3 (Feature Journeys): Stacked vertically below LV2, indented to the right (INDENT_LV3 = 48)
-    // - LV4 (Screens & Touchpoints): Stacked vertically below each LV3, indented to the right (INDENT_LV4 = 40)
-    // - LV5 (Components & Elements): Stacked vertically below each LV4, indented to the right (INDENT_LV5 = 36)
+    // - LV3 (Feature Journeys): Arranged horizontally across columns under LV2 (xếp ngang)
+    // - LV4 (Screens & Touchpoints): Stacked vertically below each LV3 (xếp dọc, INDENT_LV4 = 40)
+    // - LV5 (Components & Elements): Stacked vertically below each LV4 (xếp dọc, INDENT_LV5 = 36)
     // - Supports multiple LV1s placed side-by-side with LV1_GAP!
     const resultNodes: LayoutNode[] = []
     const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
@@ -1607,13 +1610,29 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     const START_X = 60
     const START_Y = 60
     const ROOT_TO_MODULE_GAP = 90
+    const MODULE_TO_JOURNEY_GAP = 90
     const INDENT_LV3 = 48
     const INDENT_LV4 = 40
     const INDENT_LV5 = 36
     const VERTICAL_GAP_SCREEN = Math.max(32, tierDimensions.verticalGapScreen || 36)
     const VERTICAL_GAP_JOURNEY = Math.max(48, tierDimensions.verticalGapJourney || 52)
     const COLUMN_GAP = Math.max(100, tierDimensions.columnGap || 110)
+    const JOURNEY_GAP = Math.max(48, tierDimensions.columnGap ? Math.round(tierDimensions.columnGap * 0.5) : 56)
     const LV1_GAP = 140
+
+    // Precompute Subtree Metrics once for all nodes in the active trees
+    const precomputedMetricsMap = new Map<string, SubtreeMetrics>()
+    function indexSubtreeMetrics(curr: IANode) {
+      precomputedMetricsMap.set(curr.id, computeSubtreeMetrics(curr, requestsMap))
+      if (curr.children) {
+        for (const child of curr.children) {
+          indexSubtreeMetrics(child)
+        }
+      }
+    }
+    for (const r of rootNodes) {
+      indexSubtreeMetrics(r)
+    }
 
     // Collect all nodes and apply custom coordinates if arranged by user
     function collectNodes(item: InternalNode) {
@@ -1635,6 +1654,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         childCount: item.childCount,
         isVisible: true,
         isHighlighted,
+        metrics: precomputedMetricsMap.get(item.node.id),
       })
 
       for (const child of item.children) {
@@ -1656,83 +1676,119 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         let currentModuleX = currentClusterStartX
 
         for (const module of root.children) {
-          const modX = currentModuleX
-          // Khoảng cách từ Root Cấp 1 xuống các phân hệ Cấp 2
           const modY = Math.round(root.y + root.height + ROOT_TO_MODULE_GAP)
-
-          module.x = modX
-          module.y = modY
-
           rawPairs.push({ parent: root, child: module })
 
-          let columnMaxRight = modX + module.width
-          let currentY = modY + module.height + VERTICAL_GAP_JOURNEY
-
           const luongs = module.children || []
-          if (luongs.length > 0 && module.isExpanded) {
-            const luongX = modX + INDENT_LV3
+          if (luongs.length === 0 || !module.isExpanded) {
+            module.x = currentModuleX
+            module.y = modY
+            currentModuleX += module.width + COLUMN_GAP
+          } else {
+            // LV3 xếp ngang: Các luồng tính năng (LV3) được dàn ngang bên dưới LV2
+            const luongY = Math.round(modY + module.height + MODULE_TO_JOURNEY_GAP)
+            let currentLuongX = currentModuleX
+            const firstLuongX = currentLuongX
 
             for (const luong of luongs) {
-              luong.x = luongX
-              luong.y = currentY
-              columnMaxRight = Math.max(columnMaxRight, luongX + luong.width)
+              luong.x = currentLuongX
+              luong.y = luongY
               rawPairs.push({ parent: module, child: luong })
 
+              let luongColMaxRight = luong.x + luong.width
+
+              // LV4 & LV5 xếp dọc: Các màn hình (LV4) và thành phần (LV5) xếp dọc bên dưới LV3
               const screens = luong.children || []
               if (screens.length > 0 && luong.isExpanded) {
-                currentY += luong.height + VERTICAL_GAP_SCREEN
-                const screenX = luongX + INDENT_LV4
+                let currentScreenY = luongY + luong.height + VERTICAL_GAP_JOURNEY
+                const screenX = luong.x + INDENT_LV4
 
                 for (const screen of screens) {
                   screen.x = screenX
-                  screen.y = currentY
-                  columnMaxRight = Math.max(columnMaxRight, screenX + screen.width)
+                  screen.y = currentScreenY
+                  luongColMaxRight = Math.max(luongColMaxRight, screenX + screen.width)
                   rawPairs.push({ parent: luong, child: screen })
 
                   const elements = screen.children || []
                   if (elements.length > 0 && screen.isExpanded) {
-                    currentY += screen.height + VERTICAL_GAP_SCREEN
+                    let currentElementY = currentScreenY + screen.height + VERTICAL_GAP_SCREEN
                     const elementX = screenX + INDENT_LV5
 
                     for (const element of elements) {
                       element.x = elementX
-                      element.y = currentY
-                      columnMaxRight = Math.max(columnMaxRight, elementX + element.width)
+                      element.y = currentElementY
+                      luongColMaxRight = Math.max(luongColMaxRight, elementX + element.width)
                       rawPairs.push({ parent: screen, child: element })
 
-                      currentY += element.height + VERTICAL_GAP_SCREEN
+                      currentElementY += element.height + VERTICAL_GAP_SCREEN
                     }
+                    currentScreenY = currentElementY
                   } else {
-                    currentY += screen.height + VERTICAL_GAP_SCREEN
+                    currentScreenY += screen.height + VERTICAL_GAP_SCREEN
                   }
                 }
+              }
 
-                // Khoảng cách từ màn hình/chi tiết cuối cùng tới luồng tính năng tiếp theo
-                currentY += VERTICAL_GAP_JOURNEY - VERTICAL_GAP_SCREEN
+              const luongWidthInCol = luongColMaxRight - luong.x
+              currentLuongX += luongWidthInCol + JOURNEY_GAP
+            }
+
+            const totalLuongsWidth = (currentLuongX - JOURNEY_GAP) - firstLuongX
+
+            // "cho tôi chiều ngang lv2 bao trùm cả lv3 như kiểu lv1 nhé"
+            if (!module.node.customWidth) {
+              if (luongs.length > 1) {
+                module.x = firstLuongX
+                module.width = Math.max(tierDimensions[2].width, totalLuongsWidth)
               } else {
-                // Nếu không có màn hình con, khoảng cách tới luồng tiếp theo là VERTICAL_GAP_JOURNEY
-                currentY += luong.height + VERTICAL_GAP_JOURNEY
+                const targetWidth = Math.max(tierDimensions[2].width, totalLuongsWidth)
+                module.width = targetWidth
+                module.x = firstLuongX - (targetWidth - totalLuongsWidth) / 2
+              }
+            } else {
+              module.x = Math.round(firstLuongX + (totalLuongsWidth - module.width) / 2)
+            }
+            module.y = modY
+            currentModuleX = Math.max(module.x + module.width, firstLuongX + totalLuongsWidth) + COLUMN_GAP
+          }
+        }
+
+        // LV1 (Root) kéo dài phủ toàn bộ các phân hệ LV2 bên dưới
+        let minClusterX = Infinity
+        let maxClusterRight = -Infinity
+        for (const mod of root.children) {
+          minClusterX = Math.min(minClusterX, mod.x)
+          maxClusterRight = Math.max(maxClusterRight, mod.x + mod.width)
+          if (mod.children && mod.isExpanded) {
+            for (const l of mod.children) {
+              minClusterX = Math.min(minClusterX, l.x)
+              maxClusterRight = Math.max(maxClusterRight, l.x + l.width)
+              if (l.children && l.isExpanded) {
+                for (const s of l.children) {
+                  minClusterX = Math.min(minClusterX, s.x)
+                  maxClusterRight = Math.max(maxClusterRight, s.x + s.width)
+                  if (s.children && s.isExpanded) {
+                    for (const e of s.children) {
+                      minClusterX = Math.min(minClusterX, e.x)
+                      maxClusterRight = Math.max(maxClusterRight, e.x + e.width)
+                    }
+                  }
+                }
               }
             }
           }
-
-          const columnWidth = columnMaxRight - modX
-          currentModuleX += columnWidth + COLUMN_GAP
         }
-
-        // "khi tự chỉnh thì lv1 sẽ kéo dài phủ toàn bộ lv2"
-        const firstMod = root.children[0]
-        const lastMod = root.children[root.children.length - 1]
 
         if (root.children.length > 1) {
-          root.x = firstMod.x
-          root.width = Math.max(tierDimensions[1].width, (lastMod.x + lastMod.width) - firstMod.x)
+          root.x = minClusterX
+          root.width = Math.max(tierDimensions[1].width, maxClusterRight - minClusterX)
         } else {
-          root.width = Math.max(tierDimensions[1].width, firstMod.width)
-          root.x = firstMod.x - (root.width - firstMod.width) / 2
+          const targetWidth = Math.max(tierDimensions[1].width, maxClusterRight - minClusterX)
+          root.width = targetWidth
+          root.x = minClusterX - (targetWidth - (maxClusterRight - minClusterX)) / 2
         }
 
-        const clusterMaxRight = Math.max(root.x + root.width, currentModuleX - COLUMN_GAP)
+        const clusterMaxRight = Math.max(root.x + root.width, maxClusterRight)
         currentClusterStartX = clusterMaxRight + LV1_GAP
       }
 
@@ -1746,12 +1802,13 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     }
 
     // Precalculate vertical span for each parent's children to position the FigJam trunk handle right at the midpoint
+    // Vertical trunks are: LV3 -> LV4 and LV4 -> LV5
     const parentBusSpanMap = new Map<string, { startY: number; maxY: number }>()
     for (const { parent, child } of rawPairs) {
       const pLayout = layoutMap.get(parent.node.id)
       const cLayout = layoutMap.get(child.node.id)
       if (!pLayout || !cLayout) continue
-      if ((parent.node.tier === 2 && child.node.tier === 3) || (parent.node.tier === 3 && child.node.tier === 4)) {
+      if ((parent.node.tier === 3 && child.node.tier === 4) || (parent.node.tier === 4 && child.node.tier === 5)) {
         const startY = Math.round(pLayout.y + pLayout.height)
         const targetY = Math.round(cLayout.y + cLayout.height / 2)
         const existing = parentBusSpanMap.get(parent.node.id)
@@ -1777,6 +1834,23 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           lv1BusYMap.set(parent.node.id, childTopY)
         } else {
           lv1BusYMap.set(parent.node.id, Math.min(existing, childTopY))
+        }
+      }
+    }
+
+    // Precalculate shared LV2 -> LV3 bus line height (forkY) for each LV2 parent
+    // All LV3 children under the same LV2 parent share the exact same horizontal bus line!
+    const lv2BusYMap = new Map<string, number>()
+    for (const { parent, child } of rawPairs) {
+      if (parent.node.tier === 2 && child.node.tier === 3) {
+        const cLayout = layoutMap.get(child.node.id)
+        if (!cLayout) continue
+        const childTopY = cLayout.y
+        const existing = lv2BusYMap.get(parent.node.id)
+        if (existing === undefined) {
+          lv2BusYMap.set(parent.node.id, childTopY)
+        } else {
+          lv2BusYMap.set(parent.node.id, Math.min(existing, childTopY))
         }
       }
     }
@@ -1838,52 +1912,46 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
 
       // CASE 2: LV2 (Module) -> LV3 (Feature Journey)
-      // Trunk drops down from bottom-left of LV2, elbows right (└─>) into exact vertical center of left edge of LV3
+      // LV3 is now HORIZONTAL (xếp ngang)!
+      // Fork bus line from bottom-center of LV2, branching across unified bus line and dropping into top-center of LV3
       if (parent.node.tier === 2 && child.node.tier === 3) {
         fromPort = "bottom"
-        toPort = "left"
-        const defaultOffset = 24
-        const offset = parent.node.customTrunkOffset ?? defaultOffset
-        const trunkX = Math.round(pLayout.x + offset)
-        const startY = Math.round(pLayout.y + pLayout.height)
-        const targetY = Math.round(cLayout.y + cLayout.height / 2)
-        // Offset 2px outside left border so arrowhead sits cleanly outside
-        const targetX = Math.round(cLayout.x - 2)
+        toPort = "top"
+        const p1 = getPortCoord(pLayout.x, pLayout.y, pLayout.width, pLayout.height, "bottom")
+        // Offset 2px outside card top border so the arrowhead sits cleanly outside and touches the border without plunging into it
+        const p2 = getPortCoord(cLayout.x, cLayout.y, cLayout.width, cLayout.height, "top", 2)
 
-        if (targetX >= trunkX + r && targetY >= startY + r) {
-          path = `M ${trunkX} ${startY} L ${trunkX} ${targetY - r} Q ${trunkX} ${targetY} ${trunkX + r} ${targetY} L ${targetX} ${targetY}`
+        const minChildTopY = lv2BusYMap.get(parent.node.id) ?? cLayout.y
+        // Compute a unified horizontal bus line for all LV3 children of this LV2
+        const forkY = Math.round(p1.y + Math.max(25, (minChildTopY - p1.y) * 0.45))
+        const cornerR = Math.min(10, Math.max(2, Math.abs(p2.x - p1.x) / 2))
+
+        if (Math.abs(p1.x - p2.x) < 4) {
+          path = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`
+        } else if (p2.y <= forkY + 15) {
+          // Fallback smooth bezier if node was dragged above the shared bus line
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+          const mag = Math.max(25, Math.min(dist * 0.5, 120))
+          path = `M ${p1.x} ${p1.y} C ${p1.x} ${p1.y + mag}, ${p2.x} ${p2.y - mag}, ${p2.x} ${p2.y}`
+        } else if (p2.x > p1.x) {
+          path = `M ${p1.x} ${p1.y} L ${p1.x} ${forkY - cornerR} Q ${p1.x} ${forkY} ${p1.x + cornerR} ${forkY} L ${p2.x - cornerR} ${forkY} Q ${p2.x} ${forkY} ${p2.x} ${forkY + cornerR} L ${p2.x} ${p2.y}`
         } else {
-          // Fallback if node was custom-dragged
-          path = `M ${trunkX} ${startY} C ${trunkX} ${targetY}, ${targetX - 30} ${targetY}, ${targetX} ${targetY}`
-        }
-
-        let trunkHandle: LayoutConnector["trunkHandle"] = undefined
-        if (!handledParentSet.has(parent.node.id)) {
-          handledParentSet.add(parent.node.id)
-          const span = parentBusSpanMap.get(parent.node.id)
-          const handleY = span ? Math.round((span.startY + span.maxY) / 2) : Math.round((startY + targetY) / 2)
-          trunkHandle = {
-            x: trunkX,
-            y: handleY,
-            parentId: parent.node.id,
-            currentOffset: offset,
-          }
+          path = `M ${p1.x} ${p1.y} L ${p1.x} ${forkY - cornerR} Q ${p1.x} ${forkY} ${p1.x - cornerR} ${forkY} L ${p2.x + cornerR} ${forkY} Q ${p2.x} ${forkY} ${p2.x} ${forkY + cornerR} L ${p2.x} ${p2.y}`
         }
 
         resultConnectors.push({
           id: `conn-${parent.node.id}-${child.node.id}`,
           parentId: parent.node.id,
           childId: child.node.id,
-          x1: trunkX,
-          y1: startY,
-          x2: targetX,
-          y2: targetY,
+          x1: Number(p1.x.toFixed(2)),
+          y1: Number(p1.y.toFixed(2)),
+          x2: Number(p2.x.toFixed(2)),
+          y2: Number(p2.y.toFixed(2)),
           fromPort,
           toPort,
           path,
           colorTheme: parent.node.colorTheme || child.node.colorTheme,
           isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
-          trunkHandle,
         })
         continue
       }
