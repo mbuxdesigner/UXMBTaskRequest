@@ -124,6 +124,16 @@ export const QUICK_ADD_ITEMS: QuickAddNodeType[] = [
     badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
     icon: PanelTop,
   },
+  // TIER 5: ELEMENT / SUB-COMPONENT
+  {
+    id: "tier-5-element",
+    tier: 5,
+    name: "Tier 5: Thành phần / Chi tiết (Element)",
+    description: "Thành phần giao diện, data field hoặc trạng thái chi tiết",
+    colorHex: "#8b5cf6",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    icon: Sparkles,
+  },
 ]
 
 interface IAQuickAddSidebarProps {

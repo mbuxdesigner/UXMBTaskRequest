@@ -10,6 +10,7 @@ export const DEFAULT_TIER_DIMENSIONS: IATierDimensionSettings = {
   2: { width: 280, height: 120 },
   3: { width: 260, height: 125 },
   4: { width: 250, height: 115 },
+  5: { width: 240, height: 110 },
   columnGap: 110,
   verticalGapJourney: 44,
   verticalGapScreen: 32,
@@ -28,19 +29,21 @@ export default function IASettingsModal({
   onClose,
   onSave,
 }: IASettingsModalProps) {
-  const [lv1Width, setLv1Width] = useState<number>(currentSettings[1].width)
-  const [lv2Width, setLv2Width] = useState<number>(currentSettings[2].width)
-  const [lv3Width, setLv3Width] = useState<number>(currentSettings[3].width)
-  const [lv4Width, setLv4Width] = useState<number>(currentSettings[4].width)
-  const [columnGap, setColumnGap] = useState<number>(currentSettings.columnGap)
+  const [lv1Width, setLv1Width] = useState<number>(currentSettings[1]?.width || 320)
+  const [lv2Width, setLv2Width] = useState<number>(currentSettings[2]?.width || 280)
+  const [lv3Width, setLv3Width] = useState<number>(currentSettings[3]?.width || 260)
+  const [lv4Width, setLv4Width] = useState<number>(currentSettings[4]?.width || 250)
+  const [lv5Width, setLv5Width] = useState<number>(currentSettings[5]?.width || 240)
+  const [columnGap, setColumnGap] = useState<number>(currentSettings.columnGap || 110)
 
   useEffect(() => {
     if (isOpen) {
-      setLv1Width(currentSettings[1].width)
-      setLv2Width(currentSettings[2].width)
-      setLv3Width(currentSettings[3].width)
-      setLv4Width(currentSettings[4].width)
-      setColumnGap(currentSettings.columnGap)
+      setLv1Width(currentSettings[1]?.width || 320)
+      setLv2Width(currentSettings[2]?.width || 280)
+      setLv3Width(currentSettings[3]?.width || 260)
+      setLv4Width(currentSettings[4]?.width || 250)
+      setLv5Width(currentSettings[5]?.width || 240)
+      setColumnGap(currentSettings.columnGap || 110)
     }
   }, [isOpen, currentSettings])
 
@@ -50,18 +53,21 @@ export default function IASettingsModal({
       setLv2Width(280)
       setLv3Width(260)
       setLv4Width(250)
+      setLv5Width(240)
       setColumnGap(110)
     } else if (preset === "spacious") {
       setLv1Width(360)
       setLv2Width(310)
       setLv3Width(285)
       setLv4Width(265)
+      setLv5Width(260)
       setColumnGap(140)
     } else if (preset === "compact") {
       setLv1Width(280)
       setLv2Width(250)
       setLv3Width(235)
       setLv4Width(220)
+      setLv5Width(210)
       setColumnGap(85)
     }
   }
@@ -71,16 +77,18 @@ export default function IASettingsModal({
     setLv2Width(DEFAULT_TIER_DIMENSIONS[2].width)
     setLv3Width(DEFAULT_TIER_DIMENSIONS[3].width)
     setLv4Width(DEFAULT_TIER_DIMENSIONS[4].width)
+    setLv5Width(DEFAULT_TIER_DIMENSIONS[5].width)
     setColumnGap(DEFAULT_TIER_DIMENSIONS.columnGap)
   }
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
     onSave({
-      1: { width: Math.max(160, lv1Width), height: currentSettings[1].height },
-      2: { width: Math.max(160, lv2Width), height: currentSettings[2].height },
-      3: { width: Math.max(150, lv3Width), height: currentSettings[3].height },
-      4: { width: Math.max(140, lv4Width), height: currentSettings[4].height },
+      1: { width: Math.max(160, lv1Width), height: currentSettings[1]?.height || 115 },
+      2: { width: Math.max(160, lv2Width), height: currentSettings[2]?.height || 120 },
+      3: { width: Math.max(150, lv3Width), height: currentSettings[3]?.height || 125 },
+      4: { width: Math.max(140, lv4Width), height: currentSettings[4]?.height || 115 },
+      5: { width: Math.max(140, lv5Width), height: currentSettings[5]?.height || 110 },
       columnGap: Math.max(30, columnGap),
       verticalGapJourney: currentSettings.verticalGapJourney,
       verticalGapScreen: currentSettings.verticalGapScreen,
@@ -261,6 +269,31 @@ export default function IASettingsModal({
                     step={10}
                     value={lv4Width}
                     onChange={(e) => setLv4Width(Number(e.target.value))}
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                  <span className="text-xs text-slate-400">px</span>
+                </div>
+              </div>
+
+              {/* LV5 */}
+              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">Cấp 5</span>
+                    <span className="text-xs font-semibold text-slate-900">Thành phần & Chi tiết</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    Chiều ngang các thành phần/chi tiết trong màn hình
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    type="number"
+                    min={140}
+                    max={360}
+                    step={10}
+                    value={lv5Width}
+                    onChange={(e) => setLv5Width(Number(e.target.value))}
                     className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
                   />
                   <span className="text-xs text-slate-400">px</span>

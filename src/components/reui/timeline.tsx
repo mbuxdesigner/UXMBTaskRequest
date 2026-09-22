@@ -53,8 +53,8 @@ export function TimelineItem({
 }
 
 export interface TimelineIconProps extends React.HTMLAttributes<HTMLDivElement> {
-  status?: "completed" | "current" | "pending" | "failed"
-  variant?: "solid" | "soft" | "outline"
+  status?: "completed" | "current" | "pending" | "failed" | "plain"
+  variant?: "solid" | "soft" | "outline" | "plain"
 }
 
 export function TimelineIcon({
@@ -64,19 +64,22 @@ export function TimelineIcon({
   children,
   ...props
 }: TimelineIconProps) {
+  const isPlain = variant === "plain" || status === "plain"
+
   return (
     <div
       className={cn(
         "relative z-10 flex items-center justify-center rounded-full shrink-0 transition-all duration-200",
         "w-8 h-8 text-xs font-semibold ring-4 ring-white shadow-xs",
-        status === "completed" &&
+        !isPlain && status === "completed" &&
           "bg-emerald-500 text-white shadow-emerald-500/20",
-        status === "current" &&
+        !isPlain && status === "current" &&
           "bg-slate-900 text-white ring-4 ring-slate-900/15 shadow-md shadow-slate-900/30",
-        status === "pending" &&
+        !isPlain && status === "pending" &&
           "bg-slate-100 text-slate-400 border border-slate-200",
-        status === "failed" &&
+        !isPlain && status === "failed" &&
           "bg-rose-500 text-white shadow-rose-500/20",
+        isPlain && "bg-white text-slate-700",
         className
       )}
       {...props}

@@ -325,8 +325,8 @@ export function loadSavedTrees(): Record<string, IANode> {
         const filtered = newTaskIds.filter((tid) => !isDemoRequest({ request_id: tid }))
         newTaskIds = filtered.length > 0 ? filtered : undefined
       }
-      const safeTier = Math.min(4, Math.max(1, node.tier || 1)) as IATier
-      const safeChildren = safeTier < 4 && node.children ? node.children.map(sanitizeNodeDemoData) : []
+      const safeTier = Math.min(5, Math.max(1, node.tier || 1)) as IATier
+      const safeChildren = safeTier < 5 && node.children ? node.children.map(sanitizeNodeDemoData) : []
       return {
         ...node,
         tier: safeTier,
@@ -387,6 +387,7 @@ export function loadTierDimensionSettings(): IATierDimensionSettings {
       2: { ...DEFAULT_TIER_DIMENSIONS[2], ...(parsed[2] || {}) },
       3: { ...DEFAULT_TIER_DIMENSIONS[3], ...(parsed[3] || {}) },
       4: { ...DEFAULT_TIER_DIMENSIONS[4], ...(parsed[4] || {}) },
+      5: { ...DEFAULT_TIER_DIMENSIONS[5], ...(parsed[5] || {}) },
     }
   } catch {
     return DEFAULT_TIER_DIMENSIONS
@@ -411,35 +412,34 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
 
   const ds = node.displaySettings || getTierDefaultDisplaySettings(node.tier)
 
-  // 1. Padding và viền khung thẻ (pt-3.5: 14px, pb-3: 12px, border: 2px)
-  let h = 28
+  // 1. Padding và viền khung thẻ (p-2.5: 20px, border: 2px)
+  let h = 22
 
   // 2. Hàng: Tên tính năng + Mô tả (nếu có, Lv1 không có mô tả)
-  h += (node.description && node.tier !== 1) ? 36 : 20
+  h += (node.description && node.tier !== 1) ? 32 : 20
 
   // 3. Hàng 3: Thông tin Designer hoặc Touchpoint
   const showDesigner = ds.showDesigner !== false && (node.assignedDesigner || node.tier >= 3)
   const showTouchpoint = Boolean(node.touchpointType) || node.tier === 4
   if (showDesigner || showTouchpoint) {
-    h += 20
+    h += 18
   }
 
-  // 4. Hàng 4: Thanh tiến độ Working & Task chips
+  // 4. Hàng 4: Thanh tiến độ siêu gọn (chỉ còn thanh bar, bỏ text Working & chips)
   if (ds.showProgress !== false) {
-    const hasTasks = (node.taskIds && node.taskIds.length > 0) || Boolean(node.requestId)
-    h += hasTasks ? 44 : 26
+    h += 12
   }
 
   // 5. Hàng 5 & 6: Đường kẻ chia cách + Footer trạng thái & Đếm nhánh
   if (ds.showStatus !== false || ds.showBranchCount !== false) {
-    h += 28
+    h += 24
   }
 
-  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 115 : node.tier === 2 ? 120 : node.tier === 3 ? 125 : 115)
-  return Math.max(defaultDim, Math.round(h))
+  const defaultDim = tierDimensions?.[node.tier]?.height || (node.tier === 1 ? 85 : node.tier === 2 ? 85 : node.tier === 3 ? 80 : 75)
+  return Math.max(64, Math.min(defaultDim, Math.round(h)))
 }
 
-const VERTICAL_GAP = 36
+const VERTICAL_GAP = 20
 
 export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATreeStateReturn {
   const [products, setProducts] = useState<IAProductInfo[]>(() => getAdminIAProducts())
@@ -748,8 +748,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
       function dfs(curr: IANode): boolean {
         if (curr.id === parentId) {
-          if (curr.tier >= 4) {
-            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+          if (curr.tier >= 5) {
+            toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
             blocked = true
             return true
           }
@@ -769,7 +769,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             hasActiveTask: nodeData.hasActiveTask,
             requestId: nodeData.requestId,
             touchpointType: nextTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
-            children: nextTier < 4 ? [] : undefined,
+            children: nextTier < 5 ? [] : undefined,
             colorTheme: curr.colorTheme,
             displaySettings: nodeData.displaySettings,
             customX: nodeData.customX,
@@ -1179,7 +1179,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         delete curr.customWidth
         delete curr.customHeight
         delete curr.customTrunkOffset
-        if (curr.tier >= 4) {
+        if (curr.tier >= 5) {
           curr.children = undefined
         }
         if (curr.children) {
@@ -1209,13 +1209,13 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
       function dfs(curr: IANode): boolean {
         if (curr.id === parentId) {
-          if (curr.tier >= 4) {
-            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+          if (curr.tier >= 5) {
+            toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
             blocked = true
             return true
           }
           curr.collapsed = false
-          const nextTier = Math.min(4, curr.tier + 1) as IATier
+          const nextTier = Math.min(5, curr.tier + 1) as IATier
           const newId = nodeData?.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
           let offsetX = 340
@@ -1246,7 +1246,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
             customTag: nodeData?.customTag,
             colorTheme: curr.colorTheme,
             touchpointType: nextTier === 4 ? (nodeData?.touchpointType || "screen") : undefined,
-            children: nextTier < 4 ? [] : undefined,
+            children: nextTier < 5 ? [] : undefined,
           }
 
           if (curr.customX !== undefined && curr.customY !== undefined) {
@@ -1333,8 +1333,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       let blocked = false
       function attach(curr: IANode): boolean {
         if (curr.id === sourceNodeId) {
-          if (curr.tier >= 4) {
-            toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+          if (curr.tier >= 5) {
+            toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
             blocked = true
             return true
           }
@@ -1342,7 +1342,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           if (!curr.children) curr.children = []
           const nodeToAttach = detachedNode!
           nodeToAttach.parentId = curr.id
-          nodeToAttach.tier = Math.min(4, curr.tier + 1) as IATier
+          nodeToAttach.tier = Math.min(5, curr.tier + 1) as IATier
           curr.children.push(nodeToAttach)
           return true
         }
@@ -1381,17 +1381,19 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
         function dfs(curr: IANode): boolean {
           if (curr.id === sourceNodeId) {
-            if (curr.tier >= 4) {
-              toast.warning("Cấp 4 (Lv4) là tầng trạng thái/modal cuối cùng, không thể tạo thêm nhánh con.")
+            if (curr.tier >= 5) {
+              toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
               blocked = true
               return true
             }
             curr.collapsed = false
-            const nextTier = Math.min(4, curr.tier + 1) as IATier
+            const nextTier = Math.min(5, curr.tier + 1) as IATier
             const newId = nodeData?.id || `node-wire-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
             const defaultName =
-              nextTier === 4
+              nextTier === 5
+                ? "Thành phần mới"
+                : nextTier === 4
                 ? "Màn hình mới"
                 : nextTier === 3
                 ? "Luồng tính năng mới"
@@ -1414,7 +1416,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
               customX: Math.round(position.x),
               customY: Math.round(position.y),
               touchpointType: nextTier === 4 ? (nodeData?.touchpointType || "screen") : undefined,
-              children: nextTier < 4 ? [] : undefined,
+              children: nextTier < 5 ? [] : undefined,
             }
 
             if (!curr.children) curr.children = []
@@ -1517,8 +1519,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 120 }
       const nodeWidth = node.customWidth || dim.width
       const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
-      const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 4)
-      const childCount = node.children && node.tier < 4 ? node.children.length : 0
+      const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 5)
+      const childCount = node.children && node.tier < 5 ? node.children.length : 0
 
       // Node is forced expanded if it's an ancestor of a search match
       const forceExpanded = ancestorIdsToExpand.has(node.id)
@@ -1526,7 +1528,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const isExpanded = hasChildren && !isCollapsed
 
       const children: InternalNode[] = []
-      if (hasChildren && isExpanded && node.tier < 4) {
+      if (hasChildren && isExpanded && node.tier < 5) {
         for (const child of node.children!) {
           children.push(buildInternal(child))
         }
@@ -1594,6 +1596,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     // - LV2 (Domain Modules): Arranged horizontally across columns
     // - LV3 (Feature Journeys): Stacked vertically below LV2, indented to the right (INDENT_LV3 = 48)
     // - LV4 (Screens & Touchpoints): Stacked vertically below each LV3, indented to the right (INDENT_LV4 = 40)
+    // - LV5 (Components & Elements): Stacked vertically below each LV4, indented to the right (INDENT_LV5 = 36)
     // - Supports multiple LV1s placed side-by-side with LV1_GAP!
     const resultNodes: LayoutNode[] = []
     const rawPairs: { parent: InternalNode; child: InternalNode }[] = []
@@ -1603,6 +1606,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     const ROOT_TO_MODULE_GAP = 90
     const INDENT_LV3 = 48
     const INDENT_LV4 = 40
+    const INDENT_LV5 = 36
     const VERTICAL_GAP_SCREEN = Math.max(32, tierDimensions.verticalGapScreen || 36)
     const VERTICAL_GAP_JOURNEY = Math.max(48, tierDimensions.verticalGapJourney || 52)
     const COLUMN_GAP = Math.max(100, tierDimensions.columnGap || 110)
@@ -1682,10 +1686,25 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
                   columnMaxRight = Math.max(columnMaxRight, screenX + screen.width)
                   rawPairs.push({ parent: luong, child: screen })
 
-                  currentY += screen.height + VERTICAL_GAP_SCREEN
+                  const elements = screen.children || []
+                  if (elements.length > 0 && screen.isExpanded) {
+                    currentY += screen.height + VERTICAL_GAP_SCREEN
+                    const elementX = screenX + INDENT_LV5
+
+                    for (const element of elements) {
+                      element.x = elementX
+                      element.y = currentY
+                      columnMaxRight = Math.max(columnMaxRight, elementX + element.width)
+                      rawPairs.push({ parent: screen, child: element })
+
+                      currentY += element.height + VERTICAL_GAP_SCREEN
+                    }
+                  } else {
+                    currentY += screen.height + VERTICAL_GAP_SCREEN
+                  }
                 }
 
-                // Khoảng cách từ màn hình cuối cùng tới luồng tính năng tiếp theo
+                // Khoảng cách từ màn hình/chi tiết cuối cùng tới luồng tính năng tiếp theo
                 currentY += VERTICAL_GAP_JOURNEY - VERTICAL_GAP_SCREEN
               } else {
                 // Nếu không có màn hình con, khoảng cách tới luồng tiếp theo là VERTICAL_GAP_JOURNEY
@@ -1883,6 +1902,55 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           path = `M ${subTrunkX} ${startY} L ${subTrunkX} ${targetY - r} Q ${subTrunkX} ${targetY} ${subTrunkX + r} ${targetY} L ${targetX} ${targetY}`
         } else {
           // Fallback if custom-dragged
+          path = `M ${subTrunkX} ${startY} C ${subTrunkX} ${targetY}, ${targetX - 25} ${targetY}, ${targetX} ${targetY}`
+        }
+
+        let trunkHandle: LayoutConnector["trunkHandle"] = undefined
+        if (!handledParentSet.has(parent.node.id)) {
+          handledParentSet.add(parent.node.id)
+          const span = parentBusSpanMap.get(parent.node.id)
+          const handleY = span ? Math.round((span.startY + span.maxY) / 2) : Math.round((startY + targetY) / 2)
+          trunkHandle = {
+            x: subTrunkX,
+            y: handleY,
+            parentId: parent.node.id,
+            currentOffset: offset,
+          }
+        }
+
+        resultConnectors.push({
+          id: `conn-${parent.node.id}-${child.node.id}`,
+          parentId: parent.node.id,
+          childId: child.node.id,
+          x1: subTrunkX,
+          y1: startY,
+          x2: targetX,
+          y2: targetY,
+          fromPort,
+          toPort,
+          path,
+          colorTheme: parent.node.colorTheme || child.node.colorTheme,
+          isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          trunkHandle,
+        })
+        continue
+      }
+
+      // CASE 3B: LV4 (Touchpoint Screen) -> LV5 (Components & Elements)
+      // Trunk drops down from bottom-left of LV4, elbows right (└─>) into exact vertical center of left edge of LV5
+      if (parent.node.tier === 4 && child.node.tier === 5) {
+        fromPort = "bottom"
+        toPort = "left"
+        const defaultOffset = 18
+        const offset = parent.node.customTrunkOffset ?? defaultOffset
+        const subTrunkX = Math.round(pLayout.x + offset)
+        const startY = Math.round(pLayout.y + pLayout.height)
+        const targetY = Math.round(cLayout.y + cLayout.height / 2)
+        const targetX = Math.round(cLayout.x - 2)
+
+        if (targetX >= subTrunkX + r && targetY >= startY + r) {
+          path = `M ${subTrunkX} ${startY} L ${subTrunkX} ${targetY - r} Q ${subTrunkX} ${targetY} ${subTrunkX + r} ${targetY} L ${targetX} ${targetY}`
+        } else {
           path = `M ${subTrunkX} ${startY} C ${subTrunkX} ${targetY}, ${targetX - 25} ${targetY}, ${targetX} ${targetY}`
         }
 

@@ -27,6 +27,130 @@ export function getAvatarColorClass(name?: string): string {
   return AVATAR_COLOR_PALETTES[index]
 }
 
+/**
+ * Tra cứu ảnh đại diện Designer / Thành viên từ localStorage hoặc danh bạ fallback
+ */
+export function getDesignerAvatar(name?: string, email?: string): string {
+  if (!name || name === "Chưa phân công" || name === "unassigned" || name === "Chưa gán") return ""
+  const clean = name.replace(/\(.*?\)/g, "").trim().normalize("NFC")
+  const cleanLower = clean.toLowerCase()
+  const emailLower = (email || "").trim().toLowerCase()
+
+  try {
+    const storageKeys = ["mbbank_team_members", "mbbank_admin_team"]
+    for (const key of storageKeys) {
+      const cached = localStorage.getItem(key)
+      if (cached) {
+        const members: any[] = JSON.parse(cached)
+        if (Array.isArray(members)) {
+          const found = members.find((m: any) => {
+            const mName = String(m.name || m.displayName || "").trim().normalize("NFC").toLowerCase()
+            const mEmail = String(m.email || m.teamsEmail || m.personalEmail || "").trim().toLowerCase()
+            if (mName && (mName === cleanLower || cleanLower.includes(mName) || mName.includes(cleanLower))) {
+              return true
+            }
+            if (
+              mEmail &&
+              (cleanLower === mEmail ||
+                cleanLower.includes(mEmail) ||
+                (mEmail.includes("@") && cleanLower.includes(mEmail.split("@")[0])))
+            ) {
+              return true
+            }
+            if (emailLower && mEmail && (mEmail === emailLower || mEmail.includes(emailLower))) {
+              return true
+            }
+            return false
+          })
+          if (found && (found.avatarUrl || found.avatar || found.avatar_url)) {
+            const url = String(found.avatarUrl || found.avatar || found.avatar_url).trim()
+            if (
+              url &&
+              url !== "null" &&
+              url !== "undefined" &&
+              (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:image/") || url.startsWith("/"))
+            ) {
+              return url
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Người dùng chưa up avatar: Trả về "" để giữ nguyên Ava text (Initials) + Màu nền thương hiệu
+  return ""
+}
+
+/**
+ * Tra cứu tên hiển thị chuẩn nhất của Thành viên / PO từ Email hoặc Tên cũ
+ * Tự động đồng bộ khi user đổi tên trong hệ thống hoặc Google Sheet
+ */
+export function getMemberDisplayName(name?: string, email?: string): string {
+  const cleanName = (name || "").replace(/\(.*?\)/g, "").trim().normalize("NFC")
+  const emailLower = (email || "").trim().toLowerCase()
+  const nameLower = cleanName.toLowerCase()
+
+  try {
+    const storageKeys = ["mbbank_team_members", "mbbank_admin_team"]
+    for (const key of storageKeys) {
+      const cached = localStorage.getItem(key)
+      if (cached) {
+        const members: any[] = JSON.parse(cached)
+        if (Array.isArray(members)) {
+          const found = members.find((m: any) => {
+            const mEmail = String(m.email || m.teamsEmail || m.personalEmail || "").trim().toLowerCase()
+            // 1. Khớp theo email chính xác hoặc prefix email
+            if (emailLower && mEmail) {
+              if (mEmail === emailLower) return true
+              const emailPrefix = emailLower.split("@")[0]
+              const mPrefix = mEmail.split("@")[0]
+              if (emailPrefix && mPrefix && emailPrefix === mPrefix) return true
+            }
+            // 2. Khớp theo tên đầy đủ
+            const mName = String(m.name || m.displayName || "").trim().normalize("NFC")
+            const mNameLower = mName.toLowerCase()
+            if (nameLower && mNameLower && nameLower === mNameLower) return true
+
+            // 3. Khớp nếu email của member trùng với nameLower (trường hợp name truyền vào là email)
+            if (mEmail && nameLower && (nameLower === mEmail || nameLower === mEmail.split("@")[0])) {
+              return true
+            }
+
+            // 4. Nếu nameLower chỉ là tên gọi 1 từ (ví dụ "Huy"), kiểm tra xem có khớp với tên gọi cuối của member không
+            if (nameLower && !nameLower.includes(" ") && mNameLower) {
+              const parts = mNameLower.split(/\s+/).filter(Boolean)
+              const lastName = parts[parts.length - 1]
+              if (lastName === nameLower && emailLower && mEmail.includes(emailLower)) {
+                return true
+              }
+            }
+
+            return false
+          })
+          if (found && (found.name || found.displayName)) {
+            return String(found.name || found.displayName).trim().normalize("NFC")
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Kiểm tra thêm phiên hiện tại nếu trùng email
+  try {
+    const sessRaw = sessionStorage.getItem("ux_portal_session") || localStorage.getItem("ux_portal_session")
+    if (sessRaw) {
+      const sess = JSON.parse(sessRaw)
+      const sessEmail = String(sess.teamsEmail || sess.personalEmail || "").trim().toLowerCase()
+      if (emailLower && sessEmail && (sessEmail === emailLower || sessEmail.split("@")[0] === emailLower.split("@")[0]) && sess.displayName) {
+        return String(sess.displayName).trim().normalize("NFC")
+      }
+    }
+  } catch {}
+
+  return cleanName || (email ? email.split("@")[0] : "PO")
+}
+
 interface UserAvatarProps {
   name?: string
   avatarUrl?: string | null
@@ -38,6 +162,7 @@ interface UserAvatarProps {
 
 /**
  * Component Avatar chuẩn hóa:
+ * - Tự động tra cứu avatarUrl từ danh bạ nếu không được truyền trực tiếp
  * - Nếu có avatarUrl hợp lệ -> Hiển thị ảnh kèm xử lý fallback khi lỗi load (onError)
  * - Nếu không có avatar -> Hiển thị Chữ cái viết tắt (Initials) + Màu nền background đẹp mắt xác định theo tên
  */
@@ -50,9 +175,12 @@ export function UserAvatar({
 }: UserAvatarProps) {
   const [imgError, setImgError] = useState(false)
 
+  // Tự động phân giải ảnh đại diện từ danh bạ nhân sự nếu không truyền avatarUrl
+  const resolvedUrl = avatarUrl || getDesignerAvatar(name)
+
   React.useEffect(() => {
     setImgError(false)
-  }, [avatarUrl])
+  }, [resolvedUrl])
 
   const sizeClasses = {
     xs: "w-5 h-5 text-[10px]",
@@ -66,10 +194,10 @@ export function UserAvatar({
   const initials = getUserInitials(name)
   const colorClass = getAvatarColorClass(name)
 
-  if (avatarUrl && !imgError && avatarUrl.trim() !== "") {
+  if (resolvedUrl && !imgError && resolvedUrl.trim() !== "") {
     return (
       <img
-        src={avatarUrl}
+        src={resolvedUrl}
         alt={name}
         loading="lazy"
         decoding="async"

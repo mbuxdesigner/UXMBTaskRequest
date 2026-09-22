@@ -429,7 +429,33 @@ export function saveSession(
   products?: string[],
   sessionPolicy?: SessionPolicyType
 ): UserSession {
-  const finalDisplayName = displayName || (teamsEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+  let resolvedDisplayName = displayName
+  if (!resolvedDisplayName) {
+    try {
+      const raw = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+      if (raw) {
+        const list = JSON.parse(raw)
+        if (Array.isArray(list)) {
+          const cleanTeams = (teamsEmail || "").toLowerCase().trim()
+          const cleanPersonal = (personalEmail || "").toLowerCase().trim()
+          const prefix = cleanTeams.split("@")[0] || cleanPersonal.split("@")[0]
+          const found = list.find((m) => {
+            const p = (m.personalEmail || "").toLowerCase().trim()
+            const t = (m.teamsEmail || m.email || "").toLowerCase().trim()
+            return (
+              (cleanTeams && (p === cleanTeams || t === cleanTeams)) ||
+              (cleanPersonal && (p === cleanPersonal || t === cleanPersonal)) ||
+              (prefix && (p.split("@")[0] === prefix || t.split("@")[0] === prefix))
+            )
+          })
+          if (found && (found.displayName || found.name)) {
+            resolvedDisplayName = found.displayName || found.name
+          }
+        }
+      }
+    } catch {}
+  }
+  const finalDisplayName = resolvedDisplayName || (teamsEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
   const resolvedPolicy: SessionPolicyType = sessionPolicy || resolveEffectiveSessionPolicy(teamsEmail || personalEmail, role)
   const now = Date.now()
   const durationSeconds = resolvedPolicy === "sliding_24h"
@@ -496,6 +522,13 @@ export function startRolePreview(targetRole: UserRole): UserSession | null {
   const current = getStoredSession()
   if (!current) return null
 
+  // BẢO VỆ PHÂN QUYỀN: Chỉ tài khoản Admin (hoặc phiên preview bắt đầu từ Admin) mới được phép chuyển vai trò
+  const isAuthorizedAdmin = current.role === "Admin" || (current.isImpersonating && current.originalRole === "Admin")
+  if (!isAuthorizedAdmin) {
+    console.warn("Unauthorized startRolePreview call by non-admin role:", current.role)
+    return current
+  }
+
   // Lưu backup phiên admin gốc nếu chưa lưu
   if (!current.isImpersonating) {
     try {
@@ -506,7 +539,7 @@ export function startRolePreview(targetRole: UserRole): UserSession | null {
     }
   }
 
-  const originalRole = current.originalRole || (current.isImpersonating ? "Admin" : current.role)
+  const originalRole = current.originalRole || "Admin"
   const originalDisplayName = current.originalDisplayName || current.displayName
 
   // Nếu chọn lại chính vai trò Admin/Original role -> dừng preview
@@ -548,19 +581,23 @@ export function startRolePreview(targetRole: UserRole): UserSession | null {
  */
 export function stopRolePreview(): UserSession | null {
   try {
+    const current = getStoredSession()
     const backupRaw = sessionStorage.getItem(ORIGINAL_SESSION_BACKUP_KEY) || localStorage.getItem(ORIGINAL_SESSION_BACKUP_KEY)
+
+    // Nếu user hiện tại không trong chế độ impersonate và không có phiên backup -> không thực hiện
+    if (!backupRaw && (!current || !current.isImpersonating)) {
+      return current
+    }
+
     let restoredSession: UserSession | null = null
 
     if (backupRaw) {
       restoredSession = JSON.parse(backupRaw)
-    } else {
-      const current = getStoredSession()
-      if (current) {
-        restoredSession = {
-          ...current,
-          role: current.originalRole || "Admin",
-          displayName: current.originalDisplayName || current.displayName,
-        }
+    } else if (current && current.isImpersonating) {
+      restoredSession = {
+        ...current,
+        role: current.originalRole || "Admin",
+        displayName: current.originalDisplayName || current.displayName,
       }
     }
 
@@ -674,15 +711,43 @@ function createLocalBypassSession(cleanEmail: string): UserSession {
     ? cleanEmail
     : cleanEmail.replace(/@.*$/, "") + "@mbbank.com.vn"
   let squad = "Daily Banking Squad"
+  let squads: string[] | undefined = undefined
+  let products: string[] | undefined = undefined
   let displayName = "Chuyên viên Thiết kế UX"
   let avatarUrl = ""
+
+  let matchedMember: any = null
+  try {
+    const raw = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+    if (raw) {
+      const list = JSON.parse(raw)
+      if (Array.isArray(list)) {
+        const prefix = cleanEmail.split("@")[0].toLowerCase()
+        matchedMember = list.find((m) => {
+          const p = (m.personalEmail || "").toLowerCase().trim()
+          const t = (m.teamsEmail || m.email || "").toLowerCase().trim()
+          return p === cleanEmail || t === cleanEmail || p.split("@")[0] === prefix || t.split("@")[0] === prefix
+        })
+      }
+    }
+  } catch {}
 
   if (matchedAccount) {
     role = matchedAccount.role
     teamsEmail = matchedAccount.teamsEmail
     squad = matchedAccount.squad || squad
+    squads = matchedAccount.squads
+    products = matchedAccount.products
     displayName = matchedAccount.displayName
     avatarUrl = matchedAccount.avatarUrl || ""
+  } else if (matchedMember) {
+    role = (matchedMember.role as UserRole) || "Designer"
+    teamsEmail = matchedMember.teamsEmail || matchedMember.email || teamsEmail
+    squad = matchedMember.squad || squad
+    squads = Array.isArray(matchedMember.squads) ? matchedMember.squads : (squad ? [squad] : undefined)
+    products = Array.isArray(matchedMember.products) ? matchedMember.products : undefined
+    displayName = matchedMember.displayName || matchedMember.name || displayName
+    avatarUrl = matchedMember.avatarUrl || ""
   } else {
     const derivedName = cleanEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     if (cleanEmail.includes("admin")) {
@@ -712,8 +777,8 @@ function createLocalBypassSession(cleanEmail: string): UserSession {
     displayName,
     avatarUrl,
     undefined,
-    matchedAccount?.squads,
-    matchedAccount?.products,
+    matchedAccount?.squads || squads,
+    matchedAccount?.products || products,
     effectivePolicy
   )
 }

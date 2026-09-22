@@ -121,8 +121,8 @@ export default function IANodeFloatingToolbar({
         </Tooltip>
       )}
 
-      {/* Add Child (Tier 1-3) - Chỉ khi có quyền Edit */}
-      {!readOnly && node.tier < 4 && (
+      {/* Add Child (Tier 1-4) - Chỉ khi có quyền Edit */}
+      {!readOnly && node.tier < 5 && (
         <Tooltip content="Thêm node con" shortcut="Tab" side="top">
           <motion.button
             type="button"

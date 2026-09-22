@@ -1,11 +1,12 @@
 /**
- * Phân cấp 4 tầng của Kiến trúc Thông tin (Information Architecture)
+ * Phân cấp 5 tầng của Kiến trúc Thông tin (Information Architecture)
  * - Tier 1: Sản phẩm số tổng thể (Product Root)
  * - Tier 2: Phân hệ / Module nghiệp vụ (Domain / Module)
  * - Tier 3: Luồng tính năng người dùng (Feature Journey)
  * - Tier 4: Màn hình & Điểm chạm tương tác (Screens & Touchpoints)
+ * - Tier 5: Thành phần & Chi tiết tương tác (Components & Elements)
  */
-export type IATier = 1 | 2 | 3 | 4
+export type IATier = 1 | 2 | 3 | 4 | 5
 
 export interface IATierInfo {
   tier: IATier
@@ -48,6 +49,14 @@ export const IA_TIER_CONFIG: Record<IATier, IATierInfo> = {
     badgeText: "Lv4",
     badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
     themeColor: "#f59e0b",
+  },
+  5: {
+    tier: 5,
+    label: "Thành phần & Chi tiết",
+    sublabel: "Phần tử / Trạng thái chi tiết",
+    badgeText: "Lv5",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    themeColor: "#8b5cf6",
   },
 }
 
@@ -181,6 +190,16 @@ export function getTierDefaultDisplaySettings(tier: IATier): Required<IANodeDisp
         showStatus: true,
         showBranchCount: false,
       }
+    case 5:
+      return {
+        allowDirectTasks: true,
+        showProgress: true,
+        rollupProgress: false,
+        showSquad: true,
+        showDesigner: true,
+        showStatus: true,
+        showBranchCount: false,
+      }
   }
 }
 
@@ -192,6 +211,7 @@ export interface IATierDimensionSettings {
   2: { width: number; height: number }
   3: { width: number; height: number }
   4: { width: number; height: number }
+  5: { width: number; height: number }
   columnGap: number
   verticalGapJourney: number
   verticalGapScreen: number

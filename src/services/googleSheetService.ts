@@ -15,6 +15,7 @@ import {
 import { getGoogleSheetConfig, saveGoogleSheetConfig } from "../config/googleSheetConfig"
 import { getStoredSession } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
+import { getMemberDisplayName } from "../components/common/UserAvatar"
 
 export interface SelectionsData {
   products: string[]
@@ -225,7 +226,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
     deadline_reason: String(data.deadline_reason || "Ra mắt sản phẩm"),
     preferred_squad: cleanSquad,
     requester_email: String(data.requester_email || ""),
-    requester_name: String(data.requester_name || data.requester_email?.split("@")[0] || "PO"),
+    requester_name: getMemberDisplayName(String(data.requester_name || ""), String(data.requester_email || "")),
     assigned_designer: data.assigned_designer ? String(data.assigned_designer) : "",
     design_owner: String(data.design_owner || "lead.cuong@mbbank.com.vn"),
     squad_name: cleanSquad,

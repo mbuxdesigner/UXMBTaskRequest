@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { UXRequest } from "../../data/mockData"
-import { UserAvatar } from "@/components/common/UserAvatar"
+import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
 import { 
@@ -955,6 +955,7 @@ export default function ReUIGanttChart({
                     <UserAvatar
                       key={`sel-${uName}`}
                       name={uName}
+                      avatarUrl={getDesignerAvatar(uName)}
                       size="xs"
                       className="w-5 h-5 text-[9px] ring-2 ring-white"
                     />
@@ -1007,7 +1008,7 @@ export default function ReUIGanttChart({
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <UserAvatar name={u.name} size="xs" className="w-5 h-5 text-[9px] shrink-0" />
+                          <UserAvatar name={u.name} avatarUrl={getDesignerAvatar(u.name)} size="xs" className="w-5 h-5 text-[9px] shrink-0" />
                           <span className="truncate">{u.name}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -1112,7 +1113,7 @@ export default function ReUIGanttChart({
           ========================================================================= */}
       <div className="flex overflow-hidden relative">
         {/* =========================================================================
-            LEFT COLUMN (TREE PANE): NAME | STATUS | ASSIGNEE | DUE DATE | +
+            LEFT COLUMN (TREE PANE): NAME | STATUS | ASSIGNEE | RELEASE | +
             NO CHECKBOXES, NO DRAG GRIP ICONS (Exactly matching Tempo Tasks screenshot)
             ========================================================================= */}
         <div 
@@ -1141,7 +1142,7 @@ export default function ReUIGanttChart({
 
             {visibleColumns.due && (
               <div className="w-24 text-left pl-2 shrink-0 font-medium text-slate-500">
-                Due date
+                Release
               </div>
             )}
 
@@ -1170,7 +1171,7 @@ export default function ReUIGanttChart({
                   {[
                     { key: "status", label: "Status" },
                     { key: "assignee", label: "Assignee" },
-                    { key: "due", label: "Due date" },
+                    { key: "due", label: "Release" },
                     { key: "priority", label: "Priority" },
                   ].map((col) => (
                     <label
@@ -1322,14 +1323,41 @@ export default function ReUIGanttChart({
                                   {visibleColumns.assignee && (
                                     <div className="w-20 flex justify-center shrink-0">
                                       {req.assigned_designer && req.assigned_designer !== "Chưa phân công" ? (
-                                        <UserAvatar
-                                          name={req.assigned_designer}
-                                          size="xs"
-                                          className="w-5 h-5 text-[9px] ring-1 ring-white shadow-2xs"
-                                        />
+                                        (() => {
+                                          const designers = req.assigned_designer.split(/[,;\n/]+/).map((d) => d.trim()).filter(Boolean)
+                                          if (designers.length <= 1) {
+                                            const dName = designers[0] || req.assigned_designer
+                                            return (
+                                              <UserAvatar
+                                                name={dName}
+                                                avatarUrl={getDesignerAvatar(dName)}
+                                                size="xs"
+                                                className="w-5 h-5 ring-1 ring-white shadow-2xs"
+                                              />
+                                            )
+                                          }
+                                          return (
+                                            <div className="flex items-center -space-x-1.5" title={req.assigned_designer}>
+                                              {designers.slice(0, 2).map((dName, dIdx) => (
+                                                <UserAvatar
+                                                  key={`gantt-des-${dIdx}-${dName}`}
+                                                  name={dName}
+                                                  avatarUrl={getDesignerAvatar(dName)}
+                                                  size="xs"
+                                                  className="w-5 h-5 ring-1 ring-white shadow-2xs"
+                                                />
+                                              ))}
+                                              {designers.length > 2 && (
+                                                <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 text-[8.5px] font-bold text-slate-600 flex items-center justify-center ring-1 ring-white">
+                                                  +{designers.length - 2}
+                                                </span>
+                                              )}
+                                            </div>
+                                          )
+                                        })()
                                       ) : (
                                         /* Clean dashed circle for unassigned */
-                                        <span className="w-5 h-5 rounded-full border border-dashed border-slate-300 flex items-center justify-center shrink-0" />
+                                        <span className="w-5 h-5 rounded-full border border-dashed border-slate-300 flex items-center justify-center shrink-0" title="Chưa phân công" />
                                       )}
                                     </div>
                                   )}
@@ -1666,12 +1694,25 @@ export default function ReUIGanttChart({
                                       style={{
                                         left: `calc(${leftPct + Math.max(1.5, widthPct)}% + 8px)`,
                                       }}
-                                      className={`absolute text-[11.5px] font-normal ${taskBar.isPending ? "text-slate-400 italic" : "text-slate-700"} hover:text-blue-600 truncate max-w-[280px] cursor-pointer z-10 transition-colors pointer-events-auto select-none whitespace-nowrap`}
+                                      className={`absolute text-[11.5px] font-normal ${taskBar.isPending ? "text-slate-400 italic" : "text-slate-700"} hover:text-blue-600 truncate max-w-[320px] cursor-pointer z-10 transition-colors pointer-events-auto select-none whitespace-nowrap inline-flex items-center gap-1.5`}
                                       title={req.title}
                                     >
-                                      {req.title}
+                                      {req.assigned_designer && req.assigned_designer !== "Chưa phân công" && (
+                                        <div className="inline-flex -space-x-1 shrink-0">
+                                          {req.assigned_designer.split(/[,;\n/]+/).map((d) => d.trim()).filter(Boolean).slice(0, 2).map((dName, idx) => (
+                                            <UserAvatar
+                                              key={`bar-des-${idx}-${dName}`}
+                                              name={dName}
+                                              avatarUrl={getDesignerAvatar(dName)}
+                                              size="xs"
+                                              className="w-3.5 h-3.5 ring-1 ring-white"
+                                            />
+                                          ))}
+                                        </div>
+                                      )}
+                                      <span className="truncate">{req.title}</span>
                                       {taskBar.isPending && (
-                                        <span className="ml-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 not-italic">
+                                        <span className="ml-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 not-italic shrink-0">
                                           {taskBar.stageInfo.text}
                                         </span>
                                       )}
@@ -1804,15 +1845,32 @@ export default function ReUIGanttChart({
             <div className="space-y-1.5 text-[11px] text-slate-600">
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Phụ trách:</span>
-                <span className="font-semibold text-slate-900">
-                  {hoveredTooltip.request.assigned_designer || "Chưa gán"}
-                </span>
+                <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                  {hoveredTooltip.request.assigned_designer && hoveredTooltip.request.assigned_designer !== "Chưa phân công" ? (
+                    <>
+                      <div className="flex -space-x-1 overflow-hidden">
+                        {hoveredTooltip.request.assigned_designer.split(/[,;\n/]+/).map((d) => d.trim()).filter(Boolean).map((dName, idx) => (
+                          <UserAvatar
+                            key={`tip-des-${idx}-${dName}`}
+                            name={dName}
+                            avatarUrl={getDesignerAvatar(dName)}
+                            size="xs"
+                            className="w-4 h-4 ring-1 ring-white"
+                          />
+                        ))}
+                      </div>
+                      <span className="truncate max-w-[140px]">{hoveredTooltip.request.assigned_designer}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 font-normal">Chưa gán</span>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Release / Hạn:</span>
+                <span className="text-slate-500">Release:</span>
                 <span className="font-mono text-emerald-700 font-bold tabular-nums">
-                  {formatDueDate(hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline) || "Chưa hạn"}
+                  {formatDueDate(hoveredTooltip.request.release_date || hoveredTooltip.request.expected_deadline) || "Chưa có"}
                 </span>
               </div>
 

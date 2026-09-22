@@ -149,7 +149,7 @@ export default function IANodeEditorModal({
   // Cấp độ hiện tại của node đang xử lý
   const currentTier: IATier = useMemo(() => {
     if (mode === "add" && targetNode) {
-      return Math.min(4, ((targetNode.tier || 1) + 1)) as IATier
+      return Math.min(5, ((targetNode.tier || 1) + 1)) as IATier
     }
     return (targetNode?.tier || 3) as IATier
   }, [mode, targetNode])

@@ -9,6 +9,7 @@ import {
   Command as CommandIcon,
 } from "lucide-react"
 import { Kbd } from "@/components/ui/kbd"
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 // Embedded CSS for minimal custom scrollbar styles as in JolyUI
 const styles = `
@@ -30,11 +31,11 @@ textarea::-webkit-scrollbar-thumb:hover {
 const useStyleInjection = () => {
   useEffect(() => {
     const styleId = "joly-ai-prompt-box-styles"
-    if (typeof document !== "undefined" && !document.getElementById(styleId)) {
-      const styleSheet = document.createElement("style")
-      styleSheet.id = styleId
-      styleSheet.innerText = styles
-      document.head.appendChild(styleSheet)
+    if (!document.getElementById(styleId)) {
+      const styleEl = document.createElement("style")
+      styleEl.id = styleId
+      styleEl.innerHTML = styles
+      document.head.appendChild(styleEl)
     }
   }, [])
 }
@@ -74,6 +75,7 @@ export interface MentionUser {
   isViewer?: boolean
   isAssignee?: boolean
   isRequester?: boolean
+  isDesignOwner?: boolean
   squad?: string
 }
 
@@ -163,14 +165,70 @@ export function AiPromptBox({
     }
 
     const uniqueUsers: MentionUser[] = []
-    const seen = new Set<string>()
+    const seenNames = new Set<string>()
+    const emailToIndex = new Map<string, number>()
 
     mentionUsers.forEach((u) => {
-      const key = (u.name || u.displayName || u.email || "").toLowerCase().trim()
-      if (key && !seen.has(key) && key !== "mọi người" && key !== "all") {
-        seen.add(key)
-        uniqueUsers.push(u)
+      const cleanName = (u.name || u.displayName || "").trim().normalize("NFC")
+      const cleanDisplay = (u.displayName || u.name || "").trim().normalize("NFC")
+      const nameKey = cleanName.toLowerCase().trim()
+      const emailKey = (u.email || "").toLowerCase().trim()
+
+      if (!nameKey && !emailKey) return
+      if (nameKey === "mọi người" || nameKey === "all") return
+
+      // 1. Nếu đã có người này trong danh sách theo email: Hợp nhất thông tin và chọn tên đầy đủ nhất
+      if (emailKey && emailToIndex.has(emailKey)) {
+        const existingIdx = emailToIndex.get(emailKey)!
+        const existing = uniqueUsers[existingIdx]
+        const bestName = cleanName.length >= (existing.name || "").length ? cleanName : existing.name
+        const bestDisplay = cleanDisplay.length >= (existing.displayName || "").length ? cleanDisplay : existing.displayName
+        uniqueUsers[existingIdx] = {
+          ...existing,
+          ...u,
+          name: bestName,
+          displayName: bestDisplay,
+          email: existing.email || u.email,
+          avatar: existing.avatar || u.avatar,
+          isRequester: existing.isRequester || u.isRequester,
+          isAssignee: existing.isAssignee || u.isAssignee,
+          isDesignOwner: existing.isDesignOwner || u.isDesignOwner,
+          isViewer: existing.isViewer || u.isViewer,
+          role: u.isRequester ? (u.role || existing.role) : (existing.role || u.role),
+        }
+        if (nameKey) seenNames.add(nameKey)
+        return
       }
+
+      // 2. Nếu đã có người này theo tên hiển thị chính xác: Bổ sung email / avatar / role nếu có
+      if (nameKey && seenNames.has(nameKey)) {
+        const existingIdx = uniqueUsers.findIndex((x) => (x.name || "").toLowerCase().trim() === nameKey)
+        if (existingIdx !== -1) {
+          const existing = uniqueUsers[existingIdx]
+          uniqueUsers[existingIdx] = {
+            ...existing,
+            ...u,
+            email: existing.email || u.email,
+            avatar: existing.avatar || u.avatar,
+            isRequester: existing.isRequester || u.isRequester,
+            isAssignee: existing.isAssignee || u.isAssignee,
+            isDesignOwner: existing.isDesignOwner || u.isDesignOwner,
+            isViewer: existing.isViewer || u.isViewer,
+            role: u.isRequester ? (u.role || existing.role) : (existing.role || u.role),
+          }
+          if (emailKey) emailToIndex.set(emailKey, existingIdx)
+          return
+        }
+      }
+
+      if (nameKey) seenNames.add(nameKey)
+      const newIdx = uniqueUsers.length
+      uniqueUsers.push({
+        ...u,
+        name: cleanName,
+        displayName: cleanDisplay,
+      })
+      if (emailKey) emailToIndex.set(emailKey, newIdx)
     })
 
     return [everyoneItem, ...uniqueUsers]
@@ -192,12 +250,12 @@ export function AiPromptBox({
   // Filter mention suggestions (when activeTrigger === "mention")
   const filteredMentions = useMemo(() => {
     if (!query) return allMentionList
-    const q = query.toLowerCase()
+    const q = query.toLowerCase().normalize("NFC")
     return allMentionList.filter((m) => {
-      const nameMatch = m.name.toLowerCase().includes(q)
-      const displayMatch = m.displayName?.toLowerCase().includes(q)
+      const nameMatch = m.name?.normalize("NFC").toLowerCase().includes(q)
+      const displayMatch = m.displayName?.normalize("NFC").toLowerCase().includes(q)
       const emailMatch = m.email?.toLowerCase().includes(q)
-      const roleMatch = m.role?.toLowerCase().includes(q)
+      const roleMatch = m.role?.normalize("NFC").toLowerCase().includes(q)
       const isAllMatch = m.isAll && (q === "all" || q === "everyone" || "mọi người".includes(q))
       return nameMatch || displayMatch || emailMatch || roleMatch || isAllMatch
     })
@@ -281,7 +339,8 @@ export function AiPromptBox({
     const prefix = lastAtIndex !== -1 ? value.slice(0, lastAtIndex) : ""
     const suffix = value.slice(cursorPos)
 
-    const tagText = user.isAll ? "@all " : `@${user.name} `
+    const cleanName = (user.name || user.displayName || "").trim().normalize("NFC")
+    const tagText = user.isAll ? "@all " : `@${cleanName} `
     const newValue = `${prefix}${tagText}${suffix}`
     onChange(newValue)
     setActiveTrigger("none")
@@ -558,21 +617,18 @@ export function AiPromptBox({
                       <div className="w-7 h-7 rounded-full bg-blue-100 text-[#1057FB] flex items-center justify-center shrink-0">
                         <Users className="w-3.5 h-3.5" />
                       </div>
-                    ) : user.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
-                      />
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-slate-200">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        name={user.displayName || user.name}
+                        avatarUrl={user.avatar}
+                        size="xs"
+                        className="w-7 h-7 text-[10.5px] shrink-0"
+                      />
                     )}
 
                     {/* User Info */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={`text-xs truncate ${user.isAll ? "font-bold text-[#1057FB]" : "font-semibold text-slate-900"}`}>
                           {user.displayName || user.name}
                         </span>
@@ -583,12 +639,22 @@ export function AiPromptBox({
                           </span>
                         )}
                         {user.isAssignee && (
-                          <span className="text-[9px] px-1 py-0.2 bg-blue-50 text-[#1057FB] rounded font-medium">
-                            Phân công
+                          <span className="text-[9px] px-1 py-0.2 bg-blue-50 text-[#1057FB] rounded font-medium border border-blue-200/60">
+                            Designer
+                          </span>
+                        )}
+                        {user.isRequester && (
+                          <span className="text-[9px] px-1 py-0.2 bg-amber-50 text-amber-700 rounded font-medium border border-amber-200/60">
+                            PO
+                          </span>
+                        )}
+                        {user.isDesignOwner && (
+                          <span className="text-[9px] px-1 py-0.2 bg-purple-50 text-purple-700 rounded font-medium border border-purple-200/60">
+                            Design Owner
                           </span>
                         )}
                         {user.isViewer && (
-                          <span className="text-[9px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded font-medium">
+                          <span className="text-[9px] px-1 py-0.2 bg-slate-100 text-slate-600 rounded font-medium border border-slate-200/60">
                             Viewer
                           </span>
                         )}
@@ -726,17 +792,15 @@ export function AiPromptBox({
           <div className="flex items-center gap-3">
             {/* Keyboard Shortcuts Hint */}
             <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 select-none">
-              <span className="inline-flex items-center gap-1.5">
-                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Enter ↵</Kbd>
+              <span className="inline-flex items-center gap-1">
+                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none">↵</Kbd>
                 <span className="text-[10px] text-slate-400">gửi</span>
               </span>
               <span className="text-slate-300">•</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1">
-                  <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Shift</Kbd>
-                  <span className="text-slate-400 text-[10px]">+</span>
-                  <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Enter ↵</Kbd>
-                </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Shift</Kbd>
+                <span className="text-slate-400 text-[10px]">+</span>
+                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none">↵</Kbd>
                 <span className="text-[10px] text-slate-400">xuống dòng</span>
               </span>
             </div>

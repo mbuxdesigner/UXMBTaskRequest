@@ -107,6 +107,8 @@ import {
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
 import FormConfigTab from "@/components/admin/FormConfigTab"
+import SystemParamsTab from "@/components/admin/SystemParamsTab"
+import NotificationTemplatesTab from "@/components/admin/NotificationTemplatesTab"
 import { getFormConfig, saveFormConfig } from "@/config/formConfig"
 import { TestExam } from "@/types/testAssessment"
 import {
@@ -1224,7 +1226,7 @@ const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
   { id: "log-4", timestamp: "21/08/2026 16:20", actor: "Hệ thống Google Sheet", action: "Đồng bộ Realtime", target: "RAW_SETTINGS", details: "Lưu trữ thành công cấu hình USERS_LIST & SQUADS_LIST", type: "integration" },
 ]
 
-type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "form_config" | "masterdata" | "integrations" | "audit"
+type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "form_config" | "system_params" | "notifications_config" | "masterdata" | "integrations" | "audit"
 
 interface AdminNavItem {
   id: AdminTab
@@ -1257,6 +1259,8 @@ const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     category: "Hệ thống & Kết nối",
     items: [
+      { id: "system_params", title: "Thông số hệ thống & SLA", icon: Sliders },
+      { id: "notifications_config", title: "Cấu hình Thông báo", icon: Bell },
       { id: "masterdata", title: "Squads & Sản phẩm", icon: Boxes },
       { id: "integrations", title: "Cổng kết nối APIs", icon: Database },
       { id: "audit", title: "Audit Logs", icon: History },
@@ -2681,6 +2685,29 @@ export default function QuanLyPage() {
     setTeamMembers(updatedList)
     localStorage.setItem("mbbank_admin_team", JSON.stringify(updatedList))
     localStorage.setItem("mbbank_team_members", JSON.stringify(updatedList))
+
+    // Đồng bộ tên PO / Requester trên các task đã tạo nếu member đổi tên
+    try {
+      const rawReqs = localStorage.getItem("ux_portal_real_requests")
+      const memEmail = (sanitizedMember.email || sanitizedMember.teamsEmail || sanitizedMember.personalEmail || "").toLowerCase().trim()
+      if (rawReqs && memEmail) {
+        const reqs = JSON.parse(rawReqs)
+        if (Array.isArray(reqs)) {
+          let hasChange = false
+          reqs.forEach((r: any) => {
+            const rEmail = String(r.requester_email || "").toLowerCase().trim()
+            if (rEmail && (rEmail === memEmail || rEmail.split("@")[0] === memEmail.split("@")[0])) {
+              r.requester_name = sanitizedMember.name
+              hasChange = true
+            }
+          })
+          if (hasChange) {
+            localStorage.setItem("ux_portal_real_requests", JSON.stringify(reqs))
+            window.dispatchEvent(new CustomEvent("ux_portal_tasks_changed"))
+          }
+        }
+      }
+    } catch {}
 
     // Đồng bộ ngược lại vào danh sách Squads
     const memName = sanitizedMember.name.trim()
@@ -4183,7 +4210,7 @@ export default function QuanLyPage() {
                     {navOrder.platform.map((key, idx) => {
                       const itemMeta = {
                         overview: { label: "Overview (Tổng quan)", icon: <Home className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
-                        track: { label: "Task của tôi (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
+                        track: { label: "My task (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
                         create: { label: "Tạo task mới (Gửi đề bài)", icon: <PlusCircle className="w-3.5 h-3.5" />, desc: "Form 3 bước gửi bài toán thiết kế UX cho team" },
                         ia: { label: "Kiến trúc Thông tin (IA)", icon: <Network className="w-3.5 h-3.5" />, desc: "Sơ đồ cây tương tác Mindmap & Phân cấp tính năng đa sản phẩm" },
                       }[key]
@@ -5019,6 +5046,16 @@ export default function QuanLyPage() {
         {/* TAB MỚI: CẤU HÌNH FORM TIẾP NHẬN YÊU CẦU UX */}
         {activeTab === "form_config" && (
           <FormConfigTab onLogAction={logAdminAction} />
+        )}
+
+        {/* TAB MỚI: CẤU HÌNH THÔNG SỐ HỆ THỐNG & TIÊU CHUẨN SLA */}
+        {activeTab === "system_params" && (
+          <SystemParamsTab onLogAction={logAdminAction} />
+        )}
+
+        {/* TAB MỚI: CẤU HÌNH MẪU THÔNG BÁO & KÊNH PHÂN PHỐI */}
+        {activeTab === "notifications_config" && (
+          <NotificationTemplatesTab onLogAction={logAdminAction} />
         )}
 
         {/* TAB 5: DANH MỤC SẢN PHẨM & SQUADS (NHÓM SQUAD VỚI SẢN PHẨM, SQUAD CARD REUI CARD-15) */}

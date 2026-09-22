@@ -30,6 +30,7 @@ import BrandLogo from "@/components/common/BrandLogo"
 import { Toaster } from "@/components/ui/toast"
 
 import AppHeader from "@/components/common/AppHeader"
+import GlobalAnnouncementBanner from "@/components/common/GlobalAnnouncementBanner"
 import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 
 import {
@@ -45,16 +46,41 @@ import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 import { getRoleNavConfig, DEFAULT_ROLE_NAV_CONFIG } from "@/config/navVisibilityConfig"
 import { canRoleAccessCapability } from "@/lib/accessControl"
 import type { UserRole } from "./data/mockData"
-import TongQuanPage from "./pages/TongQuanPage"
-import CreateRequestPage from "./pages/CreateRequestPage"
-import TrackRequestPage from "./pages/TrackRequestPage"
-import QuanLyPage from "./pages/QuanLyPage"
-import TestAssessmentPage from "./pages/TestAssessmentPage"
-import ImageCompressorPage from "./pages/ImageCompressorPage"
-import IAPage from "./pages/IAPage"
 
-// Route Preloaders (maintained for interface compatibility)
-export const preloadPage = (_page: Page) => {}
+const TongQuanPage = lazy(() => import("./pages/TongQuanPage"))
+const CreateRequestPage = lazy(() => import("./pages/CreateRequestPage"))
+const TrackRequestPage = lazy(() => import("./pages/TrackRequestPage"))
+const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
+const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
+const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
+const IAPage = lazy(() => import("./pages/IAPage"))
+
+// Route Preloaders (dynamic import on demand)
+export const preloadPage = (targetPage: Page) => {
+  switch (targetPage) {
+    case "overview":
+      import("./pages/TongQuanPage")
+      break
+    case "create":
+      import("./pages/CreateRequestPage")
+      break
+    case "track":
+      import("./pages/TrackRequestPage")
+      break
+    case "manage":
+      import("./pages/QuanLyPage")
+      break
+    case "test":
+      import("./pages/TestAssessmentPage")
+      break
+    case "compressor":
+      import("./pages/ImageCompressorPage")
+      break
+    case "ia":
+      import("./pages/IAPage")
+      break
+  }
+}
 
 function PageLoadingSkeleton({ page }: { page: Page }) {
   switch (page) {
@@ -164,7 +190,7 @@ export default function App() {
     const pageTitles: Record<Page, string> = {
       overview: "Tổng quan & Tiến độ — MB UX Request Portal",
 
-      track: "Quản lý & Theo dõi Task — MB UX Request Portal",
+      track: "My task — MB UX Request Portal",
 
       create: "Tạo yêu cầu thiết kế mới — MB UX Request Portal",
 
@@ -302,6 +328,21 @@ export default function App() {
   }, [session?.role, page, navVersion])
 
   // Background prefetch remaining pages during browser idle time
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const prefetch = () => {
+        import("./pages/TongQuanPage")
+        import("./pages/TrackRequestPage")
+      }
+      if ("requestIdleCallback" in window) {
+        const id = (window as any).requestIdleCallback(prefetch)
+        return () => (window as any).cancelIdleCallback(id)
+      } else {
+        const timer = setTimeout(prefetch, 1200)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [])
 
 
 
@@ -324,7 +365,7 @@ export default function App() {
           onAuthSuccess={(newSession) => {
             setSession(newSession)
 
-            // Mặc định đăng nhập: PO/Business về Track Task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
+            // Mặc định đăng nhập: PO/Business về My task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
 
             // Tuyệt đối không giữ URL cũ #manage từ phiên trước
 
@@ -357,6 +398,9 @@ export default function App() {
 
         {/* Container chính: Offset theo sidebar w-60 (240px) */}
         <div className="md:ml-60 min-h-screen bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1">
+          {/* Global System Announcement Banner (Admin Controlled) */}
+          <GlobalAnnouncementBanner />
+
           {/* ReUI App Shell 12 Global Sticky Header */}
           <AppHeader
             currentPage={page}
@@ -368,37 +412,39 @@ export default function App() {
           />
 
           {/* Main Content View: Tách biệt IA Canvas toàn màn hình và các trang cuộn tiêu chuẩn để loại bỏ hoàn toàn hiện tượng nháy layout */}
-          {page === "ia" ? (
-            <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-              <ErrorBoundary>
-                <IAPage />
-              </ErrorBoundary>
-            </div>
-          ) : (
-            <div className="flex-1 w-full min-w-0 max-w-full flex flex-col justify-between">
-              <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+          <Suspense fallback={<PageLoadingSkeleton page={page} />}>
+            {page === "ia" ? (
+              <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
                 <ErrorBoundary>
-                  {page === "overview" && <TongQuanPage />}
-                  {page === "create" && (
-                    <CreateRequestPage onBack={() => handleNavigate("track")} />
-                  )}
-                  {page === "track" && (
-                    <TrackRequestPage
-                      onNavigateToCreate={() => handleNavigate("create")}
-                    />
-                  )}
-                  {page === "manage" && <QuanLyPage />}
-                  {page === "test" && <TestAssessmentPage />}
-                  {page === "compressor" && <ImageCompressorPage />}
+                  <IAPage />
                 </ErrorBoundary>
               </div>
+            ) : (
+              <div className="flex-1 w-full min-w-0 max-w-full flex flex-col justify-between">
+                <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+                  <ErrorBoundary>
+                    {page === "overview" && <TongQuanPage />}
+                    {page === "create" && (
+                      <CreateRequestPage onBack={() => handleNavigate("track")} />
+                    )}
+                    {page === "track" && (
+                      <TrackRequestPage
+                        onNavigateToCreate={() => handleNavigate("create")}
+                      />
+                    )}
+                    {page === "manage" && <QuanLyPage />}
+                    {page === "test" && <TestAssessmentPage />}
+                    {page === "compressor" && <ImageCompressorPage />}
+                  </ErrorBoundary>
+                </div>
 
-              {/* ReUI App Shell 12 Footer */}
-              <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
-                <div>2026 © MBBank UX Platform</div>
-              </footer>
-            </div>
-          )}
+                {/* ReUI App Shell 12 Footer */}
+                <footer className="w-full border-t border-slate-200/80 px-3.5 sm:px-6 lg:px-8 py-3.5 flex items-center text-xs text-slate-500 bg-white/50">
+                  <div>2026 © MBBank UX Platform</div>
+                </footer>
+              </div>
+            )}
+          </Suspense>
         </div>
 
         {/* Global Toast Provider */}

@@ -162,8 +162,10 @@ export default function IAMinimap({
                   : ln.node.tier === 2
                   ? "#6366f1"
                   : ln.node.tier === 3
-                  ? "#8b5cf6"
-                  : "#059669"
+                  ? "#10b981"
+                  : ln.node.tier === 4
+                  ? "#f59e0b"
+                  : "#8b5cf6"
 
               return (
                 <rect

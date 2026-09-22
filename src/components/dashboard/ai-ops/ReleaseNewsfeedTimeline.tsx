@@ -382,7 +382,7 @@ export default function ReleaseNewsfeedTimeline({
 
             return (
               <div
-                key={group.dateKey}
+                key={group.dateKey ? `grp-${group.dateKey}` : `grp-idx-${idx}`}
                 ref={isCurrent ? activeNodeRef : undefined}
                 className="relative flex items-start gap-2.5 group/timeline-node"
               >
@@ -472,7 +472,7 @@ export default function ReleaseNewsfeedTimeline({
                   <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 overflow-hidden divide-y divide-neutral-200/80 shadow-2xs">
                     {group.tasks.map((task, taskIdx) => (
                       <div
-                        key={task.id}
+                        key={task.rawRequest?.request_id || task.id || `feed-task-${taskIdx}`}
                         className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-neutral-100/70 transition-colors group/item"
                       >
                         {/* Cột trái: [ Số thứ tự ] + Tên task - căn giữa thẳng hàng tuyệt đối */}

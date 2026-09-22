@@ -170,13 +170,21 @@ function getTierThemeStyles(tier: IATier, customTheme?: string) {
         squadBadgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
       }
     case 4:
-    default:
       return {
         stripe: "bg-amber-500",
         accentHex: "#f59e0b",
         border: "border-slate-200 hover:border-amber-500",
         portBorder: "border-amber-500 text-amber-600 hover:bg-amber-50",
         squadBadgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+      }
+    case 5:
+    default:
+      return {
+        stripe: "bg-purple-600",
+        accentHex: "#8b5cf6",
+        border: "border-slate-200 hover:border-purple-500",
+        portBorder: "border-purple-500 text-purple-600 hover:bg-purple-50",
+        squadBadgeClass: "bg-purple-50 text-purple-700 border-purple-200",
       }
   }
 }
@@ -330,6 +338,7 @@ function IATreeNodeCardComponent({
   const completedTasksCount = isRollup ? subtreeMetrics.completedTasks : directCompletedTasksCount
   const inProgressCount = isRollup ? subtreeMetrics.inProgressTasks : directInProgressCount
   const pendingCount = isRollup ? subtreeMetrics.pendingTasks : Math.max(0, totalTasks - completedTasksCount - inProgressCount)
+  const activeTaskCount = inProgressCount > 0 ? inProgressCount : (totalTasks > completedTasksCount ? totalTasks - completedTasksCount : totalTasks)
 
   const taskPercent = useMemo(() => {
     if (isRollup) return subtreeMetrics.progressPercent
@@ -348,8 +357,8 @@ function IATreeNodeCardComponent({
       return subtreeMetrics.hasActiveTask
     }
     if (taskIdsList.length === 0) return false
-    return directInProgressCount > 0
-  }, [node.hasActiveTask, isRollup, subtreeMetrics.hasActiveTask, taskIdsList.length, directInProgressCount])
+    return directInProgressCount > 0 || (totalTasks > 0 && completedTasksCount < totalTasks)
+  }, [node.hasActiveTask, isRollup, subtreeMetrics.hasActiveTask, taskIdsList.length, directInProgressCount, totalTasks, completedTasksCount])
 
   const allTasksCompleted = useMemo(() => {
     if (isRollup) return subtreeMetrics.allCompleted
@@ -588,42 +597,52 @@ function IATreeNodeCardComponent({
         left: x,
         top: y,
         width,
-        minHeight: layoutNode.height,
+        minHeight: Math.min(layoutNode.height, 68),
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
       }}
-      className={`group relative rounded-2xl border bg-white p-3 pt-3.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
+      className={`group relative rounded-xl border bg-white p-2 px-2.5 pt-2 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
     >
       {/* Level Label ngay trên thẻ (không box, không nền) */}
-      <div className="absolute -top-5 left-1 flex items-center select-none pointer-events-none">
+      <div className="absolute -top-5 left-1 flex items-center select-none pointer-events-none max-w-[calc(100%-20px)]">
         <Tooltip
           content={
-            node.tier === 1
+            (node.tier === 1
               ? "Cấp 1: Nút gốc / Sản phẩm"
               : node.tier === 2
               ? "Cấp 2: Luồng nghiệp vụ chính"
               : node.tier === 3
               ? "Cấp 3: Màn hình chi tiết / Chức năng"
-              : "Cấp 4: Trạng thái / Modal / Điểm chạm cuối"
+              : node.tier === 4
+              ? "Cấp 4: Màn hình & Điểm chạm"
+              : "Cấp 5: Thành phần & Chi tiết tương tác") +
+            (node.squad?.trim() ? ` • Squad: ${node.squad.trim()}` : "")
           }
           side="top"
         >
           <span
             data-testid={`ia-node-level-badge-${node.id}`}
-            className={`text-[11px] font-bold tracking-tight inline-flex items-center gap-1 pointer-events-auto select-none ${
+            className={`text-[11px] font-bold tracking-tight inline-flex items-center gap-1 pointer-events-auto select-none truncate ${
               node.tier === 1
                   ? "text-[#1057FB]"
                   : node.tier === 2
                   ? "text-indigo-600"
                   : node.tier === 3
                   ? "text-emerald-600"
-                  : "text-amber-600"
+                  : node.tier === 4
+                  ? "text-amber-600"
+                  : "text-purple-600"
             }`}
           >
-            {node.tier === 1 ? "✨ Lv1" : `Lv${node.tier}`}
+            <span>{node.tier === 1 ? "✨ Lv1" : `Lv${node.tier}`}</span>
+            {node.squad?.trim() && (
+              <span className="font-semibold text-slate-600 truncate max-w-[180px]">
+                {` - "${node.squad.trim()}"`}
+              </span>
+            )}
             {node.tier === 4 && getTouchpointIcon(node.touchpointType)}
           </span>
         </Tooltip>
@@ -648,9 +667,9 @@ function IATreeNodeCardComponent({
 
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}
-      {/* CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN VÀ CHƯA ĐẠT CẤP 4 (Lv4 Capping)        */}
+      {/* CHỈ HIỂN THỊ KHI ĐƯỢC CHỌN VÀ CHƯA ĐẠT CẤP 5 (Lv5 Capping)        */}
       {/* ───────────────────────────────────────────────────────────────── */}
-      {!readOnly && isSelected && node.tier < 4 && (
+      {!readOnly && isSelected && node.tier < 5 && (
         <>
           {/* TOP PORT */}
           <div
@@ -788,13 +807,13 @@ function IATreeNodeCardComponent({
                 }
               }}
               onBlur={handleCommitInlineEdit}
-              className="w-full text-[13px] font-bold text-slate-900 bg-transparent border-0 outline-none ring-0 focus:ring-0 p-0 m-0 leading-snug tracking-tight cursor-text caret-slate-900"
+              className="w-full text-[15px] font-bold text-slate-900 bg-transparent border-0 outline-none ring-0 focus:ring-0 p-0 m-0 leading-tight tracking-tight cursor-text caret-slate-900"
             />
           </div>
         ) : (
           <Tooltip content={node.name + (readOnly ? "" : " (Click để sửa tên trực tiếp)")} side="top">
             <h4
-              className="text-[13px] font-bold text-slate-900 leading-snug tracking-tight line-clamp-3 hover:text-blue-600 cursor-text transition-colors"
+              className="text-[15px] font-bold text-slate-900 leading-tight tracking-tight line-clamp-2 hover:text-blue-600 cursor-text transition-colors"
               onClick={(e) => {
                 if (!readOnly) {
                   e.stopPropagation()
@@ -816,7 +835,7 @@ function IATreeNodeCardComponent({
         {node.description && node.tier !== 1 && (
           <Tooltip content={node.description} side="top">
             <p
-              className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 font-normal leading-relaxed"
+              className="text-[10.5px] text-slate-500 line-clamp-1 mt-0.5 font-normal leading-tight"
             >
               {node.description}
             </p>
@@ -824,31 +843,12 @@ function IATreeNodeCardComponent({
         )}
       </div>
 
-      {/* Bottom section: Căn dưới - Working progress bar & Footer */}
-      <div className="mt-auto pt-2 flex flex-col gap-1.5">
-        {/* Row 4: Dòng 2 là Track task -> Working (Căn dưới) */}
+      {/* Bottom section: Căn dưới - Sleek progress bar & Footer */}
+      <div className="mt-auto pt-0.5 flex flex-col gap-0.5">
+        {/* Row 4: Chỉ giữ lại thanh process (được bọc Tooltip hiển thị số liệu khi hover) */}
         {displaySettings.showProgress !== false && (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span className="flex items-center gap-1 text-slate-600">
-                <ListTodo className="w-3.5 h-3.5 text-slate-400" />
-                <span>Working</span>
-              </span>
-              <span className="font-mono text-slate-700 text-[10px]">
-                {totalTasks > 0 ? (
-                  <>
-                    {completedTasksCount}/{totalTasks} - {taskPercent}%
-                    {isRollup && inProgressCount > 0 && (
-                      <span className="text-blue-600 font-medium ml-1">({inProgressCount} đang làm)</span>
-                    )}
-                  </>
-                ) : (
-                  `${taskPercent}%`
-                )}
-              </span>
-            </div>
-            {/* Sleek Progress Bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <Tooltip content={`Tiến độ thực hiện: ${completedTasksCount}/${totalTasks} (${taskPercent}%)`} side="top">
+            <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden my-0.5 cursor-help">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
@@ -857,80 +857,23 @@ function IATreeNodeCardComponent({
                 }}
               />
             </div>
-
-            {/* Task Chips */}
-            {isRollup && taskIdsList.length === 0 ? (
-              /* Subtree Rollup summary chips when no direct tasks attached */
-              totalTasks > 0 && (
-                <div className="flex flex-wrap items-center gap-1 mt-0.5" data-testid={`ia-task-rollup-chips-${node.id}`}>
-                  {inProgressCount > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                      <span>{inProgressCount} đang làm</span>
-                    </span>
-                  )}
-                  {completedTasksCount > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                      <span>{completedTasksCount} hoàn thành</span>
-                    </span>
-                  )}
-                  {pendingCount > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
-                      <span>{pendingCount} chờ làm</span>
-                    </span>
-                  )}
-                </div>
-              )
-            ) : (
-              /* Linked Direct Task Chips */
-              taskIdsList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1 mt-0.5" data-testid={`ia-task-list-${node.id}`}>
-                  {taskIdsList.slice(0, 3).map((tid, idx) => {
-                    const req = requestsMap?.get(tid) || (linkedRequest?.request_id === tid ? linkedRequest : undefined)
-                    const badgeStyle = getStatusBadgeStyle(req?.status)
-                    return (
-                      <Tooltip
-                        key={`task-chip-${node.id}-${tid || idx}`}
-                        content={req ? `${tid}: ${req.title} (${req.status})` : tid}
-                        side="top"
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (req && onOpenDetail) onOpenDetail(req)
-                          }}
-                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border shadow-2xs transition-all hover:scale-105 cursor-pointer ${badgeStyle}`}
-                        >
-                          <span>{tid}</span>
-                        </button>
-                      </Tooltip>
-                    )
-                  })}
-                  {taskIdsList.length > 3 && (
-                    <Tooltip content={taskIdsList.slice(3).join(", ")} side="top">
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono font-bold"
-                      >
-                        +{taskIdsList.length - 3}
-                      </span>
-                    </Tooltip>
-                  )}
-                </div>
-              )
-            )}
-          </div>
+          </Tooltip>
         )}
 
         {/* Row 5 & 6: Divider & Footer (Trạng thái có task thực hiện ----- số lượng nhánh con) */}
-        <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1.5 text-[10px]">
+        <div className="pt-0.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[9.5px]">
         {/* Trạng thái có task thực hiện */}
         <div className="flex items-center">
           {displaySettings.showStatus !== false && (
             hasActiveTask ? (
               <Tooltip
-                content={isRollup ? "Có tính năng nhánh con đang triển khai" : "Tính năng đang có bài toán thiết kế đang triển khai - Click để quản lý task"}
+                content={
+                  activeTaskCount > 0
+                    ? `Đang có ${activeTaskCount} task đang thực hiện - Click để quản lý task`
+                    : isRollup
+                      ? "Có tính năng nhánh con đang triển khai - Click để quản lý task"
+                      : "Tính năng đang có bài toán thiết kế đang triển khai - Click để quản lý task"
+                }
                 side="top"
               >
                 <button
@@ -942,13 +885,21 @@ function IATreeNodeCardComponent({
                       onOpenTaskPicker(node)
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer"
                 >
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
-                  <span>Đang có task làm</span>
+                  <span>
+                    {activeTaskCount > 0 ? (
+                      <>
+                        Đang làm <span className="font-normal font-sans tabular-nums">{activeTaskCount}</span> task
+                      </>
+                    ) : (
+                      "Đang có task làm"
+                    )}
+                  </span>
                 </button>
               </Tooltip>
             ) : allTasksCompleted ? (
@@ -1004,7 +955,7 @@ function IATreeNodeCardComponent({
                 e.stopPropagation()
                 onToggleCollapse(node.id)
               }}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer select-none ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all cursor-pointer select-none ${
                 isCollapsed
                   ? "bg-blue-600 text-white hover:bg-blue-700 shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80"

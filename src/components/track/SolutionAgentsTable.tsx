@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { UXRequest } from "@/data/mockData"
-import { UserAvatar } from "@/components/common/UserAvatar"
+import { UserAvatar, getDesignerAvatar, getMemberDisplayName } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { getRequestPendingClassification, getStatusConfig, formatPriority } from "@/config/statusConfig"
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
@@ -18,19 +18,6 @@ function formatDesignerDisplayName(rawName?: string): string {
       .replace(/\b\w/g, (c) => c.toUpperCase())
   }
   return clean
-}
-
-function getDesignerAvatar(name?: string) {
-  if (!name || name === "Chưa phân công") return ""
-  try {
-    const cached = localStorage.getItem("mbbank_team_members")
-    if (cached) {
-      const members: any[] = JSON.parse(cached)
-      const found = members.find((m) => m.name === name || (name && m.name && (name.includes(m.name) || m.name.includes(name))))
-      if (found && found.avatarUrl) return found.avatarUrl
-    }
-  } catch {}
-  return ""
 }
 
 import { motion, AnimatePresence } from "framer-motion"
@@ -733,10 +720,12 @@ export default function SolutionAgentsTable({
 
                           // Created by
                           const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
-                          const displayCreator = rawCreator.includes("@")
-                            ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
-                            : rawCreator
-                          const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator)
+                          const displayCreator = getMemberDisplayName(rawCreator, req.requester_email) || (
+                            rawCreator.includes("@")
+                              ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                              : rawCreator
+                          )
+                          const creatorAvatar = getDesignerAvatar(displayCreator, req.requester_email) || getDesignerAvatar(rawCreator, req.requester_email)
 
                           const priorityInfo = formatPriority(req.priority)
 

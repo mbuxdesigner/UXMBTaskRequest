@@ -71,7 +71,7 @@ export const APP_CONTENT = {
         description: "Overview Workload",
       },
       track: {
-        title: "Track Task",
+        title: "My task",
         description: "Kanban View",
       },
       create: {
@@ -181,7 +181,7 @@ export const APP_CONTENT = {
   // 5. MÀN HÌNH THEO DÕI YÊU CẦU & KANBAN (TRACK & KANBAN)
   // ----------------------------------------------------------------------------
   track: {
-    pageTitle: "Track Task",
+    pageTitle: "My task",
     pageSubtitle: "Theo dõi tiến độ và bàn giao sản phẩm",
     viewModes: {
       kanban: "Kanban",
@@ -330,7 +330,7 @@ export const APP_CONTENT = {
     successModal: {
       title: "Yêu cầu đã được gửi thành công!",
       subtitle: "ID:",
-      message: "Hệ thống đã gửi thông báo đến UX Squad qua Microsoft Teams. Bạn có thể theo dõi tiến độ xử lý trên Track Task.",
+      message: "Hệ thống đã gửi thông báo đến UX Squad qua Microsoft Teams. Bạn có thể theo dõi tiến độ xử lý trên My task.",
       trackButton: "Theo dõi tiến độ",
       createNewButton: "Tạo yêu cầu mới",
     },

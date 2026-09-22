@@ -333,7 +333,7 @@ export default function TongQuanPage() {
     <main id="main-content" tabIndex={-1} className="w-full space-y-4 text-slate-900 pb-8 outline-none">
       {/* Header & Product Navigation Section */}
       <div className="space-y-2.5">
-        {/* 1. Page Header Synchronized with Track Task & Design System */}
+        {/* 1. Page Header Synchronized with My task & Design System */}
         <PageHeader
           breadcrumb={{
             parent: "Dashboards",
@@ -524,7 +524,7 @@ export default function TongQuanPage() {
                 </div>
               </div>
 
-              {/* ROW 3: FULL-WIDTH TRACK TASK GANTT ROADMAP */}
+              {/* ROW 3: FULL-WIDTH MY TASK GANTT ROADMAP */}
               <div className="w-full">
                 <TrackTaskGanttFrame
                   requests={filteredRequests}

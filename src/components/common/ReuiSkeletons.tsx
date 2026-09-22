@@ -171,7 +171,7 @@ export function OverviewContentSkeleton() {
         </div>
       </div>
 
-      {/* ROW 3: Full-width Track Task Gantt Roadmap */}
+      {/* ROW 3: Full-width My task Gantt Roadmap */}
       <div className="w-full">
         <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col min-w-0">
           <div className="flex items-center justify-between px-3 py-1.5">

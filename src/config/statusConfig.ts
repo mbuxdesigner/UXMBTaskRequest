@@ -437,18 +437,45 @@ function parseTimeMs(dateStr?: string | null): number {
   if (!dateStr || typeof dateStr !== "string") return 0
   const trimmed = dateStr.trim()
   if (!trimmed) return 0
-  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+
+  // 1. Try standard Date parsing (e.g. ISO-8601)
+  const parsed = new Date(trimmed).getTime()
+  if (!isNaN(parsed) && parsed > 0) return parsed
+
+  // 2. Extract DD/MM/YYYY and optional HH:mm:ss anywhere in string
+  const dmyMatch = trimmed.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  const timeMatch = trimmed.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
   if (dmyMatch) {
     const day = parseInt(dmyMatch[1], 10)
     const month = parseInt(dmyMatch[2], 10) - 1
     const year = parseInt(dmyMatch[3], 10)
-    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0
-    const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0
-    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0
-    return new Date(year, month, day, hour, minute, second).getTime()
+    const hour = timeMatch ? parseInt(timeMatch[1], 10) : 0
+    const minute = timeMatch ? parseInt(timeMatch[2], 10) : 0
+    const second = timeMatch && timeMatch[3] ? parseInt(timeMatch[3], 10) : 0
+    const d = new Date(year, month, day, hour, minute, second).getTime()
+    return isNaN(d) ? 0 : d
   }
-  const parsed = new Date(trimmed).getTime()
-  return isNaN(parsed) ? 0 : parsed
+  return 0
+}
+
+/**
+ * Helper lấy thời hạn PO Pending động từ Admin System Config (mặc định: 24h)
+ */
+export function getPoPendingTimeoutHours(): number {
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const raw = localStorage.getItem("mb_system_config_v1")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (typeof parsed?.sla?.poPendingTimeoutHours === "number") {
+          return parsed.sla.poPendingTimeoutHours
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return 24
 }
 
 /**
@@ -511,15 +538,16 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
     }
   }
 
+  const poTimeoutHours = getPoPendingTimeoutHours()
   const isExplicitPoPending = rawStatus === "po pending" || rawStatus === "pending po" || rawStatus.includes("po pending")
-  const isOverduePo = (rawStatus === "đã gửi po" || hasSentToPo) && elapsedHours >= 24 && rawStatus !== "đang thực hiện"
+  const isOverduePo = (rawStatus === "đã gửi po" || hasSentToPo) && elapsedHours >= poTimeoutHours && rawStatus !== "đang thực hiện"
 
   if (isExplicitPoPending || isOverduePo) {
     return {
       isPending: true,
       type: "po_pending",
       label: "PO Pending",
-      reason: "Quá hạn 24h PO chưa phản hồi duyệt phương án",
+      reason: `Quá hạn ${poTimeoutHours}h PO chưa phản hồi duyệt phương án`,
       sentTimeStr,
       elapsedHours: Math.round(elapsedHours * 10) / 10,
       hoursRemaining: 0,

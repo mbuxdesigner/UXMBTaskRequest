@@ -228,14 +228,14 @@ export default function Sidebar({
             className="flex items-center gap-2.5 font-bold text-slate-900 text-left cursor-pointer group select-none"
           >
             <img
-              src="/favicon.svg"
-              alt="MB UXTeam"
+              src="/img-logo-UXTeamRegDark.webp"
+              alt="UX Team"
               width="28"
               height="28"
-              className="w-7 h-7 object-contain shrink-0 group-hover:scale-105 transition-transform"
+              className="w-7 h-7 object-contain rounded-lg shrink-0 group-hover:scale-105 transition-transform"
             />
             <span className="text-[15px] font-bold text-slate-900 tracking-tight">
-              MB UXTeam
+              UX Workspace
             </span>
           </button>
         </div>

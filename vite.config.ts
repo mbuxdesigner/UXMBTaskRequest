@@ -50,6 +50,9 @@ export default defineConfig(({ mode }) => {
               if (id.includes('matter-js')) {
                 return 'vendor-matter'
               }
+              if (id.includes('recharts') || id.includes('d3-')) {
+                return 'vendor-charts'
+              }
               if (
                 id.includes('@radix-ui') ||
                 id.includes('clsx') ||

@@ -23,7 +23,9 @@ Deploy App/doc/
 │   ├── 📋 2026-09-16_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 16/09: Format Due Date Gantt DD/MM/YYYY, Component Kbd ReUI, Dynamic Email Lookup, Masking Task PO/Business, IA Map v2 (8 tiêu chuẩn vượt ReUI Flow) & Chế độ View-Only tinh gọn
 │   ├── 📋 2026-09-16_DASHBOARD_REUI_AND_TIMELINE_V2_REPORT.md  <-- Báo cáo: Tích hợp chuẩn @reui/c-chart-20 (Donut), @reui/c-chart-17 (Trending), @reui/c-timeline-3 (Reverse Timeline, Spinner, Card Ảnh 4), Đồng bộ Tab Sản phẩm Admin
 │   ├── 📋 2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md  <-- Báo cáo: Chuẩn hóa 4 layout mẫu thực tế, Nút Dark Navy #0F172A, Status Pills dot đồng màu, ReUI Sonner Toast 3D Stacking, Fix Responsive 375-1440px
-│   └── 📋 2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo: Cơ chế Phiên song song (Fixed 8h & Sliding 24h khi thoát), W3C Page Lifecycle, Cấu hình Quản trị 2 tầng (RBAC & Nhân sự), Đồng bộ Backend GAS 14 cột
+│   ├── 📋 2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo: Cơ chế Phiên song song (Fixed 8h & Sliding 24h khi thoát), W3C Page Lifecycle, Cấu hình Quản trị 2 tầng (RBAC & Nhân sự), Đồng bộ Backend GAS 14 cột
+│   ├── 📋 2026-09-17_DAILY_UPDATE_REPORT.md  <-- Báo cáo: Magnific UI IA Map (Middle-Click Pan, Tooltip ReUI, 4 Tầng Capping Lv4, Lateral Dock & Sheet), Modal Xem chi tiết node, Khôi phục Release dự kiến, Khử co giật Stepper, Polling 2 chiều OTP
+│   └── 📋 2026-09-22_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 22/09: Đạt 100/100 điểm Admin Settings, Động cơ cấu hình thống nhất (systemConfig.ts), 2 Tab mới (SystemParamsTab & NotificationTemplatesTab), Banner khẩn cấp toàn cầu, Đấu nối động PO Pending, KPI & SLA
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
@@ -36,7 +38,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình tạo yêu cầu (RequestForm), Ràng buộc sản phẩm của PO, Đính kèm tài liệu Google Drive, Hiệu ứng Confetti (Matter.js).
 │   │
 │   ├── ⚙️ 04_ADMIN_PORTAL_AND_RBAC.md
-│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (8 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL, Đồng bộ Sản phẩm sang IA.
+│   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (11 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL, Đồng bộ Sản phẩm sang IA.
 │   │
 │   ├── 💾 05_GOOGLE_SHEET_AND_GAS_BACKEND.md
 │   │   └── Đọc khi: Đụng tới backend Google Apps Script (`google-apps-script-backend.js`), Cấu trúc lưu trữ JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), Nạp GViz CSV bảng USERS, API get_master_data & sync_master_data, Upload Avatar/Drive.
@@ -56,8 +58,11 @@ Deploy App/doc/
 │   ├── 🗺️ 10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md
 │   │   └── Đọc khi: Sửa/Làm mới IA map v2 vượt chuẩn ReUI Flow: Đa nút gốc Tier 1 độc lập trên cùng sản phẩm, Chip chọn sản phẩm có màu quản trị + số đếm (X), QuickAdd Sidebar kiểu n8n (kéo thả node), Snap to Grid 20px, Căn chuẩn layout, Minimap bản đồ nhỏ, Thẻ node chỉ hiện action khi click chọn, Thanh công cụ nổi IANodeFloatingToolbar, Nhập/Xuất JSON siêu tốc, và Trải nghiệm tinh gọn Zero-Clutter cho quyền View (PO, Business, Viewer: Kéo xem, tích chọn xem chi tiết node, vew full, ẩn sạch 100% tính năng thừa).
 │   │
-│   └── 📈 11_DASHBOARD_AND_AIOPS_REUI.md
-│       └── Đọc khi: Sửa/Làm mới Dashboard điều hành AIOps, Biểu đồ Donut Backlog & Pending (@reui/c-chart-20), Biểu đồ Line Squad Trending (@reui/c-chart-17), NewsFeed Timeline ngược & auto-scroll (@reui/c-timeline-3), Thẻ task Ảnh 4 (Reviewing sources), Double Shell Cards, Lọc theo Tab sản phẩm Admin.
+│   ├── 📈 11_DASHBOARD_AND_AIOPS_REUI.md
+│   │   └── Đọc khi: Sửa/Làm mới Dashboard điều hành AIOps, Biểu đồ Donut Backlog & Pending (@reui/c-chart-20), Biểu đồ Line Squad Trending (@reui/c-chart-17), NewsFeed Timeline ngược & auto-scroll (@reui/c-timeline-3), Thẻ task Ảnh 4 (Reviewing sources), Double Shell Cards, Lọc theo Tab sản phẩm Admin.
+│   │
+│   └── ⚙️ 12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md
+│       └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
 ```
 
 ---

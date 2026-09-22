@@ -6,7 +6,8 @@
  * hoặc đối tượng nhận (recipients) tại file này.
  */
 
-import { NotificationType } from "../types/notification"
+import type { NotificationType } from "../types/notification.ts"
+import { getSystemConfig } from "./systemConfig.ts"
 
 export interface NotificationTemplateDef {
   /** Mã loại thông báo */
@@ -210,6 +211,30 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
 }
 
 /**
+ * Lấy mẫu thông báo hiệu lực (ưu tiên cấu hình tùy biến động từ Admin Settings)
+ */
+export function getResolvedNotificationTemplate(type: NotificationType): NotificationTemplateDef {
+  const sysConfig = getSystemConfig()
+  const custom = sysConfig.notifications?.[type]
+  const base = NOTIFICATION_TEMPLATES[type] || NOTIFICATION_TEMPLATES.system
+
+  if (custom && custom.enabled !== false) {
+    return {
+      type,
+      eventName: custom.eventName || base.eventName,
+      sender: custom.sender || base.sender,
+      recipients: custom.recipients || base.recipients,
+      titleTemplate: custom.titleTemplate || base.titleTemplate,
+      messageTemplate: custom.messageTemplate || base.messageTemplate,
+      badgeLabel: custom.badgeLabel || base.badgeLabel,
+      toastType: (custom.toastType as any) || base.toastType,
+    }
+  }
+
+  return base
+}
+
+/**
  * Helper format nội dung thông báo từ template
  */
 export function formatNotificationFromTemplate(
@@ -222,10 +247,12 @@ export function formatNotificationFromTemplate(
     ownerName?: string
     phaseName?: string
     statusName?: string
+    deadline?: string
+    hours?: string | number
     note?: string
   }
 ): { title: string; message: string; recipients: string; toastType: "success" | "info" | "warning" | "error" } {
-  const tpl = NOTIFICATION_TEMPLATES[type] || NOTIFICATION_TEMPLATES.system
+  const tpl = getResolvedNotificationTemplate(type)
   let title = tpl.titleTemplate
   let message = tpl.messageTemplate
 
@@ -237,6 +264,8 @@ export function formatNotificationFromTemplate(
     "{ownerName}": params.ownerName || "Designer Owner",
     "{phaseName}": params.phaseName || "Quy trình UX",
     "{statusName}": params.statusName || "Đang xử lý",
+    "{deadline}": params.deadline || "",
+    "{hours}": String(params.hours ?? ""),
     "{note}": params.note || "",
   }
 

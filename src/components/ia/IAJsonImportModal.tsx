@@ -113,7 +113,7 @@ export function parseAndNormalizeIaJson(rawObj: any, defaultProductName: string)
 
       const children: IANode[] = []
       const rawChildList = raw.children ?? raw.items ?? raw.subnodes ?? raw.childs
-      if (Array.isArray(rawChildList) && tier < 4) {
+      if (Array.isArray(rawChildList) && tier < 5) {
         const nextTier = (tier + 1) as IATier
         for (const ch of rawChildList) {
           if (ch && typeof ch === "object") {
@@ -132,7 +132,7 @@ export function parseAndNormalizeIaJson(rawObj: any, defaultProductName: string)
         isCriticalPath,
         touchpointType,
         parentId,
-        children: tier < 4 ? children : undefined,
+        children: tier < 5 ? children : undefined,
         customWidth: raw.customWidth,
         customHeight: raw.customHeight,
         customX: raw.customX,

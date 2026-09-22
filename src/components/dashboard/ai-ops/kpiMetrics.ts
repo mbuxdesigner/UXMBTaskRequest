@@ -1,5 +1,6 @@
 import type { UXRequest } from "../../../data/mockData"
 import { getRequestPendingClassification } from "../../../config/statusConfig.ts"
+import { getSystemConfig } from "../../../config/systemConfig.ts"
 
 /**
  * Danh sách tài khoản Designer chuẩn mặc định khi danh bạ local rỗng.
@@ -244,6 +245,54 @@ export function resolveTaskDesigner(req?: UXRequest | null): string {
   if (!isPlaceholder(req.design_owner)) return toSafeString(req.design_owner)
   if (!isPlaceholder(req.ux_owner)) return toSafeString(req.ux_owner)
   return ""
+}
+
+/**
+ * Trích xuất danh sách tất cả Designer thực tế phụ trách bài toán:
+ * - Hỗ trợ phân tách nếu có nhiều designer (phẩy, chấm phẩy, gạch chéo)
+ * - Tự động loại bỏ các placeholder ("Chưa phân công", "Chưa gán", v.v.)
+ */
+export function extractTaskDesigners(req?: UXRequest | null): string[] {
+  if (!req || typeof req !== "object") return []
+
+  const isPlaceholder = (val?: unknown) => {
+    if (val === null || val === undefined) return true
+    const t = typeof val === "string" ? val.trim() : typeof val === "number" ? String(val) : ""
+    if (!t) return true
+    const lower = t.toLowerCase()
+    return (
+      lower === "chưa phân công" ||
+      lower === "unassigned" ||
+      lower === "đang phân công" ||
+      lower === "chưa gán" ||
+      lower === "chưa gán designer" ||
+      lower === "chưa phân công designer" ||
+      lower === "admin quản trị" ||
+      lower === "admin" ||
+      lower === "none" ||
+      lower === "n/a" ||
+      lower === "null" ||
+      lower === "undefined"
+    )
+  }
+
+  const rawCandidates: string[] = []
+  if (!isPlaceholder(req.assigned_designer)) rawCandidates.push(toSafeString(req.assigned_designer))
+  if (!isPlaceholder(req.ux_owner)) rawCandidates.push(toSafeString(req.ux_owner))
+  if (!isPlaceholder(req.design_owner)) rawCandidates.push(toSafeString(req.design_owner))
+
+  const results: string[] = []
+  rawCandidates.forEach((raw) => {
+    const parts = raw.split(/[,;\n/]+/).map((s) => s.trim()).filter(Boolean)
+    parts.forEach((p) => {
+      const clean = p.replace(/\(.*?\)/g, "").trim()
+      if (clean && !isPlaceholder(clean) && !results.some((r) => r.toLowerCase() === clean.toLowerCase())) {
+        results.push(clean)
+      }
+    })
+  })
+
+  return results
 }
 
 /**
@@ -592,12 +641,12 @@ export interface WorkloadCapacityStats {
 
 /**
  * Tính toán tỷ lệ tải trọng & sức chứa đội ngũ (R1).
+ * - CHỈ TÍNH SỐ LƯỢNG DESIGNER ĐANG THỰC HIỆN TASK và TỔNG SỐ TASK (không fill toàn bộ danh bạ).
  * - Định mức chuẩn: 2.0 task/designer.
  * - Cân bằng: <= 2.0 task/designer
  * - Tải cao: > 2.0 đến 2.8 task/designer
  * - Quá tải: > 2.8 task/designer
  * - Zero-safe: Tránh chia cho 0 khi chưa có nhân sự hoặc danh bạ rỗng.
- * - Hỗ trợ lọc theo selectedProduct để chỉ tính designer của sản phẩm đó.
  */
 export function calculateWorkloadCapacity(
   requests: UXRequest[] = [],
@@ -605,23 +654,11 @@ export function calculateWorkloadCapacity(
   selectedProduct?: string
 ): WorkloadCapacityStats {
   const safeReqs = Array.isArray(requests) ? requests.filter(isValidTask) : []
-  const designers = getRegisteredDesigners(customDesigners, safeReqs, selectedProduct)
-  const totalDesigners = designers.length
-
   const inProgressTasks = safeReqs.filter(isInProgressTask)
   const inProgressCount = inProgressTasks.length
 
-  // Bảng ánh xạ case-insensitive để gom tải chuẩn xác
-  const canonicalMap = new Map<string, string>()
-  designers.forEach((d) => {
-    canonicalMap.set(d.toLowerCase(), d)
-  })
-
   const designerWorkloads: Record<string, number> = {}
-  designers.forEach((d) => {
-    designerWorkloads[d] = 0
-  })
-
+  const activeDesignerMap = new Map<string, string>() // lower -> canonical
   const squadSet = new Set<string>()
 
   inProgressTasks.forEach((r) => {
@@ -635,40 +672,38 @@ export function calculateWorkloadCapacity(
       squadSet.add(sName)
     }
 
-    const designer = resolveTaskDesigner(r)
-    if (designer) {
-      const canonical = canonicalMap.get(designer.toLowerCase()) || designer
+    const taskDesigners = extractTaskDesigners(r)
+    taskDesigners.forEach((d) => {
+      const lower = d.toLowerCase()
+      if (!activeDesignerMap.has(lower)) {
+        activeDesignerMap.set(lower, d)
+      }
+      const canonical = activeDesignerMap.get(lower)!
       designerWorkloads[canonical] = (designerWorkloads[canonical] || 0) + 1
-    }
+    })
   })
 
-  // Tính số Designer sẵn sàng nhận việc (đang có 0 task)
-  let readyDesigners = 0
-  let activeDesigners = 0
-
-  designers.forEach((d) => {
-    if ((designerWorkloads[d] || 0) === 0) {
-      readyDesigners++
-    } else {
-      activeDesigners++
-    }
-  })
-
+  // Chỉ tính số lượng designer thực tế đang có task đang thực hiện
+  const activeDesignersCount = activeDesignerMap.size
   const activeSquads = squadSet.size > 0 ? squadSet.size : inProgressCount > 0 ? 1 : 0
 
-  // Zero-safe: Xử lý an toàn mẫu số 0
+  const sysConfig = getSystemConfig()
+  const designerCapacity = sysConfig.capacity?.defaultDesignerCapacity ?? 2
+  const highThreshold = sysConfig.capacity?.workloadHighThreshold ?? 2.0
+  const overloadThreshold = sysConfig.capacity?.workloadOverloadThreshold ?? 2.8
+
   let workloadRatio = 0
   let capacityPercent = 0
   let badgeText: "Cân bằng" | "Tải cao" | "Quá tải" = "Cân bằng"
   let badgeVariant: "emerald" | "amber" | "rose" = "emerald"
 
-  if (totalDesigners > 0) {
-    workloadRatio = Number((inProgressCount / totalDesigners).toFixed(1))
-    capacityPercent = Math.round((inProgressCount / (totalDesigners * 2)) * 100)
-    if (workloadRatio > 2.8) {
+  if (activeDesignersCount > 0) {
+    workloadRatio = Number((inProgressCount / activeDesignersCount).toFixed(1))
+    capacityPercent = Math.round((inProgressCount / (activeDesignersCount * designerCapacity)) * 100)
+    if (workloadRatio > overloadThreshold) {
       badgeText = "Quá tải"
       badgeVariant = "rose"
-    } else if (workloadRatio > 2.0) {
+    } else if (workloadRatio > highThreshold) {
       badgeText = "Tải cao"
       badgeVariant = "amber"
     } else {
@@ -676,20 +711,20 @@ export function calculateWorkloadCapacity(
       badgeVariant = "emerald"
     }
   } else if (inProgressCount > 0) {
-    // Có task đang chạy nhưng không có designer nào trong danh bạ
-    workloadRatio = inProgressCount
-    capacityPercent = 100
-    badgeText = "Quá tải"
-    badgeVariant = "rose"
+    // Có task đang chạy nhưng chưa phân công designer cụ thể
+    workloadRatio = 0
+    capacityPercent = 0
+    badgeText = "Cân bằng"
+    badgeVariant = "emerald"
   }
 
   return {
     inProgressCount,
-    totalDesigners,
+    totalDesigners: activeDesignersCount, // Chỉ tính số lượng designer đang thực hiện task
     workloadRatio: Number.isFinite(workloadRatio) ? workloadRatio : 0,
     capacityPercent: Number.isFinite(capacityPercent) ? capacityPercent : 0,
-    readyDesigners,
-    activeDesigners,
+    readyDesigners: 0,
+    activeDesigners: activeDesignersCount,
     activeSquads,
     badgeText,
     badgeVariant,
@@ -854,7 +889,9 @@ export function calculateCycleTime(
   nowMs: number = Date.now()
 ): CycleTimeStats {
   const MS_PER_DAY = 24 * 3600 * 1000
-  const targetCycleTime = SLA_TARGET_CYCLE_DAYS
+  const sysConfig = getSystemConfig()
+  const targetCycleTime = sysConfig.sla?.targetCycleDays ?? SLA_TARGET_CYCLE_DAYS
+  const fastCycleTime = sysConfig.sla?.fastCycleDays ?? 3.5
 
   const safeReqs = Array.isArray(requests) ? requests.filter(isValidTask) : []
 
@@ -906,7 +943,7 @@ export function calculateCycleTime(
     let badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện" = "Đạt chuẩn SLA"
     let badgeVariant: "emerald" | "blue" | "amber" = "blue"
 
-    if (safeAvg <= 3.5) {
+    if (safeAvg <= fastCycleTime) {
       badgeText = "Tốc độ nhanh"
       badgeVariant = "emerald"
     } else if (safeAvg <= targetCycleTime) {
@@ -960,7 +997,7 @@ export function calculateCycleTime(
     let badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện" = "Đạt chuẩn SLA"
     let badgeVariant: "emerald" | "blue" | "amber" = "blue"
 
-    if (safeAvg <= 3.5) {
+    if (safeAvg <= fastCycleTime) {
       badgeText = "Tốc độ nhanh"
       badgeVariant = "emerald"
     } else if (safeAvg <= targetCycleTime) {

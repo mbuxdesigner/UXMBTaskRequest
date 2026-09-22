@@ -70,10 +70,10 @@ export default function BrandLogo({ size = "md", iconOnly = false, className = "
       {!iconOnly && (
         <div className="min-w-0">
           <p className="text-sm font-bold text-slate-900 leading-tight tracking-tight">
-            MB UXTeam
+            UX Workspace
           </p>
           <p className="text-[10px] font-semibold text-slate-400 leading-tight mt-0.5 uppercase tracking-wider">
-            Digital Banking Division
+            DIGITAL BANKING DIVISION
           </p>
         </div>
       )}

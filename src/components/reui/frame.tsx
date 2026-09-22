@@ -114,3 +114,15 @@ export function FrameFooter({
     />
   )
 }
+
+export function FramePanel({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("p-2 sm:p-3 rounded-xl transition-colors", className)}
+      {...props}
+    />
+  )
+}

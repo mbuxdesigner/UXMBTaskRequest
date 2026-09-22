@@ -58,11 +58,12 @@ export interface IASlideOverSheetProps {
 }
 
 export const CATEGORY_TABS = [
-  { id: "all", label: "Tất cả (4)" },
+  { id: "all", label: "Tất cả (5)" },
   { id: "1", label: "Lv1" },
   { id: "2", label: "Lv2" },
   { id: "3", label: "Lv3" },
   { id: "4", label: "Lv4" },
+  { id: "5", label: "Lv5" },
 ] as const
 
 export interface NodeTemplateItem extends QuickAddNodeType {
@@ -115,15 +116,28 @@ export const NODE_TEMPLATES: NodeTemplateItem[] = [
   {
     id: "tier-4-screen",
     tier: 4,
-    title: "Màn hình / Điểm chạm cuối",
+    title: "Màn hình / Điểm chạm",
     name: "Màn hình / Điểm chạm",
     code: "SCR_FINAL",
     keywords: ["screen", "man hinh", "touchpoint", "action", "modal", "tier 4", "lv4"],
-    description: "Giao diện màn hình, popup hoặc thao tác cuối của luồng",
+    description: "Giao diện màn hình, popup hoặc thao tác trong luồng",
     touchpointType: "screen",
     colorHex: "#059669",
     badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
     icon: Smartphone,
+  },
+  // CẤP 5 (THÀNH PHẦN & CHI TIẾT)
+  {
+    id: "tier-5-element",
+    tier: 5,
+    title: "Thành phần / Chi tiết tương tác",
+    name: "Thành phần / Chi tiết",
+    code: "COMP_EL",
+    keywords: ["element", "component", "chi tiet", "thanh phan", "tier 5", "lv5", "button", "field"],
+    description: "Thành phần UI, trạng thái tương tác hoặc data field cụ thể",
+    colorHex: "#8b5cf6",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    icon: Sparkles,
   },
 ]
 
@@ -175,6 +189,7 @@ export default function IASlideOverSheet({
   const [settingsLv2Width, setSettingsLv2Width] = useState<number>(tierDimensions[2]?.width || 280)
   const [settingsLv3Width, setSettingsLv3Width] = useState<number>(tierDimensions[3]?.width || 260)
   const [settingsLv4Width, setSettingsLv4Width] = useState<number>(tierDimensions[4]?.width || 250)
+  const [settingsLv5Width, setSettingsLv5Width] = useState<number>(tierDimensions[5]?.width || 240)
   const [settingsColumnGap, setSettingsColumnGap] = useState<number>(tierDimensions.columnGap || 110)
 
   // JSON Panel state
@@ -189,6 +204,7 @@ export default function IASlideOverSheet({
       setSettingsLv2Width(tierDimensions[2]?.width || 280)
       setSettingsLv3Width(tierDimensions[3]?.width || 260)
       setSettingsLv4Width(tierDimensions[4]?.width || 250)
+      setSettingsLv5Width(tierDimensions[5]?.width || 240)
       setSettingsColumnGap(tierDimensions.columnGap || 110)
     }
   }, [tierDimensions])
@@ -257,9 +273,9 @@ export default function IASlideOverSheet({
     })
   }, [searchQuery, activeCategoryTab])
 
-  // Lv4 selection context logic
-  const isSelectedNodeLv4 = selectedNode?.tier === 4
-  const canAddChild = selectedNode ? selectedNode.tier < 4 : false
+  // Lv5 selection context logic
+  const isSelectedNodeLv5 = selectedNode?.tier === 5
+  const canAddChild = selectedNode ? selectedNode.tier < 5 : false
 
   // Apply settings preset
   const handleApplyPreset = (preset: "default" | "spacious" | "compact") => {
@@ -268,12 +284,14 @@ export default function IASlideOverSheet({
       setSettingsLv2Width(280)
       setSettingsLv3Width(260)
       setSettingsLv4Width(250)
+      setSettingsLv5Width(240)
       setSettingsColumnGap(110)
       onSaveSettings({
-        1: { width: 320, height: tierDimensions[1].height },
-        2: { width: 280, height: tierDimensions[2].height },
-        3: { width: 260, height: tierDimensions[3].height },
-        4: { width: 250, height: tierDimensions[4].height },
+        1: { width: 320, height: tierDimensions[1]?.height || 115 },
+        2: { width: 280, height: tierDimensions[2]?.height || 120 },
+        3: { width: 260, height: tierDimensions[3]?.height || 125 },
+        4: { width: 250, height: tierDimensions[4]?.height || 115 },
+        5: { width: 240, height: tierDimensions[5]?.height || 110 },
         columnGap: 110,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -283,12 +301,14 @@ export default function IASlideOverSheet({
       setSettingsLv2Width(310)
       setSettingsLv3Width(285)
       setSettingsLv4Width(265)
+      setSettingsLv5Width(260)
       setSettingsColumnGap(140)
       onSaveSettings({
-        1: { width: 360, height: tierDimensions[1].height },
-        2: { width: 310, height: tierDimensions[2].height },
-        3: { width: 285, height: tierDimensions[3].height },
-        4: { width: 265, height: tierDimensions[4].height },
+        1: { width: 360, height: tierDimensions[1]?.height || 115 },
+        2: { width: 310, height: tierDimensions[2]?.height || 120 },
+        3: { width: 285, height: tierDimensions[3]?.height || 125 },
+        4: { width: 265, height: tierDimensions[4]?.height || 115 },
+        5: { width: 260, height: tierDimensions[5]?.height || 110 },
         columnGap: 140,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -298,12 +318,14 @@ export default function IASlideOverSheet({
       setSettingsLv2Width(250)
       setSettingsLv3Width(235)
       setSettingsLv4Width(220)
+      setSettingsLv5Width(210)
       setSettingsColumnGap(85)
       onSaveSettings({
-        1: { width: 280, height: tierDimensions[1].height },
-        2: { width: 250, height: tierDimensions[2].height },
-        3: { width: 235, height: tierDimensions[3].height },
-        4: { width: 220, height: tierDimensions[4].height },
+        1: { width: 280, height: tierDimensions[1]?.height || 115 },
+        2: { width: 250, height: tierDimensions[2]?.height || 120 },
+        3: { width: 235, height: tierDimensions[3]?.height || 125 },
+        4: { width: 220, height: tierDimensions[4]?.height || 115 },
+        5: { width: 210, height: tierDimensions[5]?.height || 110 },
         columnGap: 85,
         verticalGapJourney: tierDimensions.verticalGapJourney,
         verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -318,6 +340,7 @@ export default function IASlideOverSheet({
       settingsLv2Width === 280 &&
       settingsLv3Width === 260 &&
       settingsLv4Width === 250 &&
+      settingsLv5Width === 240 &&
       settingsColumnGap === 110
     ) {
       return "default"
@@ -327,6 +350,7 @@ export default function IASlideOverSheet({
       settingsLv2Width === 310 &&
       settingsLv3Width === 285 &&
       settingsLv4Width === 265 &&
+      settingsLv5Width === 260 &&
       settingsColumnGap === 140
     ) {
       return "spacious"
@@ -336,20 +360,22 @@ export default function IASlideOverSheet({
       settingsLv2Width === 250 &&
       settingsLv3Width === 235 &&
       settingsLv4Width === 220 &&
+      settingsLv5Width === 210 &&
       settingsColumnGap === 85
     ) {
       return "compact"
     }
     return "custom"
-  }, [settingsLv1Width, settingsLv2Width, settingsLv3Width, settingsLv4Width, settingsColumnGap])
+  }, [settingsLv1Width, settingsLv2Width, settingsLv3Width, settingsLv4Width, settingsLv5Width, settingsColumnGap])
 
   // Handle Save Settings from sliders
   const handleSaveSettingsValues = () => {
     onSaveSettings({
-      1: { width: Math.max(160, settingsLv1Width), height: tierDimensions[1].height },
-      2: { width: Math.max(160, settingsLv2Width), height: tierDimensions[2].height },
-      3: { width: Math.max(150, settingsLv3Width), height: tierDimensions[3].height },
-      4: { width: Math.max(140, settingsLv4Width), height: tierDimensions[4].height },
+      1: { width: Math.max(160, settingsLv1Width), height: tierDimensions[1]?.height || 115 },
+      2: { width: Math.max(160, settingsLv2Width), height: tierDimensions[2]?.height || 120 },
+      3: { width: Math.max(150, settingsLv3Width), height: tierDimensions[3]?.height || 125 },
+      4: { width: Math.max(140, settingsLv4Width), height: tierDimensions[4]?.height || 115 },
+      5: { width: Math.max(140, settingsLv5Width), height: tierDimensions[5]?.height || 110 },
       columnGap: Math.max(40, settingsColumnGap),
       verticalGapJourney: tierDimensions.verticalGapJourney,
       verticalGapScreen: tierDimensions.verticalGapScreen,
@@ -756,6 +782,31 @@ export default function IASlideOverSheet({
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                     <span>160px</span>
+                    <span>320px</span>
+                  </div>
+                </div>
+
+                {/* Lv5 Thành phần & Chi tiết */}
+                <div className="p-2.5 rounded-xl bg-slate-50/70 border border-slate-200/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-slate-700 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0 shadow-2xs" />
+                      <span>Chiều rộng Cấp 5 (Thành phần)</span>
+                    </span>
+                    <span className="font-mono text-slate-700 font-bold text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
+                      {settingsLv5Width}px
+                    </span>
+                  </div>
+                  <Slider
+                    min={140}
+                    max={320}
+                    step={10}
+                    value={settingsLv5Width}
+                    onChange={setSettingsLv5Width}
+                    color="#8B5CF6"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                    <span>140px</span>
                     <span>320px</span>
                   </div>
                 </div>

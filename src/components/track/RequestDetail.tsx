@@ -18,10 +18,11 @@ import {
   startTaskActivePolling,
   stopTaskActivePolling,
 } from "../../services/realtimeSyncService"
-import { UserAvatar, getAvatarColorClass } from "@/components/common/UserAvatar"
+import { UserAvatar, getAvatarColorClass, getMemberDisplayName, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
+import { getSystemConfig } from "@/config/systemConfig"
 import { APP_CONTENT } from "@/config/content"
 import { toast } from "@/components/ui/toast"
 import { dispatchNotification } from "@/services/notificationService"
@@ -41,8 +42,8 @@ import {
   TimelineDescription,
 } from "@/components/reui/timeline"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
-import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
+import { SmartLinkChip } from "@/components/common/SmartLinkChip"
 import { 
   X, 
   ArrowLeft, 
@@ -306,42 +307,6 @@ function formatDesignerDisplayName(rawName?: string): string {
   return clean
 }
 
-function getDesignerAvatar(name?: string) {
-  if (!name || name === "Chưa phân công") return ""
-  const clean = name.replace(/\(.*?\)/g, "").trim()
-  const cleanLower = clean.toLowerCase()
-
-  try {
-    const storageKeys = ["mbbank_team_members", "mbbank_admin_team"]
-    for (const key of storageKeys) {
-      const cached = localStorage.getItem(key)
-      if (cached) {
-        const members: any[] = JSON.parse(cached)
-        if (Array.isArray(members)) {
-          const found = members.find((m: any) => {
-            const mName = String(m.name || m.displayName || "").trim().toLowerCase()
-            const mEmail = String(m.email || m.teamsEmail || "").trim().toLowerCase()
-            if (mName && (mName === cleanLower || cleanLower.includes(mName) || mName.includes(cleanLower))) {
-              return true
-            }
-            if (mEmail && (cleanLower === mEmail || cleanLower.includes(mEmail) || (mEmail.includes("@") && cleanLower.includes(mEmail.split("@")[0])))) {
-              return true
-            }
-            return false
-          })
-          if (found && (found.avatarUrl || found.avatar || found.avatar_url)) {
-            return found.avatarUrl || found.avatar || found.avatar_url
-          }
-        }
-      }
-    }
-  } catch {}
-
-  // Fallback defaults nếu không có trong team members
-  if (clean.includes("Nam")) return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
-  if (clean.includes("Lan")) return "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
-  return ""
-}
 
 /**
  * Renders inline text with automatic conversion of '->', '-->', '=>' to stylized arrow '→'
@@ -1362,52 +1327,55 @@ export default function RequestDetail({
 
     const userEmail = (session.teamsEmail || session.personalEmail || "").toLowerCase().trim()
     const uPrefix = userEmail.includes("@") ? userEmail.split("@")[0].trim() : userEmail
-    const userName = (session.displayName || "").toLowerCase().trim()
+    const userName = (session.displayName || "").trim().normalize("NFC").toLowerCase()
 
-    const assigned = `${request.assigned_designer || ""} ${request.ux_owner || ""}`.toLowerCase().trim()
-    if (!assigned) return false
-    if (
-      assigned === "chưa phân công" ||
-      assigned === "đang phân công" ||
-      assigned === "unassigned" ||
-      assigned === "chưa gán"
-    ) {
-      return false
-    }
+    // Tách riêng từng người được gán, không gộp chuỗi gây lặp từ
+    const assignedList = [
+      ...(request.assigned_designer ? request.assigned_designer.split(/[,;\n/]+/) : []),
+      ...(request.ux_owner ? request.ux_owner.split(/[,;\n/]+/) : []),
+    ]
+      .map((s) => s.trim().normalize("NFC"))
+      .filter((s) => s && !["chưa phân công", "đang phân công", "unassigned", "chưa gán"].includes(s.toLowerCase()))
 
-    if (userEmail && assigned.includes(userEmail)) return true
-    if (uPrefix && uPrefix.length >= 3) {
-      const prefixRegex = new RegExp(`(^|[\\s,;:/])` + uPrefix + `($|[\\s,;:/@])`, "i")
-      if (prefixRegex.test(assigned)) return true
-    }
-    if (userName) {
-      const normAssigned = normalizeVietnameseString(assigned)
-      const normUserName = normalizeVietnameseString(userName)
-      if (normAssigned === normUserName) return true
+    if (assignedList.length === 0) return false
 
-      const userWords = userName.split(/\s+/).filter(Boolean)
-      if (userWords.length >= 2 && (assigned.includes(userName) || normAssigned.includes(normUserName))) {
-        return true
+    for (const rawAssigned of assignedList) {
+      const assignedLower = rawAssigned.toLowerCase()
+      if (userEmail && assignedLower.includes(userEmail)) return true
+      if (uPrefix && uPrefix.length >= 3) {
+        if (assignedLower.includes(uPrefix)) return true
+        if (uPrefix.startsWith(assignedLower) && assignedLower.length >= 2) return true
       }
-    }
+      if (userName) {
+        const normAssigned = normalizeVietnameseString(rawAssigned).toLowerCase()
+        const normUser = normalizeVietnameseString(userName).toLowerCase()
+        if (assignedLower === userName || normAssigned === normUser) return true
 
-    // Chỉ khi assigned là 1 từ duy nhất (ví dụ ghi tắt: "Nam", "Đăng") mới so khớp tên gọi cuối
-    const assignedWords = assigned.split(/[\s,;]+/).filter(Boolean)
-    if (assignedWords.length === 1 && userName) {
-      const nameParts = userName.split(/\s+/).filter(Boolean)
-      const lastName = nameParts[nameParts.length - 1]
-      if (lastName && lastName.length >= 2 && lastName.toLowerCase() === assignedWords[0].toLowerCase()) {
-        return true
+        const userWords = userName.split(/\s+/).filter(Boolean)
+        if (userWords.length >= 2 && (assignedLower.includes(userName) || normAssigned.includes(normUser))) {
+          return true
+        }
+        const assignedWords = assignedLower.split(/\s+/).filter(Boolean)
+        if (assignedWords.length >= 2 && (userName.includes(assignedLower) || normUser.includes(normAssigned))) {
+          return true
+        }
+
+        // So khớp tên gọi ngắn (từ cuối)
+        const userShort = userWords[userWords.length - 1]
+        const assignedShort = assignedWords[assignedWords.length - 1]
+        if (userShort && assignedShort && userShort.length >= 2 && userShort === assignedShort) {
+          return true
+        }
       }
     }
 
     return false
   }, [request, session])
 
-  // R1 Phân quyền quản lý Viewer: Chỉ PO tạo task, Designer được phân công và Admin/Lead mới có quyền thêm/xóa Viewer
+  // Phân quyền quản lý Viewer: Designer, Design Owner, Admin và PO tạo task đều có quyền thêm/xóa Viewer
   const canManageViewers = useMemo(() => {
     if (!session) return true // Khi chưa đăng nhập / demo view
-    if (session.role === "Admin" || session.role === "Design Owner") return true
+    if (session.role === "Admin" || session.role === "Design Owner" || session.role === "Designer") return true
     if (isAuthor) return true
     if (isAssignedDesigner) return true
     return false
@@ -1418,13 +1386,16 @@ export default function RequestDetail({
     const list: any[] = Array.isArray(teamMemberList) ? teamMemberList : []
 
     return list
-      .map((m: any) => ({
-        name: String(m.name || m.displayName || "").trim(),
-        role: String(m.role || "Thành viên").trim(),
-        email: String(m.email || m.teamsEmail || "").trim(),
-        avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(m.name || m.displayName || "")),
-        squad: String(m.squad || (Array.isArray(m.squads) ? m.squads[0] : "") || "").trim(),
-      }))
+      .map((m: any) => {
+        const normName = String(m.name || m.displayName || "").trim().normalize("NFC")
+        return {
+          name: normName,
+          role: String(m.role || "Thành viên").trim().normalize("NFC"),
+          email: String(m.email || m.teamsEmail || "").trim(),
+          avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(normName)),
+          squad: String(m.squad || (Array.isArray(m.squads) ? m.squads[0] : "") || "").trim().normalize("NFC"),
+        }
+      })
       .filter((m) => {
         if (!m.name) return false
         if (isMockDesigner(m.name, m.email)) return false
@@ -1433,10 +1404,10 @@ export default function RequestDetail({
   }, [teamMemberList])
 
   const isMemberMatchViewer = (member: { name: string; email?: string }, viewerStr: string): boolean => {
-    const rawV = String(viewerStr || "").trim()
+    const rawV = String(viewerStr || "").trim().normalize("NFC")
     const cleanV = rawV.toLowerCase()
     if (!cleanV) return false
-    const cleanName = (member.name || "").toLowerCase().trim()
+    const cleanName = (member.name || "").trim().normalize("NFC").toLowerCase()
     if (cleanV === cleanName) return true
 
     if (member.email) {
@@ -1466,6 +1437,15 @@ export default function RequestDetail({
     }
     if (vWords.length >= 2 && (cleanName.includes(cleanV) || normM.includes(normV))) {
       return true
+    }
+
+    // Tên gọi 1 từ (ví dụ "Huy") khớp với tên gọi cuối (given name) trong họ tên thành viên (ví dụ "Bạch Đức Huy")
+    if (nameWords.length >= 2 && vWords.length === 1) {
+      const lastName = nameWords[nameWords.length - 1]
+      const normLastName = normM.split(/\s+/).filter(Boolean).pop()
+      if (lastName === cleanV || normLastName === normV) {
+        return true
+      }
     }
 
     return false
@@ -1656,55 +1636,297 @@ export default function RequestDetail({
     }
   }, [availableViewerMembers, request, localSquad, matchesPerson])
 
-  // Danh sách gợi ý @mention thành viên trao đổi (Bao gồm Assignees, Requester, Viewers, Squad & Toàn bộ nhân sự)
-  const mentionUserList = useMemo<MentionUser[]>(() => {
-    if (!request) return []
-    const list: MentionUser[] = []
-    const seen = new Set<string>()
+  // Tra cứu thông tin chuẩn xác và mới nhất của Người yêu cầu / PO
+  const resolvedRequester = useMemo(() => {
+    const rawName = request?.requester_name || ""
+    const rawEmail = (request?.requester_email || "").toLowerCase().trim()
+    const canonicalName = getMemberDisplayName(rawName, rawEmail) || rawName || rawEmail || "Người yêu cầu"
+    const matched = availableViewerMembers.find((m) => {
+      if (rawEmail && m.email && m.email.toLowerCase().trim() === rawEmail) return true
+      if (canonicalName && m.name && m.name.toLowerCase().trim() === canonicalName.toLowerCase().trim()) return true
+      return false
+    })
+    return {
+      name: canonicalName,
+      email: rawEmail || matched?.email || "",
+      avatar: matched?.avatar || getDesignerAvatar(canonicalName, rawEmail),
+      role: matched?.role || "PO (Người yêu cầu)",
+    }
+  }, [request?.requester_name, request?.requester_email, availableViewerMembers])
 
-    const addPerson = (
-      rawName?: string,
-      flags?: { isAssignee?: boolean; isViewer?: boolean; isRequester?: boolean; role?: string }
-    ) => {
-      if (!rawName) return
-      const names = rawName.split(",").map((s) => s.trim()).filter(Boolean)
-      names.forEach((name) => {
-        const key = name.toLowerCase()
-        if (!key || seen.has(key) || key === "chưa phân công" || key === "đang phân công") return
-        seen.add(key)
+  // Danh sách Designer Owner phụ trách Squad của bài toán
+  const squadDesignOwners = useMemo(() => {
+    const rawSquad = (localSquad !== undefined && localSquad !== "" ? localSquad : (request?.squad_name || request?.preferred_squad || "")).trim()
+    const squadLower = rawSquad.toLowerCase()
+    const taskProd = (localProduct || request?.product || "").trim().toLowerCase()
 
-        const matched = availableViewerMembers.find((m) => isMemberMatchViewer(m, name))
+    let allSquads: any[] = []
+    try {
+      const raw = localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) allSquads = parsed
+      }
+    } catch {}
+    if (allSquads.length === 0) allSquads = mockSquads
 
-        list.push({
-          id: matched?.email || name,
-          name: matched?.name || name,
-          displayName: matched?.name || name,
-          role: flags?.role || matched?.role || (flags?.isAssignee ? "Designer phụ trách" : flags?.isRequester ? "PO (Requester)" : flags?.isViewer ? "Viewer" : "Thành viên"),
-          email: matched?.email || "",
-          avatar: matched?.avatar || getDesignerAvatar(matched?.name || name),
-          isAssignee: flags?.isAssignee,
-          isViewer: flags?.isViewer,
-          isRequester: flags?.isRequester,
-          squad: matched?.squad || request.squad_name || "",
-        })
+    const matchedSquad = allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      const sqProd = (sq.productName || sq.product_name || "").trim().toLowerCase()
+      const isNameMatch = sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+      if (taskProd && sqProd) {
+        return isNameMatch && (sqProd === taskProd || sqProd.includes(taskProd) || taskProd.includes(sqProd))
+      }
+      return isNameMatch
+    }) || allSquads.find((sq: any) => {
+      const sqName = (sq.name || sq.squad_name || "").trim().toLowerCase()
+      return sqName === squadLower || (rawSquad && (sqName.includes(squadLower) || squadLower.includes(sqName)))
+    })
+
+    const owners: Array<{ name: string; email?: string }> = []
+    const seenOwners = new Set<string>()
+
+    const addOwner = (nameOrEmail?: string) => {
+      if (!nameOrEmail) return
+      const clean = nameOrEmail.replace(/\(.*?\)/g, "").trim().normalize("NFC")
+      const lower = clean.toLowerCase()
+      if (!lower || lower === "chưa phân công" || lower === "đang phân công" || seenOwners.has(lower)) return
+      seenOwners.add(lower)
+
+      const matched = availableViewerMembers.find((m) => isMemberMatchViewer(m, clean))
+      const email = matched?.email || (clean.includes("@") ? clean : undefined)
+      const name = matched?.name || getMemberDisplayName(clean, email) || clean
+      owners.push({ name, email })
+    }
+
+    // 1. ux_owner lưu trực tiếp trên bài toán
+    if (request?.ux_owner) {
+      addOwner(request.ux_owner)
+    }
+
+    // 2. ux_owner hoặc leadDesigner cấu hình trên squad
+    if (matchedSquad) {
+      if (matchedSquad.ux_owner) addOwner(matchedSquad.ux_owner)
+      if (matchedSquad.leadDesigner) addOwner(matchedSquad.leadDesigner)
+    }
+
+    // 3. Nhân sự có vai trò "Design Owner" phụ trách squad này trong danh bạ
+    if (rawSquad) {
+      availableViewerMembers.forEach((m) => {
+        const isOwnerRole = (m.role || "").toLowerCase().includes("owner")
+        const mSquad = (m.squad || "").toLowerCase()
+        const mSquads = ((m as any).squads || []).map((s: string) => s.toLowerCase())
+        if (isOwnerRole && (mSquad === squadLower || mSquads.includes(squadLower) || mSquad === "all squads")) {
+          addOwner(m.name || m.email)
+        }
       })
     }
 
-    // 1. Assignees (Ưu tiên đầu bảng)
-    addPerson(localAssignee || request.assigned_designer, { isAssignee: true, role: "Designer phụ trách" })
+    return owners
+  }, [localSquad, request?.squad_name, request?.preferred_squad, request?.ux_owner, localProduct, request?.product, availableViewerMembers])
 
-    // 2. Requester (PO)
-    addPerson(request.requester_name || request.requester_email, { isRequester: true, role: "PO (Người yêu cầu)" })
+  // Danh sách gợi ý @mention thành viên trao đổi:
+  // CHỈ BAO GỒM 4 NHÓM THEO YÊU CẦU:
+  // 1. Designer thực hiện (Assignee)
+  // 2. PO (Người yêu cầu / Requester)
+  // 3. Designer Owner phụ trách squad
+  // 4. Viewers (Người theo dõi bài toán)
+  const mentionUserList = useMemo<MentionUser[]>(() => {
+    if (!request) return []
+    const list: MentionUser[] = []
+    const seenNames = new Set<string>()
+    const emailToIndex = new Map<string, number>()
 
-    // 3. Viewers
-    localViewers.forEach((v) => addPerson(v, { isViewer: true, role: "Người theo dõi" }))
+    const addPerson = (
+      rawName?: string,
+      flags?: { isAssignee?: boolean; isViewer?: boolean; isRequester?: boolean; isDesignOwner?: boolean; role?: string; email?: string }
+    ) => {
+      if (!rawName && !flags?.email) return
+      const names = (rawName || flags?.email || "").split(",").map((s) => s.trim()).filter(Boolean)
+      names.forEach((name) => {
+        const normName = name.normalize("NFC")
+        const nameKey = normName.toLowerCase().trim()
+        const passedEmail = (flags?.email || "").toLowerCase().trim()
 
-    // 4. Squad Viewers & Supporting Members
-    squadViewers.forEach((m) => addPerson(m.name, { role: m.role || "Nhân sự Squad" }))
-    supportingViewers.forEach((m) => addPerson(m.name, { role: m.role || "Nhân sự UX" }))
+        if ((nameKey === "chưa phân công" || nameKey === "đang phân công") && !passedEmail) return
+
+        // 1. Khớp thành viên trong hệ thống theo email chính xác hoặc tên gọi
+        const matched = availableViewerMembers.find((m) => {
+          if (passedEmail && m.email && m.email.toLowerCase().trim() === passedEmail) return true
+          return isMemberMatchViewer(m, normName)
+        })
+
+        // Tên chuẩn hóa, email và avatar mới nhất
+        const canonicalName = (matched?.name || getMemberDisplayName(normName, passedEmail) || normName).normalize("NFC")
+        const canonicalEmail = (matched?.email || passedEmail || "").toLowerCase().trim()
+        const defaultRole = flags?.isAssignee
+          ? "Designer thực hiện"
+          : flags?.isRequester
+          ? "PO (Người yêu cầu)"
+          : flags?.isDesignOwner
+          ? "Designer Owner phụ trách squad"
+          : flags?.isViewer
+          ? "Người theo dõi"
+          : "Thành viên"
+        const resolvedRole = flags?.role || defaultRole
+        const canonicalAvatar = matched?.avatar || getDesignerAvatar(canonicalName, canonicalEmail)
+
+        // 2. Kiểm tra trùng lặp theo Email
+        if (canonicalEmail && emailToIndex.has(canonicalEmail)) {
+          const idx = emailToIndex.get(canonicalEmail)!
+          const existing = list[idx]
+          const bestName = canonicalName.length >= (existing.name?.length || 0) ? canonicalName : existing.name
+          const bestDisplay = canonicalName.length >= (existing.displayName?.length || 0) ? canonicalName : (existing.displayName || existing.name)
+          list[idx] = {
+            ...existing,
+            name: bestName,
+            displayName: bestDisplay,
+            avatar: existing.avatar || canonicalAvatar,
+            isAssignee: existing.isAssignee || flags?.isAssignee,
+            isRequester: existing.isRequester || flags?.isRequester,
+            isDesignOwner: existing.isDesignOwner || flags?.isDesignOwner,
+            isViewer: existing.isViewer || flags?.isViewer,
+            role: flags?.isRequester
+              ? resolvedRole
+              : flags?.isAssignee
+              ? resolvedRole
+              : flags?.isDesignOwner
+              ? resolvedRole
+              : existing.role,
+          }
+          seenNames.add(canonicalName.toLowerCase().trim())
+          if (nameKey) seenNames.add(nameKey)
+          return
+        }
+
+        // 3. Kiểm tra trùng lặp theo Họ tên
+        const existingByNameIdx = list.findIndex(
+          (u) => u.name.toLowerCase().trim() === canonicalName.toLowerCase().trim() ||
+                 (nameKey && u.name.toLowerCase().trim() === nameKey)
+        )
+        if (existingByNameIdx !== -1) {
+          const existing = list[existingByNameIdx]
+          list[existingByNameIdx] = {
+            ...existing,
+            email: existing.email || canonicalEmail,
+            avatar: existing.avatar || canonicalAvatar,
+            isAssignee: existing.isAssignee || flags?.isAssignee,
+            isRequester: existing.isRequester || flags?.isRequester,
+            isDesignOwner: existing.isDesignOwner || flags?.isDesignOwner,
+            isViewer: existing.isViewer || flags?.isViewer,
+            role: flags?.isRequester
+              ? resolvedRole
+              : flags?.isAssignee
+              ? resolvedRole
+              : flags?.isDesignOwner
+              ? resolvedRole
+              : existing.role,
+          }
+          if (canonicalEmail) emailToIndex.set(canonicalEmail, existingByNameIdx)
+          seenNames.add(canonicalName.toLowerCase().trim())
+          if (nameKey) seenNames.add(nameKey)
+          return
+        }
+
+        // 4. Thêm mới vào danh sách
+        const newIdx = list.length
+        list.push({
+          id: canonicalEmail || canonicalName,
+          name: canonicalName,
+          displayName: canonicalName,
+          role: resolvedRole,
+          email: canonicalEmail,
+          avatar: canonicalAvatar,
+          isAssignee: flags?.isAssignee,
+          isViewer: flags?.isViewer,
+          isRequester: flags?.isRequester,
+          isDesignOwner: flags?.isDesignOwner,
+          squad: matched?.squad || request.squad_name || "",
+        })
+
+        if (canonicalEmail) emailToIndex.set(canonicalEmail, newIdx)
+        seenNames.add(canonicalName.toLowerCase().trim())
+        if (nameKey) seenNames.add(nameKey)
+      })
+    }
+
+    // 1. Designer thực hiện (Assignee)
+    const currentAssignee = localAssignee || request.assigned_designer
+    if (currentAssignee && currentAssignee !== "Chưa phân công" && currentAssignee !== "Đang phân công") {
+      addPerson(currentAssignee, { isAssignee: true, role: "Designer thực hiện" })
+    }
+
+    // 2. PO (Người yêu cầu / Requester)
+    if (resolvedRequester.name || resolvedRequester.email) {
+      addPerson(resolvedRequester.name, {
+        isRequester: true,
+        role: "PO (Người yêu cầu)",
+        email: resolvedRequester.email,
+      })
+    }
+
+    // 3. Designer Owner phụ trách squad
+    squadDesignOwners.forEach((owner) => {
+      addPerson(owner.name, {
+        isDesignOwner: true,
+        role: "Designer Owner phụ trách squad",
+        email: owner.email,
+      })
+    })
+
+    // 4. Viewers (Người theo dõi bài toán)
+    localViewers.forEach((v) => {
+      addPerson(v, { isViewer: true, role: "Người theo dõi" })
+    })
+
+    // LƯU Ý: Tuyệt đối KHÔNG thêm toàn bộ nhân sự ngân hàng vào đây.
+    // Chỉ giới hạn đúng 4 nhóm: Viewer, PO, Designer thực hiện, Designer Owner phụ trách squad.
 
     return list
-  }, [request, localAssignee, localViewers, squadViewers, supportingViewers, availableViewerMembers])
+  }, [request, localAssignee, resolvedRequester, squadDesignOwners, localViewers, availableViewerMembers])
+
+  // Danh sách toàn bộ họ tên thành viên để nhận diện trong nội dung trao đổi
+  const allKnownMemberNames = useMemo(() => {
+    const names = new Set<string>()
+    availableViewerMembers.forEach((m) => {
+      if (m.name) names.add(m.name.trim().normalize("NFC"))
+    })
+    if (request?.assigned_designer) {
+      request.assigned_designer.split(",").forEach((n) => names.add(n.trim().normalize("NFC")))
+    }
+    if (resolvedRequester?.name) {
+      names.add(resolvedRequester.name.trim().normalize("NFC"))
+    } else if (request?.requester_name) {
+      names.add(request.requester_name.trim().normalize("NFC"))
+    }
+    localViewers.forEach((v) => names.add(v.trim().normalize("NFC")))
+
+    return Array.from(names).filter(Boolean).sort((a, b) => b.length - a.length)
+  }, [availableViewerMembers, request, localViewers, resolvedRequester])
+
+  // Regex nhận diện URL, lệnh slash /sentopo /pending, mention @all và mention @User
+  const commentTokenRegex = useMemo(() => {
+    const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const knownPattern = allKnownMemberNames.map(escapeRegex).join("|")
+
+    // Title-case Vietnamese name: 1 to 4 Capitalized words (e.g. "Nguyễn Phương Nam", "Bạch Đức Duy")
+    const generalTitleCaseName = "[A-ZÀ-ỸĐ][a-zà-ỹđ0-9_]*(?:\\s+[A-ZÀ-ỸĐ][a-zà-ỹđ0-9_]*){0,3}"
+
+    // Single-word handle / email / username (e.g. "namnp5", "trangbt9")
+    const singleWordHandle = "[a-zA-Z0-9_\\p{L}\\p{M}]+(?:\\.[a-zA-Z0-9_\\p{L}\\p{M}]+)*"
+
+    const mentionPattern = `@\\s*(?:${knownPattern ? `${knownPattern}|` : ""}${generalTitleCaseName}|${singleWordHandle})`
+
+    const pattern =
+      `(\\[[^\\]]+\\]\\(https?:\\/\\/[^\\s\\)]+\\)|` +
+      `https?:\\/\\/[^\\s]+|` +
+      `(?:\/|@)[sS][eE][nN]?[dD]?_?[tT][oO]_?[pP][oO](?::|\\s)?|` +
+      `(?:\/|@)(?:[pP][oO]_)?(?:[pP][eE][nN][dD][iI][nN][gG])(?::|\\s)?|` +
+      `@[aA][lL][lL]\\b|@[eE][vV][eE][rR][yY][oO][nN][eE]\\b|@[mM][ọo][iị]\\s+[nN][gG][ưu][ờo][iì]\\b|` +
+      `${mentionPattern})`
+
+    return new RegExp(pattern, "gu")
+  }, [allKnownMemberNames])
 
   const renderViewerPopoverContent = (onClose: () => void) => {
     const filterByQuery = (m: (typeof availableViewerMembers)[0]) => {
@@ -2258,7 +2480,7 @@ export default function RequestDetail({
           taskTitle: request.title,
           actorName: targetName || "Chưa phân công",
           actorRole: "Designer",
-          recipient: targetName ? `${targetName} & ${request.requester_name || "PO"}` : undefined,
+          recipient: targetName ? `${targetName} & ${resolvedRequester.name || "PO"}` : undefined,
           targetRole: "Designer",
           showToast: false,
           viewers: localViewers,
@@ -2521,7 +2743,7 @@ export default function RequestDetail({
           taskTitle: request.title,
           actorName: session?.displayName || displayName || "Designer",
           actorRole: (session?.role as any) || "Designer",
-          recipient: `${request.requester_name || "PO"} (Requester)`,
+          recipient: `${resolvedRequester.name || "PO"} (Requester)`,
           targetRole: "PO",
           showToast: false,
           viewers: localViewers,
@@ -2774,7 +2996,7 @@ export default function RequestDetail({
       timestamp: initialCreateUpdate?.timestamp || request.submitted_at || "19/08/2026 09:15",
       author: initialCreateUpdate?.updated_by
         ? formatDesignerDisplayName(initialCreateUpdate.updated_by)
-        : (request.requester_name || request.requester_email || "PO (Product Owner)"),
+        : (resolvedRequester.name || request.requester_name || request.requester_email || "PO (Product Owner)"),
       authorRole: (initialCreateUpdate?.author_role as any) || "PO",
       title: "Đã khởi tạo yêu cầu UX",
       content: `Yêu cầu [${request.title}] được tạo cho Sản phẩm ${request.product || "App MBBank"}${request.squad_name ? ` (Squad: ${request.squad_name})` : ""}.`,
@@ -3099,10 +3321,11 @@ export default function RequestDetail({
         link: `#track?requestId=${request.request_id}`,
       })
     } else {
+      const normRawText = rawText.normalize("NFC").toLowerCase()
       const mentionedUsers = mentionUserList.filter((m) => {
         if (m.isAll) return false
-        const tag = `@${m.name.toLowerCase()}`
-        return rawText.toLowerCase().includes(tag)
+        const tag = `@${m.name.normalize("NFC").toLowerCase()}`
+        return normRawText.includes(tag)
       })
 
       if (mentionedUsers.length > 0) {
@@ -3119,6 +3342,17 @@ export default function RequestDetail({
           viewers: localViewers,
           link: `#track?requestId=${request.request_id}`,
         })
+
+        // Tự động thêm thành viên được @mention vào người theo dõi của task nếu chưa có
+        const newViewersToAdd = mentionedUsers
+          .map((u) => u.name)
+          .filter((uName) => !localViewers.some((v) => isMemberMatchViewer({ name: uName }, v)))
+
+        if (newViewersToAdd.length > 0) {
+          const updatedViewers = [...localViewers, ...newViewersToAdd]
+          setLocalViewers(updatedViewers)
+          saveStoredTaskViewers(request.request_id, updatedViewers)
+        }
       } else {
         dispatchNotification({
           type: "comment_added",
@@ -3222,9 +3456,10 @@ export default function RequestDetail({
     const elapsedMs = Math.max(0, now - sentMs)
     const elapsedHours = elapsedMs / (1000 * 60 * 60)
 
-    // Trong 24h: Hiện Banner 1 (Tím: Đang trong hạn 24h chờ PO phản hồi)
-    if (elapsedHours < 24) {
-      const hoursRemaining = Math.max(0, Math.ceil(24 - elapsedHours))
+    // Trong thời hạn quy định: Hiện Banner 1 (Tím: Đang trong hạn chờ PO phản hồi)
+    const poTimeoutHours = getSystemConfig().sla?.poPendingTimeoutHours ?? 24
+    if (elapsedHours < poTimeoutHours) {
+      const hoursRemaining = Math.max(0, Math.ceil(poTimeoutHours - elapsedHours))
       const sentDate = new Date(sentMs)
       const sentTimeStr = !isNaN(sentDate.getTime()) ? sentDate.toLocaleString("vi-VN") : ""
       return {
@@ -3881,7 +4116,7 @@ export default function RequestDetail({
 
                                     return (
                                       <button
-                                        key={des.name}
+                                        key={des.email || des.name}
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation()
@@ -4465,18 +4700,16 @@ export default function RequestDetail({
                       {/* Row 2: Author and Created Metadata aligned with Edit Button */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
                         {(() => {
-                          const rawCreator = (request.requester_name || request.requester_email || "PO").trim()
-                          const displayCreator = rawCreator.includes("@")
-                            ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
-                            : rawCreator
-                          const creatorAvatar = getDesignerAvatar(displayCreator) || getDesignerAvatar(rawCreator) || getDesignerAvatar(request.requester_name) || getDesignerAvatar(request.requester_email)
+                          const displayCreator = resolvedRequester.name || "PO"
+                          const creatorEmail = resolvedRequester.email || request.requester_email || ""
+                          const creatorAvatar = resolvedRequester.avatar || getDesignerAvatar(displayCreator, creatorEmail)
 
                           return (
                             <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
                               <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" className="w-5 h-5 text-[10px]" />
                               <strong className="font-semibold text-slate-800">{displayCreator}</strong>
-                              {request.requester_email && (
-                                <span className="text-slate-400 font-mono text-[11.5px]">({request.requester_email})</span>
+                              {creatorEmail && (
+                                <span className="text-slate-400 font-mono text-[11.5px]">({creatorEmail})</span>
                               )}
                               {request.submitted_at && (
                                 <>
@@ -4516,7 +4749,7 @@ export default function RequestDetail({
                         ) : (
                           <span 
                             className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80 shrink-0" 
-                            title={`Chỉ người tạo yêu cầu (${request.requester_name || request.requester_email || "Tác giả"}) hoặc Admin mới có quyền sửa nội dung đầu bài.`}
+                            title={`Chỉ người tạo yêu cầu (${resolvedRequester.name || resolvedRequester.email || "Tác giả"}) hoặc Admin mới có quyền sửa nội dung đầu bài.`}
                           >
                             <Lock className="w-3.5 h-3.5 text-slate-400" />
                             <span>Chỉ tác giả được sửa</span>
@@ -4684,43 +4917,35 @@ export default function RequestDetail({
                   </div>
 
 
-                    {/* Deliverables Sub-cards (ClickUp Linked Items Hub) */}
-                    <div className="space-y-2.5 pt-2">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs sm:text-[13px] font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-2">
-                          <span>DELIVERABLES & TÀI LIỆU BÀN GIAO</span>
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setShowAddDeliverableModal(true)}
-                          className="text-xs sm:text-sm font-medium text-[#1057FB] hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Thêm link</span>
-                        </button>
-                      </div>
-
-                      {/* Figma Item Card */}
-                      <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 hover:border-purple-300 bg-white transition-all shadow-2xs flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0 border border-purple-100">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                              <path d="M5 5.5C5 3.567 6.567 2 8.5 2H12V9H8.5C6.567 9 5 7.433 5 5.5Z" fill="#F24E1E"/>
-                              <path d="M12 2H15.5C17.433 2 19 3.567 19 5.5C19 7.433 17.433 9 15.5 9H12V2Z" fill="#FF7262"/>
-                              <path d="M12 9H15.5C17.433 9 19 10.567 19 12.5C19 14.433 17.433 16 15.5 16H12V9Z" fill="#1ABCFE"/>
-                              <path d="M5 12.5C5 10.567 6.567 9 8.5 9H12V16H8.5C6.567 16 5 14.433 5 12.5Z" fill="#A259FF"/>
-                              <path d="M5 19.5C5 17.567 6.567 16 8.5 16H12V19.5C12 21.433 10.433 23 8.5 23C6.567 23 5 21.433 5 19.5Z" fill="#0ACF83"/>
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-sm sm:text-[14.5px] font-semibold text-slate-900">Figma Design Canvas</p>
-                            <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md font-normal">
-                              {customDeliverables?.figma_url || "Chưa đính kèm liên kết Figma"}
-                            </p>
-                          </div>
+                    {/* Deliverables Sub-cards: Chỉ hiển thị khi có link bàn giao Figma, ẩn nút thêm link và ẩn cụm đính kèm khi chưa có link */}
+                    {customDeliverables?.figma_url && (
+                      <div className="space-y-2.5 pt-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs sm:text-[13px] font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+                            <span>DELIVERABLES & TÀI LIỆU BÀN GIAO</span>
+                          </h3>
                         </div>
 
-                        {customDeliverables?.figma_url ? (
+                        {/* Figma Item Card */}
+                        <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 hover:border-purple-300 bg-white transition-all shadow-2xs flex items-center justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0 border border-purple-100">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M5 5.5C5 3.567 6.567 2 8.5 2H12V9H8.5C6.567 9 5 7.433 5 5.5Z" fill="#F24E1E"/>
+                                <path d="M12 2H15.5C17.433 2 19 3.567 19 5.5C19 7.433 17.433 9 15.5 9H12V2Z" fill="#FF7262"/>
+                                <path d="M12 9H15.5C17.433 9 19 10.567 19 12.5C19 14.433 17.433 16 15.5 16H12V9Z" fill="#1ABCFE"/>
+                                <path d="M5 12.5C5 10.567 6.567 9 8.5 9H12V16H8.5C6.567 16 5 14.433 5 12.5Z" fill="#A259FF"/>
+                                <path d="M5 19.5C5 17.567 6.567 16 8.5 16H12V19.5C12 21.433 10.433 23 8.5 23C6.567 23 5 21.433 5 19.5Z" fill="#0ACF83"/>
+                              </svg>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm sm:text-[14.5px] font-semibold text-slate-900">Figma Design Canvas</p>
+                              <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md font-normal">
+                                {customDeliverables.figma_url}
+                              </p>
+                            </div>
+                          </div>
+
                           <a
                             href={customDeliverables.figma_url}
                             target="_blank"
@@ -4730,20 +4955,9 @@ export default function RequestDetail({
                           >
                             <ExternalLink className="w-4 h-4" />
                           </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewDeliverableType("figma")
-                              setShowAddDeliverableModal(true)
-                            }}
-                            className="text-[11px] text-[#1057FB] font-medium hover:underline cursor-pointer"
-                          >
-                            + Đính kèm
-                          </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                 {/* RIGHT COLUMN: ClickUp Activity & Comments Stream with Full Updates */}
@@ -4920,8 +5134,9 @@ export default function RequestDetail({
                         const renderRichCommentContent = (content?: string) => {
                           if (!content) return null
 
-                          // Hỗ trợ hiển thị danh sách gạch đầu dòng (-) hoặc (*)
-                          const lines = content.split("\n")
+                          // Chuẩn hóa Unicode NFC để gộp các ký tự tổ hợp (tránh lỗi ~n hay .ch do NFD từ sheet cũ)
+                          const normalizedContent = content.normalize("NFC")
+                          const lines = normalizedContent.split("\n")
 
                           return (
                             <div className="space-y-1">
@@ -4931,29 +5146,22 @@ export default function RequestDetail({
                                 const textToRender = isBullet ? bulletMatch![2] : line
 
                                 const renderLineSegments = (text: string) => {
-                                  // Regex nhận diện URL, lệnh slash /sentopo /pending, mention @all và mention @User
-                                  const tokenRegex = /(https?:\/\/[^\s]+|(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po(?::|\s)?|(?:\/|@)(?:po_)?pending(?::|\s)?|@all\b|@everyone\b|@mọi người\b|@[a-zA-Z0-9_\p{L}]+(?:\s+[a-zA-Z0-9_\p{L}]+)*)/gu
-                                  const parts = text.split(tokenRegex)
+                                  const parts = text.split(commentTokenRegex)
 
                                   return parts.map((part, pIdx) => {
                                     if (!part) return null
 
-                                    // 1. URL Link
-                                    if (/^https?:\/\//i.test(part)) {
+                                    // 1. URL Link (Cả Markdown link [Tiêu đề](https://...) và link URL trực tiếp)
+                                    const mdMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)$/)
+                                    if (mdMatch || /^https?:\/\//i.test(part)) {
+                                      const targetUrl = mdMatch ? mdMatch[2] : part.replace(/[.,;:!?)]+$/, "")
+                                      const customTitle = mdMatch ? mdMatch[1] : undefined
                                       return (
-                                        <a
+                                        <SmartLinkChip
                                           key={`link-${lIdx}-${pIdx}`}
-                                          href={part}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="text-[#1057FB] hover:text-[#0b40bd] hover:underline font-semibold break-all inline-flex items-center gap-1 bg-blue-50/90 hover:bg-blue-100 px-2 py-0.5 rounded-lg transition-colors border border-blue-200 text-xs my-0.5 shadow-2xs"
-                                          title={part}
-                                        >
-                                          <Paperclip className="w-3 h-3 shrink-0" />
-                                          <span className="truncate max-w-[280px]">{part}</span>
-                                          <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-80" />
-                                        </a>
+                                          url={targetUrl}
+                                          customTitle={customTitle}
+                                        />
                                       )
                                     }
 
@@ -4981,30 +5189,39 @@ export default function RequestDetail({
                                       )
                                     }
 
-                                    // 4. Mention @all / @everyone / @Mọi người
-                                    if (/^@(all|everyone|mọi người)$/i.test(part)) {
+                                    // 4. Mention @all / @everyone / @Mọi người (chữ xanh, không bôi box)
+                                    if (/^@(all|everyone|mọi người)/i.test(part)) {
                                       return (
                                         <span
                                           key={`men-all-${lIdx}-${pIdx}`}
-                                          className="inline-flex items-center gap-1 px-1.5 py-0.2 mr-1 rounded-md text-xs font-bold bg-blue-100 text-[#1057FB] border border-blue-200 shadow-2xs"
+                                          className="text-[#1057FB] font-semibold hover:underline cursor-pointer inline mr-1"
                                         >
-                                          <Users className="w-3 h-3" />
-                                          {part}
+                                          {part.trim()}
                                         </span>
                                       )
                                     }
 
-                                    // 5. Mention cá nhân: @Tên
-                                    if (/^@[a-zA-Z0-9_\p{L}]+/u.test(part)) {
-                                      return (
-                                        <span
-                                          key={`men-usr-${lIdx}-${pIdx}`}
-                                          className="inline-flex items-center gap-0.5 px-1.5 py-0.2 mr-1 rounded-md text-xs font-semibold bg-blue-50 text-[#1057FB] border border-blue-200/80"
-                                        >
-                                          <AtSign className="w-2.5 h-2.5 opacity-80" />
-                                          <span>{part.startsWith("@") ? part.slice(1) : part}</span>
-                                        </span>
-                                      )
+                                    // 5. Mention cá nhân: @Tên (CHỈ bôi xanh tên nếu user thuộc bài toán, KHÔNG bôi box)
+                                    if (/^@\s*[a-zA-Z0-9_\p{L}\p{M}]/u.test(part)) {
+                                      const cleanPart = part.trim()
+                                      const nameOnly = cleanPart.replace(/^@\s*/, "").trim()
+
+                                      const matchedMember = mentionUserList.find((u) => !u.isAll && isMemberMatchViewer(u, nameOnly))
+
+                                      if (matchedMember) {
+                                        return (
+                                          <span
+                                            key={`men-usr-${lIdx}-${pIdx}`}
+                                            className="text-[#1057FB] font-semibold hover:underline cursor-pointer inline mr-1"
+                                            title={`${matchedMember.name} (${matchedMember.role || "Thành viên"}${matchedMember.email ? ` • ${matchedMember.email}` : ""})`}
+                                          >
+                                            @{nameOnly}
+                                          </span>
+                                        )
+                                      }
+
+                                      // Không phải user thuộc bài toán: Hiển thị như văn bản thường, không bôi xanh, không có box
+                                      return <span key={`txt-${lIdx}-${pIdx}`}>{part}</span>
                                     }
 
                                     return <span key={`txt-${lIdx}-${pIdx}`}>{part}</span>
@@ -5040,10 +5257,16 @@ export default function RequestDetail({
                             return (
                               <TimelineItem key={eventKey} status={isLatest ? "current" : "completed"} className="items-start">
                                 <TimelineIcon
-                                  status={isLatest ? "current" : "completed"}
-                                  className="w-8 h-8 ring-2 ring-white shrink-0 p-0 overflow-hidden"
+                                  variant="plain"
+                                  className="w-8 h-8 ring-4 ring-white shrink-0 p-0 overflow-hidden bg-white shadow-xs"
                                 >
-                                  <UserAvatar name={event.author} avatarUrl={evtAvatar} size="sm" className="w-full h-full" />
+                                  <UserAvatar
+                                    name={event.author}
+                                    avatarUrl={evtAvatar}
+                                    size="lg"
+                                    className="w-8 h-8"
+                                    showBorder={false}
+                                  />
                                 </TimelineIcon>
                                 <TimelineContent className="flex-1 min-w-0">
                                   <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 group hover:border-[#1057FB]/40 transition-all">
@@ -5085,16 +5308,7 @@ export default function RequestDetail({
 
                                       return (
                                         <div className="pt-1">
-                                          <a
-                                            href={event.link}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-[#1057FB] text-xs font-medium border border-blue-200/80 transition-colors group"
-                                          >
-                                            <Paperclip className="w-3.5 h-3.5 shrink-0" />
-                                            <span className="truncate max-w-[260px]">{event.link}</span>
-                                            <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-75 group-hover:opacity-100" />
-                                          </a>
+                                          <SmartLinkChip url={event.link} customTitle={event.title} />
                                         </div>
                                       )
                                     })()}
@@ -5104,133 +5318,128 @@ export default function RequestDetail({
                             )
                           }
 
-                          // SYSTEM EVENT ROW (Dạng text ngắn gọn, thanh lịch)
+                          // SYSTEM EVENT ROW (Dạng text nhỏ gọn theo phong cách ClickUp / Jira)
+                          const displayAuthor =
+                            event.author && session?.displayName && event.author === session.displayName
+                              ? "Bạn"
+                              : event.author
+
                           return (
-                            <TimelineItem key={eventKey} status={isLatest ? "current" : "completed"} className="items-start">
-                              <TimelineIcon
-                                status={isLatest ? "current" : "completed"}
-                                className="w-7 h-7 text-xs shrink-0"
-                              >
-                                {event.type === "create" && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                                {event.type === "assignment" && <UserCheck className="w-3.5 h-3.5" />}
-                                {event.type === "phase_change" && <Layers className="w-3.5 h-3.5" />}
-                                {event.type === "deliverable" && <Paperclip className="w-3.5 h-3.5" />}
-                                {event.type === "status_change" && <Activity className="w-3.5 h-3.5" />}
-                                {!["create", "assignment", "phase_change", "deliverable", "status_change"].includes(event.type) && (
-                                  <Activity className="w-3.5 h-3.5" />
-                                )}
-                              </TimelineIcon>
-                              <TimelineContent className="flex-1 min-w-0 pt-0.5">
-                                <TimelineHeader className="text-xs">
-                                  <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-700 leading-normal min-w-0 font-normal">
-                                    {event.type === "create" && (
-                                      <>
-                                        <span className="font-medium text-slate-800">{event.author || "PO"}</span>
-                                        <span>đã khởi tạo yêu cầu cho</span>
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-200/90">
-                                          {localProduct || request.product || "App MBBank"}
-                                        </span>
-                                      </>
-                                    )}
-                                    {event.type === "assignment" && (
-                                      <>
-                                        {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
-                                        <span>đã phân công Designer</span>
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                          {event.toValue}
-                                        </span>
-                                      </>
-                                    )}
-                                    {event.type === "phase_change" && (
-                                      <>
-                                        {event.author && <span className="font-medium text-slate-800">{event.author}</span>}
-                                        <span>đã chuyển khâu từ</span>
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                          {event.fromValue || "Chờ xác nhận"}
-                                        </span>
-                                        <span>sang</span>
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium border border-blue-200/80">
-                                          {event.toValue}
-                                        </span>
-                                      </>
-                                    )}
-                                    {event.type === "deliverable" && (
-                                      <>
-                                        {event.author && <span className="font-bold text-slate-800">{event.author}</span>}
-                                        <span>đã đính kèm</span>
-                                        <a
-                                          href={event.link}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[11px] font-semibold border border-purple-200/80 hover:underline"
-                                        >
-                                          <Paperclip className="w-3 h-3" />
-                                          <span>{event.title || "Tài liệu bàn giao"}</span>
-                                        </a>
-                                      </>
-                                    )}
-                                    {event.type === "status_change" && (
-                                      <>
-                                        {event.fromValue ? (
-                                          <>
-                                            {event.author && <span className="font-bold text-slate-800">{event.author}:</span>}
-                                            <span>Đã cập nhật trạng thái từ</span>
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200">
-                                              {event.fromValue}
-                                            </span>
-                                            <span>sang</span>
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80">
-                                              {event.toValue}
-                                            </span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            {(() => {
-                                              const val = event.toValue || ""
-                                              const valLower = val.toLowerCase()
-                                              if (valLower.includes("người theo dõi") || valLower.includes("viewer")) {
-                                                const countMatch = val.match(/\(([^)]+)\)/)
-                                                return (
-                                                  <>
-                                                    {event.author && (
-                                                      <span className="font-medium text-slate-800">{event.author}</span>
-                                                    )}
-                                                    <span>đã cập nhật danh sách</span>
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
-                                                      Người theo dõi
-                                                    </span>
-                                                    {countMatch && (
-                                                      <span className="text-slate-500 font-normal">({countMatch[1]})</span>
-                                                    )}
-                                                  </>
-                                                )
-                                              }
-                                              const hasAuthor = event.author && val.toLowerCase().includes(event.author.toLowerCase())
+                            <TimelineItem key={eventKey} className="items-start py-1">
+                              {/* Bullet dot nhỏ gọn, thẳng hàng tuyệt đối với trục timeline 16px */}
+                              <div className="w-8 flex items-center justify-center shrink-0 pt-1.5 z-10">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 ring-4 ring-white" />
+                              </div>
+
+                              {/* Nội dung text gọn nhẹ kèm timestamp căn phải */}
+                              <div className="flex-1 min-w-0 flex items-start sm:items-center justify-between gap-2 sm:gap-4 flex-col sm:flex-row text-xs py-0.5">
+                                <div className="flex items-center gap-1.5 flex-wrap text-slate-600 leading-normal min-w-0 font-normal">
+                                  {event.type === "create" && (
+                                    <>
+                                      <span className="font-medium text-slate-700">{displayAuthor || "PO"}</span>
+                                      <span className="text-slate-500">đã khởi tạo yêu cầu cho</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200/80">
+                                        {localProduct || request.product || "App MBBank"}
+                                      </span>
+                                    </>
+                                  )}
+                                  {event.type === "assignment" && (
+                                    <>
+                                      {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}</span>}
+                                      <span className="text-slate-500">đã phân công Designer</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                        {event.toValue}
+                                      </span>
+                                    </>
+                                  )}
+                                  {event.type === "phase_change" && (
+                                    <>
+                                      {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}</span>}
+                                      <span className="text-slate-500">đã chuyển khâu từ</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200/80">
+                                        {event.fromValue || "Chờ xác nhận"}
+                                      </span>
+                                      <span className="text-slate-500">sang</span>
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                        {event.toValue}
+                                      </span>
+                                    </>
+                                  )}
+                                  {event.type === "deliverable" && (
+                                    <>
+                                      {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}</span>}
+                                      <span className="text-slate-500">đã đính kèm</span>
+                                      <SmartLinkChip url={event.link} customTitle={event.title} />
+                                    </>
+                                  )}
+                                  {event.type === "status_change" && (
+                                    <>
+                                      {event.fromValue ? (
+                                        <>
+                                          {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}</span>}
+                                          <span className="text-slate-500">đã đổi trạng thái từ</span>
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200">
+                                            {event.fromValue}
+                                          </span>
+                                          <span className="text-slate-500">sang</span>
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-medium border border-emerald-200/80">
+                                            {event.toValue}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {(() => {
+                                            const val = event.toValue || ""
+                                            const valLower = val.toLowerCase()
+                                            if (valLower.includes("người theo dõi") || valLower.includes("viewer")) {
+                                              const countMatch = val.match(/\(([^)]+)\)/)
                                               return (
                                                 <>
-                                                  {event.author && !hasAuthor && (
-                                                    <span className="font-medium text-slate-800">{event.author}:</span>
+                                                  {displayAuthor && (
+                                                    <span className="font-medium text-slate-700">{displayAuthor}</span>
                                                   )}
-                                                  <span className="text-slate-700 font-normal">{val}</span>
+                                                  <span className="text-slate-500">đã cập nhật danh sách</span>
+                                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 text-[#1057FB] text-[11px] font-medium border border-blue-200/80">
+                                                    Người theo dõi
+                                                  </span>
+                                                  {countMatch && (
+                                                    <span className="text-slate-500 font-normal">({countMatch[1]})</span>
+                                                  )}
                                                 </>
                                               )
-                                            })()}
-                                          </>
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                  <TimelineTime className="text-[11px] text-slate-400 shrink-0 font-mono pl-2 pt-0.5 whitespace-nowrap self-start">
-                                    {event.timestamp}
-                                  </TimelineTime>
-                                </TimelineHeader>
-                              </TimelineContent>
+                                            }
+                                            const hasAuthor = displayAuthor && val.toLowerCase().includes(displayAuthor.toLowerCase())
+                                            return (
+                                              <>
+                                                {displayAuthor && !hasAuthor && (
+                                                  <span className="font-medium text-slate-700">{displayAuthor}:</span>
+                                                )}
+                                                <span className="text-slate-600 font-normal">{val}</span>
+                                              </>
+                                            )
+                                          })()}
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                  {!["create", "assignment", "phase_change", "deliverable", "status_change"].includes(event.type) && (
+                                    <>
+                                      {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}:</span>}
+                                      <span className="text-slate-600 font-normal">{event.content || event.toValue}</span>
+                                    </>
+                                  )}
+                                </div>
+
+                                <span className="text-[11px] text-slate-400 shrink-0 font-normal whitespace-nowrap self-start sm:self-center">
+                                  {event.timestamp}
+                                </span>
+                              </div>
                             </TimelineItem>
                           )
                         }
 
                         return (
-                          <Timeline className="before:left-3.5 space-y-4">
+                          <Timeline className="before:left-4 space-y-2.5">
                             {/* Older Activities Accordion (Show more) */}
                             {hasOlder && (
                               <div className="pb-2 border-b border-slate-100">
@@ -5240,7 +5449,7 @@ export default function RequestDetail({
                                   className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 py-1 transition-colors cursor-pointer"
                                 >
                                   <ChevronRight className={`w-3.5 h-3.5 transition-transform text-slate-400 ${showOlderActivities ? "rotate-90" : ""}`} />
-                                  <span>{showOlderActivities ? "Show less" : `Show more (${olderItems.length})`}</span>
+                                  <span>{showOlderActivities ? "Thu gọn bớt" : `Xem hoạt động trước đó (${olderItems.length})`}</span>
                                 </button>
 
                                 <AnimatePresence>
@@ -5252,7 +5461,7 @@ export default function RequestDetail({
                                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                                       className="overflow-hidden"
                                     >
-                                      <div className="space-y-4 pt-2">
+                                      <div className="space-y-2.5 pt-2">
                                         {olderItems.map((item, idx) => renderSingleActivity(item, `older-${idx}`, false))}
                                       </div>
                                     </motion.div>
@@ -5262,7 +5471,7 @@ export default function RequestDetail({
                             )}
 
                             {/* Recent Activities */}
-                            <div className="space-y-4">
+                            <div className="space-y-2.5">
                               {recentItems.map((item, idx) => {
                                 const isLatest = idx === recentItems.length - 1
                                 return renderSingleActivity(item, `recent-${idx}`, isLatest)

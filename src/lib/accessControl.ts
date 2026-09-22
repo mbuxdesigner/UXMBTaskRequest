@@ -1,6 +1,27 @@
-import { UXRequest } from "@/data/mockData"
-import { UserSession } from "@/services/otpAuthService"
-import { getStoredTaskViewers } from "@/services/googleSheetService"
+import type { UXRequest } from "../data/mockData"
+import type { UserSession } from "../services/otpAuthService"
+
+export const TASK_VIEWERS_STORE_KEY = "ux_task_viewers_map"
+
+export function getStoredTaskViewers(requestId?: string): string[] {
+  if (!requestId || typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(TASK_VIEWERS_STORE_KEY)
+    if (raw) {
+      const map = JSON.parse(raw)
+      if (map && Array.isArray(map[requestId])) {
+        return map[requestId]
+          .map((v: any) =>
+            typeof v === "object" && v !== null
+              ? String(v.name || v.displayName || v.email || "").trim()
+              : String(v || "").trim()
+          )
+          .filter(Boolean)
+      }
+    }
+  } catch {}
+  return []
+}
 
 export interface UserScope {
   products: string[]
@@ -205,6 +226,199 @@ export function isUserInViewers(viewers: string[] | string | null | undefined, s
 }
 
 /**
+ * Thu thập tất cả các định danh (email, prefix, tên hiển thị, tên trong danh bạ) của người dùng hiện tại
+ */
+export function getUserIdentities(session: UserSession | null): {
+  emails: string[]
+  emailPrefixes: string[]
+  names: string[]
+  shortNames: string[]
+} {
+  if (!session) {
+    return { emails: [], emailPrefixes: [], names: [], shortNames: [] }
+  }
+
+  const emails = new Set<string>()
+  const emailPrefixes = new Set<string>()
+  const names = new Set<string>()
+  const shortNames = new Set<string>()
+
+  const addEmail = (em?: string) => {
+    if (!em) return
+    const clean = em.toLowerCase().trim()
+    if (!clean) return
+    emails.add(clean)
+    const prefix = clean.includes("@") ? clean.split("@")[0].trim() : clean
+    if (prefix) {
+      emailPrefixes.add(prefix)
+      // Tách bỏ phần số ở cuối (ví dụ: trangbt9 -> trangbt, namlp2 -> namlp)
+      const noDigits = prefix.replace(/\d+$/, "")
+      if (noDigits && noDigits.length >= 3) {
+        emailPrefixes.add(noDigits)
+      }
+    }
+  }
+
+  const addName = (nm?: string) => {
+    if (!nm) return
+    const clean = nm.trim()
+    if (!clean) return
+    const low = clean.toLowerCase()
+    if (
+      low === "chưa phân công" ||
+      low === "đang phân công" ||
+      low === "unassigned" ||
+      low === "chưa gán" ||
+      low === "chuyên viên thiết kế ux"
+    ) {
+      return
+    }
+    // Bỏ qua phần chú thích ngoặc (ví dụ: "Trang (Lending)" -> "Trang")
+    const baseName = clean.replace(/\s*[\(\[\-].*$/, "").trim()
+    if (baseName) {
+      names.add(baseName)
+      const words = baseName.split(/\s+/).filter(Boolean)
+      if (words.length > 0) {
+        const last = words[words.length - 1]
+        if (last && last.length >= 2) shortNames.add(last)
+        if (words.length === 1 && words[0].length >= 2) shortNames.add(words[0])
+      }
+    }
+  }
+
+  addEmail(session.teamsEmail)
+  addEmail(session.personalEmail)
+  addName(session.displayName)
+
+  // Tra cứu bổ sung từ danh bạ nhân sự trong localStorage
+  try {
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      const cachedMembers =
+        localStorage.getItem("mbbank_admin_team") ||
+        localStorage.getItem("mbbank_team_members")
+      if (cachedMembers) {
+        const list: any[] = JSON.parse(cachedMembers)
+      if (Array.isArray(list)) {
+        const userEmail = (session.teamsEmail || session.personalEmail || "").toLowerCase().trim()
+        const userPrefix = userEmail.includes("@") ? userEmail.split("@")[0] : userEmail
+        const userName = (session.displayName || "").toLowerCase().trim()
+
+        const found = list.find((m) => {
+          const mEmail = (m.email || m.teamsEmail || m.personalEmail || "").toLowerCase().trim()
+          const mName = (m.name || m.displayName || "").toLowerCase().trim()
+          return (
+            (userEmail && mEmail === userEmail) ||
+            (userPrefix && userPrefix.length >= 3 && mEmail.includes(userPrefix)) ||
+            (userName && (mName === userName || (mName.length >= 3 && userName.length >= 3 && (mName.includes(userName) || userName.includes(mName)))))
+          )
+        })
+
+        if (found) {
+          addEmail(found.email)
+          addEmail(found.teamsEmail)
+          addEmail(found.personalEmail)
+          addName(found.name)
+          addName(found.displayName)
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Could not read team members for user identities:", e)
+}
+
+  return {
+    emails: Array.from(emails),
+    emailPrefixes: Array.from(emailPrefixes),
+    names: Array.from(names),
+    shortNames: Array.from(shortNames),
+  }
+}
+
+/**
+ * Kiểm tra xem bài toán có được gán cho user hay không (hỗ trợ cả assigned_designer, ux_owner, design_owner)
+ */
+export function isTaskAssignedToUser(
+  r: UXRequest | null | undefined,
+  session: UserSession | null,
+  includeDesignOwner = false
+): boolean {
+  if (!r || !session) return false
+  const identities = getUserIdentities(session)
+
+  const rawCandidates = [
+    r.assigned_designer,
+    r.ux_owner,
+    includeDesignOwner ? r.design_owner : undefined,
+  ].filter(Boolean) as string[]
+
+  if (rawCandidates.length === 0) return false
+
+  const candidateTokens: string[] = []
+  for (const raw of rawCandidates) {
+    const parts = raw.split(/[,;/|\n]+/).map((s) => s.trim()).filter(Boolean)
+    candidateTokens.push(...parts)
+  }
+
+  const ignoreList = [
+    "chưa phân công",
+    "đang phân công",
+    "unassigned",
+    "chưa gán",
+    "chưa gán designer",
+    "chuyên viên thiết kế ux",
+  ]
+
+  return candidateTokens.some((token) => {
+    const low = token.toLowerCase()
+    if (ignoreList.includes(low)) return false
+    const normToken = normalizeVietnameseString(token)
+    if (!normToken) return false
+
+    // 1. So khớp Email chính xác hoặc trích xuất email
+    if (identities.emails.some((em) => low.includes(em))) return true
+
+    // 2. So khớp Username prefix (ví dụ: "trangbt9", "namlp2")
+    for (const pref of identities.emailPrefixes) {
+      if (low === pref) return true
+      const prefixRegex = new RegExp("(^|[\\s,;:/])" + pref + "($|[\\s,;:/@])", "i")
+      if (prefixRegex.test(low)) return true
+      // Tiền tố email bắt đầu bằng tên token (ví dụ: prefix 'trangbt9' bắt đầu bằng 'trang')
+      const normPref = normalizeVietnameseString(pref)
+      if (normToken.length >= 3 && normPref.startsWith(normToken)) return true
+    }
+
+    // 3. So khớp Họ tên chính xác
+    if (identities.names.some((nm) => normalizeVietnameseString(nm) === normToken)) return true
+
+    // 4. So khớp Tên gọi ngắn / Tên chính trong tiếng Việt (ví dụ: "Trang", "Nam")
+    const tokenWords = token.split(/\s+/).filter(Boolean)
+    const tokenLastWord = tokenWords[tokenWords.length - 1]
+    const normTokenLastWord = normalizeVietnameseString(tokenLastWord)
+
+    if (
+      identities.shortNames.some((sn) => {
+        const normSn = normalizeVietnameseString(sn)
+        return normSn === normToken || normSn === normTokenLastWord
+      })
+    ) {
+      return true
+    }
+
+    // 5. So khớp lồng họ tên đầy đủ khi cả 2 bên đều có ít nhất 2 từ
+    for (const nm of identities.names) {
+      const normNm = normalizeVietnameseString(nm)
+      const nmWords = nm.split(/\s+/).filter(Boolean)
+      if (nmWords.length >= 2 && tokenWords.length >= 2) {
+        if (normNm.includes(normToken) || normToken.includes(normNm)) return true
+      }
+    }
+
+    return false
+  })
+}
+
+/**
  * Kiểm tra xem người dùng hiện tại có quyền xem bài toán (UXRequest) này hay không
  * theo đúng quy chuẩn Phân quyền theo Vai trò (Role-based Access Control):
  * - Admin: Xem được tất cả các bài toán của toàn team.
@@ -271,46 +485,7 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
 
   // 3. Designer: Chỉ nhìn thấy các bài toán được phân công cho mình (khớp với assigned_designer hoặc ux_owner)
   if (userRole === "Designer") {
-    const assigned = `${r.assigned_designer || ""} ${r.ux_owner || ""}`.toLowerCase().trim()
-    if (!assigned) return false
-
-    // Bỏ qua các chuỗi mặc định chưa phân công
-    if (
-      assigned === "chưa phân công" ||
-      assigned === "đang phân công" ||
-      assigned === "unassigned" ||
-      assigned === "chưa gán"
-    ) {
-      return false
-    }
-
-    if (userEmail && assigned.includes(userEmail)) return true
-    if (userEmailPrefix && userEmailPrefix.length >= 3) {
-      const prefixRegex = new RegExp(`(^|[\\s,;:/])` + userEmailPrefix + `($|[\\s,;:/@])`, "i")
-      if (prefixRegex.test(assigned)) return true
-    }
-    if (userName) {
-      const normAssigned = normalizeVietnameseString(assigned)
-      const normUserName = normalizeVietnameseString(userName)
-      if (normAssigned === normUserName) return true
-
-      const userWords = userName.split(/\s+/).filter(Boolean)
-      if (userWords.length >= 2 && (assigned.includes(userName) || normAssigned.includes(normUserName))) {
-        return true
-      }
-    }
-
-    // Chỉ khi assigned là 1 từ duy nhất (ví dụ ghi tắt: "Nam", "Đăng") mới so khớp tên gọi cuối
-    const assignedWords = assigned.split(/[\s,;]+/).filter(Boolean)
-    if (assignedWords.length === 1 && userName) {
-      const nameParts = userName.split(/\s+/).filter(Boolean)
-      const lastName = nameParts[nameParts.length - 1]
-      if (lastName && lastName.length >= 2 && lastName.toLowerCase() === assignedWords[0].toLowerCase()) {
-        return true
-      }
-    }
-
-    return false
+    return isTaskAssignedToUser(r, session, false)
   }
 
   // 4. Design Owner: Xem được toàn bộ bài toán được apply theo sản phẩm và squad
@@ -319,11 +494,7 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
     if (scope.isAll) return true
 
     // Nếu bài toán được gán trực tiếp cho chính Design Owner này phụ trách
-    const directAssigned = `${r.assigned_designer || ""} ${r.ux_owner || ""} ${r.design_owner || ""}`.toLowerCase().trim()
-    if (
-      (userEmailPrefix && directAssigned.includes(userEmailPrefix)) ||
-      (userName && directAssigned.includes(userName))
-    ) {
+    if (isTaskAssignedToUser(r, session, true)) {
       return true
     }
 

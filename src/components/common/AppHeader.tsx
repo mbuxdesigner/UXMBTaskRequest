@@ -43,7 +43,7 @@ import { uploadAvatarToDrive } from "@/services/googleSheetService"
 import { fetchRequests } from "@/api/api"
 import { canUserAccessRequest, filterRequestsByRole, normalizeVietnameseString, canRoleAccessCapability } from "@/lib/accessControl"
 import RequestDetail from "../track/RequestDetail"
-import { UserAvatar } from "./UserAvatar"
+import { UserAvatar, getMemberDisplayName } from "./UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
@@ -68,7 +68,7 @@ interface AppHeaderProps {
 
 const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   overview: { title: "Overview", section: "Dashboards" },
-  track: { title: "Track Task", section: "Dashboards" },
+  track: { title: "My task", section: "Dashboards" },
   create: { title: "Tạo task mới", section: "Workspace" },
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },
@@ -239,6 +239,14 @@ export default function AppHeader({
   const displayName = session?.displayName || "Lê Hoàng Nam"
   const userRole = session?.role || "Designer"
 
+  // Chỉ Admin (hoặc Admin đang trong phiên Role Preview) mới có quyền sử dụng View theo role
+  const isActualAdmin = useMemo(() => {
+    if (!session) return false
+    if (session.role === "Admin") return true
+    if (session.isImpersonating && session.originalRole === "Admin") return true
+    return false
+  }, [session])
+
   // 5 Role options for "View theo role"
   const ROLE_OPTIONS: { id: UserRole; label: string; icon: React.ElementType }[] = [
     { id: "Admin", label: "Admin", icon: ShieldCheck },
@@ -249,6 +257,11 @@ export default function AppHeader({
   ]
 
   const handleSelectRole = (targetRole: UserRole, label: string) => {
+    if (!isActualAdmin) {
+      toast.error("Chỉ tài khoản Admin mới có quyền chuyển đổi vai trò.")
+      setUserMenuOpen(false)
+      return
+    }
     if (targetRole === "Admin") {
       stopRolePreview()
       toast.success("Đã chuyển sang vai trò: Admin")
@@ -348,8 +361,11 @@ export default function AppHeader({
         const raw = localStorage.getItem(key)
         if (raw) {
           const list = JSON.parse(raw)
-          const userEmail = updated.teamsEmail || updated.personalEmail
-          const found = list.find((m: any) => m.email === userEmail || m.teamsEmail === userEmail)
+          const userEmail = (updated.teamsEmail || updated.personalEmail || "").toLowerCase().trim()
+          const found = list.find((m: any) => {
+            const mEmail = String(m.email || m.teamsEmail || m.personalEmail || "").toLowerCase().trim()
+            return mEmail === userEmail || (userEmail && mEmail && mEmail.split("@")[0] === userEmail.split("@")[0])
+          })
           if (found) {
             found.name = trimmed
             localStorage.setItem(key, JSON.stringify(list))
@@ -358,6 +374,27 @@ export default function AppHeader({
       }
       updateStorage("mbbank_team_members")
       updateStorage("mbbank_admin_team")
+
+      // Đồng bộ tên PO (requester_name) trên các bài toán người này đã tạo trong cache
+      const userEmail = (updated.teamsEmail || updated.personalEmail || "").toLowerCase().trim()
+      const rawReqs = localStorage.getItem("ux_portal_real_requests")
+      if (rawReqs && userEmail) {
+        const reqs = JSON.parse(rawReqs)
+        if (Array.isArray(reqs)) {
+          let hasChange = false
+          reqs.forEach((r: any) => {
+            const rEmail = String(r.requester_email || "").toLowerCase().trim()
+            if (rEmail && (rEmail === userEmail || rEmail.split("@")[0] === userEmail.split("@")[0])) {
+              r.requester_name = trimmed
+              hasChange = true
+            }
+          })
+          if (hasChange) {
+            localStorage.setItem("ux_portal_real_requests", JSON.stringify(reqs))
+            window.dispatchEvent(new CustomEvent("ux_portal_tasks_changed"))
+          }
+        }
+      }
     } catch {}
 
     window.dispatchEvent(new Event("auth_session_changed"))
@@ -437,7 +474,7 @@ export default function AppHeader({
       list.push({
         kind: "action",
         id: "action-track",
-        title: "Theo dõi bài toán (Track Task)",
+        title: "Theo dõi bài toán (My task)",
         subtitle: "Bảng Kanban và danh sách bài toán chi tiết",
         icon: CheckSquare,
         badge: "Dashboard",
@@ -553,7 +590,7 @@ export default function AppHeader({
         squad: r.preferred_squad || r.squad_name || r.squad || "",
         status: r.status || "Mới tạo",
         designer: r.assigned_designer || "",
-        requester: r.requester_name || "",
+        requester: getMemberDisplayName(r.requester_name, r.requester_email) || r.requester_name || "",
       }))
 
       return {
@@ -584,7 +621,9 @@ export default function AppHeader({
         const normProduct = normalizeVietnameseString(r.product || "")
         const normSquad = normalizeVietnameseString(r.preferred_squad || r.squad_name || r.squad || "")
         const normDesigner = normalizeVietnameseString(r.assigned_designer || "")
-        const normRequester = normalizeVietnameseString(r.requester_name || "")
+        const reqDisplay = getMemberDisplayName(r.requester_name, r.requester_email) || r.requester_name || ""
+        const normRequester = normalizeVietnameseString(reqDisplay)
+        const normRequesterEmail = normalizeVietnameseString(r.requester_email || "")
         const normStatus = normalizeVietnameseString(r.status || "")
 
         if (
@@ -594,6 +633,7 @@ export default function AppHeader({
           normSquad.includes(norm) ||
           normDesigner.includes(norm) ||
           normRequester.includes(norm) ||
+          normRequesterEmail.includes(norm) ||
           normStatus.includes(norm)
         ) {
           taskResults.push({
@@ -606,7 +646,7 @@ export default function AppHeader({
             squad: r.preferred_squad || r.squad_name || r.squad || "",
             status: r.status || "Mới tạo",
             designer: r.assigned_designer || "",
-            requester: r.requester_name || "",
+            requester: reqDisplay,
           })
           if (taskResults.length >= 10) break
         }
@@ -767,7 +807,7 @@ export default function AppHeader({
       items.push({ id: "overview", title: "Overview", subtitle: "Bảng điều hành", icon: Home })
     }
     if (visibility.track) {
-      items.push({ id: "track", title: "Track Task", subtitle: "Bảng theo dõi tiến độ", icon: CheckSquare })
+      items.push({ id: "track", title: "My task", subtitle: "Bảng theo dõi tiến độ", icon: CheckSquare })
     }
     if (visibility.create && canRoleAccessCapability(role, "cap-request")) {
       items.push({ id: "create", title: "Tạo task mới", subtitle: "Gửi đề bài UX", icon: PlusCircle })
@@ -991,38 +1031,43 @@ export default function AppHeader({
                     </div>
                   </div>
 
-                  {/* 2. View theo role Section (thay thế Organizations) */}
-                  <div className="py-2 border-b border-slate-100">
-                    <div className="px-3 pb-1.5 text-xs font-semibold text-slate-500 select-none">
-                      View theo role
+                  {/* 2. View theo role Section (CHỈ HIỂN THỊ CHO ADMIN HOẶC PHIÊN PREVIEW CỦA ADMIN) */}
+                  {isActualAdmin && (
+                    <div className="py-2 border-b border-slate-100">
+                      <div className="px-3 pb-1.5 text-xs font-semibold text-slate-500 select-none flex items-center justify-between">
+                        <span>View theo role</span>
+                        <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-full font-medium">
+                          Chỉ Admin
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 px-1.5">
+                        {ROLE_OPTIONS.map((role, rIdx) => {
+                          const isSelected = userRole === role.id
+                          const Icon = role.icon
+                          return (
+                            <button
+                              key={role.id || `role-${rIdx}`}
+                              type="button"
+                              onClick={() => handleSelectRole(role.id, role.label)}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-colors text-left cursor-pointer group ${
+                                isSelected ? "bg-slate-100/80 font-semibold" : "hover:bg-slate-50 font-normal"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Icon className={`w-4 h-4 shrink-0 ${isSelected ? "text-[#1057FB]" : "text-slate-500 group-hover:text-slate-700"}`} />
+                                <span className={`text-xs ${isSelected ? "text-slate-900 font-semibold" : "text-slate-700"}`}>
+                                  {role.label}
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-[#1057FB] shrink-0 ml-2" />
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="space-y-0.5 px-1.5">
-                      {ROLE_OPTIONS.map((role, rIdx) => {
-                        const isSelected = userRole === role.id
-                        const Icon = role.icon
-                        return (
-                          <button
-                            key={role.id || `role-${rIdx}`}
-                            type="button"
-                            onClick={() => handleSelectRole(role.id, role.label)}
-                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-colors text-left cursor-pointer group ${
-                              isSelected ? "bg-slate-100/80 font-semibold" : "hover:bg-slate-50 font-normal"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Icon className={`w-4 h-4 shrink-0 ${isSelected ? "text-[#1057FB]" : "text-slate-500 group-hover:text-slate-700"}`} />
-                              <span className={`text-xs ${isSelected ? "text-slate-900 font-semibold" : "text-slate-700"}`}>
-                                {role.label}
-                              </span>
-                            </div>
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-[#1057FB] shrink-0 ml-2" />
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  )}
 
                   {/* 3. Account Section (chỉ để lại Đổi ảnh đại diện và Đổi tên hiển thị) */}
                   <div className="py-2 border-b border-slate-100">

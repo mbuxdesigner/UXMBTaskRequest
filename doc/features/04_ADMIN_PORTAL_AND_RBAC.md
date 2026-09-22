@@ -57,20 +57,39 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
 │   │   ├── Tích hợp TestManagementView & TestRunnerView
 │   │   └── Quản lý câu hỏi trắc nghiệm/tự luận, nhập xuất Excel XLSX
 │   │
-│   └── 🔄 Tab 5: workflow - Quy trình & Khâu UX (Phases Config & Status Rules Tool)
-│       ├── Danh sách 6 khâu UX chuẩn sắp xếp dọc (Discovery -> Handoff)
-│       ├── Kéo thả hoặc bấm nút ⬆️/⬇️ để đổi thứ tự bước quy trình
-│       ├── Thêm / Sửa / Xóa khâu UX (SLA ngày, % tiến độ, deliverable bắt buộc)
-│       ├── Nút Khôi phục mặc định 6 khâu UX MBBank
-│       ├── ⚡ TOOL CẤU HÌNH QUY TẮC TRẠNG THÁI TỰ ĐỘNG (Status Automation Rules Tool):
-│       │   ├── Bảng tương tác quản trị 6 trạng thái (Đang phân loại, Đang thực hiện, Đã gửi PO, Pending, Hoàn thành, Bị chặn)
-│       │   ├── Toggle Switch Bật/Tắt tự động hóa từng trạng thái tức thì
-│       │   ├── Modal cấu hình chuyên sâu: Tùy biến Trigger event, SLA Action, Mô tả nghiệp vụ
-│       │   ├── Liên kết động với danh sách Khâu UX phía trên (Checklist đa khâu)
-│       │   └── Nút Khôi phục mặc định 6 quy tắc tự động hóa chuẩn MBBank
+│   ├── 🔄 Tab 5: workflow - Quy trình & Khâu UX (Phases Config & Status Rules Tool)
+│   │   ├── Danh sách 6 khâu UX chuẩn sắp xếp dọc (Discovery -> Handoff)
+│   │   ├── Kéo thả hoặc bấm nút ⬆️/⬇️ để đổi thứ tự bước quy trình
+│   │   ├── Thêm / Sửa / Xóa khâu UX (SLA ngày, % tiến độ, deliverable bắt buộc)
+│   │   ├── Nút Khôi phục mặc định 6 khâu UX MBBank
+│   │   └── ⚡ TOOL CẤU HÌNH QUY TẮC TRẠNG THÁI TỰ ĐỘNG (Status Automation Rules Tool):
+│   │       ├── Bảng tương tác quản trị 6 trạng thái (Đang phân loại, Đang thực hiện, Đã gửi PO, Pending, Hoàn thành, Bị chặn)
+│   │       ├── Toggle Switch Bật/Tắt tự động hóa từng trạng thái tức thì
+│   │       ├── Modal cấu hình chuyên sâu: Tùy biến Trigger event, SLA Action, Mô tả nghiệp vụ
+│   │       ├── Liên kết động với danh sách Khâu UX phía trên (Checklist đa khâu)
+│   │       └── Nút Khôi phục mặc định 6 quy tắc tự động hóa chuẩn MBBank
+│   │
+│   └── 📝 Tab 6: form_config - Cấu hình Mẫu Đề bài UX (Form Fields & Validation)
+│       ├── Cấu hình bật/tắt hiển thị và tính bắt buộc (required) của các trường đề bài
+│       ├── Quản lý danh mục Loại yêu cầu (Request Types) và Lý do deadline
+│       └── Đồng bộ 2 chiều (Push/Pull) với RAW_SETTINGS trên Google Sheets
 │
 └── 📂 NHÓM 3: HỆ THỐNG & KẾT NỐI
-    ├── 📦 Tab 6: masterdata - Squads & Sản phẩm (Xem chi tiết doc/features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md)
+    ├── ⚙️ Tab 7: system_params - Thông số Hệ thống & Tiêu chuẩn SLA (Xem doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md)
+    │   ├── Quản lý 6 phân khu: SLA ngày, Tải trọng & Định mức Designer, Ma trận Độ ưu tiên Lv1-Lv5
+    │   ├── Kiểm tra tự động tổng trọng số Đánh giá KPI = 100%
+    │   ├── Thể lệ đề thi & bài test năng lực UX
+    │   ├── Cổng thông tin & Cấu hình Banner Khẩn cấp Toàn cầu (Global Announcement Banner)
+    │   └── Lưu trữ phản ứng thời gian thực (CustomEvent mbbank_system_config_changed), Xuất/Nhập JSON
+    │
+    ├── 🔔 Tab 8: notifications_config - Cấu hình Mẫu Thông báo Đa Kênh (Xem doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md)
+    │   ├── Quản lý 14 mẫu thông báo nghiệp vụ thuộc 6 nhóm tương tác
+    │   ├── Chip click-to-insert placeholder biến số động ({requestId}, {taskTitle}, {actorName}, v.v.)
+    │   ├── Bật/tắt 4 kênh phân phối độc lập: In-app Pop-up Toast, MS Teams Webhook, Email, Mobile Push
+    │   ├── Thẻ mô phỏng xem trước hiển thị thời gian thực
+    │   └── Nút "Bắn thử Toast trên màn hình" kiểm chứng trải nghiệm trực quan
+    │
+    ├── 📦 Tab 9: masterdata - Squads & Sản phẩm (Xem chi tiết doc/features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md)
     │   ├── Giao diện ReUI Card Grid tối ưu kèm bộ lọc & tìm kiếm nhanh
     │   ├── Quản lý danh mục UX Squads: Tên, Mã Code, Hạn mức tasks, Sản phẩm phụ trách
     │   ├── Phân bổ nhân sự Squad theo Vai trò chuẩn (Role-Based Pickers): PO, Business, UX/UI Designers
@@ -78,12 +97,12 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
     │   ├── Tự động đồng bộ sang Kiến trúc Thông tin (IA): phát event admin_products_changed, sinh Clean Root Node cho sản phẩm mới
     │   └── Tự động đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`)
     │
-    ├── 🔌 Tab 7: integrations - Cổng kết nối APIs & Webhooks
+    ├── 🔌 Tab 10: integrations - Cổng kết nối APIs & Webhooks
     │   ├── Cấu hình Google Apps Script Web App URL & Tần suất đồng bộ
     │   ├── Cấu hình Figma Org Token & Microsoft Teams Webhook URL
     │   └── Nút Kiểm tra kết nối ngoại vi (Ping Test)
     │
-    └── 📋 Tab 8: audit - Nhật ký Kiểm toán (Audit Logs)
+    └── 📋 Tab 11: audit - Nhật ký Kiểm toán (Audit Logs)
         ├── Bảng nhật ký lưu vết mọi hành động Admin (Thêm/sửa nhân sự, đổi SLA, phân bổ Squad)
         └── Badge phân loại đơn sắc: user, workflow, masterdata, integration, security
 ```
