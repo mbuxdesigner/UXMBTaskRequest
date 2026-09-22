@@ -821,3 +821,23 @@ input[type="checkbox"] {
   opacity: 1 !important;
 }
 
+/* ==========================================================================
+   TECHNICAL SPEC: STAGGERED FADE & SOFT MOTION ANIMATION
+   ========================================================================== */
+.stagger-item {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
+  filter: blur(4px);
+  will-change: opacity, transform, filter;
+  transition: opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.72s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stagger-item.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0px);
+}
+
+

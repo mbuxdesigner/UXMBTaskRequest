@@ -158,13 +158,24 @@ export default function IAMinimap({
 
               const fillColor =
                 ln.node.tier === 1
+                  ? "#E8EAEE"
+                  : ln.node.tier === 2
+                  ? "#D9F5EC"
+                  : ln.node.tier === 3
+                  ? "#FFF0D9"
+                  : ln.node.tier === 4
+                  ? "#D9F2FE"
+                  : "#EEE5FF"
+
+              const strokeColor =
+                ln.node.tier === 1
                   ? "#1057FB"
                   : ln.node.tier === 2
-                  ? "#6366f1"
-                  : ln.node.tier === 3
                   ? "#10b981"
-                  : ln.node.tier === 4
+                  : ln.node.tier === 3
                   ? "#f59e0b"
+                  : ln.node.tier === 4
+                  ? "#0284c7"
                   : "#8b5cf6"
 
               return (
@@ -176,7 +187,9 @@ export default function IAMinimap({
                   height={nh}
                   rx={1}
                   fill={fillColor}
-                  fillOpacity={0.8}
+                  stroke={strokeColor}
+                  strokeWidth={0.75}
+                  fillOpacity={1}
                 />
               )
             })}

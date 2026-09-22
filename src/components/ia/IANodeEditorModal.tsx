@@ -125,6 +125,7 @@ export default function IANodeEditorModal({
 }: IANodeEditorModalProps) {
   const [copiedId, setCopiedId] = useState(false)
   const [name, setName] = useState<string>("")
+  const [description, setDescription] = useState<string>("")
   const [squad, setSquad] = useState<string>("")
   const [customSquad, setCustomSquad] = useState<string>("")
   const [taskIds, setTaskIds] = useState<string[]>([])
@@ -228,6 +229,7 @@ export default function IANodeEditorModal({
     }
     if ((mode === "edit" || mode === "link-task") && targetNode) {
       setName(targetNode.name || "")
+      setDescription(targetNode.description || "")
       const nodeSquad = targetNode.squad || ""
       if (nodeSquad && !availableSquads.includes(nodeSquad)) {
         setSquad("custom")
@@ -262,6 +264,7 @@ export default function IANodeEditorModal({
       setErrorMessage("")
     } else if (mode === "add" && targetNode) {
       setName("")
+      setDescription("")
       setSquad(targetNode.squad || "")
       setCustomSquad("")
       setTaskIds([])
@@ -273,6 +276,7 @@ export default function IANodeEditorModal({
       setErrorMessage("")
     } else {
       setName("")
+      setDescription("")
       setSquad("")
       setCustomSquad("")
       setTaskIds([])
@@ -505,6 +509,7 @@ export default function IANodeEditorModal({
     // Trạng thái setting tự động (hasActiveTask: undefined) - hệ thống tự động tính toán từ các task liên kết
     const nodePayload: Partial<IANode> = {
       name: name.trim(),
+      description: description.trim() || undefined,
       squad: finalSquad || undefined,
       taskIds: effectiveTaskIds,
       requestId: effectiveTaskIds && effectiveTaskIds.length > 0 ? effectiveTaskIds[0] : undefined,
@@ -1065,11 +1070,29 @@ export default function IANodeEditorModal({
                     />
                   </div>
 
+                  {/* 2. GHI CHÚ / MÔ TẢ (NOTE) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-900">
+                        Ghi chú / Mô tả (Note)
+                      </label>
+                      <span className="text-[11px] text-slate-400 font-normal">Tùy chọn</span>
+                    </div>
+                    <textarea
+                      data-testid="ia-node-modal-note-input"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Nhập ghi chú màn hình, logic nghiệp vụ hoặc chỉ dẫn thiết kế..."
+                      rows={3}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 transition-all placeholder:text-slate-400 font-medium text-slate-800 shadow-2xs resize-none"
+                    />
+                  </div>
+
                   {/* 3. CHỌN SQUAD PHỤ TRÁCH (ReUI DropdownMenu Chuẩn, Đi theo Sản phẩm) */}
                   <div className="relative" ref={squadDropdownRef}>
                     <label className="block text-xs font-bold text-slate-900 mb-1.5 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                        <Users className="w-3.5 h-3.5 text-slate-500" />
                         <span>Chọn Squad phụ trách</span>
                       </div>
                       {effectiveProductName && (
@@ -1091,7 +1114,7 @@ export default function IANodeEditorModal({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                           <Users className="w-3.5 h-3.5" />
                         </div>
                         <span className="text-xs font-semibold text-slate-800 truncate">
@@ -1273,21 +1296,16 @@ export default function IANodeEditorModal({
                     </div>
 
                     {/* ReUI Frame Container with Divide-Y */}
-                    <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden">
+                    <div className="rounded-2xl bg-white border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
                       {/* Item 1: Hiển thị Tiến độ & Checklist */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <CheckSquare className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Hiển thị Tiến độ & Checklist
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Hiển thị thanh % tiến độ và tóm tắt công việc (đang làm, hoàn thành) trên thẻ.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Hiển thị Tiến độ & Checklist
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Hiển thị thanh % tiến độ và tóm tắt công việc (đang làm, hoàn thành) trên thẻ.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1298,19 +1316,14 @@ export default function IANodeEditorModal({
                       </div>
 
                       {/* Item 3: Tiến độ tổng hợp từ cấp dưới (Rollup) */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <TrendingUp className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Tiến độ tổng hợp từ nhánh con (Rollup)
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Tự động gom toàn bộ task của cây con cháu bên dưới để tính % tiến độ và số task thực hiện.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Tiến độ tổng hợp từ nhánh con (Rollup)
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Tự động gom toàn bộ task của cây con cháu bên dưới để tính % tiến độ và số task thực hiện.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1321,19 +1334,14 @@ export default function IANodeEditorModal({
                       </div>
 
                       {/* Item 4: Huy hiệu Squad */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <Users className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Huy hiệu Squad
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Hiển thị nhãn Squad phụ trách ở góc trên bên trái thẻ.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Huy hiệu Squad
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Hiển thị nhãn Squad phụ trách ở góc trên bên trái thẻ.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1344,19 +1352,14 @@ export default function IANodeEditorModal({
                       </div>
 
                       {/* Item 5: Người phụ trách / Designer */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <UserCheck className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Người phụ trách (UX Designer)
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Hiển thị avatar và tên UX Designer phụ trách luồng hoặc màn hình.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Người phụ trách (UX Designer)
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Hiển thị avatar và tên UX Designer phụ trách luồng hoặc màn hình.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1367,19 +1370,14 @@ export default function IANodeEditorModal({
                       </div>
 
                       {/* Item 6: Đèn báo trạng thái chân thẻ */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 mt-0.5">
-                            <Bell className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Đèn báo trạng thái ở chân thẻ
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Hiển thị nhãn "Đang có task làm", "Đã hoàn thành" hoặc "Chưa có task" ở góc dưới trái thẻ.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Đèn báo trạng thái ở chân thẻ
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Hiển thị nhãn "Đang có task làm", "Đã hoàn thành" hoặc "Chưa có task" ở góc dưới trái thẻ.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1390,19 +1388,14 @@ export default function IANodeEditorModal({
                       </div>
 
                       {/* Item 7: Số lượng nhánh con */}
-                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5">
-                            <FolderTree className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-900">
-                              Huy hiệu số lượng nhánh con
-                            </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                              Hiển thị nút đếm số lượng nhánh con phụ thuộc ở góc dưới bên phải thẻ.
-                            </p>
-                          </div>
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">
+                            Huy hiệu số lượng nhánh con
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Hiển thị nút đếm số lượng nhánh con phụ thuộc ở góc dưới bên phải thẻ.
+                          </p>
                         </div>
                         <Switch
                           size="sm"
@@ -1417,28 +1410,23 @@ export default function IANodeEditorModal({
                   {/* 5. GÁN TASK (Tách riêng; chỉ hiển thị khi chọn Squad; khi On thì hiện list task ngay ở dưới) */}
                   {Boolean(effectiveSquadName && effectiveSquadName.trim()) && (
                     <div className="pt-1 space-y-3">
-                      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden transition-all">
+                      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-2xs overflow-hidden transition-all">
                         {/* Header Row with Switch */}
-                        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                          <div className="flex items-start gap-3 min-w-0 flex-1">
-                            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                              <Layers className="w-4 h-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-xs font-bold text-slate-900">
-                                  Gán task
-                                </p>
-                                {taskIds.length > 0 && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                    {taskIds.length} task đã chọn
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                                Cho phép tìm kiếm & liên kết các task UX/Jira của Squad {effectiveSquadName} vào node này.
+                        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-xs font-bold text-slate-900">
+                                Gán task trực tiếp
                               </p>
+                              {taskIds.length > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  {taskIds.length} task đã chọn
+                                </span>
+                              )}
                             </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                              Cho phép tìm kiếm & liên kết các task UX/Jira của Squad {effectiveSquadName} vào node này.
+                            </p>
                           </div>
                           <Switch
                             size="sm"

@@ -262,4 +262,14 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
   - **Cột phải (Month Grid):** Header tháng/năm chuẩn tiếng Anh (`October 2026`), nút `Today`, nút điều hướng `^` và `v`, hàng thứ từ Thứ Hai (`Mo Tu We Th Fr Sa Su`), ô ngày được chọn tô nền đen bo góc tròn (`bg-slate-900 text-white rounded-md`).
   - **Cơ chế lưu trữ:** Mọi thao tác chọn ngày lập tức lưu vào `design_deadline`, đồng bộ lên Google Sheets, LocalStorage và Lịch sử hoạt động (Activity log), **hoàn toàn không cần thay đổi hay cập nhật backend**.
 
+### 7.7. Chuẩn Hóa Hoạt Họa Nối Tiếp Độ Trễ (Staggered Waterfall Motion) Cho Danh Sách Task
+- **Chế độ Bảng (`SolutionAgentsTable.tsx`):**
+  - Khung bảng sử dụng biến thể `cascadeWaveTableRowVariants` riêng cho các thẻ `<tr>`.
+  - Khắc phục lỗi vỡ viền bảng: Không dùng thuộc tính CSS `scale` hoặc `filter: blur` trực tiếp trên `<tr>` do cơ chế `border-collapse` của trình duyệt. Chỉ sử dụng dịch chuyển vị trí `y: 24 -> 0` và độ mờ `opacity: 0 -> 1`.
+  - Sử dụng biến chạy toàn cục `globalRowIdx` đếm tuần tự từ đầu đến cuối danh sách bài toán, giúp các dòng trượt nhẹ từ dưới lên theo nhịp sóng nối tiếp $T_i = 50\text{ms} + i \times 70\text{ms}$ với đường cong gia tốc `easeOutExpo` trong 720ms.
+- **Chế độ Kanban (`KanbanBoard.tsx`):**
+  - Cột và thẻ công việc áp dụng `cascadeWaveContainerVariants` kết hợp `cascadeWaveItemVariants`.
+  - Sử dụng `layout="position"` và `dataContinuityTransition` đảm bảo các thẻ trượt mượt mà về vị trí mới khi kéo thả hoặc khi thay đổi bộ lọc tìm kiếm mà không gây giật khung hình (Zero CLS).
+
+
 

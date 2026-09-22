@@ -177,6 +177,207 @@ export const staggerItemVariants: Variants = {
   },
 }
 
+// ─── 4b. CASCADE WAVE ENTRY (STAGGERED WATERFALL & SOFT FADE) ────────────────
+export const cascadeWaveContainerVariants: Variants = {
+  initial: {},
+  hidden: { opacity: 0 },
+  animate: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.07, // 70ms giữa các card liên tiếp theo Technical Spec (60ms - 80ms)
+      delayChildren: 0.05,   // T_start = 50ms
+    },
+  },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.07, // 70ms
+      delayChildren: 0.05,
+    },
+  },
+  exit: {
+    opacity: 0,
+    transition: {
+      staggerChildren: 0.03,
+      staggerDirection: -1,
+      duration: 0.2,
+    },
+  },
+}
+
+export const cascadeWaveItemVariants: Variants = {
+  initial: {
+    opacity: 0,
+    y: 28, // Trượt từ dưới lên +28px (Technical Spec: +24px đến +30px)
+    scale: 0.97, // Scale 0.97 -> 1.0
+    filter: "blur(4px)", // Giúp mép card mờ dịu khi xuất hiện
+  },
+  hidden: {
+    opacity: 0,
+    y: 28,
+    scale: 0.97,
+    filter: "blur(4px)",
+  },
+  animate: (custom?: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: {
+      duration: 0.72, // 720ms theo Technical Spec (650ms - 750ms)
+      ease: easings.easeOutExpo, // [0.16, 1, 0.3, 1] hãm phanh mượt mà
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+    },
+  }),
+  visible: (custom?: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: {
+      duration: 0.72,
+      ease: easings.easeOutExpo,
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+    },
+  }),
+  exit: {
+    opacity: 0,
+    y: -12,
+    scale: 0.98,
+    filter: "blur(2px)",
+    transition: {
+      duration: 0.22,
+      ease: "easeIn",
+    },
+  },
+}
+
+/**
+ * Technical Spec Staggered Row variant specifically for <tr> HTML table elements
+ * (Prevents scale/blur table-cell layout distortions in standard table rendering)
+ */
+export const cascadeWaveTableRowVariants: Variants = {
+  initial: {
+    opacity: 0,
+    y: 24,
+  },
+  hidden: {
+    opacity: 0,
+    y: 24,
+  },
+  animate: (custom?: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.72,
+      ease: easings.easeOutExpo,
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+    },
+  }),
+  visible: (custom?: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.72,
+      ease: easings.easeOutExpo,
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+    },
+  }),
+  exit: {
+    opacity: 0,
+    y: -8,
+    transition: {
+      duration: 0.18,
+      ease: "easeIn",
+    },
+  },
+}
+
+// Page-level container variants for App navigation (Scope 1A)
+// Acts as a clean fade frame so inner element translateY animations are distinctly visible
+export const pageContainerVariants: Variants = {
+  initial: {
+    opacity: 0,
+  },
+  hidden: {
+    opacity: 0,
+  },
+  visible: {
+    opacity: 1,
+    transition: {
+      duration: 0.25,
+      ease: "easeOut",
+      staggerChildren: 0.07,
+      delayChildren: 0.05,
+    },
+  },
+  animate: {
+    opacity: 1,
+    transition: {
+      duration: 0.25,
+      ease: "easeOut",
+      staggerChildren: 0.07,
+      delayChildren: 0.05,
+    },
+  },
+  exit: {
+    opacity: 0,
+    transition: {
+      duration: 0.18,
+      ease: "easeIn",
+    },
+  },
+}
+
+// ─── 4c. MICRO-STAGGER VARIANTS (FORM SECTIONS & CARDS) ──────────────────────
+export const microStaggerTier1Variants: Variants = {
+  initial: { opacity: 0, y: 6 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+      ease: easings.easeOutExpo,
+      delay: 0.04,
+    },
+  },
+}
+
+export const microStaggerTier2Variants: Variants = {
+  initial: { opacity: 0, y: 8 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.24,
+      ease: easings.easeOutExpo,
+      delay: 0.09,
+    },
+  },
+}
+
+export const microStaggerTier3Variants: Variants = {
+  initial: { opacity: 0, y: 10 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.28,
+      ease: easings.easeOutExpo,
+      delay: 0.14,
+    },
+  },
+}
+
+// ─── 4d. DATA CONTINUITY TRANSITION (LAYOUT MORPHING / FLIP) ─────────────────
+export const dataContinuityTransition: Transition = {
+  layout: {
+    duration: 0.4,
+    ease: easings.easeOutExpo,
+  },
+}
+
+
 /** Reduced motion fallback variants: zero translation, pure opacity fade */
 export const reducedMotionItemVariants: Variants = {
   initial: { opacity: 0 },

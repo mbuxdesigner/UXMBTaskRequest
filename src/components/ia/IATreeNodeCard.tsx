@@ -102,88 +102,99 @@ function getTierThemeStyles(tier: IATier, customTheme?: string) {
     switch (customTheme) {
       case "emerald":
         return {
+          bgHex: "#D9F5EC",
           stripe: "bg-emerald-500",
           accentHex: "#10b981",
-          border: "border-slate-200 hover:border-emerald-500",
+          border: "border-emerald-300/80 hover:border-emerald-500",
           portBorder: "border-emerald-500 text-emerald-600 hover:bg-emerald-50",
           squadBadgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
         }
       case "purple":
       case "violet":
         return {
+          bgHex: "#EEE5FF",
           stripe: "bg-purple-600",
           accentHex: "#8b5cf6",
-          border: "border-slate-200 hover:border-purple-500",
+          border: "border-purple-300/80 hover:border-purple-500",
           portBorder: "border-purple-500 text-purple-600 hover:bg-purple-50",
           squadBadgeClass: "bg-purple-50 text-purple-700 border-purple-200",
         }
       case "amber":
         return {
+          bgHex: "#FFF0D9",
           stripe: "bg-amber-500",
           accentHex: "#f59e0b",
-          border: "border-slate-200 hover:border-amber-500",
+          border: "border-amber-300/80 hover:border-amber-500",
           portBorder: "border-amber-500 text-amber-600 hover:bg-amber-50",
           squadBadgeClass: "bg-amber-50 text-amber-800 border-amber-200",
         }
       case "rose":
         return {
+          bgHex: "#FFE4E6",
           stripe: "bg-rose-500",
           accentHex: "#f43f5e",
-          border: "border-slate-200 hover:border-rose-500",
+          border: "border-rose-300/80 hover:border-rose-500",
           portBorder: "border-rose-500 text-rose-600 hover:bg-rose-50",
           squadBadgeClass: "bg-rose-50 text-rose-700 border-rose-200",
         }
       case "cyan":
         return {
+          bgHex: "#D9F2FE",
           stripe: "bg-cyan-500",
           accentHex: "#06b6d4",
-          border: "border-slate-200 hover:border-cyan-500",
+          border: "border-cyan-300/80 hover:border-cyan-500",
           portBorder: "border-cyan-500 text-cyan-600 hover:bg-cyan-50",
           squadBadgeClass: "bg-cyan-50 text-cyan-700 border-cyan-200",
         }
     }
   }
 
-  // Chia màu mặc định theo Level (Lv 1, Lv 2, Lv 3, Lv 4) chuẩn nhận diện MBBank
+  // Chia màu mặc định theo Level (Lv 1, Lv 2, Lv 3, Lv 4, Lv 5)
+  // lv 1: E8EAEE, lv 2: D9F5EC, lv 3: FFF0D9, lv 4: D9F2FE, lv 5: EEE5FF
   switch (tier) {
     case 1:
       return {
+        bgHex: "#E8EAEE",
         stripe: "bg-[#1057FB]",
         accentHex: "#1057FB",
-        border: "border-slate-200 hover:border-[#1057FB]",
+        border: "border-slate-300/90 hover:border-[#1057FB]",
         portBorder: "border-[#1057FB] text-[#1057FB] hover:bg-blue-50",
         squadBadgeClass: "bg-blue-50 text-blue-700 border-blue-200",
       }
     case 2:
       return {
-        stripe: "bg-indigo-600",
-        accentHex: "#6366f1",
-        border: "border-slate-200 hover:border-indigo-500",
-        portBorder: "border-indigo-500 text-indigo-600 hover:bg-indigo-50",
-        squadBadgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
-      }
-    case 3:
-      return {
+        bgHex: "#D9F5EC",
         stripe: "bg-emerald-600",
         accentHex: "#10b981",
-        border: "border-slate-200 hover:border-emerald-500",
+        border: "border-emerald-300/80 hover:border-emerald-500",
         portBorder: "border-emerald-500 text-emerald-600 hover:bg-emerald-50",
         squadBadgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
       }
-    case 4:
+    case 3:
       return {
+        bgHex: "#FFF0D9",
         stripe: "bg-amber-500",
         accentHex: "#f59e0b",
-        border: "border-slate-200 hover:border-amber-500",
+        border: "border-amber-300/80 hover:border-amber-500",
         portBorder: "border-amber-500 text-amber-600 hover:bg-amber-50",
         squadBadgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+      }
+    case 4:
+      return {
+        bgHex: "#D9F2FE",
+        stripe: "bg-sky-500",
+        accentHex: "#0284c7",
+        border: "border-sky-300/80 hover:border-sky-500",
+        portBorder: "border-sky-500 text-sky-600 hover:bg-sky-50",
+        squadBadgeClass: "bg-sky-50 text-sky-700 border-sky-200",
       }
     case 5:
     default:
       return {
+        bgHex: "#EEE5FF",
         stripe: "bg-purple-600",
         accentHex: "#8b5cf6",
-        border: "border-slate-200 hover:border-purple-500",
+        border: "border-purple-300/80 hover:border-purple-500",
         portBorder: "border-purple-500 text-purple-600 hover:bg-purple-50",
         squadBadgeClass: "bg-purple-50 text-purple-700 border-purple-200",
       }
@@ -604,8 +615,9 @@ function IATreeNodeCardComponent({
         minHeight: layoutNode.height,
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
+        backgroundColor: themeStyles.bgHex,
       }}
-      className={`group relative rounded-xl border bg-white px-2.5 pt-2 pb-2.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
+      className={`group relative rounded-xl border px-2.5 pt-2 pb-2.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
@@ -633,12 +645,12 @@ function IATreeNodeCardComponent({
               node.tier === 1
                   ? "text-[#1057FB]"
                   : node.tier === 2
-                  ? "text-indigo-600"
+                  ? "text-emerald-700"
                   : node.tier === 3
-                  ? "text-emerald-600"
+                  ? "text-amber-700"
                   : node.tier === 4
-                  ? "text-amber-600"
-                  : "text-purple-600"
+                  ? "text-sky-700"
+                  : "text-purple-700"
             }`}
           >
             <span>{node.tier === 1 ? "✨ Lv1" : `Lv${node.tier}`}</span>
@@ -664,10 +676,6 @@ function IATreeNodeCardComponent({
         </Tooltip>
       )}
 
-      {/* Top Accent Stripe indicating Tier (Clipped cleanly to inner rounded corners) */}
-      <div className="absolute inset-0 rounded-[11px] overflow-hidden pointer-events-none">
-        <div className={`h-1 w-full ${themeStyles.stripe}`} />
-      </div>
 
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* 4-WAY CONNECTOR PORTS (Top, Bottom, Left, Right)                 */}

@@ -36,6 +36,7 @@ import { capitalizeFirstLetter, capitalizeSentences } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { motion, AnimatePresence } from "framer-motion"
+import { microStaggerTier1Variants, microStaggerTier2Variants, cascadeWaveContainerVariants, cascadeWaveItemVariants } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FormSkeleton } from "@/components/common/ReuiSkeletons"
 import { SpotlightCard } from "@/components/jolyui/spotlight-card"
@@ -602,10 +603,10 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       ) : (
         <motion.form
           key="form-edit"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
+          variants={cascadeWaveContainerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
           onSubmit={handleProceedToReview}
           className="space-y-8 pb-16"
         >
@@ -616,17 +617,28 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
         <div className="w-full xl:col-span-8 space-y-8">
           
           {/* Main Title Đồng Bộ */}
-          <PageHeader
-            breadcrumb={{
-              parent: formConfig.header?.parentBreadcrumb || "MBBank UX Platform",
-              current: formConfig.header?.currentBreadcrumb || "Tạo task mới",
-            }}
-            title={formConfig.header?.title || "Gửi yêu cầu thiết kế UX"}
-            subtitle={formConfig.header?.subtitle || "Điền đầy đủ thông tin đề bài để UX Squad tiếp nhận và xử lý nhanh chóng nhất"}
-          />
+          <motion.div
+            custom={0}
+            variants={cascadeWaveItemVariants}
+            style={{ willChange: "opacity, transform, filter" }}
+          >
+            <PageHeader
+              breadcrumb={{
+                parent: formConfig.header?.parentBreadcrumb || "MBBank UX Platform",
+                current: formConfig.header?.currentBreadcrumb || "Tạo task mới",
+              }}
+              title={formConfig.header?.title || "Gửi yêu cầu thiết kế UX"}
+              subtitle={formConfig.header?.subtitle || "Điền đầy đủ thông tin đề bài để UX Squad tiếp nhận và xử lý nhanh chóng nhất"}
+            />
+          </motion.div>
 
           {/* 01 · THÔNG TIN YÊU CẦU */}
-          <div className="space-y-4">
+          <motion.div
+            custom={1}
+            variants={cascadeWaveItemVariants}
+            style={{ willChange: "opacity, transform, filter" }}
+            className="space-y-4"
+          >
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               {formConfig.sections?.requestInfoTitle || "01 · THÔNG TIN YÊU CẦU"}
             </h2>
@@ -727,10 +739,15 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
           {/* 02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ */}
-          <div className="space-y-4 pt-2">
+          <motion.div
+            custom={2}
+            variants={cascadeWaveItemVariants}
+            style={{ willChange: "opacity, transform, filter" }}
+            className="space-y-4 pt-2"
+          >
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               {formConfig.sections?.detailDescTitle || "02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ"}
             </h2>
@@ -745,51 +762,47 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 <Textarea
                   value={form.description}
                   onChange={(e) => set("description")(e.target.value)}
-                  placeholder={getFieldPlaceholder("description", "Mô tả chi tiết nhu cầu cần UX team hỗ trợ...")}
-                  rows={5}
-                  className="bg-white rounded-xl border-slate-200 p-4 text-sm"
+                  placeholder={getFieldPlaceholder("description", "Mô tả ngắn gọn bối cảnh và mục tiêu nghiệp vụ...")}
+                  className="min-h-[100px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"
                   error={Boolean(errors.description)}
                 />
                 {errors.description && <p className="text-sm text-rose-500 font-medium">{errors.description}</p>}
               </div>
             )}
 
-            {/* 2-Column: Tại sao yêu cầu này cần thiết & Vấn đề người dùng cần giải quyết */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {isFieldEnabled("business_need") && (
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-slate-700">
-                    {getFieldLabel("business_need", "Tại sao yêu cầu này cần thiết?")}{" "}
-                    {isFieldRequired("business_need") && <span className="text-rose-500">*</span>}
-                  </label>
-                  <Textarea
-                    value={form.business_need}
-                    onChange={(e) => set("business_need")(e.target.value)}
-                    placeholder={getFieldPlaceholder("business_need", "Vấn đề kinh doanh bạn đang muốn giải quyết là gì?")}
-                    rows={3}
-                    className="bg-white rounded-xl border-slate-200 p-3.5 text-sm"
-                  />
-                  {errors.business_need && <p className="text-sm text-rose-500 font-medium">{errors.business_need}</p>}
-                </div>
-              )}
+            {/* Nhu cầu nghiệp vụ */}
+            {isFieldEnabled("business_need") && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {getFieldLabel("business_need", "Nhu cầu nghiệp vụ")}{" "}
+                  {isFieldRequired("business_need") && <span className="text-rose-500">*</span>}
+                </label>
+                <Textarea
+                  value={form.business_need}
+                  onChange={(e) => set("business_need")(e.target.value)}
+                  placeholder={getFieldPlaceholder("business_need", "Giải thích vì sao bài toán này cần thực hiện...")}
+                  className="min-h-[80px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"
+                />
+                {errors.business_need && <p className="text-sm text-rose-500 font-medium">{errors.business_need}</p>}
+              </div>
+            )}
 
-              {isFieldEnabled("user_problem") && (
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-slate-700">
-                    {getFieldLabel("user_problem", "Vấn đề người dùng cần giải quyết")}{" "}
-                    {isFieldRequired("user_problem") && <span className="text-rose-500">*</span>}
-                  </label>
-                  <Textarea
-                    value={form.user_problem}
-                    onChange={(e) => set("user_problem")(e.target.value)}
-                    placeholder={getFieldPlaceholder("user_problem", "Điểm đau hoặc nhu cầu chưa được đáp ứng của người dùng...")}
-                    rows={3}
-                    className="bg-white rounded-xl border-slate-200 p-3.5 text-sm"
-                  />
-                  {errors.user_problem && <p className="text-sm text-rose-500 font-medium">{errors.user_problem}</p>}
-                </div>
-              )}
-            </div>
+            {/* Vấn đề của người dùng */}
+            {isFieldEnabled("user_problem") && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  {getFieldLabel("user_problem", "Vấn đề của người dùng")}{" "}
+                  {isFieldRequired("user_problem") && <span className="text-rose-500">*</span>}
+                </label>
+                <Textarea
+                  value={form.user_problem}
+                  onChange={(e) => set("user_problem")(e.target.value)}
+                  placeholder={getFieldPlaceholder("user_problem", "Khách hàng đang gặp khó khăn hay điểm nghẽn gì...")}
+                  className="min-h-[80px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"
+                />
+                {errors.user_problem && <p className="text-sm text-rose-500 font-medium">{errors.user_problem}</p>}
+              </div>
+            )}
 
             {/* Đối tượng người dùng mục tiêu */}
             {isFieldEnabled("target_user") && (
@@ -808,11 +821,16 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 {errors.target_user && <p className="text-sm text-rose-500 font-medium">{errors.target_user}</p>}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* 03 · TÀI LIỆU ĐÍNH KÈM */}
           {isFieldEnabled("doc_attachments") && (
-            <div className="space-y-4 pt-2">
+            <motion.div
+              custom={3}
+              variants={cascadeWaveItemVariants}
+              style={{ willChange: "opacity, transform, filter" }}
+              className="space-y-4 pt-2"
+            >
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                   {formConfig.sections?.attachmentsTitle || "03 · TÀI LIỆU ĐÍNH KÈM"}
@@ -847,25 +865,24 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
               {/* Input Link (Multiple Links with + Button) or File Upload */}
               {attachMode === "link" ? (
-                <div className="space-y-2.5">
-                  {form.doc_links.map((link, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                <div className="space-y-3">
+                  {form.doc_links.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
                       <div className="relative flex-1">
+                        <LinkIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <Input
                           type="url"
                           value={link}
-                          onChange={(e) => handleLinkChange(index, e.target.value)}
-                          placeholder="https://docs.google.com/..."
-                          startIcon={<LinkIcon className="w-4 h-4 text-slate-400" />}
-                          className="h-12 bg-white rounded-xl border-slate-200 text-sm pl-10"
+                          onChange={(e) => handleLinkChange(idx, e.target.value)}
+                          placeholder="https://figma.com/... hoặc link tài liệu đề bài Jira / Confluence"
+                          className="h-11 pl-10 pr-4 bg-white rounded-xl border-slate-200 text-sm"
                         />
                       </div>
                       {form.doc_links.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => handleRemoveLink(index)}
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
-                          title="Xóa link này"
+                          onClick={() => handleRemoveLink(idx)}
+                          className="size-10 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -888,13 +905,18 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
               ) : (
                 <FileUpload files={files} onFilesChange={setFiles} />
               )}
-            </div>
+            </motion.div>
           )}
 
         </div>
 
         {/* RIGHT COLUMN: KẾ HOẠCH Floating Card with Joly UI SpotlightCard & BorderBeam */}
-        <div className="w-full xl:col-span-4 xl:sticky xl:top-20">
+        <motion.div 
+          custom={4}
+          variants={cascadeWaveItemVariants}
+          style={{ willChange: "opacity, transform, filter" }}
+          className="w-full xl:col-span-4 xl:sticky xl:top-20"
+        >
           <SpotlightCard
             mode="afterglow"
             className="bg-white border border-slate-200/90 rounded-xl shadow-xl shadow-slate-900/5 relative"
@@ -980,7 +1002,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
               </p>
             </div>
           </SpotlightCard>
-        </div>
+        </motion.div>
 
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { dialogOverlayVariants, dialogContentVariants, drawerVariants, springs, tactileProps } from "@/lib/motion"
+import { dialogOverlayVariants, dialogContentVariants, drawerVariants, springs, tactileProps, microStaggerTier2Variants, microStaggerTier3Variants } from "@/lib/motion"
 import { 
   UXRequest, 
   TaskUpdateRecord, 
@@ -3769,8 +3769,13 @@ export default function RequestDetail({
                 </div>
               ) : (
                 <React.Fragment>
-                  {/* 2. ReUI Checkout-style Dynamic UX Progression Stepper Bar */}
-                  <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200/80 overflow-x-auto overflow-y-hidden no-scrollbar shrink-0 touch-pan-x">
+                  {/* 2. ReUI Checkout-style Dynamic UX Progression Stepper Bar (Tier 2 Micro-stagger) */}
+                  <motion.div 
+                    variants={microStaggerTier2Variants}
+                    initial="initial"
+                    animate="animate"
+                    className="px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200/80 overflow-x-auto overflow-y-hidden no-scrollbar shrink-0 touch-pan-x"
+                  >
                     <Stepper
                       activeStep={currentPhaseIndex}
                       orientation="horizontal"
@@ -3796,7 +3801,7 @@ export default function RequestDetail({
                         )
                       })}
                     </Stepper>
-                  </div>
+                  </motion.div>
 
               {/* Mobile / Tablet Tab Switcher (< lg) */}
               <div className="lg:hidden flex border-b border-slate-200 bg-slate-50/90 px-3 sm:px-6 pt-2 gap-2 shrink-0">
@@ -3826,8 +3831,13 @@ export default function RequestDetail({
                 </button>
               </div>
 
-              {/* 3. Main Content Split View (ClickUp 2-Column: Details Left + Activity Stream Right) */}
-              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-100 min-h-0">
+              {/* 3. Main Content Split View (ClickUp 2-Column: Details Left + Activity Stream Right) (Tier 3 Micro-stagger) */}
+              <motion.div 
+                variants={microStaggerTier3Variants}
+                initial="initial"
+                animate="animate"
+                className="flex-1 flex flex-col lg:flex-row overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-100 min-h-0"
+              >
                 
                 {/* LEFT COLUMN: Task Header, Interactive Properties Table & Details */}
                 <div className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 ${
@@ -5621,7 +5631,7 @@ export default function RequestDetail({
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
 
               {/* 4. Sheet Sticky Footer Action Bar (hiển thị khi có liên kết kết quả) */}
               {customDeliverables?.figma_url && (

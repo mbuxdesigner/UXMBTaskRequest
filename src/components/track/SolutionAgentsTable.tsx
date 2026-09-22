@@ -21,7 +21,7 @@ function formatDesignerDisplayName(rawName?: string): string {
 }
 
 import { motion, AnimatePresence } from "framer-motion"
-import { durations, springs, staggerContainerVariants } from "@/lib/motion"
+import { durations, springs, cascadeWaveContainerVariants, cascadeWaveItemVariants, cascadeWaveTableRowVariants, easings } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TableRowsSkeleton, TableRowSkeletonPlaceholder } from "@/components/common/ReuiSkeletons"
 import { EmptyState } from "@/components/reui/empty-state"
@@ -634,158 +634,161 @@ export default function SolutionAgentsTable({
             ) : (
               <motion.tbody
                 key="table-data-content"
-                variants={staggerContainerVariants}
+                variants={cascadeWaveContainerVariants}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
                 data-slot="data-grid-table-body"
               >
-                {groupedData.map((group) => {
-                if (!group.hasVisibleItems) return null
-                const isExpanded = expandedGroups[group.id] !== false
+                {(() => {
+                  let globalRowIdx = 0
+                  return groupedData.map((group) => {
+                    if (!group.hasVisibleItems) return null
+                    const isExpanded = expandedGroups[group.id] !== false
+                    const headerIdx = globalRowIdx++
 
-                return (
-                  <React.Fragment key={group.id}>
-                    {/* Collapsible Group Row Header (Enhanced Hierarchy) */}
-                    <tr
-                      data-row-id={group.id}
-                      onClick={() => toggleGroup(group.id)}
-                      className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} border-y cursor-pointer select-none transition-all group/run-row shadow-2xs`}
-                    >
-                      <td colSpan={8} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
-                        <div data-run-row="group" className="flex items-center justify-between">
-                          {/* Left: Button + Status Dot + Group Name + Count pill */}
-                          <div className="flex items-center gap-2 min-w-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleGroup(group.id)
-                              }}
-                              className="size-6 inline-flex items-center justify-center rounded-full hover:bg-black/5 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
-                            >
-                              <ChevronRight
-                                className={`size-4 transition-transform duration-150 ${
-                                  isExpanded ? "rotate-90 text-slate-800" : "text-slate-500"
-                                }`}
+                    return (
+                      <React.Fragment key={group.id}>
+                        {/* Collapsible Group Row Header (Enhanced Hierarchy) */}
+                        <motion.tr
+                          custom={headerIdx}
+                          variants={cascadeWaveTableRowVariants}
+                          data-row-id={group.id}
+                          onClick={() => toggleGroup(group.id)}
+                          style={{ willChange: "opacity, transform" }}
+                          className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} border-y cursor-pointer select-none transition-all group/run-row shadow-2xs`}
+                        >
+                          <td colSpan={8} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
+                            <div data-run-row="group" className="flex items-center justify-between">
+                              {/* Left: Button + Status Dot + Group Name + Count pill */}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleGroup(group.id)
+                                  }}
+                                  className="size-6 inline-flex items-center justify-center rounded-full hover:bg-black/5 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
+                                >
+                                  <ChevronRight
+                                    className={`size-4 transition-transform duration-150 ${
+                                      isExpanded ? "rotate-90 text-slate-800" : "text-slate-500"
+                                    }`}
+                                  />
+                                </button>
+                                <span className={`size-2.5 rounded-full shrink-0 ring-2 ring-white shadow-xs ${group.dotClass}`} />
+                                <span className={`text-sm ${group.labelClass || "font-bold text-slate-900"} truncate`}>
+                                  {group.label}
+                                </span>
+                                <span className={`rounded-full border px-2 py-0.5 text-xs h-5 min-w-5 shrink-0 inline-flex items-center justify-center shadow-2xs ${group.countBadgeClass || "border-slate-200 bg-white font-bold text-slate-600"}`}>
+                                  {group.count + group.incomingExternal.length}
+                                </span>
+                              </div>
+
+                              {/* Right: Group description */}
+                              <span
+                                className="text-xs text-slate-500 font-medium truncate max-w-md lg:max-w-xl hidden md:inline-block pr-2"
+                                title={group.summary}
+                              >
+                                {group.summary}
+                              </span>
+                            </div>
+                          </td>
+                        </motion.tr>
+
+                        {/* Group Item Rows (When expanded) */}
+                        {isExpanded && (
+                          <AnimatePresence>
+                            {/* 1. Incoming TableRowSkeletonPlaceholder for newly created external tasks (R3) */}
+                            {group.incomingExternal.map((incomingReq) => (
+                              <TableRowSkeletonPlaceholder
+                                key={`incoming-skel-${group.id}-${incomingReq.request_id}`}
                               />
-                            </button>
-                            <span className={`size-2.5 rounded-full shrink-0 ring-2 ring-white shadow-xs ${group.dotClass}`} />
-                            <span className={`text-sm ${group.labelClass || "font-bold text-slate-900"} truncate`}>
-                              {group.label}
-                            </span>
-                            <span className={`rounded-full border px-2 py-0.5 text-xs h-5 min-w-5 shrink-0 inline-flex items-center justify-center shadow-2xs ${group.countBadgeClass || "border-slate-200 bg-white font-bold text-slate-600"}`}>
-                              {group.count + group.incomingExternal.length}
-                            </span>
-                          </div>
+                            ))}
 
-                          {/* Right: Group description */}
-                          <span
-                            className="text-xs text-slate-500 font-medium truncate max-w-md lg:max-w-xl hidden md:inline-block pr-2"
-                            title={group.summary}
-                          >
-                            {group.summary}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
+                            {/* 2. Group items with layout & cross-group animation (R2, R4) */}
+                            {group.items.map((req, rowIdx) => {
+                              const currentRowIdx = globalRowIdx++
+                              const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
+                              const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
+                              const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
 
-                    {/* Group Item Rows (When expanded) */}
-                    {isExpanded && (
-                      <AnimatePresence initial={false}>
-                        {/* 1. Incoming TableRowSkeletonPlaceholder for newly created external tasks (R3) */}
-                        {group.incomingExternal.map((incomingReq) => (
-                          <TableRowSkeletonPlaceholder
-                            key={`incoming-skel-${group.id}-${incomingReq.request_id}`}
-                          />
-                        ))}
+                              const rawDesigner =
+                                req.assigned_designer ||
+                                (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
+                                  ? req.ux_owner
+                                  : "") ||
+                                ""
+                              const isAssigned = Boolean(
+                                rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
+                              )
+                              const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
+                              const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
 
-                        {/* 2. Group items with layout & cross-group animation (R2, R4) */}
-                        {group.items.map((req, rowIdx) => {
-                          const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
-                          const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
-                          const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
+                              // Created by
+                              const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
+                              const displayCreator = getMemberDisplayName(rawCreator, req.requester_email) || (
+                                rawCreator.includes("@")
+                                  ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                                  : rawCreator
+                              )
+                              const creatorAvatar = getDesignerAvatar(displayCreator, req.requester_email) || getDesignerAvatar(rawCreator, req.requester_email)
 
-                          const rawDesigner =
-                            req.assigned_designer ||
-                            (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
-                              ? req.ux_owner
-                              : "") ||
-                            ""
-                          const isAssigned = Boolean(
-                            rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
-                          )
-                          const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
-                          const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
+                              const priorityInfo = formatPriority(req.priority)
 
-                          // Created by
-                          const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
-                          const displayCreator = getMemberDisplayName(rawCreator, req.requester_email) || (
-                            rawCreator.includes("@")
-                              ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
-                              : rawCreator
-                          )
-                          const creatorAvatar = getDesignerAvatar(displayCreator, req.requester_email) || getDesignerAvatar(rawCreator, req.requester_email)
+                              // Dates
+                              const releaseDate = req.release_date || req.expected_deadline
+                              const designDoneDate = req.design_deadline || req.expected_deadline
+                              const isOverdue = Boolean(
+                                designDoneDate &&
+                                new Date(designDoneDate).getTime() < Date.now() &&
+                                req.status !== "Hoàn thành" &&
+                                req.status !== "Done"
+                              )
 
-                          const priorityInfo = formatPriority(req.priority)
+                              const pendingInfo = getRequestPendingClassification(req)
+                              const isLastRow = rowIdx === group.items.length - 1
+                              const cellBorderClass = isHighlighted
+                                ? "border-b border-blue-200"
+                                : isLastRow
+                                ? "border-b-2 border-slate-300"
+                                : "border-b border-slate-200"
 
-                          // Dates
-                          const releaseDate = req.release_date || req.expected_deadline
-                          const designDoneDate = req.design_deadline || req.expected_deadline
-                          const isOverdue = Boolean(
-                            designDoneDate &&
-                            new Date(designDoneDate).getTime() < Date.now() &&
-                            req.status !== "Hoàn thành" &&
-                            req.status !== "Done"
-                          )
+                              const prodName = (req.product || "Khác").trim()
+                              const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
+                              const hasSquad = Boolean(
+                                rawSquad &&
+                                rawSquad !== "Chưa phân công" &&
+                                rawSquad !== "Chưa có squad" &&
+                                rawSquad !== "Chưa phân squad" &&
+                                rawSquad !== "Triage Squad" &&
+                                rawSquad !== ""
+                              )
+                              const projectDisplay = hasSquad
+                                ? (rawSquad.toLowerCase() === prodName.toLowerCase() ? prodName : `${prodName} · ${rawSquad}`)
+                                : prodName
 
-                          const pendingInfo = getRequestPendingClassification(req)
-                          const isLastRow = rowIdx === group.items.length - 1
-                          const cellBorderClass = isHighlighted
-                            ? "border-b border-blue-200"
-                            : isLastRow
-                            ? "border-b-2 border-slate-300"
-                            : "border-b border-slate-200"
+                              const phaseInfo = getTaskPhaseStatus(req)
+                              const cfg = getStatusConfig(phaseInfo.name)
 
-                          const prodName = (req.product || "Khác").trim()
-                          const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
-                          const hasSquad = Boolean(
-                            rawSquad &&
-                            rawSquad !== "Chưa phân công" &&
-                            rawSquad !== "Chưa có squad" &&
-                            rawSquad !== "Chưa phân squad" &&
-                            rawSquad !== "Triage Squad" &&
-                            rawSquad !== ""
-                          )
-                          const projectDisplay = hasSquad
-                            ? (rawSquad.toLowerCase() === prodName.toLowerCase() ? prodName : `${prodName} · ${rawSquad}`)
-                            : prodName
-
-                          const phaseInfo = getTaskPhaseStatus(req)
-                          const cfg = getStatusConfig(phaseInfo.name)
-
-                          const rowStaggerDelay = Math.min(rowIdx, 12) * 0.035
-
-                          return (
-                            <motion.tr
-                              layout="position"
-                              key={`${group.id}-${req.request_id || rowIdx}`}
-                              data-row-id={req.request_id}
-                              data-depth="1"
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: isMutating ? 0.4 : 1, y: 0 }}
-                              exit={{ opacity: 0, scaleY: 0.85, transition: { duration: 0.2 } }}
-                              transition={{
-                                layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
-                                opacity: { duration: 0.25, delay: rowStaggerDelay },
-                                y: { ...springs.snappy, delay: rowStaggerDelay },
-                              }}
-                              onClick={() => !isIncoming && onSelectRequest(req)}
-                              onMouseEnter={() => {
-                                if (req.request_id && !isIncoming) {
-                                  fetchSingleTaskUpdate(req.request_id)
-                                }
-                              }}
+                              return (
+                                <motion.tr
+                                  layout="position"
+                                  key={`${group.id}-${req.request_id || rowIdx}`}
+                                  data-row-id={req.request_id}
+                                  data-depth="1"
+                                  custom={currentRowIdx}
+                                  variants={cascadeWaveTableRowVariants}
+                                  initial="hidden"
+                                  animate={isMutating ? { opacity: 0.4, y: 0 } : "visible"}
+                                  exit={{ opacity: 0, y: -10, transition: { duration: 0.22, ease: "easeIn" } }}
+                                  style={{ willChange: "opacity, transform" }}
+                                  onClick={() => !isIncoming && onSelectRequest(req)}
+                                  onMouseEnter={() => {
+                                    if (req.request_id && !isIncoming) {
+                                      fetchSingleTaskUpdate(req.request_id)
+                                    }
+                                  }}
                               className={cn(
                                 "transition-colors duration-500 group/run-row cursor-pointer relative",
                                 actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-0",
@@ -1094,7 +1097,8 @@ export default function SolutionAgentsTable({
                     )}
                   </React.Fragment>
                 )
-              })}
+              })
+            })()}
             </motion.tbody>
           )}
         </AnimatePresence>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
+import { cascadeWaveContainerVariants, cascadeWaveItemVariants, dataContinuityTransition, durations } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KanbanBoardSkeleton } from "@/components/common/ReuiSkeletons"
 import { UXRequest } from "@/data/mockData"
@@ -432,7 +432,7 @@ export default function KanbanBoard({
       ) : (
         <motion.div
           key="kanban-board-root"
-          variants={staggerContainerVariants}
+          variants={cascadeWaveContainerVariants}
           initial="hidden"
           animate="visible"
           exit="exit"
@@ -459,7 +459,7 @@ export default function KanbanBoard({
               return (
                 <motion.div
                   key={column.id}
-                  variants={staggerItemVariants}
+                  variants={cascadeWaveItemVariants}
                   onDragOver={(e) => handleDragOver(e, column.id)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, column)}
@@ -496,7 +496,7 @@ export default function KanbanBoard({
                     ) : (
                       <motion.div
                         key={`kcards-col-${column.id}`}
-                        variants={staggerContainerVariants}
+                        variants={cascadeWaveContainerVariants}
                         initial="hidden"
                         animate="visible"
                         exit="exit"
@@ -520,7 +520,9 @@ export default function KanbanBoard({
                     return (
                       <motion.div
                         key={req.request_id ? `kcard-${req.request_id}-${idx}` : `kcard-idx-${idx}`}
-                        variants={staggerItemVariants}
+                        variants={cascadeWaveItemVariants}
+                        layout="position"
+                        transition={dataContinuityTransition}
                         draggable
                         onDragStart={(e: any) => handleDragStart(e, req.request_id)}
                         onDragEnd={handleDragEnd}

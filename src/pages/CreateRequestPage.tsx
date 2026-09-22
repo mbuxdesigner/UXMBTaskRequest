@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
+import { cascadeWaveContainerVariants, cascadeWaveItemVariants, durations } from "@/lib/motion"
 import { Squad } from "../data/mockData"
 import { fetchSquads } from "../api/api"
 import RequestForm from "../components/form/RequestForm"
@@ -60,7 +60,10 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
   }, [])
 
   return (
-    <main
+    <motion.main
+      variants={cascadeWaveContainerVariants}
+      initial="hidden"
+      animate="visible"
       id="main-content"
       tabIndex={-1}
       className={
@@ -70,7 +73,7 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
       }
     >
       {isPo && !isSuccess && (
-        <motion.div variants={staggerItemVariants}>
+        <motion.div variants={cascadeWaveItemVariants}>
           <Button
             variant="ghost"
             size="sm"
@@ -100,7 +103,7 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
         ) : (
           <motion.div
             key="form-content"
-            variants={staggerContainerVariants}
+            variants={cascadeWaveContainerVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
@@ -109,6 +112,6 @@ export default function CreateRequestPage({ onBack }: CreateRequestPageProps) {
           </motion.div>
         )}
       </AnimatePresence>
-    </main>
+    </motion.main>
   )
 }

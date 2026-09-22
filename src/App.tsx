@@ -15,6 +15,7 @@ import {
 } from "@/components/common/ReuiSkeletons"
 
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
+import { pageContainerVariants } from "@/lib/motion"
 
 import { Frame } from "@/components/reui/frame"
 
@@ -423,18 +424,30 @@ export default function App() {
               <div className="flex-1 w-full min-w-0 max-w-full flex flex-col justify-between">
                 <div className="flex-1 w-full min-w-0 max-w-full px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
                   <ErrorBoundary>
-                    {page === "overview" && <TongQuanPage />}
-                    {page === "create" && (
-                      <CreateRequestPage onBack={() => handleNavigate("track")} />
-                    )}
-                    {page === "track" && (
-                      <TrackRequestPage
-                        onNavigateToCreate={() => handleNavigate("create")}
-                      />
-                    )}
-                    {page === "manage" && <QuanLyPage />}
-                    {page === "test" && <TestAssessmentPage />}
-                    {page === "compressor" && <ImageCompressorPage />}
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={page}
+                        variants={pageContainerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        style={{ willChange: "opacity, transform, filter" }}
+                        className="w-full flex-1"
+                      >
+                        {page === "overview" && <TongQuanPage />}
+                        {page === "create" && (
+                          <CreateRequestPage onBack={() => handleNavigate("track")} />
+                        )}
+                        {page === "track" && (
+                          <TrackRequestPage
+                            onNavigateToCreate={() => handleNavigate("create")}
+                          />
+                        )}
+                        {page === "manage" && <QuanLyPage />}
+                        {page === "test" && <TestAssessmentPage />}
+                        {page === "compressor" && <ImageCompressorPage />}
+                      </motion.div>
+                    </AnimatePresence>
                   </ErrorBoundary>
                 </div>
 

@@ -35,6 +35,17 @@
 >    - **Thu Nhỏ Thẻ Cấp 5 (Lv5) Bằng Thẻ Cấp 4 (Lv4):** Chiều cao chuẩn chuyển từ 110px về 68px, chiều rộng 240px; tự động thanh lọc cache localStorage nếu từng lưu 110px cũ; xóa sạch khoảng trắng thừa bên trong thẻ.
 >    - **Khắc Phục Lỗi Viền Gạch Màu (Accent Stripe) Bị Thòi Ra Ngoài:** Sửa container 4px bị co ép border-radius bằng lớp bọc `inset-0 rounded-[11px] overflow-hidden`, gạch màu uốn cong ôm khít hoàn hảo viền thẻ.
 >    - **Tinh Giản Giao Diện Request Detail & Page Header:** Loại bỏ nút quay lại thừa trong Request Detail; tinh giản Information Architecture Header (bỏ icon mũi tên xuống, bỏ drafts, bỏ page +, bỏ menu 3 chấm; đồng bộ màu chọn page khớp sidebar).
+> 6. **Xây Dựng Component TimePicker Chuẩn reUI (`src/components/reui/time-picker.tsx`):**
+>    - Chuẩn hóa ô nhập thời gian đồng bộ với DatePicker (`c-calendar-15.tsx`) thay thế các thẻ `<input type="time">` cơ bản của trình duyệt.
+>    - Giao diện Popover 2 dòng: Dòng 1 chứa icon đồng hồ và nhãn định dạng LED lớn `HH:mm`; Dropdown hiển thị 2 cột cuộn độc lập Giờ (00–23) và Phút (00–59) cùng các phím Presets nhanh (08:00, 12:00, 13:30, 17:30); hỗ trợ căn lề `align="left" | "right"`.
+>    - Thay thế toàn diện 4 ô chọn giờ làm việc và nghỉ trưa trong phân hệ "Cài đặt lịch làm việc" (`SystemParamsTab.tsx`).
+> 7. **Chuẩn Hóa Triệt Để 100% Staggered Fade & Motion Animation Theo Technical Spec:**
+>    - Triển khai hiệu ứng xuất hiện danh sách/lưới dữ liệu theo cơ chế **Staggered Waterfall (Nối tiếp độ trễ)** kết hợp **Soft Fade (Mờ dần)**, **Translate Y (+24px -> 0px)**, **Blur (4px -> 0px)** và **Ease-Out Deceleration (`easeOutExpo`, duration 720ms)**.
+>    - Loại bỏ hoàn toàn hiệu ứng nảy rẻ tiền (Zero Bounce/Elastic) và sửa triệt để lỗi giật cả trang (Page-level jump) bằng cách chuyển `pageContainerVariants` sang Fade thuần 0.25s.
+>    - Áp dụng mượt mà trên **Tạo Task Mới** (`RequestForm.tsx`), **My Task** (`TrackRequestPage.tsx` & `SolutionAgentsTable.tsx` với hàng bảng `cascadeWaveTableRowVariants`), và **Kanban Board** (`KanbanBoard.tsx`).
+> 8. **Khảo Sát Toàn Diện Dữ Liệu Tiềm Năng & Kiến Trúc Lịch Đôi (Dual-Calendar Architecture):**
+>    - Lập danh mục chi tiết các nguồn dữ liệu có sẵn trên Google Sheets/Google Apps Script nhưng chưa được code/hiển thị trên Frontend.
+>    - Làm rõ vai trò kiến trúc của mô hình Lịch Google (Lịch bé - Navigator/Context vs Lịch to - Canvas/Workspace).
 
 ---
 
@@ -72,6 +83,10 @@
 | **28** | **Khắc Phục Lỗi Viền Gạch Màu (Accent Stripe) Bị Thòi Ra Ngoài Góc Thẻ** | `src/components/ia/IATreeNodeCard.tsx` | ✅ Hoàn thành 100% | Sửa container 4px bị co ép border-radius bằng lớp bọc toàn thẻ `inset-0 rounded-[11px] overflow-hidden`; viền gạch màu tự động cắt gọt (clip) ôm khít hoàn hảo theo cung cong của góc thẻ, triệt tiêu 100% hiện tượng thòi ra ngoài viền. |
 | **29** | **Bỏ Nút Quay Lại Trong Chi Tiết Task (Request Detail)** | `src/components/track/RequestDetail.tsx` | ✅ Hoàn thành 100% | Loại bỏ nút quay lại thừa trên thanh điều hướng chi tiết task theo yêu cầu người dùng, giữ giao diện sạch sẽ, tập trung tối đa vào nội dung bài toán. |
 | **30** | **Đồng Bộ Màu Chọn Page Và Tinh Giản Tiêu Đề Information Architecture** | `src/components/Sidebar.tsx`<br>`src/components/common/AppHeader.tsx`<br>`src/pages/IAPage.tsx` | ✅ Hoàn thành 100% | Bỏ icon mũi tên xuống ở text Information Architecture, bỏ chữ drafts, bỏ dòng page +, bỏ icon 3 chấm khi đang chọn page, đồng bộ màu nền và viền khi chọn page khớp hoàn toàn với màu chọn side bar. |
+| **31** | **Xây Dựng Component TimePicker Chuẩn reUI** | `src/components/reui/time-picker.tsx`<br>`src/components/admin/SystemParamsTab.tsx` | ✅ Hoàn thành 100% | Tạo component TimePicker chuẩn mực reUI (2 dòng LED container, 2 cột cuộn Giờ 00-23 & Phút 00-59, presets); thay thế 4 input time cơ bản trong Cài đặt lịch làm việc. |
+| **32** | **Hoàn Thiện Staggered Fade & Motion Animation (Technical Spec 100%)** | `src/lib/motion.ts`<br>`src/components/form/RequestForm.tsx`<br>`src/pages/TrackRequestPage.tsx`<br>`src/components/track/SolutionAgentsTable.tsx`<br>`src/components/kanban/KanbanBoard.tsx` | ✅ Hoàn thành 100% | Sửa lỗi giật cả trang (bỏ `y: 24` trên `pageContainerVariants`); công thức trễ $T_i = 50\text{ms} + i \times 70\text{ms}$; trượt tịnh tiến êm ái với `easeOutExpo` (720ms, blur 4px -> 0px, zero bounce); stagger 5 khối Form tạo task và từng dòng bảng `SolutionAgentsTable` qua `cascadeWaveTableRowVariants`. |
+| **33** | **Khảo Sát & Lập Danh Mục Dữ Liệu Tiềm Năng Toàn Hệ Thống** | `google-apps-script-backend.js`<br>`src/services/googleSheetService.ts`<br>`src/mockData.ts` | ✅ Hoàn thành 100% | Lập danh mục chi tiết các nguồn dữ liệu có sẵn trên Google Sheets/Backend nhưng chưa có UI hiển thị (`get_tests`, `get_submissions`, `spec_url`, `prototype_url`, `USERS.Last Active At`, `ping`, `fix_duplicate_ids`). |
+| **34** | **Phân Tích Kiến Trúc Mô Hình Lịch Đôi (Dual-Calendar Layout)** | `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` | ✅ Hoàn thành 100% | Phân tích chuyên sâu cơ chế Google Calendar: Lịch bé (Mini-Calendar Navigator / Monthly Context) kết hợp Lịch to (Main Canvas / Work Coordinator). |
 
 ---
 
@@ -269,6 +284,66 @@
 #### F. Tinh Giản Giao Diện Request Detail & Page Header
 - Bỏ nút quay lại thừa trong giao diện chi tiết bài toán (`RequestDetail.tsx`).
 - Tinh giản tiêu đề Information Architecture Header: bỏ icon mũi tên xuống, bỏ nhãn drafts, bỏ dòng page +, bỏ menu 3 chấm; đồng bộ màu chọn page khớp hoàn toàn với màu chọn của sidebar.
+
+---
+
+### 2.9. Chiến Dịch IX: Chuẩn Hóa Component TimePicker reUI & Hoàn Thiện Motion Staggered Waterfall 100% Spec
+
+#### A. Component TimePicker Chuẩn reUI (`src/components/reui/time-picker.tsx`)
+- **Bối cảnh:** Trước đây các ô chọn giờ trong mục "Cài đặt lịch làm việc & Ngày nghỉ" (`SystemParamsTab.tsx`) sử dụng thẻ HTML `<input type="time">` cơ bản của trình duyệt, giao diện thô ráp, không ăn nhập với DatePicker và thiếu tính năng chọn nhanh.
+- **Kiến trúc TimePicker reUI:**
+  - **Khung chứa 2 tầng (Two-Tier Container):** Dòng 1 gồm icon `Clock`, nhãn và hiển thị giờ to rõ nét phong cách LED digital clock `font-mono text-base font-semibold text-slate-800`.
+  - **Dropdown Popover thông minh:** Tự động căn lề (`align="left" | "right"`), bo góc `rounded-xl`, đổ bóng mềm mại `shadow-xl border border-slate-200/80 bg-white`.
+  - **Hệ thống Presets 1-chạm:** 4 nút preset tiện ích cho giờ hành chính MBBank (`08:00`, `12:00`, `13:30`, `17:30`).
+  - **2 Cột cuộn độc lập Giờ & Phút (Scrollable Dual Columns):** Cột Giờ (`00` – `23`), Cột Phút (`00` – `59` với bước nhảy 5 phút hoặc từng phút), nút đang chọn nổi bật với nền xanh `bg-blue-600 text-white font-bold rounded-lg shadow-sm`.
+  - **Thay thế hoàn toàn 4 ô nhập giờ:** Khung giờ làm việc bắt đầu (`openTime`), kết thúc (`closeTime`), nghỉ trưa bắt đầu (`lunchStart`), kết thúc (`lunchEnd`).
+
+#### B. Hoàn Thiện 100% Staggered Fade & Motion Animation Theo Technical Spec
+- **Khắc phục triệt để hiện tượng cả trang bị giật lên (Page-level jump):**
+  - Trước đây `pageContainerVariants` áp dụng `y: 24`, dẫn đến việc khi chuyển trang, cả khung trang trượt lên như thang máy, nuốt trọn hiệu ứng trượt của các phần tử con.
+  - Đã chuyển `pageContainerVariants` sang Fade Frame thuần: `opacity: 0 -> 1` trong `0.25s` với `ease: "easeOut"`, loại bỏ hoàn toàn `y: 24` ở cấp trang.
+- **Tham số Hoạt họa Vật lý (Physics Animation Parameters):**
+  - **Độ mờ (Opacity):** `0.0 -> 1.0` (Soft Fade in).
+  - **Tịnh tiến trục Y (Translate Y):** `+24px -> 0px` (trượt tịnh tiến êm ái từ dưới lên).
+  - **Làm mờ mép viền (Blur):** `blur(4px) -> blur(0px)` giúp mép thẻ mềm mại, dễ chịu cho mắt.
+  - **Thời lượng (Duration):** `720ms` (0.72s) chuẩn mực.
+  - **Đường cong hãm phanh (Easing):** `easeOutExpo` (`[0.16, 1, 0.3, 1]`) — bứt tốc êm dịu trong 50ms đầu và hãm phanh nhẹ nhàng khi tiếp đất, **tuyệt đối không dùng Bounce/Elastic**.
+  - **Công thức tính độ trễ nối tiếp:**
+    $$T_i = T_{\text{start}} + i \times \Delta t \quad (T_{\text{start}} = 50\text{ms}, \; \Delta t = 70\text{ms})$$
+    (Phần tử 0: 50ms $\to$ Phần tử 1: 120ms $\to$ Phần tử 2: 190ms $\to$ Phần tử 3: 260ms $\to$ Phần tử 4: 330ms...).
+- **Triển khai thực tế trên các màn hình:**
+  1. **Tạo Task Mới (`RequestForm.tsx`):**
+     - Áp dụng `custom={i}` cho 5 khối tuần tự: Khối Header (50ms) $\to$ Section 01 Thông tin chung (120ms) $\to$ Section 02 Yêu cầu & Chi tiết (190ms) $\to$ Section 03 Tài liệu & Liên kết (260ms) $\to$ Cột Phải Kế hoạch & SLA (330ms).
+     - Bổ sung `style={{ willChange: "opacity, transform, filter" }}` tối ưu hóa bộ nhớ GPU.
+  2. **Danh Sách Bài Toán My Task (`TrackRequestPage.tsx` & `SolutionAgentsTable.tsx`):**
+     - `pageContainerVariants` mờ dần tĩnh; Header trang mang `custom={0}`; Khung bảng/bộ lọc mang `custom={1}`.
+     - **Chế độ Bảng (`SolutionAgentsTable.tsx`):** Xây dựng riêng variant `cascadeWaveTableRowVariants` cho thẻ `<tr>` (chỉ dịch chuyển `y: 24 -> 0` và `opacity: 0 -> 1`, **không dùng CSS scale hoặc blur trên `<tr>`** để tránh lỗi méo vỡ cấu trúc bảng của trình duyệt).
+     - Biến đếm `globalRowIdx` đếm tuần tự xuyên suốt mọi nhóm trạng thái (Grouped/Ungrouped), đảm bảo từng dòng trượt lên mượt mà theo nhịp sóng nối tiếp.
+  3. **Bảng Kanban (`KanbanBoard.tsx`):**
+     - Cột và thẻ Kanban bọc trong `cascadeWaveContainerVariants` và `cascadeWaveItemVariants`, phối hợp cùng `layout="position"` và `dataContinuityTransition` đảm bảo Zero CLS khi kéo thả hoặc đổi bộ lọc.
+
+---
+
+### 2.10. Chiến Dịch X: Rà Soát Dữ Liệu Tiềm Năng Chưa Khai Thác & Phân Tích Kiến Trúc Lịch Đôi Google Calendar
+
+#### A. Danh Mục Nguồn Dữ Liệu Tiềm Năng Có Thể Đưa Lên Giao Diện
+Sau khi rà soát toàn bộ backend Google Apps Script (`google-apps-script-backend.js`), Google Sheets schema và Frontend services, hệ thống ghi nhận các nguồn dữ liệu quý giá sẵn sàng tích hợp:
+1. **Dữ liệu Đánh giá Ứng viên / Bài thi tuyển dụng:**
+   - Backend đã có sẵn action `get_tests` (danh sách đề thi UX) và `get_submissions` (danh sách bài nộp của ứng viên kèm điểm số, thời gian nộp). Hiện tại Frontend mới có trang làm bài thi của ứng viên, Admin Portal có thể mở thêm màn hình chấm điểm và thống kê ứng viên.
+2. **Trường nghiệp vụ chi tiết của Task:**
+   - Cột H/I trong `RAW_TASKS` hỗ trợ trường `spec_url` (Link tài liệu đặc tả nghiệp vụ/BRD) và `prototype_url` (Link bản mẫu tương tác Prototype). Hiện Create Request chỉ có link Figma chung, có thể mở rộng thêm 2 input trực quan này.
+3. **Dữ liệu Nhân sự & Trạng thái hoạt động (`USERS` sheet):**
+   - Cột `Last Active At` (Lần cuối truy cập) và `Phone Number` có thể đưa lên danh sách phân công nhân sự và tooltip avatar để biết designer nào đang online.
+4. **Hạ tầng Tự động hóa & Kiểm tra Kết nối Realtime:**
+   - Action `ping` (kiểm tra độ trễ mạng Backend Google Apps Script, đưa lên widget System Health).
+   - Action `fix_duplicate_ids` (tiện ích tự động quét và sửa các ID trùng lặp nếu có sự cố ghi đồng thời).
+
+#### B. Phân Tích Kiến Trúc Lịch Đôi (Dual-Calendar Layout - Google Calendar Style)
+- **Lịch bé (Mini-Calendar / Navigator):**
+  - **Vai trò:** La bàn định hướng (Compass & Context). Đóng vai trò là công cụ xem nhanh tổng thể cả tháng, nhảy nhanh đến một ngày bất kỳ, phát hiện nhanh các ngày có deadline bằng chấm tròn màu (heat dots).
+- **Lịch to (Main Calendar Canvas / Workspace):**
+  - **Vai trò:** Bàn làm việc điều phối chi tiết (Workspace & Coordinator). Hiển thị lịch trình làm việc theo Ngày/Tuần/Tháng với các dải màu (event chips), kéo thả phân bổ công việc, hiển thị xung đột thời gian (time collision).
+- **Sự phối hợp hoàn hảo:** Khi click vào ngày trên "Lịch bé", "Lịch to" lập tức cuộn mượt hoặc lọc đúng ngày/tuần đó mà người dùng không bị mất ngữ cảnh của cả tháng.
 
 ---
 
@@ -481,7 +556,41 @@ TEST SUITE: IA UNIFIED BOTTOM DOCK (LIGHT GLASS) VERIFICATION
 ================================================================================
 ```
 
-### 11. Kiểm tra Biên Dịch Bản Production (Vite Build)
+### 11. Kiểm thử Hoạt Họa Mượt Mà & Zero-CLS Audit (`tests/test-silky-smooth-motion.mjs`)
+```
+========================================================
+🧪 SUITE: SILKY SMOOTH MOTION & ZERO-CLS AUDIT
+========================================================
+
+▶ [Test 1] Verifying Motion Library Tokens & Physics Specifications...
+  ✔ All motion tokens (cascade, micro-stagger 3 tiers, continuity) exported cleanly.
+
+▶ [Test 2] Verifying Dashboard Metric Cards Integration...
+  ✔ AiOpsKpiCards successfully uses cascade wave and position continuity.
+
+▶ [Test 3] Verifying RequestDetail Drawer 3-Tier Micro-staggering...
+  ✔ RequestDetail implements 3-tiered micro-stagger (Shell -> Stepper -> Split Content).
+
+▶ [Test 4] Verifying Kanban Board & Track Request Grid...
+  ✔ KanbanBoard and TrackRequestPage apply smooth cascade waves & continuity.
+
+▶ [Test 5] Verifying RequestForm & QuanLyPage...
+  ✔ RequestForm and QuanLyPage silky smooth animations verified.
+
+▶ [Test 6] Verifying IA Map Isolation...
+  ✔ IA Page canvas maintains dedicated 60fps GPU transform and viewport culling.
+
+▶ [Test 7] Verifying IA Map Ctrl+Wheel Zoom-Out & Zoom-In Symmetry...
+  ✔ Zoom-out factor (delta +100): 0.8607 (scales down smoothly)
+  ✔ Zoom-in factor  (delta -100): 1.1618 (scales up smoothly)
+  ✔ Reciprocal symmetry: factorOut * factorIn = 1.00000 (preserves exact scale)
+
+========================================================
+✅ ALL SILKY SMOOTH MOTION & IA MAP CHECKS PASSED (7/7)!
+========================================================
+```
+
+### 12. Kiểm tra Biên Dịch Bản Production (Vite Build)
 ```
 > vite build
 ✓ 2974 modules transformed.
@@ -496,14 +605,19 @@ dist/assets/index-DklBgtFH.js                355.77 kB │ gzip:  86.43 kB
 ## 📈 4. DANH MỤC TÀI LIỆU KỸ THUẬT ĐÃ CẬP NHẬT
 
 1. **Báo cáo Ngày Toàn Diện:**
-   - `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` (Tài liệu này)
-2. **Tài Liệu Đặc Tả Backend Google Apps Script & Google Sheets Database:**
-   - `doc/features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` (Cập nhật Mục 7: Cơ chế Auto-Chunking, Auto-Reassembly vượt giới hạn 50.000 ký tự của Google Sheets; Double Persistence và Overflow Guard cho lịch sử trao đổi của Task).
+   - `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` (Cập nhật Mục 31-34, Chiến dịch IX & X, Hoạt họa Waterfall Spec và TimePicker reUI).
+2. **Tài Liệu Đặc Tả Design System & UI/UX Guideline:**
+   - `doc/features/06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md` (Bổ sung Mục 6.1: Component TimePicker chuẩn reUI & Calendar Presets; Mục 6.2: Quy chuẩn Hoạt họa Chuyển động Staggered Waterfall Animation Spec).
 3. **Tài Liệu Đặc Tả Quản Lý Bài Toán & Task Tracking:**
-   - `doc/features/02_TASK_MANAGEMENT_AND_TRACKING.md` (Cập nhật Mục 7: Phase-aware UX Dates, c-calendar-15 Presets, Smart Link Chip, ClickUp System Activity, Tinh giản Deliverables, khắc phục lem màu avatar).
-4. **Tài Liệu Đặc Tả Tính Năng IA Map:**
-   - `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md` (Cập nhật Phân cấp Lv5, Squad badge, Ultra-compact cards, Title 15px bold, Tự động xếp Lv3 ngang & Lv2 bao trùm, Viewport Culling 256+ nodes và bộ kịch bản kiểm thử mới).
-5. **Tài Liệu Cấu Hình Quản Trị Hệ Thống:**
+   - `doc/features/02_TASK_MANAGEMENT_AND_TRACKING.md` (Cập nhật Mục 7.7: Trải nghiệm Chuyển động Cascade mượt mà cho Danh sách Task).
+4. **Tài Liệu Hướng Dẫn Chuyển Động Hệ Thống (Motion Guidelines):**
+   - `doc/motion-guidelines.md` (Đặc tả 6 pattern chuyển động chuẩn, spring physics, cascade wave và phân tầng nội bộ 3 bậc).
+5. **Tài Liệu Đặc Tả Backend Google Apps Script & Google Sheets Database:**
+   - `doc/features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` (Cơ chế Auto-Chunking, Auto-Reassembly vượt giới hạn 50.000 ký tự; Double Persistence và Overflow Guard cho lịch sử Task).
+6. **Tài Liệu Đặc Tả Tính Năng IA Map:**
+   - `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md` (Phân cấp Lv5, Squad badge, Ultra-compact cards, Title 15px bold, Viewport Culling 256+ nodes).
+7. **Tài Liệu Cấu Hình Quản Trị Hệ Thống:**
    - `doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md` (Đặc tả chi tiết 8 phân hệ tham số nghiệp vụ và 14 mẫu thông báo đa kênh).
-6. **Bản Đồ Tra Cứu Tổng Thể:**
+8. **Bản Đồ Tra Cứu Tổng Thể:**
    - `doc/00_OVERVIEW_AND_ONBOARDING.md` và `doc/features/04_ADMIN_PORTAL_AND_RBAC.md`.
+

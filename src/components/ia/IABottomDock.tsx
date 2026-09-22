@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
+  Plus,
+  Code2,
   CloudUpload,
   FileCode,
   SlidersHorizontal,
@@ -177,20 +179,19 @@ export default function IABottomDock({
       {/* ======================================================== */}
       {!readOnly && (
         <>
-          <Tooltip content="Mở bảng mẫu Thêm Node mới" shortcut="A" side="top">
+          <Tooltip content="Thêm Node mới" shortcut="A" side="top">
             <motion.button
               type="button"
               data-testid="ia-tool-add-node-btn"
               onClick={() => handleToolToggle("add-node")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                 activeTool === "add-node"
-                  ? "bg-blue-50 text-[#1057FB] border border-blue-200/90 shadow-2xs"
-                  : "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                  ? "bg-blue-50 text-[#1057FB] ring-1 ring-blue-200/90 shadow-2xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               }`}
               {...tactileProps.button}
             >
-              <Sparkles className={`w-3.5 h-3.5 ${activeTool === "add-node" ? "text-[#1057FB]" : "text-amber-500"}`} />
-              <span>Thêm Node</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
             </motion.button>
           </Tooltip>
           <div className="w-px h-5 bg-slate-200/80 mx-0.5" />
@@ -214,20 +215,19 @@ export default function IABottomDock({
             data-testid="ia-tool-view-sync-btn"
             onClick={() => onPullCloud?.()}
             disabled={isPullingCloud}
-            className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
               isPullingCloud
                 ? "bg-slate-100 text-slate-800 border border-slate-300/80 shadow-2xs cursor-not-allowed"
-                : "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
             {...tactileProps.button}
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${isPullingCloud ? "animate-spin text-slate-700" : "text-slate-600"}`}
+              className={`w-4 h-4 ${isPullingCloud ? "animate-spin text-slate-700" : "text-slate-600"}`}
             />
-            <span>Đồng bộ</span>
             {/* Live status dot */}
             <span
-              className={`w-2 h-2 rounded-full ring-2 ring-white shrink-0 ${
+              className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ring-1 ring-white shrink-0 ${
                 isPullingCloud ? "bg-amber-500 animate-ping" : "bg-emerald-500"
               }`}
             />
@@ -246,18 +246,17 @@ export default function IABottomDock({
             type="button"
             data-testid="ia-tool-data-system-btn"
             onClick={() => handleToolToggle("data-system")}
-            className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
               isDataSystemActive
-                ? "bg-blue-50 text-[#1057FB] border border-blue-200/90 shadow-2xs"
-                : "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-blue-50 text-[#1057FB] ring-1 ring-blue-200/90 shadow-2xs font-semibold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
             {...tactileProps.button}
           >
-            <CloudUpload className={`w-3.5 h-3.5 ${isSyncing ? "animate-pulse text-blue-600" : "text-slate-600"}`} />
-            <span>Dữ liệu & Hệ thống</span>
+            <Code2 className="w-4 h-4" />
             {/* Live status dot */}
             <span
-              className={`w-2 h-2 rounded-full ring-2 ring-white shrink-0 ${
+              className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ring-1 ring-white shrink-0 ${
                 isSyncing ? "bg-amber-500 animate-ping" : "bg-emerald-500"
               }`}
             />

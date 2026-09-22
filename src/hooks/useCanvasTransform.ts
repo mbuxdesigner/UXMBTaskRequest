@@ -291,13 +291,32 @@ export function useCanvasTransform(options: UseCanvasTransformOptions = {}) {
     (e: WheelEvent, containerRect: DOMRect) => {
       e.preventDefault()
 
-      // 1. Trackpad pinch gesture (or Ctrl + Wheel): Zoom in/out centered at cursor
-      if (e.ctrlKey) {
+      // 1. Trackpad pinch gesture (or Ctrl/Cmd + Mouse Wheel): Zoom in/out centered at cursor
+      if (e.ctrlKey || e.metaKey) {
         const cursor = {
           x: e.clientX - containerRect.left,
           y: e.clientY - containerRect.top,
         }
-        const factor = 1 - e.deltaY * 0.01
+
+        // Normalize delta across devices and deltaModes (pixels vs lines vs pages)
+        let normalizedDelta = e.deltaY
+        if (e.deltaMode === 1) {
+          // DOM_DELTA_LINE: typically ~33px per line in Windows browsers
+          normalizedDelta *= 33
+        } else if (e.deltaMode === 2) {
+          // DOM_DELTA_PAGE: typically full page
+          normalizedDelta *= 300
+        }
+
+        // Clamp single event delta to avoid extreme zoom jumps
+        const clampedDelta = Math.max(-120, Math.min(normalizedDelta, 120))
+
+        // Exponential scaling factor guarantees factor is strictly positive (> 0),
+        // preventing factor <= 0 when scrolling down (zoom out with deltaY > 0).
+        // e.g., delta = +100 (wheel down) => exp(-0.15) ≈ 0.8607 (smooth zoom out)
+        //       delta = -100 (wheel up)   => exp(+0.15) ≈ 1.1618 (smooth zoom in)
+        const factor = Math.exp(-clampedDelta * 0.0015)
+
         setTransform((prev) => zoomAtPoint(prev, cursor, factor, minZoom, maxZoom))
         return
       }

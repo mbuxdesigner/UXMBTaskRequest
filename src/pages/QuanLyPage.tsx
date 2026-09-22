@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { staggerContainerVariants, staggerItemVariants, durations, springs } from "@/lib/motion"
+import { staggerContainerVariants, staggerItemVariants, durations, springs, easings } from "@/lib/motion"
 import { Frame } from "@/components/reui/frame"
 import { DropdownMenu, type DropdownOption } from "@/components/reui/dropdown-menu"
 import { Badge, StatusPill, PriorityBadge } from "@/components/ui/badge"
@@ -3560,6 +3560,15 @@ export default function QuanLyPage() {
 
         {/* CỘT 2: Settings Main Panel */}
         <div className="flex-1 min-w-0 w-full space-y-6">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: easings.easeOutExpo }}
+              className="w-full space-y-6"
+            >
 
         {/* TAB 1: DANH SÁCH NHÂN SỰ UX */}
         {activeTab === "team" && (
@@ -5941,7 +5950,8 @@ export default function QuanLyPage() {
             </Frame>
           </div>
         )}
-
+            </motion.div>
+          </AnimatePresence>
         </div>
       </motion.div>
     </motion.div>

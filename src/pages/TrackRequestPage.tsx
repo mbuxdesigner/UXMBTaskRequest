@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { springs, staggerContainerVariants, staggerItemVariants, durations } from "@/lib/motion"
+import { springs, staggerContainerVariants, staggerItemVariants, durations, cascadeWaveContainerVariants, cascadeWaveItemVariants, dataContinuityTransition } from "@/lib/motion"
 import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
 import { UXRequest, TaskUpdateRecord } from "../data/mockData"
 import { fetchRequests, updateTaskProgress } from "../api/api"
@@ -720,14 +720,26 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const completedCount = groupCounts.completed
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-6 text-slate-900 pb-8 outline-none">
+    <motion.main
+      variants={cascadeWaveContainerVariants}
+      initial="hidden"
+      animate="visible"
+      id="main-content"
+      tabIndex={-1}
+      className="w-full space-y-6 text-slate-900 pb-8 outline-none"
+    >
       {/* 1. Page Header Synchronized with Dashboard */}
-      <PageHeader
-        breadcrumb={{
-          parent: "MBBank UX Platform",
-          current: "My task",
-        }}
-        title="My task"
+      <motion.div
+        custom={0}
+        variants={cascadeWaveItemVariants}
+        style={{ willChange: "opacity, transform, filter" }}
+      >
+        <PageHeader
+          breadcrumb={{
+            parent: "MBBank UX Platform",
+            current: "My task",
+          }}
+          title="My task"
         badge={
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -829,9 +841,16 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           </div>
         }
       />
+      </motion.div>
 
       {/* 2. Unified Frame Container */}
-      <div data-slot="frame" className="relative flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-xs">
+      <motion.div
+        custom={1}
+        variants={cascadeWaveItemVariants}
+        data-slot="frame"
+        style={{ willChange: "opacity, transform" }}
+        className="relative flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-xs"
+      >
         {/* Frame Panel Header / Toolbar - Flux AgentOps Style */}
         <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between rounded-t-2xl relative z-20">
           {/* Left: Search input */}
@@ -994,7 +1013,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 ) : filteredRequests.length > 0 ? (
                   <motion.div
                     key="grid-list"
-                    variants={staggerContainerVariants}
+                    variants={cascadeWaveContainerVariants}
                     initial="hidden"
                     animate="visible"
                     exit="exit"
@@ -1003,7 +1022,9 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                     {filteredRequests.map((r, idx) => (
                       <motion.div
                         key={r.request_id ? `${r.request_id}-${idx}` : `grid-${idx}`}
-                        variants={staggerItemVariants}
+                        variants={cascadeWaveItemVariants}
+                        layout="position"
+                        transition={dataContinuityTransition}
                       >
                         <RequestCard request={r} onClick={setSelectedRequest} />
                       </motion.div>
@@ -1088,7 +1109,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
 
       {/* SLIDE-OVER DRAWER XEM CHI TIẾT / HỒ SƠ YÊU CẦU */}
       <RequestDetail
@@ -1114,7 +1135,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           }
         }}
       />
-    </main>
+    </motion.main>
   )
 }
 export { TrackRequestPage }

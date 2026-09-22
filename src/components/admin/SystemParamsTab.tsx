@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
+import { TimePicker } from "@/components/reui/time-picker"
 import {
   SystemConfig,
   DEFAULT_SYSTEM_CONFIG,
@@ -662,142 +663,117 @@ export default function SystemParamsTab({ onLogAction }: SystemParamsTabProps) {
                 <span className="text-slate-400 text-xs cursor-help" title="Khung giờ bắt đầu và kết thúc làm việc trong ngày">ⓘ</span>
               </div>
 
-              {/* Option 1: Same time for all days */}
+              {/* Working hours inputs */}
               <div className="space-y-3">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="radio"
-                    name="workingHoursMode"
-                    checked={config.workSchedule?.workingHoursMode === "same_all_days" || !config.workSchedule?.workingHoursMode}
-                    onChange={() => {
+                <div className="flex items-center gap-3 flex-wrap">
+                  <TimePicker
+                    value={config.workSchedule?.startTime || "08:00"}
+                    onChange={(val) => {
                       updateConfig((prev) => ({
                         ...prev,
-                        workSchedule: { ...prev.workSchedule, workingHoursMode: "same_all_days" },
+                        workSchedule: { ...prev.workSchedule, startTime: val },
                       }))
                     }}
-                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                    className="w-32"
+                    placeholder="08:00"
                   />
-                  <span className="text-sm font-medium text-slate-800">Same time for all days (Cùng khung giờ cho tất cả các ngày)</span>
-                </label>
+                  <span className="text-sm text-slate-500 font-medium">to</span>
+                  <TimePicker
+                    value={config.workSchedule?.endTime || "17:30"}
+                    onChange={(val) => {
+                      updateConfig((prev) => ({
+                        ...prev,
+                        workSchedule: { ...prev.workSchedule, endTime: val },
+                      }))
+                    }}
+                    className="w-32"
+                    placeholder="17:30"
+                  />
 
-                <div className="pl-6 space-y-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Input
-                      type="time"
-                      value={config.workSchedule?.startTime || "08:00"}
-                      onChange={(e) => {
-                        updateConfig((prev) => ({
-                          ...prev,
-                          workSchedule: { ...prev.workSchedule, startTime: e.target.value },
-                        }))
-                      }}
-                      className="w-32 h-10 px-3 bg-white border-slate-200 text-sm font-medium rounded-lg"
-                    />
-                    <span className="text-sm text-slate-500 font-medium">to</span>
-                    <Input
-                      type="time"
-                      value={config.workSchedule?.endTime || "17:30"}
-                      onChange={(e) => {
-                        updateConfig((prev) => ({
-                          ...prev,
-                          workSchedule: { ...prev.workSchedule, endTime: e.target.value },
-                        }))
-                      }}
-                      className="w-32 h-10 px-3 bg-white border-slate-200 text-sm font-medium rounded-lg"
-                    />
-
-                    {/* Lunch Break Toggle */}
-                    <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
-                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(config.workSchedule?.lunchBreak?.enabled)}
-                          onChange={(e) => {
+                  {/* Lunch Break Toggle */}
+                  <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(config.workSchedule?.lunchBreak?.enabled)}
+                        onChange={(e) => {
+                          updateConfig((prev) => ({
+                            ...prev,
+                            workSchedule: {
+                              ...prev.workSchedule,
+                              lunchBreak: {
+                                ...prev.workSchedule?.lunchBreak,
+                                enabled: e.target.checked,
+                                startTime: prev.workSchedule?.lunchBreak?.startTime || "12:00",
+                                endTime: prev.workSchedule?.lunchBreak?.endTime || "13:30",
+                              },
+                            },
+                          }))
+                        }}
+                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="flex items-center gap-1">
+                        <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                        Trừ giờ nghỉ trưa:
+                      </span>
+                    </label>
+                    {config.workSchedule?.lunchBreak?.enabled && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <TimePicker
+                          size="sm"
+                          value={config.workSchedule?.lunchBreak?.startTime || "12:00"}
+                          onChange={(val) => {
                             updateConfig((prev) => ({
                               ...prev,
                               workSchedule: {
                                 ...prev.workSchedule,
                                 lunchBreak: {
-                                  ...prev.workSchedule?.lunchBreak,
-                                  enabled: e.target.checked,
-                                  startTime: prev.workSchedule?.lunchBreak?.startTime || "12:00",
-                                  endTime: prev.workSchedule?.lunchBreak?.endTime || "13:30",
+                                  ...prev.workSchedule.lunchBreak,
+                                  startTime: val,
                                 },
                               },
                             }))
                           }}
-                          className="rounded text-indigo-600 focus:ring-indigo-500"
+                          className="w-28"
+                          placeholder="12:00"
                         />
-                        <span className="flex items-center gap-1">
-                          <Coffee className="w-3.5 h-3.5 text-amber-600" />
-                          Trừ giờ nghỉ trưa:
-                        </span>
-                      </label>
-                      {config.workSchedule?.lunchBreak?.enabled && (
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <input
-                            type="time"
-                            value={config.workSchedule?.lunchBreak?.startTime || "12:00"}
-                            onChange={(e) => {
-                              updateConfig((prev) => ({
-                                ...prev,
-                                workSchedule: {
-                                  ...prev.workSchedule,
-                                  lunchBreak: {
-                                    ...prev.workSchedule.lunchBreak,
-                                    startTime: e.target.value,
-                                  },
+                        <span className="text-slate-400 font-medium">-</span>
+                        <TimePicker
+                          size="sm"
+                          value={config.workSchedule?.lunchBreak?.endTime || "13:30"}
+                          onChange={(val) => {
+                            updateConfig((prev) => ({
+                              ...prev,
+                              workSchedule: {
+                                ...prev.workSchedule,
+                                lunchBreak: {
+                                  ...prev.workSchedule.lunchBreak,
+                                  endTime: val,
                                 },
-                              }))
-                            }}
-                            className="w-24 h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium"
-                          />
-                          <span className="text-slate-400">-</span>
-                          <input
-                            type="time"
-                            value={config.workSchedule?.lunchBreak?.endTime || "13:30"}
-                            onChange={(e) => {
-                              updateConfig((prev) => ({
-                                ...prev,
-                                workSchedule: {
-                                  ...prev.workSchedule,
-                                  lunchBreak: {
-                                    ...prev.workSchedule.lunchBreak,
-                                    endTime: e.target.value,
-                                  },
-                                },
-                              }))
-                            }}
-                            className="w-24 h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs font-medium"
-                          />
-                        </div>
-                      )}
-                    </div>
+                              },
+                            }))
+                          }}
+                          className="w-28"
+                          placeholder="13:30"
+                        />
+                      </div>
+                    )}
                   </div>
-
-                  {/* Live Capacity calculation text */}
-                  {(() => {
-                    const dailyMins = getDailyWorkingMinutes(config.workSchedule)
-                    const dailyH = Math.floor(dailyMins / 60)
-                    const dailyM = dailyMins % 60
-                    const weeklyH = getWeeklyCapacityHours(config.workSchedule)
-                    return (
-                      <p className="text-xs text-slate-500 font-medium">
-                        Daily capacity: {dailyH}h {dailyM > 0 ? `${dailyM}m` : "00m"}
-                        {config.workSchedule?.lunchBreak?.enabled ? " (đã trừ giờ nghỉ trưa)" : ""} • Weekly capacity: {weeklyH}h
-                      </p>
-                    )
-                  })()}
                 </div>
 
-                {/* Option 2: Custom working hours (Locked) */}
-                <div className="flex items-center gap-2.5 pt-1 text-slate-400 select-none">
-                  <input type="radio" disabled className="w-4 h-4 text-slate-300" />
-                  <span className="text-sm font-medium flex items-center gap-1.5">
-                    Custom working hours
-                    <Lock className="w-3.5 h-3.5" />
-                  </span>
-                </div>
+                {/* Live Capacity calculation text */}
+                {(() => {
+                  const dailyMins = getDailyWorkingMinutes(config.workSchedule)
+                  const dailyH = Math.floor(dailyMins / 60)
+                  const dailyM = dailyMins % 60
+                  const weeklyH = getWeeklyCapacityHours(config.workSchedule)
+                  return (
+                    <p className="text-xs text-slate-500 font-medium">
+                      Daily capacity: {dailyH}h {dailyM > 0 ? `${dailyM}m` : "00m"}
+                      {config.workSchedule?.lunchBreak?.enabled ? " (đã trừ giờ nghỉ trưa)" : ""} • Weekly capacity: {weeklyH}h
+                    </p>
+                  )
+                })()}
               </div>
             </div>
 

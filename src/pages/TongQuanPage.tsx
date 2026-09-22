@@ -65,7 +65,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { springs } from "@/lib/motion"
+import { springs, cascadeWaveContainerVariants, cascadeWaveItemVariants } from "@/lib/motion"
 import { Squad, UXRequest, mockRequests, mockSquads } from "../data/mockData"
 import { fetchSquads, fetchRequests } from "../api/api"
 import { getStoredSession, UserSession } from "../services/otpAuthService"
@@ -330,9 +330,16 @@ export default function TongQuanPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="w-full space-y-4 text-slate-900 pb-8 outline-none">
+    <motion.main
+      variants={cascadeWaveContainerVariants}
+      initial="hidden"
+      animate="visible"
+      id="main-content"
+      tabIndex={-1}
+      className="w-full space-y-4 text-slate-900 pb-8 outline-none"
+    >
       {/* Header & Product Navigation Section */}
-      <div className="space-y-2.5">
+      <motion.div variants={cascadeWaveItemVariants} className="space-y-2.5">
         {/* 1. Page Header Synchronized with My task & Design System */}
         <PageHeader
           breadcrumb={{
@@ -476,14 +483,14 @@ export default function TongQuanPage() {
             )
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* =========================================================================
           6 REUI FRAMES (Bento KPI + Asymmetric Workload + Gantt Roadmap)
           Smooth cross-fade grid stack (No blank gap, zero vertical jerk, seamless morph)
           ========================================================================= */}
       <div className="grid grid-cols-1 grid-rows-1 w-full min-w-0 isolate">
-        <AnimatePresence initial={false}>
+        <AnimatePresence>
           {isLoading || isRefreshing || isFiltering ? (
             <motion.div
               key="overview-content-skeleton-frame"
@@ -498,17 +505,23 @@ export default function TongQuanPage() {
           ) : (
             <motion.div
               key={`overview-content-${selectedProduct}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: "easeInOut" }}
+              variants={cascadeWaveContainerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
               className="col-start-1 row-start-1 w-full min-w-0 space-y-4 z-20"
             >
               {/* ROW 1: 3 REUI KPI CARDS (Backlog & Pending, Đang thực hiện, Đã hoàn thành) */}
-              <AiOpsKpiCards requests={filteredRequests} selectedProduct={currentProductName} />
+              <motion.div variants={cascadeWaveItemVariants} layout="position">
+                <AiOpsKpiCards requests={filteredRequests} selectedProduct={currentProductName} />
+              </motion.div>
 
               {/* ROW 2: ASYMMETRIC 2-COLUMN GRID (NewsFeed + Squad Trending) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch">
+              <motion.div
+                variants={cascadeWaveItemVariants}
+                layout="position"
+                className="grid grid-cols-1 lg:grid-cols-3 gap-4.5 items-stretch"
+              >
                 <div className="lg:col-span-1 h-full min-w-0">
                   <ReleaseNewsfeedTimeline
                     requests={filteredRequests}
@@ -522,15 +535,15 @@ export default function TongQuanPage() {
                     currentProduct={selectedProduct}
                   />
                 </div>
-              </div>
+              </motion.div>
 
               {/* ROW 3: FULL-WIDTH MY TASK GANTT ROADMAP */}
-              <div className="w-full">
+              <motion.div variants={cascadeWaveItemVariants} layout="position" className="w-full">
                 <TrackTaskGanttFrame
                   requests={filteredRequests}
                   onSelectRequest={(req) => setSelectedRequest(req)}
                 />
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -547,6 +560,6 @@ export default function TongQuanPage() {
         onClose={() => setSelectedRequest(null)}
         onUpdated={() => {}}
       />
-    </main>
+    </motion.main>
   )
 }

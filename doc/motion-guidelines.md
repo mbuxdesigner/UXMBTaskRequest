@@ -15,11 +15,14 @@
    - 2.2. Thời Lượng Chuẩn (Duration Tokens)
    - 2.3. Đường Cong Gia Tốc (Easing Curves)
    - 2.4. Chính Sách Giảm Chuyển Động (Reduced Motion Policy)
-3. [Bốn Pattern Chuyển Động Chuẩn (Standard Motion Patterns)](#3-bốn-pattern-chuyển-động-chuẩn-standard-motion-patterns)
+3. [Sáu Pattern Chuyển Động Chuẩn (Standard Motion Patterns)](#3-sáu-pattern-chuyển-động-chuẩn-standard-motion-patterns)
    - 3.1. Pattern 1: Floating Active Indicator (Shared Layout `layoutId`)
    - 3.2. Pattern 2: Origin-Aware Popover & Dialog (Anchor Origin Scale & Fade)
    - 3.3. Pattern 3: Staggered Skeleton-to-UI Reveal (Cascade Wave Transition)
    - 3.4. Pattern 4: Tactile Feedback & Micro-Interactions (Spring Bounce & Hover Lift)
+   - 3.5. Pattern 5: Silky Smooth Staggered Entry & Cascade Wave Effect (Nối Tiếp Độ Trễ)
+   - 3.6. Pattern 6: Per-Element Micro-Staggering & Data Continuity (Phân Tầng Nội Bộ 3 Bậc & FLIP Layout)
+   - 3.7. Vùng Cách Ly Kiến Trúc: Ngoại Trừ IA Map (IA Map Isolation Rationale)
 4. [Tối Ưu Hiệu Năng & Cam Kết 60+ FPS (Performance Engineering)](#4-tối-ưu-hiệu-năng--cam-kết-60-fps-performance-engineering)
 5. [Quy Chuẩn Khả Năng Tiếp Cận (WCAG 2.2 SC 2.3.3 Compliance)](#5-quy-chuẩn-khả-năng-tiếp-cận-wcag-22-sc-233-compliance)
 6. [Bảng Tra Cứu Tái Sử Dụng (Implementation Catalog)](#6-bảng-tra-cứu-tái-sử-dụng-implementation-catalog)
@@ -101,9 +104,119 @@ Khi hệ điều hành kích hoạt `prefers-reduced-motion: reduce`:
 - Toàn bộ chuyển đổi lò xo chuyển sang **Fade In / Fade Out** thuần túy trong khoảng thời lượng từ `0.1s - 0.15s`.
 - Khung xương Skeleton vô hiệu hóa chuyển động lướt ánh sáng ngang (shimmer wave), giữ nền tĩnh nhẹ nhàng.
 
+### 2.5. Tham Số Nối Tiếp Độ Trễ & Phân Tầng Nội Bộ (Cascade Wave & Micro-Stagger Tokens)
+
+Hỗ trợ hiển thị dữ liệu dạng sóng liên tục (Wave Effect) kết hợp gia tốc Apple HIG `easeOutExpo`:
+
+```ts
+// 1. Cascade Wave Entry (Staggered Entry Animation)
+export const cascadeWaveContainerVariants: Variants = {
+  initial: {},
+  hidden: { opacity: 0 },
+  animate: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.028, // 28ms độ trễ nối tiếp giữa các phần tử
+      delayChildren: 0.015,   // 15ms khởi động tức thì
+    },
+  },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.028,
+      delayChildren: 0.015,
+    },
+  },
+  exit: {
+    opacity: 0,
+    transition: {
+      staggerChildren: 0.015,
+      staggerDirection: -1,
+      duration: 0.15,
+    },
+  },
+}
+
+export const cascadeWaveItemVariants: Variants = {
+  initial: { opacity: 0, y: 12 },
+  hidden: { opacity: 0, y: 12 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.26,
+      ease: easings.easeOutExpo, // [0.16, 1, 0.3, 1] Snappy start (0-50ms) & smooth landing
+    },
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.26,
+      ease: easings.easeOutExpo,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -6,
+    scale: 0.98,
+    transition: { duration: 0.16, ease: "easeIn" },
+  },
+}
+
+// 2. Per-Element Micro-Staggering (Phân tầng nội bộ 3 bậc)
+export const microStaggerTier1Variants: Variants = {
+  initial: { opacity: 0, y: 6 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.2, ease: easings.easeOutExpo, delay: 0.04 },
+  },
+}
+
+export const microStaggerTier2Variants: Variants = {
+  initial: { opacity: 0, y: 8 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.24, ease: easings.easeOutExpo, delay: 0.09 },
+  },
+}
+
+export const microStaggerTier3Variants: Variants = {
+  initial: { opacity: 0, y: 10 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.28, ease: easings.easeOutExpo, delay: 0.14 },
+  },
+}
+```
+
+### 2.6. Tính Liên Tục Của Dữ Liệu (Data Continuity Transition Token)
+
+Khi áp dụng `layout="position"` trên các danh sách phần tử (Kanban cards, Grid cards, Table rows), Framer Motion tự động tính toán hình học FLIP (First, Last, Invert, Play) để trượt mượt mà về vị trí mới:
+
+```ts
+export const dataContinuityTransition: Transition = {
+  layout: {
+    duration: 0.28,
+    ease: easings.easeOutExpo,
+  },
+  opacity: {
+    duration: 0.2,
+    ease: "easeInOut",
+  },
+  scale: {
+    duration: 0.2,
+    ease: "easeInOut",
+  },
+}
+```
+
 ---
 
-## 3. BỐN PATTERN CHUYỂN ĐỘNG CHUẨN (STANDARD MOTION PATTERNS)
+## 3. SÁU PATTERN CHUYỂN ĐỘNG CHUẨN (STANDARD MOTION PATTERNS)
 
 ### 3.1. Pattern 1: Floating Active Indicator (Shared Layout `layoutId`)
 
@@ -407,6 +520,129 @@ export function RequestCardInteractive({ children }: { children: React.ReactNode
 
 ---
 
+### 3.5. Pattern 5: Silky Smooth Staggered Entry & Cascade Wave Effect (Nối Tiếp Độ Trễ)
+
+#### Mục đích
+Cách làm truyền thống là khi dữ liệu tải xong, cả danh sách sẽ đập vào mắt người dùng cùng một lúc gây cảm giác ngợp và giật cục. Kỹ thuật **Nối tiếp độ trễ (Cascade Wave Effect)** làm cho dữ liệu chảy liên tục vào màn hình như từng đợt sóng mềm mại:
+- **Xuất hiện theo gợn sóng (Wave Effect)**: Thẻ đầu tiên xuất hiện ở $0\text{ms}$, thẻ thứ hai ở $28\text{ms}$, thẻ thứ ba ở $56\text{ms}$... Toàn bộ danh sách hoàn tất hiển thị dưới **$280\text{ms}$** để không gây cảm giác chờ đợi.
+- **Di chuyển đa hướng kết hợp (Multi-axis Translation)**: Kết hợp đồng thời trượt nhẹ từ dưới lên ($Y: 12\text{px} \to 0\text{px}$) và tăng dần độ mờ ($Opacity: 0 \to 1$).
+- **Đường cong gia tốc Apple HIG (`easeOutExpo`)**: Áp dụng cubic-bezier `[0.16, 1, 0.3, 1]` tạo lực bứt tốc cực nhanh ngay $0 - 50\text{ms}$ đầu tiên rồi hãm phanh mượt mà khi tiếp đất, loại bỏ hoàn toàn cảm giác nảy rẻ tiền (zero cartoonish bounce).
+
+#### Sơ đồ Nhịp Sóng
+```
+Thời gian (ms):  0ms    28ms    56ms    84ms    112ms   ... <= 280ms
+Container:      [ Khởi động gợn sóng (delayChildren: 15ms) ]
+Card 1 (Y+Op):  [===> easeOutExpo landing ]
+Card 2 (Y+Op):         [===> easeOutExpo landing ]
+Card 3 (Y+Op):                 [===> easeOutExpo landing ]
+Card 4 (Y+Op):                         [===> easeOutExpo landing ]
+```
+
+#### Code Mẫu Chuẩn (Danh sách Thẻ / Bảng KPI):
+```tsx
+import { motion } from "framer-motion"
+import { 
+  cascadeWaveContainerVariants, 
+  cascadeWaveItemVariants, 
+  dataContinuityTransition 
+} from "@/lib/motion"
+
+export function SilkyMetricCardsGrid({ items }: { items: any[] }) {
+  return (
+    <motion.div
+      variants={cascadeWaveContainerVariants}
+      initial="hidden"
+      animate="visible"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+    >
+      {items.map((item, idx) => (
+        <motion.div
+          key={item.id || idx}
+          variants={cascadeWaveItemVariants}
+          layout="position"
+          transition={dataContinuityTransition}
+        >
+          <MetricCard data={item} />
+        </motion.div>
+      ))}
+    </motion.div>
+  )
+}
+```
+
+---
+
+### 3.6. Pattern 6: Per-Element Micro-Staggering & Data Continuity (Phân Tầng Nội Bộ 3 Bậc & FLIP Layout)
+
+#### Mục đích
+1. **Phân tầng nội bộ 3 bậc (Per-Element Micro-Staggering)**: Khi mở một bề mặt phức tạp (như Drawer chi tiết `RequestDetail` hoặc Form tạo yêu cầu `RequestForm`), các thành phần con bên trong không xuất hiện cùng một lúc mà được phân nhịp vi mô tạo chiều sâu không gian:
+   - **Tier 1 (`microStaggerTier1Variants`)**: Khung vỏ bao ngoài, Tiêu đề và Header (`delay: 40ms`, `duration: 0.20s`).
+   - **Tier 2 (`microStaggerTier2Variants`)**: Stepper tiến độ khâu UX, Card nổi tóm tắt đề bài (`delay: 90ms`, `duration: 0.24s`).
+   - **Tier 3 (`microStaggerTier3Variants`)**: Không gian 2 cột chi tiết, luồng hoạt động & timeline trao đổi (`delay: 140ms`, `duration: 0.28s`).
+2. **Tính liên tục của dữ liệu (Data Continuity / FLIP Layout Position)**:
+   - Khi lọc theo Phase, theo Squad hoặc chuyển đổi tab/chế độ xem, các thẻ bài toán không biến mất rồi xuất hiện lại mà trượt mượt mà về vị trí mới với `layout="position"` và `dataContinuityTransition`.
+   - Đảm bảo **Zero CLS** (Cumulative Layout Shift = 0) do chuyển động chỉ thực thi trên GPU Compositor.
+
+#### Code Mẫu Chuẩn (Drawer Chi Tiết 3 Tầng):
+```tsx
+import { motion } from "framer-motion"
+import { 
+  drawerVariants,
+  microStaggerTier2Variants, 
+  microStaggerTier3Variants 
+} from "@/lib/motion"
+
+export function TaskDetailDrawer({ isOpen, onClose, task }: any) {
+  return (
+    <motion.aside
+      variants={drawerVariants}
+      initial="closed"
+      animate={isOpen ? "open" : "closed"}
+      className="fixed inset-y-0 right-0 w-full max-w-5xl bg-white shadow-2xl z-50 flex flex-col"
+    >
+      {/* TIER 1: Header vát cạnh tự động theo Drawer shell */}
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+        <h2>{task.title}</h2>
+      </div>
+
+      {/* TIER 2: Stepper tiến độ xuất hiện nối tiếp nhịp 2 */}
+      <motion.div
+        variants={microStaggerTier2Variants}
+        initial="initial"
+        animate="animate"
+        className="px-6 py-3.5 bg-white border-b border-slate-200"
+      >
+        <Stepper activeStep={task.currentPhaseIndex} />
+      </motion.div>
+
+      {/* TIER 3: Nội dung 2 cột chi tiết & luồng trao đổi xuất hiện nhịp 3 */}
+      <motion.div
+        variants={microStaggerTier3Variants}
+        initial="initial"
+        animate="animate"
+        className="flex-1 flex overflow-hidden divide-x divide-slate-100"
+      >
+        <div className="flex-1 overflow-y-auto p-6">{/* Left Details */}</div>
+        <div className="w-[460px] flex flex-col bg-slate-50">{/* Right Timeline */}</div>
+      </motion.div>
+    </motion.aside>
+  )
+}
+```
+
+---
+
+### 3.7. Vùng Cách Ly Kiến Trúc: Ngoại Trừ IA Map (IA Map Isolation Rationale)
+
+#### Nguyên Tắc Thiết Kế Bất Biến:
+- **Tuyệt đối KHÔNG áp dụng Staggered DOM Animation vào Canvas của IA Map (`IAPage.tsx`)**.
+- **Lý do kỹ thuật**:
+  1. **Hiệu năng 60 FPS**: Canvas IA Map quản lý hàng trăm nút (Node LV1 $\to$ LV5) và đường nối Bezier trên không gian 2 chiều vô cực với cơ chế **Viewport Culling** (giảm 83.6% DOM thừa ngoài khung nhìn).
+  2. **Ma trận biến đổi GPU Transform**: Canvas sử dụng cơ chế kéo Pan/Zoom cảm ứng kiểu FigJam (`transform: translate3d(x, y, 0) scale(s)`). Nếu lồng các lớp hoạt ảnh Staggered Cascade của Framer Motion vào từng Node con trên Canvas sẽ gây xung đột ma trận biến đổi (Matrix Transform Conflict) và kích hoạt Layout Reflow liên tục trên Canvas.
+  3. **Kiến trúc phân tách rõ ràng**: Hiệu ứng chuyển động mượt (Cascade & Micro-stagger) phục vụ các màn hình quản trị luồng (Dashboard, Task Track, Drawer, Form, Admin Rail); còn IA Map sử dụng bộ Render Engine chuyên dụng riêng biệt.
+
+---
+
 ## 4. TỐI ƯU HIỆU NĂNG & CAM KẾT 60+ FPS (PERFORMANCE ENGINEERING)
 
 1. **Chỉ tác động lên các thuộc tính Composite (GPU Accelerated)**:
@@ -473,8 +709,15 @@ Mọi thẻ Skeleton trong quá trình nạp dữ liệu bắt buộc gắn thu�
 | **Hộp thoại Thêm TV** | `src/components/common/AddMemberModal.tsx` | `dialogOverlayVariants`, `dialogContentVariants` | Sửa lỗi `if (!open) return null`, backdrop mờ dần |
 | **Khung xương Skeleton**| `src/components/ui/skeleton.tsx` | Shimmer wave gradient ngang | Sóng phản quang radiant 1.6s, GPU accelerated |
 | **Tổng quan Dashboard** | `src/pages/TongQuanPage.tsx` | `staggerContainerVariants`, `staggerItemVariants` | Skeleton fade-out, 4 KPI bento cards trượt lên tuần tự |
-| **Hàng Bảng Dữ Liệu** | `src/components/track/SolutionAgentsTable.tsx`| `staggerItemVariants`, `tactileProps.button` | Hàng lướt vào nhịp nhàng, click có active tap |
+| **Hàng Bảng Dữ Liệu** | `src/components/track/SolutionAgentsTable.tsx`| `staggerItemVariants`, `tactileProps.button`, `layout="position"` | Hàng lướt vào nhịp nhàng, click có active tap, FLIP position |
 | **Nút bấm Hành động** | `src/components/ui/button.tsx` | `tactileProps.button` (`whileHover`, `whileTap`) | Đàn hồi xúc giác nhạy bén, micro bounce |
+| **Thẻ KPI Dashboard** | `src/components/dashboard/ai-ops/AiOpsKpiCards.tsx` | `cascadeWaveContainerVariants`, `cascadeWaveItemVariants` | Nối tiếp độ trễ gợn sóng 28ms, gia tốc Apple HIG, Zero CLS |
+| **Drawer Chi Tiết** | `src/components/track/RequestDetail.tsx` | `microStaggerTier2Variants`, `microStaggerTier3Variants` | Phân tầng nội bộ 3 bậc: Vỏ Drawer -> Stepper -> Split Content |
+| **Bảng Kanban** | `src/components/kanban/KanbanBoard.tsx` | `cascadeWaveContainerVariants`, `dataContinuityTransition` | Cột thẻ chảy sóng, chuyển cột và lọc mượt mà không nhấp nháy |
+| **Lưới Thẻ My Task** | `src/pages/TrackRequestPage.tsx` | `cascadeWaveContainerVariants`, `dataContinuityTransition` | Gợn sóng hiển thị lưới bài toán, FLIP layout khi thay đổi bộ lọc |
+| **Form Tạo Yêu Cầu** | `src/components/form/RequestForm.tsx` | `microStaggerTier1Variants`, `microStaggerTier2Variants` | Phân nhịp 2 cột: Cột nhập form trái lướt trước, Card nổi tóm tắt phải nối tiếp |
+| **Trang Quản Trị** | `src/pages/QuanLyPage.tsx` | `AnimatePresence mode="wait"`, `easings.easeOutExpo` | Lướt chuyển tab nội dung mượt mà, đồng bộ với sidebar indicator |
+| **Bản đồ IA Map** | `src/pages/IAPage.tsx` | *Cách ly hoàn toàn khỏi DOM Cascade* | Giữ nguyên 60fps GPU Matrix Transform và Viewport Culling |
 
 ---
 

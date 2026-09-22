@@ -142,45 +142,42 @@ export default function IASettingsModal({
           </div>
 
           <form onSubmit={handleSave} className="p-6 space-y-4">
-            {/* Quick Presets */}
+            {/* Quick Presets - reUI Sheet 6 Layout Selector */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-2">Bộ mẫu kích thước nhanh</label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleApplyPreset("compact")}
-                >
-                  Thu nhỏ
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleApplyPreset("default")}
-                >
-                  Chuẩn mặc định
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleApplyPreset("spacious")}
-                >
-                  Rộng rãi
-                </Button>
+              <label className="block text-xs font-bold text-slate-900 mb-2">Bố cục mẫu nhanh</label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  { id: "compact", label: "Thu nhỏ", desc: "Tối ưu màn hình nhỏ" },
+                  { id: "default", label: "Mặc định", desc: "Tỉ lệ khuyến nghị" },
+                  { id: "spacious", label: "Rộng rãi", desc: "Nội dung dài, thoáng" },
+                ].map((p) => {
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleApplyPreset(p.id as "default" | "spacious" | "compact")}
+                      className="p-3 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/60 text-left transition-all cursor-pointer shadow-2xs group"
+                    >
+                      <span className="block text-xs font-bold text-slate-900 group-hover:text-slate-950">
+                        {p.label}
+                      </span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5 leading-tight">
+                        {p.desc}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            {/* Inputs per tier */}
-            <div className="space-y-3 pt-1">
+            {/* Inputs per tier - clean reUI Frame */}
+            <div className="rounded-2xl bg-white border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
               {/* LV1 */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">Cấp 1</span>
-                    <span className="text-xs font-semibold text-slate-900">Sản phẩm số</span>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">Cấp 1</span>
+                    <span className="text-xs font-bold text-slate-900">Sản phẩm số</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Tự động kéo dài phủ trọn các LV2 bên dưới khi có nhiều nhánh
@@ -194,18 +191,18 @@ export default function IASettingsModal({
                     step={10}
                     value={lv1Width}
                     onChange={(e) => setLv1Width(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
 
               {/* LV2 */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md">Cấp 2</span>
-                    <span className="text-xs font-semibold text-slate-900">Phân hệ / Module</span>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">Cấp 2</span>
+                    <span className="text-xs font-bold text-slate-900">Phân hệ / Module</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Chiều ngang các khối phân hệ đỉnh cột
@@ -219,18 +216,18 @@ export default function IASettingsModal({
                     step={10}
                     value={lv2Width}
                     onChange={(e) => setLv2Width(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
 
               {/* LV3 */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">Cấp 3</span>
-                    <span className="text-xs font-semibold text-slate-900">Luồng tính năng</span>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">Cấp 3</span>
+                    <span className="text-xs font-bold text-slate-900">Luồng tính năng</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Chiều ngang các thẻ luồng thụt lề dưới phân hệ
@@ -244,18 +241,18 @@ export default function IASettingsModal({
                     step={10}
                     value={lv3Width}
                     onChange={(e) => setLv3Width(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
 
               {/* LV4 */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">Cấp 4</span>
-                    <span className="text-xs font-semibold text-slate-900">Màn hình / Điểm chạm</span>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">Cấp 4</span>
+                    <span className="text-xs font-bold text-slate-900">Màn hình / Điểm chạm</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Chiều ngang các màn hình con trong luồng
@@ -269,18 +266,18 @@ export default function IASettingsModal({
                     step={10}
                     value={lv4Width}
                     onChange={(e) => setLv4Width(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
 
               {/* LV5 */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">Cấp 5</span>
-                    <span className="text-xs font-semibold text-slate-900">Thành phần & Chi tiết</span>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">Cấp 5</span>
+                    <span className="text-xs font-bold text-slate-900">Thành phần & Chi tiết</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Chiều ngang các thành phần/chi tiết trong màn hình
@@ -294,16 +291,16 @@ export default function IASettingsModal({
                     step={10}
                     value={lv5Width}
                     onChange={(e) => setLv5Width(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
 
               {/* Khoảng cách cột */}
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="min-w-0 flex-1">
-                  <span className="text-xs font-semibold text-slate-900">Khoảng cách giữa các cột</span>
+                  <span className="text-xs font-bold text-slate-900">Khoảng cách giữa các cột</span>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                     Khoảng trống chiều ngang giữa các nhánh module
                   </p>
@@ -316,20 +313,21 @@ export default function IASettingsModal({
                     step={10}
                     value={columnGap}
                     onChange={(e) => setColumnGap(Number(e.target.value))}
-                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-300 focus:outline-none focus:border-blue-500 bg-white"
+                    className="w-20 px-2.5 py-1 text-xs font-bold text-right rounded-lg border border-slate-200 focus:outline-none focus:border-slate-900 bg-slate-50/50 focus:bg-white text-slate-900 transition-colors"
                   />
-                  <span className="text-xs text-slate-400">px</span>
+                  <span className="text-xs text-slate-400 font-medium">px</span>
                 </div>
               </div>
             </div>
 
-            {/* Footer Buttons */}
+            {/* Footer Buttons - reUI Sheet 6 style */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={handleReset}
+                className="text-slate-500 hover:text-slate-800 text-xs font-medium gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                 <span>Khôi phục chuẩn</span>
@@ -341,6 +339,7 @@ export default function IASettingsModal({
                   variant="outline"
                   size="sm"
                   onClick={onClose}
+                  className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs text-xs font-semibold px-4 h-9"
                 >
                   Hủy
                 </Button>
@@ -348,8 +347,9 @@ export default function IASettingsModal({
                   type="submit"
                   variant="default"
                   size="sm"
+                  className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs text-xs font-semibold px-4 h-9 gap-1.5 focus-visible:ring-slate-900/30"
                 >
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
                   <span>Lưu cấu hình</span>
                 </Button>
               </div>

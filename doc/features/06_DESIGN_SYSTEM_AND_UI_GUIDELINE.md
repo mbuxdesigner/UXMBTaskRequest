@@ -118,7 +118,35 @@ Các component độc quyền đã được đóng gói sẵn trong thư mục `
 
 ---
 
-## 🔍 6. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG (IMPACT ANALYSIS)
+## 🕒 7. BỘ COMPONENT NHẬP LIỆU THỜI GIAN & QUY CHUẨN HOẠT HỌA (TIME & MOTION SPEC)
+
+### 7.1. Component TimePicker Chuẩn reUI (`src/components/reui/time-picker.tsx`)
+Thay thế hoàn toàn các ô `<input type="time">` mặc định của trình duyệt bằng component TimePicker cao cấp chuẩn mực reUI:
+- **Cấu trúc 2 tầng (Two-Tier Layout):**
+  - Dòng 1: Icon đồng hồ `Clock` nhỏ kèm nhãn trường dữ liệu.
+  - Dòng 2: Hiển thị thời gian to, đậm nét phong cách LED digital clock `font-mono text-base font-semibold text-slate-800`.
+- **Dropdown Popover thông minh:**
+  - Presets nhanh 1-chạm: Các mốc giờ hành chính chuẩn mực (`08:00`, `12:00`, `13:30`, `17:30`).
+  - 2 Cột cuộn độc lập: Cột Giờ (`00` – `23`) và Cột Phút (`00` – `59`), nút active tô nền xanh MB `bg-blue-600 text-white font-bold rounded-lg`.
+  - Hỗ trợ căn lề linh hoạt qua prop `align="left" | "right"`.
+
+### 7.2. Quy Chuẩn Hoạt Họa Chuyển Động (Staggered Waterfall Animation Spec)
+Để tạo cảm giác chuyển động tịnh tiến êm ái, nối tiếp nhịp nhàng mà không bị giật hay nảy (zero bounce):
+- **Thông số chuẩn mực:**
+  - **Opacity:** `0.0 -> 1.0` (Soft Fade In).
+  - **Translate Y:** `+24px -> 0px` (Trượt từ dưới lên).
+  - **Blur:** `blur(4px) -> blur(0px)` (Mép thẻ dịu mắt khi xuất hiện).
+  - **Duration:** `720ms` (0.72s).
+  - **Easing Curve:** `easeOutExpo` (`[0.16, 1, 0.3, 1]`) — bứt tốc êm dịu trong 50ms đầu và hãm phanh mượt mà khi tiếp đất.
+- **Công thức tính độ trễ nối tiếp:**
+  $$T_i = T_{\text{start}} + i \times \Delta t \quad (T_{\text{start}} = 50\text{ms}, \; \Delta t = 70\text{ms})$$
+- **Quy tắc bất biến:**
+  - **Page-level Frame:** Khung trang (`pageContainerVariants`) chỉ dùng Fade thuần `opacity: 0 -> 1` trong 0.25s, **cấm dịch chuyển `y` trên khung trang** để tránh giật toàn bộ layout.
+  - **Table Rows:** Dùng `cascadeWaveTableRowVariants` cho các hàng `<tr>` (`opacity: 0 -> 1` và `y: 24 -> 0`), **tuyệt đối không áp dụng CSS scale hoặc filter blur trực tiếp lên thẻ `<tr>`** để bảo vệ viền bảng `border-collapse`.
+
+---
+
+## 🔍 8. MA TRẬN PHÂN TÍCH PHẠM VI ẢNH HƯỞNG (IMPACT ANALYSIS)
 
 | Khi bạn chỉnh sửa... | Các file bị ảnh hưởng | Rủi ro tiềm ẩn & Cách phòng tránh |
 | :--- | :--- | :--- |
@@ -128,10 +156,13 @@ Các component độc quyền đã được đóng gói sẵn trong thư mục `
 
 ---
 
-## 🛑 7. CHECKLIST KIỂM THỬ ĐẠT 100 ĐIỂM (TEST CHECKLIST)
+## 🛑 9. CHECKLIST KIỂM THỬ ĐẠT 100 ĐIỂM (TEST CHECKLIST)
 
 - [ ] **Desktop Offset Test**: Thu nhỏ và mở rộng Sidebar -> Kiểm tra xem các trang Tổng quan, Track, Tạo yêu cầu, Quản trị có tự động thụt lề mượt mà không, không có chữ nào bị Sidebar che khuất.
 - [ ] **Responsive Mobile Test**: Bật chế độ giả lập màn hình iPhone/Android (375px - 414px) -> Sidebar tự động ẩn vào Menu Hamburger -> Các bảng và thẻ hiển thị dạng 1 cột vừa vặn, không xuất hiện thanh cuộn ngang vỡ màn hình.
 - [ ] **Badge Status Consistency**: So sánh màu của khâu "Hi-Fi UI Design" trên thẻ Kanban và trong Modal chi tiết task -> Màu sắc và icon phải khớp nhau 100%.
 - [ ] **Skeleton Shimmer**: F5 trang mạng yếu -> Khung xương Skeleton phải xuất hiện lấp lánh và giữ đúng kích thước trước khi dữ liệu thật tải xong.
-- [ ] **Compile Test**: Chạy `npx tsc --noEmit` đạt 0 lỗi.
+- [ ] **TimePicker reUI Test**: Mở modal Cài đặt lịch làm việc -> Click chọn 4 ô thời gian -> Dropdown hiển thị đầy đủ presets và 2 cột Giờ/Phút cuộn êm ái, chọn xong cập nhật tức thì.
+- [ ] **Staggered Waterfall Motion Test**: Chuyển đổi giữa Tạo task mới, My Task và Bảng Kanban -> Các phần tử trượt lên tuần tự với độ trễ 70ms, không giật trang, không bounce.
+- [ ] **Compile Test**: Chạy `npm run build` đạt 0 lỗi (Exit code 0).
+
