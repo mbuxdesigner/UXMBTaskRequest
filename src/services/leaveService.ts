@@ -1,5 +1,5 @@
-import { UserLeaveRecord, UnifiedOperationalData } from "../types/leave";
-import { getGoogleSheetConfig } from "../config/googleSheetConfig";
+import type { UserLeaveRecord, UnifiedOperationalData } from "../types/leave.ts";
+import { getGoogleSheetConfig } from "../config/googleSheetConfig.ts";
 
 const LEAVE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg/gviz/tq?tqx=out:csv&gid=917777763";
 const LEAVES_CACHE_KEY = "uxmb_cached_team_leaves";

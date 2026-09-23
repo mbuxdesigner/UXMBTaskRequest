@@ -8,24 +8,62 @@
  * Tầng 4: Sự kiện team nội bộ (Design Review, Workshop, Teambuilding, Nhắc việc)
  */
 
-import { UXRequest, TaskUpdateRecord, UserRole } from "@/data/mockData"
-import { fetchTeamLeaves, TeamLeaveRecord } from "@/services/leaveService"
+import type { UXRequest, TaskUpdateRecord, UserRole } from "../data/mockData.ts"
+import { fetchTeamLeaves, type TeamLeaveRecord } from "./leaveService.ts"
 import {
   getSystemConfig,
   saveSystemConfig,
-  HolidayException,
-  TeamEvent,
-  EventCategoryConfig,
-} from "@/config/systemConfig"
-import { UserSession, getStoredSession } from "@/services/otpAuthService"
+  type HolidayException,
+  type TeamEvent,
+  type EventCategoryConfig,
+} from "../config/systemConfig.ts"
+export interface UserSession {
+  email?: string
+  displayName?: string
+  role?: string
+  personalEmail?: string
+  [key: string]: any
+}
+
+export function getStoredSession(): UserSession | null {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem("mbbank_user_session") : null
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
 
 export type CalendarLayer = 1 | 2 | 3 | 4
+export type TaskRiskLevel = "on_track" | "at_risk" | "overdue"
+
+export interface RiskAssessment {
+  riskLevel: TaskRiskLevel
+  riskReason: string
+  remainingEffort: number
+  availableCapacity: number
+  daysUntilDeadline: number
+  leaveDaysCount: number
+}
+
+export interface DesignerWorkload {
+  name: string
+  avatar?: string
+  role?: string
+  totalCapacityHours: number
+  leaveHours: number
+  availableHours: number
+  assignedHours: number
+  utilizationPercent: number
+  isOverloaded: boolean
+  activeTasksCount: number
+  tasks: UXRequest[]
+}
 
 export interface CalendarItem {
   id: string
   layer: CalendarLayer
   title: string
-  date: string // "YYYY-MM-DD"
+  date: string // "YYYY-MM-DD" (ngày hiển thị chính: planned date hoặc deadline)
   startDate: string // ISO date or "YYYY-MM-DDTHH:mm"
   endDate: string // ISO date or "YYYY-MM-DDTHH:mm"
   allDay: boolean
@@ -43,6 +81,12 @@ export interface CalendarItem {
   progress?: number
   hasConflict?: boolean
   conflictReason?: string
+  // Resource & Delivery Fields
+  plannedDate?: string
+  committedDeadline?: string
+  estimatedHours?: number
+  riskLevel?: TaskRiskLevel
+  riskReason?: string
   rawItem: UXRequest | TeamLeaveRecord | HolidayException | TeamEvent
 }
 
@@ -106,7 +150,46 @@ export function getLocalUXRequests(): UXRequest[] {
 }
 
 /**
- * Dời / Cập nhật Deadline cho bài toán UX và tự động chèn Activity Log chuẩn TaskUpdateRecord
+ * Cập nhật Ngày làm việc dự kiến (Planned Work Date) cho bài toán
+ * Kéo thả trên lịch mặc định CHỈ thay đổi ngày này, KHÔNG đổi Committed Deadline!
+ */
+export function updateTaskPlannedDate(
+  requestId: string,
+  newPlannedDateYMD: string
+): { success: boolean; task?: UXRequest; error?: string } {
+  try {
+    const requests = getLocalUXRequests()
+    const index = requests.findIndex((r) => r.request_id === requestId)
+    if (index === -1) {
+      return { success: false, error: `Không tìm thấy bài toán có mã ${requestId}` }
+    }
+
+    const currentTask = requests[index]
+    const updatedTask: UXRequest = {
+      ...currentTask,
+      planned_work_date: newPlannedDateYMD,
+      last_updated: new Date().toISOString(),
+    } as any
+
+    requests[index] = updatedTask
+    localStorage.setItem("ux_portal_real_requests", JSON.stringify(requests))
+    window.dispatchEvent(
+      new CustomEvent("ux_portal_tasks_changed", {
+        detail: { requestId, newPlannedDate: newPlannedDateYMD },
+      })
+    )
+    window.dispatchEvent(new Event("storage"))
+
+    return { success: true, task: updatedTask }
+  } catch (err: any) {
+    console.error("[CalendarService] Error updating planned work date:", err)
+    return { success: false, error: err.message || "Lỗi cập nhật kế hoạch làm việc" }
+  }
+}
+
+/**
+ * Dời / Cập nhật Deadline cam kết cho bài toán UX và tự động chèn Activity Log chuẩn TaskUpdateRecord
+ * BẮT BUỘC có lý do thay đổi deadline để đảm bảo tính minh bạch và audit log.
  */
 export function updateTaskDeadlineWithLog(
   requestId: string,
@@ -115,6 +198,13 @@ export function updateTaskDeadlineWithLog(
   reason?: string
 ): { success: boolean; task?: UXRequest; error?: string } {
   try {
+    if (!reason || !reason.trim()) {
+      return {
+        success: false,
+        error: "Thay đổi hạn cam kết (Deadline) bắt buộc phải có lý do cụ thể để lưu Audit Log!",
+      }
+    }
+
     const requests = getLocalUXRequests()
     const index = requests.findIndex((r) => r.request_id === requestId)
     if (index === -1) {
@@ -136,9 +226,7 @@ export function updateTaskDeadlineWithLog(
       new_phase: currentTask.current_phase,
       previous_progress: currentTask.progress,
       new_progress: currentTask.progress,
-      note: `Dời hạn hoàn thành thiết kế từ [${oldDeadline}] sang [${newDeadlineYMD}] trên UX Team Planner${
-        reason ? ` (Lý do: ${reason})` : ""
-      }`,
+      note: `Dời hạn hoàn thành thiết kế từ [${oldDeadline}] sang [${newDeadlineYMD}] trên UX Team Planner (Lý do: ${reason.trim()})`,
       is_comment: false,
     }
 
@@ -155,7 +243,11 @@ export function updateTaskDeadlineWithLog(
 
     // 3. Lưu vào localStorage và dispatch custom event
     localStorage.setItem("ux_portal_real_requests", JSON.stringify(requests))
-    window.dispatchEvent(new CustomEvent("ux_portal_tasks_changed", { detail: { requestId, newDeadline: newDeadlineYMD } }))
+    window.dispatchEvent(
+      new CustomEvent("ux_portal_tasks_changed", {
+        detail: { requestId, newDeadline: newDeadlineYMD, reason },
+      })
+    )
     window.dispatchEvent(new Event("storage"))
 
     return { success: true, task: updatedTask }
@@ -273,6 +365,272 @@ export function isPersonOnLeave(
 }
 
 /**
+ * Lấy số giờ ước tính (Estimated Effort Hours) của đề bài UX
+ * Nếu chưa được gán cụ thể, nội suy theo Priority: Lv1 = 24h, Lv2 = 16h, Lv3 = 8h (Mặc định 16h)
+ */
+export function getTaskEffort(task: UXRequest): number {
+  if (typeof (task as any).estimated_hours === "number" && (task as any).estimated_hours > 0) {
+    return (task as any).estimated_hours
+  }
+  const prio = (task.priority || "").toLowerCase()
+  if (prio === "lv1") return 24
+  if (prio === "lv2") return 16
+  if (prio === "lv3") return 8
+  return 16
+}
+
+/**
+ * Động cơ Đánh giá Rủi ro (Risk Engine):
+ * So sánh Remaining Effort (giờ cần làm) với Available Working Capacity (giờ khả dụng thực tế trước deadline)
+ * Tính đến: Ngày làm việc ngân hàng, trừ ngày nghỉ lễ, trừ ngày nghỉ phép của Designer
+ */
+export function assessTaskRisk(
+  task: UXRequest,
+  leaves: TeamLeaveRecord[],
+  targetDateYMD?: string
+): RiskAssessment {
+  const todayYMD = targetDateYMD || normalizeDateToYMD(new Date())
+  const deadlineYMD = normalizeDateToYMD(task.expected_deadline || task.design_deadline)
+  const totalEffort = getTaskEffort(task)
+  const progress = task.progress ?? 0
+
+  // 1. Task hoàn thành -> On track
+  if (task.status === "Hoàn thành" || progress >= 100) {
+    return {
+      riskLevel: "on_track",
+      riskReason: "Đề bài đã hoàn thành",
+      remainingEffort: 0,
+      availableCapacity: 40,
+      daysUntilDeadline: 0,
+      leaveDaysCount: 0,
+    }
+  }
+
+  // 2. Không có deadline -> Không xác định
+  if (!deadlineYMD) {
+    return {
+      riskLevel: "on_track",
+      riskReason: "Chưa ấn định deadline",
+      remainingEffort: totalEffort,
+      availableCapacity: 40,
+      daysUntilDeadline: 999,
+      leaveDaysCount: 0,
+    }
+  }
+
+  // 3. Đã quá hạn
+  if (deadlineYMD < todayYMD) {
+    return {
+      riskLevel: "overdue",
+      riskReason: `Đã quá hạn hoàn thành (${deadlineYMD})`,
+      remainingEffort: Math.round(totalEffort * (1 - progress / 100)),
+      availableCapacity: 0,
+      daysUntilDeadline: -1,
+      leaveDaysCount: 0,
+    }
+  }
+
+  const remainingEffort = Math.max(1, Math.round(totalEffort * (1 - progress / 100)))
+
+  // 4. Tính toán số ngày và số giờ khả dụng giữa today và deadline
+  const sysConfig = getSystemConfig()
+  const holidays = sysConfig.workSchedule?.holidays || []
+  const holidayDates = new Set(
+    holidays
+      .filter((h) => h.type !== "compensatory_workday")
+      .map((h) => normalizeDateToYMD(h.date))
+  )
+  const compensatoryDates = new Set(
+    holidays
+      .filter((h) => h.type === "compensatory_workday")
+      .map((h) => normalizeDateToYMD(h.date))
+  )
+
+  let availableHours = 0
+  let daysCount = 0
+  let leaveDaysCount = 0
+
+  const cur = new Date(todayYMD + "T00:00:00")
+  const end = new Date(deadlineYMD + "T00:00:00")
+
+  while (cur <= end) {
+    const curYMD = normalizeDateToYMD(cur)
+    const dayOfWeek = cur.getDay() // 0 = Sun, 6 = Sat
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+    const isCompensatory = compensatoryDates.has(curYMD)
+    const isHoliday = holidayDates.has(curYMD)
+
+    const isWorkday = (!isWeekend || isCompensatory) && !isHoliday
+
+    if (isWorkday) {
+      daysCount++
+      let dayHours = 8 // chuẩn 8 tiếng/ngày
+
+      if (task.assigned_designer) {
+        const leaveCheck = isPersonOnLeave(leaves, task.assigned_designer, curYMD)
+        if (leaveCheck.onLeave && leaveCheck.leaveRecord) {
+          const shift = (leaveCheck.leaveRecord.shift || "").toLowerCase()
+          if (shift.includes("sáng") || shift.includes("chiều") || shift.includes("nửa ngày")) {
+            dayHours -= 4
+            leaveDaysCount += 0.5
+          } else {
+            dayHours = 0
+            leaveDaysCount += 1
+          }
+        }
+      }
+
+      availableHours += dayHours
+    }
+
+    cur.setDate(cur.getDate() + 1)
+  }
+
+  // 5. Kết luận rủi ro
+  if (remainingEffort > availableHours) {
+    let reason = `Cần ${remainingEffort}h, chỉ còn ${availableHours}h khả dụng trước hạn`
+    if (leaveDaysCount > 0) {
+      reason += ` (${task.assigned_designer || "Designer"} nghỉ ${leaveDaysCount} ngày)`
+    }
+    return {
+      riskLevel: "at_risk",
+      riskReason: reason,
+      remainingEffort,
+      availableCapacity: availableHours,
+      daysUntilDeadline: daysCount,
+      leaveDaysCount,
+    }
+  }
+
+  return {
+    riskLevel: "on_track",
+    riskReason: `Tiến độ đảm bảo: Cần ${remainingEffort}h / Khả dụng ${availableHours}h`,
+    remainingEffort,
+    availableCapacity: availableHours,
+    daysUntilDeadline: daysCount,
+    leaveDaysCount,
+  }
+}
+
+/**
+ * Tính toán Năng lực và Khối lượng công việc tuần của từng Designer (Capacity & Workload Board)
+ */
+export function calculateTeamWorkload(
+  requests: UXRequest[],
+  leaves: TeamLeaveRecord[],
+  targetDate: Date = new Date()
+): DesignerWorkload[] {
+  // Lấy danh sách ngày Mon -> Fri của tuần chứa targetDate
+  const d = new Date(targetDate)
+  const dayIndex = (d.getDay() + 6) % 7 // 0 = Mon, 4 = Fri
+  const monday = new Date(d)
+  monday.setDate(monday.getDate() - dayIndex)
+
+  const weekYMDs: string[] = []
+  for (let i = 0; i < 5; i++) {
+    const day = new Date(monday)
+    day.setDate(day.getDate() + i)
+    weekYMDs.push(normalizeDateToYMD(day))
+  }
+
+  // Tập hợp danh sách Designer
+  const designerMap = new Map<string, UXRequest[]>()
+  requests.forEach((req) => {
+    const designer = req.assigned_designer?.trim()
+    if (!designer || designer === "Chưa phân công") return
+    if (!designerMap.has(designer)) {
+      designerMap.set(designer, [])
+    }
+    designerMap.get(designer)!.push(req)
+  })
+
+  // Nếu chưa có ai trong requests, lấy từ leaves
+  leaves.forEach((l) => {
+    const name = l.fullName?.trim()
+    if (name && !designerMap.has(name)) {
+      designerMap.set(name, [])
+    }
+  })
+
+  const results: DesignerWorkload[] = []
+
+  designerMap.forEach((tasks, name) => {
+    // 1. Tính số giờ nghỉ phép trong tuần này (Mon - Fri)
+    let leaveHours = 0
+    weekYMDs.forEach((ymd) => {
+      const check = isPersonOnLeave(leaves, name, ymd)
+      if (check.onLeave && check.leaveRecord) {
+        const shift = (check.leaveRecord.shift || "").toLowerCase()
+        if (shift.includes("sáng") || shift.includes("chiều") || shift.includes("nửa ngày")) {
+          leaveHours += 4
+        } else {
+          leaveHours += 8
+        }
+      }
+    })
+
+    const totalCapacityHours = 40
+    const availableHours = Math.max(0, totalCapacityHours - leaveHours)
+
+    // 2. Tính số giờ công việc được giao đang active trong tuần
+    const activeTasks = tasks.filter((t) => t.status !== "Hoàn thành")
+    let assignedHours = 0
+    activeTasks.forEach((t) => {
+      const effort = getTaskEffort(t)
+      const prog = t.progress ?? 0
+      const remain = effort * (1 - prog / 100)
+      // Phân bổ ước tính 1 phần vào tuần này
+      assignedHours += Math.min(20, Math.round(remain))
+    })
+
+    const utilizationPercent =
+      availableHours > 0
+        ? Math.round((assignedHours / availableHours) * 100)
+        : assignedHours > 0
+        ? 150
+        : 0
+
+    results.push({
+      name,
+      totalCapacityHours,
+      leaveHours,
+      availableHours,
+      assignedHours,
+      utilizationPercent,
+      isOverloaded: utilizationPercent > 100,
+      activeTasksCount: activeTasks.length,
+      tasks: activeTasks,
+    })
+  })
+
+  return results.sort((a, b) => b.utilizationPercent - a.utilizationPercent)
+}
+
+/**
+ * Lấy thông tin độ tươi dữ liệu nghỉ phép (Freshness)
+ */
+export function getLeavesFreshnessInfo(): { text: string; isFresh: boolean; lastSyncMs: number | null } {
+  try {
+    const savedTime = localStorage.getItem("uxmb_cached_team_leaves_time")
+    if (!savedTime) {
+      return { text: "Chưa đồng bộ", isFresh: false, lastSyncMs: null }
+    }
+    const diffMs = Date.now() - Number(savedTime)
+    const diffMinutes = Math.floor(diffMs / (60 * 1000))
+    if (diffMinutes < 1) {
+      return { text: "Vừa xong", isFresh: true, lastSyncMs: Number(savedTime) }
+    }
+    if (diffMinutes < 60) {
+      return { text: `${diffMinutes} phút trước`, isFresh: diffMinutes <= 30, lastSyncMs: Number(savedTime) }
+    }
+    const diffHours = Math.floor(diffMinutes / 60)
+    return { text: `${diffHours} giờ trước`, isFresh: false, lastSyncMs: Number(savedTime) }
+  } catch {
+    return { text: "Không xác định", isFresh: false, lastSyncMs: null }
+  }
+}
+
+/**
  * Tải và hợp nhất toàn bộ 4 tầng dữ liệu của Calendar
  */
 export async function loadAllCalendarItems(): Promise<{
@@ -300,12 +658,16 @@ export async function loadAllCalendarItems(): Promise<{
 
   const items: CalendarItem[] = []
 
-  // 2. Tầng 1: Đề bài & Deadlines UX
+  // 2. Tầng 1: Đề bài & Deadlines UX (kèm Động cơ Đánh giá Rủi ro)
   const requests = getLocalUXRequests()
   requests.forEach((req) => {
     const deadline = req.expected_deadline || req.design_deadline
     const dateYMD = normalizeDateToYMD(deadline)
     if (!dateYMD) return
+
+    const plannedYMD = normalizeDateToYMD((req as any).planned_work_date) || dateYMD
+    const effort = getTaskEffort(req)
+    const risk = assessTaskRisk(req, leaves)
 
     // Kiểm tra xung đột với lịch nghỉ phép của Designer phụ trách
     let hasConflict = false
@@ -318,27 +680,35 @@ export async function loadAllCalendarItems(): Promise<{
       }
     }
 
-    // Xác định màu sắc theo trạng thái / ưu tiên
+    // Kết hợp xung đột năng lực từ Risk Engine
+    if (risk.riskLevel === "at_risk") {
+      hasConflict = true
+      conflictReason = conflictReason ? `${conflictReason} | ${risk.riskReason}` : risk.riskReason
+    }
+
+    // Xác định màu sắc theo trạng thái / ưu tiên / rủi ro
     let color = "#3b82f6" // blue
-    if (req.priority === "lv1" || req.status === "PO pending") {
+    if (risk.riskLevel === "overdue" || req.priority === "lv1" || req.status === "PO pending") {
       color = "#ef4444" // red
+    } else if (risk.riskLevel === "at_risk") {
+      color = "#f59e0b" // amber (rủi ro)
     } else if (req.status === "Hoàn thành" || req.progress === 100) {
       color = "#10b981" // green
     } else if (req.status === "Đã gửi PO") {
-      color = "#f59e0b" // amber
+      color = "#8b5cf6" // purple
     }
 
     items.push({
       id: `task-${req.request_id}`,
       layer: 1,
       title: req.title,
-      date: dateYMD,
-      startDate: dateYMD,
+      date: plannedYMD, // Hiển thị trên ô ngày làm việc
+      startDate: plannedYMD,
       endDate: dateYMD,
       allDay: true,
       color,
       category: "ux_task",
-      categoryLabel: "Deadline UX",
+      categoryLabel: "Kế hoạch UX",
       assigneeName: req.assigned_designer || "Chưa phân công",
       squadName: req.squad_name || req.preferred_squad,
       productName: req.product,
@@ -347,6 +717,11 @@ export async function loadAllCalendarItems(): Promise<{
       progress: req.progress,
       hasConflict,
       conflictReason,
+      plannedDate: plannedYMD,
+      committedDeadline: dateYMD,
+      estimatedHours: effort,
+      riskLevel: risk.riskLevel,
+      riskReason: risk.riskReason,
       rawItem: req,
     })
   })
