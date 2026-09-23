@@ -149,8 +149,9 @@ export interface HolidayException {
   name: string
   date: string // "YYYY-MM-DD"
   endDate?: string // "YYYY-MM-DD"
-  type: "public_holiday" | "internal_holiday" | "day_off"
+  type: "public_holiday" | "internal_holiday" | "day_off" | "compensatory_workday"
   description?: string
+  compensatoryFor?: string // Tùy chọn: Làm bù cho ngày nghỉ nào (ví dụ: "Nghỉ hoán đổi Quốc khánh 01/09")
 }
 
 export interface WorkScheduleConfig {
@@ -172,6 +173,63 @@ export interface WorkScheduleConfig {
   holidays: HolidayException[]
 }
 
+export interface LeaveSheetConfig {
+  /** Bật/Tắt tự động đồng bộ danh sách nghỉ phép từ Google Sheet ngoài */
+  enabled: boolean
+  /** Đường dẫn URL hoặc Spreadsheet ID của Sheet lịch nghỉ */
+  sheetUrl: string
+  /** GID tab chứa dữ liệu nghỉ phép (mặc định: 917777763) */
+  sheetGid: string
+  /** Chu kỳ tự động quét làm mới dữ liệu (phút) */
+  autoSyncInterval: string
+}
+
+export type CalendarViewMode = "month" | "week" | "day" | "agenda"
+export type StartOfWeekDay = "monday" | "sunday"
+
+export interface EventCategoryConfig {
+  id: string
+  name: string
+  color: string
+  textColor?: string
+  icon?: string
+  description?: string
+  isSystem?: boolean
+}
+
+export interface TeamEvent {
+  id: string
+  title: string
+  categoryId: string
+  startDate: string
+  endDate: string
+  allDay: boolean
+  attendees?: string[]
+  location?: string
+  description?: string
+  createdBy?: string
+  createdAt?: string
+}
+
+export interface CalendarConfig {
+  defaultView: CalendarViewMode
+  startOfWeek: StartOfWeekDay
+  enableConflictAlert: boolean
+  showWeekends: boolean
+  lightenNonWorkingHours: boolean
+  showWeekNumbers: boolean
+  hideSidebarByDefault: boolean
+  workingHoursStart: string
+  workingHoursEnd: string
+  rolePermissions: {
+    viewCalendar: string[]
+    manageEvents: string[]
+    modifyDeadlines: string[]
+  }
+  eventCategories: EventCategoryConfig[]
+  teamEvents: TeamEvent[]
+}
+
 export interface SystemConfig {
   version: string
   lastUpdated: string
@@ -185,6 +243,8 @@ export interface SystemConfig {
   portal: PortalConfig
   attachments: AttachmentConfig
   workSchedule: WorkScheduleConfig
+  leaveSheet: LeaveSheetConfig
+  calendar: CalendarConfig
 }
 
 export const SYSTEM_CONFIG_STORAGE_KEY = "mb_system_config_v1"
@@ -520,6 +580,17 @@ export const VIETNAM_PUBLIC_HOLIDAYS_2026: HolidayException[] = [
   },
 ]
 
+export const VIETNAM_COMPENSATORY_WORKDAYS_2026: HolidayException[] = [
+  {
+    id: "lam_bu_quoc_khanh_2026",
+    name: "Làm bù thứ Bảy (Hoán đổi nghỉ Quốc khánh 2026)",
+    date: "2026-08-29",
+    type: "compensatory_workday",
+    description: "Đi làm thứ Bảy để hoán đổi nghỉ liền kề ngày 01/09 (Tính SLA như ngày làm việc tiêu chuẩn)",
+    compensatoryFor: "Nghỉ liền kề Quốc khánh 01/09",
+  },
+]
+
 export const DEFAULT_WORK_SCHEDULE: WorkScheduleConfig = {
   workweek: ["Mo", "Tu", "We", "Th", "Fr"],
   workingHoursMode: "same_all_days",
@@ -531,6 +602,95 @@ export const DEFAULT_WORK_SCHEDULE: WorkScheduleConfig = {
     endTime: "13:30",
   },
   holidays: VIETNAM_PUBLIC_HOLIDAYS_2026,
+}
+
+export const DEFAULT_EVENT_CATEGORIES: EventCategoryConfig[] = [
+  {
+    id: "cat-review",
+    name: "Design Review & Demo",
+    color: "#3b82f6",
+    textColor: "#ffffff",
+    description: "Họp phản biện thiết kế, thẩm định giải pháp với PO/Business",
+    isSystem: true,
+  },
+  {
+    id: "cat-workshop",
+    name: "Workshop & Training",
+    color: "#f59e0b",
+    textColor: "#ffffff",
+    description: "Tập huấn chuyên môn, chia sẻ UI Token, ReUI Design System",
+    isSystem: true,
+  },
+  {
+    id: "cat-team",
+    name: "Teambuilding & Sự kiện",
+    color: "#8b5cf6",
+    textColor: "#ffffff",
+    description: "Gặp mặt nội bộ, sinh nhật thành viên, liên hoan Squad",
+    isSystem: true,
+  },
+  {
+    id: "cat-reminder",
+    name: "Nhắc việc & Deadline",
+    color: "#10b981",
+    textColor: "#ffffff",
+    description: "Nhắc nộp tài liệu bàn giao, đồng bộ Figma tokens",
+    isSystem: true,
+  },
+  {
+    id: "cat-squad-sync",
+    name: "Họp Sprint & Sync Squad",
+    color: "#06b6d4",
+    textColor: "#ffffff",
+    description: "Họp giao ban đầu tuần, điều phối backlog bài toán UX",
+    isSystem: false,
+  },
+]
+
+export const DEFAULT_CALENDAR_CONFIG: CalendarConfig = {
+  defaultView: "month",
+  startOfWeek: "monday",
+  enableConflictAlert: true,
+  showWeekends: true,
+  lightenNonWorkingHours: true,
+  showWeekNumbers: false,
+  hideSidebarByDefault: false,
+  workingHoursStart: "08:00",
+  workingHoursEnd: "18:00",
+  rolePermissions: {
+    viewCalendar: ["Admin", "Design Owner", "Designer", "PO", "Business"],
+    manageEvents: ["Admin", "Design Owner", "Designer"],
+    modifyDeadlines: ["Admin", "Design Owner", "Designer"],
+  },
+  eventCategories: DEFAULT_EVENT_CATEGORIES,
+  teamEvents: [
+    {
+      id: "ev-demo-1",
+      title: "Design Review Sprint 23 - MB Mobile Banking",
+      categoryId: "cat-review",
+      startDate: "2026-09-24T09:30",
+      endDate: "2026-09-24T11:00",
+      allDay: false,
+      attendees: ["manhcuong1340@gmail.com", "cachien1501@gmail.com"],
+      location: "Phòng họp Sao Mai 3 - Hội sở MB",
+      description: "Thẩm định luồng chuyển tiền đa kênh và màn hình kết quả giao dịch",
+      createdBy: "Admin",
+      createdAt: "2026-09-20T08:00:00.000Z",
+    },
+    {
+      id: "ev-demo-2",
+      title: "UX Workshop: Quy chuẩn ReUI Tokens & Micro-Interactions",
+      categoryId: "cat-workshop",
+      startDate: "2026-09-26T14:00",
+      endDate: "2026-09-26T16:00",
+      allDay: false,
+      attendees: ["manhcuong1340@gmail.com"],
+      location: "Microsoft Teams (Kênh UX Core)",
+      description: "Hướng dẫn tích hợp Component ReUI và tokens đồng bộ Figma",
+      createdBy: "Design Owner",
+      createdAt: "2026-09-20T08:00:00.000Z",
+    },
+  ],
 }
 
 export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
@@ -599,6 +759,13 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     allowScreenshotsPaste: true,
   },
   workSchedule: DEFAULT_WORK_SCHEDULE,
+  leaveSheet: {
+    enabled: true,
+    sheetUrl: "https://docs.google.com/spreadsheets/d/1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg/edit?gid=917777763",
+    sheetGid: "917777763",
+    autoSyncInterval: "5",
+  },
+  calendar: DEFAULT_CALENDAR_CONFIG,
 }
 
 /**
@@ -655,6 +822,24 @@ export function getSystemConfig(): SystemConfig {
         holidays: Array.isArray(parsed.workSchedule?.holidays)
           ? parsed.workSchedule.holidays
           : DEFAULT_SYSTEM_CONFIG.workSchedule.holidays,
+      },
+      leaveSheet: {
+        ...DEFAULT_SYSTEM_CONFIG.leaveSheet,
+        ...(parsed.leaveSheet || {}),
+      },
+      calendar: {
+        ...DEFAULT_SYSTEM_CONFIG.calendar,
+        ...(parsed.calendar || {}),
+        rolePermissions: {
+          ...DEFAULT_SYSTEM_CONFIG.calendar.rolePermissions,
+          ...(parsed.calendar?.rolePermissions || {}),
+        },
+        eventCategories: Array.isArray(parsed.calendar?.eventCategories) && parsed.calendar.eventCategories.length > 0
+          ? parsed.calendar.eventCategories
+          : DEFAULT_SYSTEM_CONFIG.calendar.eventCategories,
+        teamEvents: Array.isArray(parsed.calendar?.teamEvents)
+          ? parsed.calendar.teamEvents
+          : DEFAULT_SYSTEM_CONFIG.calendar.teamEvents,
       },
     }
 
@@ -823,27 +1008,44 @@ export function isBusinessDay(
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput
   if (isNaN(date.getTime())) return false
 
-  // 1. Kiểm tra ngày trong tuần
-  const dayKey = getDayOfWeekKey(date)
-  if (!schedule.workweek.includes(dayKey)) {
-    return false
-  }
-
-  // 2. Kiểm tra ngày nghỉ lễ / ngày nghỉ ngoại lệ (YYYY-MM-DD)
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, "0")
   const dd = String(date.getDate()).padStart(2, "0")
   const dateStr = `${yyyy}-${mm}-${dd}`
 
-  const isOff = (schedule.holidays || []).some((h) => {
+  const holidays = schedule.holidays || []
+
+  // 1. Kiểm tra ngày làm bù (Compensatory Workday):
+  // Nếu ngày này được thiết lập làm bù, LUÔN ĐƯỢC TÍNH là ngày làm việc (kể cả Thứ 7 hoặc Chủ Nhật)
+  const isCompensatory = holidays.some((h) => {
+    if (h.type !== "compensatory_workday") return false
     if (!h.endDate || h.endDate === h.date) {
       return h.date === dateStr
     }
     return dateStr >= h.date && dateStr <= h.endDate
   })
+  if (isCompensatory) {
+    return true
+  }
 
-  return !isOff
+  // 2. Kiểm tra ngày nghỉ lễ / ngày nghỉ ngoại lệ (loại trừ khỏi ngày làm việc)
+  const isOff = holidays.some((h) => {
+    if (h.type === "compensatory_workday") return false
+    if (!h.endDate || h.endDate === h.date) {
+      return h.date === dateStr
+    }
+    return dateStr >= h.date && dateStr <= h.endDate
+  })
+  if (isOff) {
+    return false
+  }
+
+  // 3. Kiểm tra ngày trong tuần thông thường theo lịch làm việc (workweek)
+  const dayKey = getDayOfWeekKey(date)
+  return schedule.workweek.includes(dayKey)
 }
+
+export const isWorkingDay = isBusinessDay
 
 /**
  * Tính số phút làm việc tiêu chuẩn trong một ngày làm việc bình thường
@@ -1026,4 +1228,16 @@ export function calculateSlaElapsedHours(
   return Math.round((netMs / (1000 * 60 * 60)) * 10) / 10
 }
 
+/**
+ * Lấy cấu hình Lịch nghỉ phép ngoài hiện tại
+ */
+export function getLeaveSheetConfig(): LeaveSheetConfig {
+  return getSystemConfig().leaveSheet || DEFAULT_SYSTEM_CONFIG.leaveSheet
+}
 
+/**
+ * Lấy cấu hình UX Planner & Calendar hiện tại
+ */
+export function getCalendarConfig(): CalendarConfig {
+  return getSystemConfig().calendar || DEFAULT_SYSTEM_CONFIG.calendar
+}

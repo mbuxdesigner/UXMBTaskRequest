@@ -637,7 +637,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
             custom={1}
             variants={cascadeWaveItemVariants}
             style={{ willChange: "opacity, transform, filter" }}
-            className="space-y-4"
+            className="space-y-4 relative z-30"
           >
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               {formConfig.sections?.requestInfoTitle || "01 · THÔNG TIN YÊU CẦU"}
@@ -746,7 +746,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
             custom={2}
             variants={cascadeWaveItemVariants}
             style={{ willChange: "opacity, transform, filter" }}
-            className="space-y-4 pt-2"
+            className="space-y-4 pt-2 relative z-20"
           >
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               {formConfig.sections?.detailDescTitle || "02 · MÔ TẢ CHI TIẾT NHU CẦU CẦN UX TEAM HỖ TRỢ"}
@@ -829,7 +829,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
               custom={3}
               variants={cascadeWaveItemVariants}
               style={{ willChange: "opacity, transform, filter" }}
-              className="space-y-4 pt-2"
+              className="space-y-4 pt-2 relative z-10"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">

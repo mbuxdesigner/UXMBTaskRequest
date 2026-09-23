@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   UserPlus, 
@@ -312,7 +313,9 @@ export default function AddMemberModal({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
@@ -339,7 +342,7 @@ export default function AddMemberModal({
           {/* Header */}
           <div className="flex items-start justify-between border-b border-slate-100 pb-3 shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/70 flex items-center justify-center text-[#1057FB] shrink-0 shadow-2xs">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-800 shrink-0 shadow-2xs">
                 <UserPlus className="w-5 h-5" />
               </div>
               <div>
@@ -373,7 +376,7 @@ export default function AddMemberModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="VD: Lê Thị Thu Trang"
-                  className="text-xs rounded-xl border-slate-200 focus:border-[#1057FB] h-9"
+                  className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 h-9"
                 />
               </div>
               <div>
@@ -386,7 +389,7 @@ export default function AddMemberModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="trang.designer@mbbank.com.vn"
-                  className="text-xs rounded-xl border-slate-200 focus:border-[#1057FB] font-mono h-9"
+                  className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 font-mono h-9"
                 />
               </div>
             </div>
@@ -491,7 +494,7 @@ export default function AddMemberModal({
                       key={`prod-box-${prodName}`}
                       className={`rounded-xl border transition-all overflow-hidden ${
                         isProdSelected
-                          ? "bg-white border-blue-200 shadow-2xs"
+                          ? "bg-white border-slate-300 shadow-2xs"
                           : "bg-white/60 border-slate-200/80 hover:border-slate-300"
                       }`}
                     >
@@ -504,7 +507,7 @@ export default function AddMemberModal({
                           <div
                             className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
                               isProdSelected
-                                ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
+                                ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
                                 : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
                             }`}
                           >
@@ -524,7 +527,7 @@ export default function AddMemberModal({
                             </span>
                           </div>
                           {selectedCountInProd > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-[#1057FB] border border-blue-200/80 shrink-0">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 shrink-0">
                               {selectedCountInProd}/{prodSquads.length} squad
                             </span>
                           )}
@@ -536,7 +539,7 @@ export default function AddMemberModal({
                             <button
                               type="button"
                               onClick={(e) => handleSelectAllSquadsInProduct(prodName, e)}
-                              className="text-[11px] font-normal text-slate-500 hover:text-[#1057FB] transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-blue-50"
+                              className="text-[11px] font-normal text-slate-500 hover:text-slate-900 transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-100"
                             >
                               {allSquadsSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                             </button>
@@ -570,7 +573,7 @@ export default function AddMemberModal({
                                     onClick={() => handleToggleSquad(sqName, prodName)}
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer select-none border ${
                                       isSqSelected
-                                        ? "bg-[#1057FB] text-white border-[#1057FB] font-medium shadow-xs"
+                                        ? "bg-slate-900 text-white border-slate-900 font-medium shadow-xs"
                                         : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border-slate-200 font-normal hover:border-slate-300"
                                     }`}
                                   >
@@ -624,6 +627,7 @@ export default function AddMemberModal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

@@ -208,34 +208,35 @@ export default function NotificationTemplatesTab({ onLogAction }: NotificationTe
   return (
     <div className="space-y-6">
       {/* 1. Header Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-xs shrink-0 mt-0.5">
             <Bell className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-900">Cấu hình Mẫu Thông báo & Kênh Phân phối</h2>
+          <div className="space-y-1 min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Cấu hình Mẫu Thông báo & Kênh Phân phối</h2>
               {isDirty && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                   Có thay đổi chưa lưu
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-4xl">
               Tùy biến nội dung tiêu đề, lời nhắn tự động với biến placeholder và lựa chọn kênh gửi (In-app, Teams Webhook, Email).
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Buttons sitting below text */}
+        <div className="pt-3 border-t border-slate-100 flex items-center gap-2.5 flex-wrap justify-between sm:justify-start">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={handleResetCurrent}
-            className="text-xs font-medium gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+            className="text-xs font-medium gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer h-9 px-3.5 rounded-xl shadow-2xs"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Mặc định mẫu này</span>
@@ -246,7 +247,7 @@ export default function NotificationTemplatesTab({ onLogAction }: NotificationTe
             size="sm"
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="text-xs font-medium gap-1.5 bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs disabled:opacity-50"
+            className="text-xs font-medium gap-1.5 bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs disabled:opacity-50 h-9 px-4 rounded-xl ml-auto sm:ml-0"
           >
             {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             <span>{isSaving ? "Đang lưu..." : "Lưu mẫu thông báo"}</span>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { staggerContainerVariants, staggerItemVariants, durations, springs, easings } from "@/lib/motion"
 import { Frame } from "@/components/reui/frame"
@@ -103,13 +104,20 @@ import {
   ArrowUpDown,
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
+  MoreVertical,
+  CalendarOff,
+  Calendar,
 } from "lucide-react"
 import TestManagementView from "@/components/test-assessment/TestManagementView"
 import TestRunnerView from "@/components/test-assessment/TestRunnerView"
 import FormConfigTab from "@/components/admin/FormConfigTab"
 import SystemParamsTab from "@/components/admin/SystemParamsTab"
 import NotificationTemplatesTab from "@/components/admin/NotificationTemplatesTab"
+import CalendarConfigTab from "@/components/admin/CalendarConfigTab"
 import { getFormConfig, saveFormConfig } from "@/config/formConfig"
+import { getLeaveSheetConfig, saveSystemConfig } from "@/config/systemConfig"
+import { fetchTeamLeaves } from "@/services/leaveService"
 import { TestExam } from "@/types/testAssessment"
 import {
   getRoleNavConfig,
@@ -624,8 +632,8 @@ export const INITIAL_STATUS_RULES: StatusAutomationRule[] = [
     id: "st-in-progress",
     name: "Đang thực hiện",
     colorKey: "blue",
-    badgeClass: "bg-blue-50 text-[#1057FB] border-blue-200",
-    dotClass: "bg-[#1057FB]",
+    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+    dotClass: "bg-blue-600",
     triggerDescription: "Đã gán Designer VÀ tiến độ từ Khâu 2 trở đi",
     triggerEvent: "designer_assigned",
     mappedPhaseIds: ["ph-2", "ph-3", "ph-4", "ph-5"],
@@ -1226,7 +1234,7 @@ const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
   { id: "log-4", timestamp: "21/08/2026 16:20", actor: "Hệ thống Google Sheet", action: "Đồng bộ Realtime", target: "RAW_SETTINGS", details: "Lưu trữ thành công cấu hình USERS_LIST & SQUADS_LIST", type: "integration" },
 ]
 
-type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "form_config" | "system_params" | "notifications_config" | "masterdata" | "integrations" | "audit"
+type AdminTab = "team" | "rbac" | "evaluation" | "test_bank" | "workflow" | "calendar_config" | "form_config" | "system_params" | "notifications_config" | "masterdata" | "integrations" | "audit"
 
 interface AdminNavItem {
   id: AdminTab
@@ -1259,6 +1267,7 @@ const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     category: "Hệ thống & Kết nối",
     items: [
+      { id: "calendar_config", title: "Lịch & UX Planner", icon: Calendar },
       { id: "system_params", title: "Thông số hệ thống & SLA", icon: Sliders },
       { id: "notifications_config", title: "Cấu hình Thông báo", icon: Bell },
       { id: "masterdata", title: "Squads & Sản phẩm", icon: Boxes },
@@ -2116,10 +2125,57 @@ export default function QuanLyPage() {
   // Integration Settings
   const [sheetUrl, setSheetUrl] = useState<string>("https://script.google.com/macros/s/AKfycbz_MB_UX_GATEWAY/exec")
   const [sheetSyncInterval, setSheetSyncInterval] = useState<string>("5")
-  const [figmaOrgKey, setFigmaOrgKey] = useState<string>("figd_MBBank_UXDesign_SecuredToken_8829")
+  const [sheetSyncEnabled, setSheetSyncEnabled] = useState<boolean>(true)
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState<string>("https://mbbank.webhook.office.com/webhookb2/teams_ux_alerts")
   const [autoNotifySlack, setAutoNotifySlack] = useState<boolean>(true)
   const [testingConnection, setTestingConnection] = useState<boolean>(false)
+
+  // Team Leaves Gateway Integration
+  const [leaveSheetUrl, setLeaveSheetUrl] = useState<string>(() => {
+    return getLeaveSheetConfig().sheetUrl || "https://docs.google.com/spreadsheets/d/1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg/edit?gid=917777763"
+  })
+  const [leaveSheetGid, setLeaveSheetGid] = useState<string>(() => {
+    return getLeaveSheetConfig().sheetGid || "917777763"
+  })
+  const [leaveSyncEnabled, setLeaveSyncEnabled] = useState<boolean>(() => {
+    return getLeaveSheetConfig().enabled ?? true
+  })
+  const [leaveSyncInterval, setLeaveSyncInterval] = useState<string>(() => {
+    return getLeaveSheetConfig().autoSyncInterval || "5"
+  })
+  const [leaveTesting, setLeaveTesting] = useState<boolean>(false)
+  const [expandedGateway, setExpandedGateway] = useState<string | null>("team_leaves")
+
+  const handleTestLeaveConnection = async () => {
+    setLeaveTesting(true)
+    const toastId = toast.loading("Đang kết nối và quét dữ liệu lịch nghỉ phép nhân sự...")
+    try {
+      saveSystemConfig({
+        leaveSheet: {
+          enabled: leaveSyncEnabled,
+          sheetUrl: leaveSheetUrl,
+          sheetGid: leaveSheetGid,
+          autoSyncInterval: leaveSyncInterval,
+        },
+      })
+      const leaves = await fetchTeamLeaves(true)
+      setLeaveTesting(false)
+      toast.dismiss(toastId)
+      toast.success(
+        `Kết nối thành công! Đã quét và phân tích ${leaves.length} lượt nghỉ phép nhân sự (lọc chuẩn C, D, E, G).`
+      )
+      logAdminAction(
+        "Test Cổng Lịch Nghỉ Phép",
+        `Sheet GID: ${leaveSheetGid}`,
+        `Quét thành công ${leaves.length} lượt nghỉ hợp lệ (Cột G có email MB)`,
+        "integration"
+      )
+    } catch (err: any) {
+      setLeaveTesting(false)
+      toast.dismiss(toastId)
+      toast.error(`Lỗi khi quét lịch nghỉ: ${err?.message || "Không thể tải Google Sheet"}`)
+    }
+  }
 
   // Modals state
   const [showAddMemberModal, setShowAddMemberModal] = useState<boolean>(false)
@@ -3299,7 +3355,7 @@ export default function QuanLyPage() {
       uxPhases,
       squads,
       products,
-      settings: { sheetUrl, sheetSyncInterval, figmaOrgKey, teamsWebhookUrl },
+      settings: { sheetUrl, sheetSyncInterval, leaveSheetUrl, leaveSheetGid, teamsWebhookUrl },
     }
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
@@ -3612,34 +3668,36 @@ export default function QuanLyPage() {
             {/* Team Table Card (Unified ReUI Card) */}
             <Frame variant="default" padding="none" className="overflow-hidden">
               {/* Card Header & Main Actions */}
-              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="p-5 sm:p-6 border-b border-slate-200/80 space-y-3">
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-slate-900">Danh sách Thành viên UX</h3>
                   <p className="text-xs sm:text-sm text-slate-500">
                     Quản lý tài khoản nhân sự, phân bổ squad và đồng bộ Google Sheets.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportMembersCSV}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                    title="Tải xuống danh sách nhân sự dạng tệp CSV mở bằng Excel"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Xuất CSV</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setShowAddMemberModal(true)}
-                    className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Thêm nhân sự</span>
-                  </Button>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportMembersCSV}
+                      className="h-8 rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      title="Tải xuống danh sách nhân sự dạng tệp CSV mở bằng Excel"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Xuất CSV</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setShowAddMemberModal(true)}
+                      className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Thêm nhân sự</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -3879,7 +3937,7 @@ export default function QuanLyPage() {
             {/* Card 1: Ma trận Phân quyền Vai trò (True RBAC Matrix Table) */}
             <Frame variant="default" padding="none" className="overflow-hidden">
               {/* Card Header */}
-              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="p-5 sm:p-6 border-b border-slate-200/80 space-y-3">
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-slate-900">Ma trận Phân quyền Vai trò</h3>
                   <p className="text-xs sm:text-sm text-slate-500">
@@ -3888,7 +3946,26 @@ export default function QuanLyPage() {
                 </div>
 
                 {/* Header Actions: Reset RBAC & Preview Role */}
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-100">
+                  {/* Role Preview Dropdown / Buttons */}
+                  <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs">
+                    <span className="text-slate-500 px-2 text-[11px] font-medium hidden sm:inline">Xem thử vai trò:</span>
+                    {(["PO", "Business", "Designer", "Design Owner"] as const).map((r) => (
+                      <button
+                        key={`preview-btn-${r}`}
+                        type="button"
+                        onClick={() => {
+                          startRolePreview(r)
+                          toast.info(`Chế độ xem trước vai trò: ${r}`, "Đang chuyển sang giao diện thực tế của vai trò này.")
+                        }}
+                        className="px-2.5 py-1 rounded-md text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-2xs transition-all text-xs font-medium cursor-pointer"
+                        title={`Xem giao diện dưới tư cách ${r}`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+
                   <Button
                     type="button"
                     variant="outline"
@@ -3917,25 +3994,6 @@ export default function QuanLyPage() {
                     <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
                     <span>Khôi phục mặc định</span>
                   </Button>
-
-                  {/* Role Preview Dropdown / Buttons */}
-                  <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs">
-                    <span className="text-slate-500 px-2 text-[11px] font-medium hidden sm:inline">Xem thử:</span>
-                    {(["PO", "Business", "Designer", "Design Owner"] as const).map((r) => (
-                      <button
-                        key={`preview-btn-${r}`}
-                        type="button"
-                        onClick={() => {
-                          startRolePreview(r)
-                          toast.info(`Chế độ xem trước vai trò: ${r}`, "Đang chuyển sang giao diện thực tế của vai trò này.")
-                        }}
-                        className="px-2.5 py-1 rounded-md text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-2xs transition-all text-xs font-medium cursor-pointer"
-                        title={`Xem giao diện dưới tư cách ${r}`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
@@ -4155,7 +4213,7 @@ export default function QuanLyPage() {
 
             {/* Role Navigation Menu Visibility & Ordering Settings Card */}
             <Frame variant="default" padding="none" className="overflow-hidden">
-              <div className="p-5 sm:p-6 border-b border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="p-5 sm:p-6 border-b border-slate-200/80 space-y-3">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">
                     Cấu hình Menu Điều hướng (Sidebar)
@@ -4164,22 +4222,24 @@ export default function QuanLyPage() {
                     Kéo thả để đổi thứ tự, bật/tắt hiển thị menu trên Sidebar cho từng vai trò.
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setNavConfig(DEFAULT_ROLE_NAV_CONFIG)
-                    saveRoleNavConfig(DEFAULT_ROLE_NAV_CONFIG)
-                    setNavOrder(DEFAULT_NAV_ORDER)
-                    saveNavOrderConfig(DEFAULT_NAV_ORDER)
-                    toast.success("Đã khôi phục cài đặt & thứ tự Menu điều hướng mặc định!")
-                  }}
-                  className="h-8 text-xs gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Khôi phục mặc định</span>
-                </Button>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setNavConfig(DEFAULT_ROLE_NAV_CONFIG)
+                      saveRoleNavConfig(DEFAULT_ROLE_NAV_CONFIG)
+                      setNavOrder(DEFAULT_NAV_ORDER)
+                      saveNavOrderConfig(DEFAULT_NAV_ORDER)
+                      toast.success("Đã khôi phục cài đặt & thứ tự Menu điều hướng mặc định!")
+                    }}
+                    className="h-8 text-xs gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Khôi phục mặc định</span>
+                  </Button>
+                </div>
               </div>
 
               <div data-slot="data-grid" className="w-full select-none">
@@ -4210,16 +4270,17 @@ export default function QuanLyPage() {
                             Nhóm 1: Quản lý công việc & Báo cáo
                           </span>
                           <span className="text-slate-400 font-mono text-[11px]">
-                            {navOrder.platform.length} mục
+                            {(navOrder?.platform || []).length} mục
                           </span>
                         </div>
                       </td>
                     </tr>
 
-                    {navOrder.platform.map((key, idx) => {
+                    {(navOrder?.platform || []).map((key, idx) => {
                       const itemMeta = {
                         overview: { label: "Overview (Tổng quan)", icon: <Home className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
                         track: { label: "My task (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
+                        calendar: { label: "Lịch & UX Planner", icon: <Calendar className="w-3.5 h-3.5" />, desc: "Lịch trình công việc, deadline bài toán, lịch nghỉ phép & sự kiện team" },
                         create: { label: "Tạo task mới (Gửi đề bài)", icon: <PlusCircle className="w-3.5 h-3.5" />, desc: "Form 3 bước gửi bài toán thiết kế UX cho team" },
                         ia: { label: "Kiến trúc Thông tin (IA)", icon: <Network className="w-3.5 h-3.5" />, desc: "Sơ đồ cây tương tác Mindmap & Phân cấp tính năng đa sản phẩm" },
                       }[key]
@@ -4263,7 +4324,7 @@ export default function QuanLyPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    disabled={idx === navOrder.platform.length - 1}
+                                    disabled={idx === (navOrder?.platform || []).length - 1}
                                     onClick={() => handleMovePlatformItem(idx, "down")}
                                     className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-not-allowed text-slate-500 transition-colors cursor-pointer"
                                     title="Di chuyển xuống"
@@ -4318,13 +4379,13 @@ export default function QuanLyPage() {
                             Nhóm 2: Công cụ & Quản trị hệ thống
                           </span>
                           <span className="text-slate-400 font-mono text-[11px]">
-                            {navOrder.resources.length} mục
+                            {(navOrder?.resources || []).length} mục
                           </span>
                         </div>
                       </td>
                     </tr>
 
-                    {navOrder.resources.map((key, idx) => {
+                    {(navOrder?.resources || []).map((key, idx) => {
                       const itemMeta = {
                         compressor: { label: "Nén ảnh (Built-in Tool)", icon: <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />, desc: "Công cụ nén ảnh tối ưu dung lượng dưới 500KB" },
                         test: { label: "Bài test & Đánh giá (Khảo sát/Thi chuyên môn)", icon: <BookOpen className="w-3.5 h-3.5" />, desc: "Đánh giá năng lực chuyên môn, bài thi trắc nghiệm & tự luận" },
@@ -4371,7 +4432,7 @@ export default function QuanLyPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    disabled={idx === navOrder.resources.length - 1}
+                                    disabled={idx === (navOrder?.resources || []).length - 1}
                                     onClick={() => handleMoveResourceItem(idx, "down")}
                                     className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-not-allowed text-slate-500 transition-colors cursor-pointer"
                                     title="Di chuyển xuống"
@@ -4429,19 +4490,17 @@ export default function QuanLyPage() {
         {activeTab === "test_bank" && (
           <div className="space-y-6">
             {/* ReUI Section Header Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900">Quản lý Đề thi & Chấm bài Test UX</h2>
-                    <p className="text-xs text-slate-500">Soạn đề thi trắc nghiệm & tự luận, đồng bộ câu hỏi Excel và chấm điểm năng lực</p>
-                  </div>
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Quản lý Đề thi & Chấm bài Test UX</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Soạn đề thi trắc nghiệm & tự luận, đồng bộ câu hỏi Excel và chấm điểm năng lực</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium">
                   <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
                   <span>Excel + Google Sheet Gateway</span>
@@ -4479,19 +4538,17 @@ export default function QuanLyPage() {
         {activeTab === "evaluation" && (
           <div className="space-y-6">
             {/* ReUI Section Header Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900">Đánh giá Hiệu suất & Năng lực Nhân sự</h2>
-                    <p className="text-xs text-slate-500">Theo dõi KPI Matrix, chuẩn hóa chỉ số FTR (First-Time-Right) và tuân thủ SLA khâu</p>
-                  </div>
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Đánh giá Hiệu suất & Năng lực Nhân sự</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Theo dõi KPI Matrix, chuẩn hóa chỉ số FTR (First-Time-Right) và tuân thủ SLA khâu</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium">
                   <Sparkles className="w-3.5 h-3.5 text-slate-500" />
                   <span>KPI Matrix MB v3.0</span>
@@ -4675,9 +4732,9 @@ export default function QuanLyPage() {
         {activeTab === "workflow" && (
           <div className="space-y-6">
             <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="space-y-3 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold shrink-0">
                     <Workflow className="w-4 h-4" />
                   </div>
                   <div>
@@ -4688,7 +4745,7 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
                   <Button
                     type="button"
                     size="sm"
@@ -4825,14 +4882,14 @@ export default function QuanLyPage() {
 
             {/* Dynamic Status Automation Rules Tool */}
             <Frame variant="default" padding="none" className="overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-slate-50/70 via-white to-indigo-50/30">
+              <div className="p-5 border-b border-slate-200 space-y-3 bg-gradient-to-r from-slate-50/70 via-white to-indigo-50/30">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold shrink-0">
                       <Zap className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-sm font-semibold text-slate-900">
                           Quy tắc Trạng thái & Tự động hóa Quy trình UX (Status Automation Rules)
                         </h3>
@@ -4848,7 +4905,7 @@ export default function QuanLyPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
                   <Button
                     type="button"
                     variant="primary"
@@ -4950,9 +5007,9 @@ export default function QuanLyPage() {
                                 <Workflow className="w-3 h-3 text-slate-500" />
                                 <span>{rule.mappedPhaseNames}</span>
                               </span>
-                              {rule.mappedPhaseIds.length > 0 && (
+                              {(rule.mappedPhaseIds || []).length > 0 && (
                                 <p className="text-[10.5px] text-slate-400">
-                                  {rule.mappedPhaseIds.length} khâu liên kết trực tiếp
+                                  {(rule.mappedPhaseIds || []).length} khâu liên kết trực tiếp
                                 </p>
                               )}
                             </div>
@@ -5050,6 +5107,11 @@ export default function QuanLyPage() {
               </div>
             </Frame>
           </div>
+        )}
+
+        {/* TAB MỚI: CẤU HÌNH LỊCH & UX PLANNER */}
+        {activeTab === "calendar_config" && (
+          <CalendarConfigTab onLogAction={logAdminAction} />
         )}
 
         {/* TAB MỚI: CẤU HÌNH FORM TIẾP NHẬN YÊU CẦU UX */}
@@ -5701,204 +5763,477 @@ export default function QuanLyPage() {
         {activeTab === "integrations" && (
           <div className="space-y-6">
             {/* ReUI Section Header Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <Database className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900">Tích hợp Cổng Kết nối Ngoại vi (APIs & Webhooks)</h2>
-                    <p className="text-xs text-slate-500">Quản lý kết nối cơ sở dữ liệu Google Sheets, lưu trữ Drive và Webhooks thông báo Teams</p>
-                  </div>
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold shrink-0">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Tích hợp Cổng Kết nối Ngoại vi (APIs & Webhooks)</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Quản lý kết nối cơ sở dữ liệu Google Sheets, lịch nghỉ phép nhân sự và Webhooks thông báo Teams</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   <span>All Gateways Online</span>
                 </span>
+                <span className="text-xs text-slate-400">·</span>
+                <span className="text-xs text-slate-500">3 cổng kết nối ngoại vi đang sẵn sàng phục vụ</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Google Sheets Config Card */}
-            <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
-                    <FileSpreadsheet className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Google Sheets Database Gateway</h3>
-                    <p className="text-xs text-slate-500">Đồng bộ hai chiều dữ liệu bài toán UX</p>
-                  </div>
-                </div>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Connected
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">
-                    Google Apps Script Webhook Endpoint:
-                  </label>
-                  <Input
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
-                    className="font-mono text-xs bg-slate-50 rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <label className="text-xs font-medium text-slate-700 block mb-1">
-                      Chu kỳ tự động đồng bộ:
-                    </label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={sheetSyncInterval}
-                      onChange={(val) => setSheetSyncInterval(val)}
-                      options={[
-                        { value: "1", label: "Mỗi 1 phút" },
-                        { value: "5", label: "Mỗi 5 phút (Khuyến nghị)" },
-                        { value: "15", label: "Mỗi 15 phút" },
-                        { value: "manual", label: "Chỉ đồng bộ thủ công" },
-                      ]}
-                    />
-                  </div>
-
-                  <div className="pt-5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setTestingConnection(true)
-                        setTimeout(() => {
-                          setTestingConnection(false)
-                          toast.success("Kết nối thành công tới MBBank Google Sheets Gateway (Latency: 38ms)!")
-                        }, 1000)
-                      }}
-                      disabled={testingConnection}
-                      className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${testingConnection ? "animate-spin text-slate-900" : ""}`} />
-                      <span>{testingConnection ? "Đang test..." : "Test kết nối"}</span>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Microsoft Teams Bot Webhook */}
-            <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
-                    <Bell className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Microsoft Teams Notifications</h3>
-                    <p className="text-xs text-slate-500">Bắn thông báo realtime khi có đề bài mới hoặc bàn giao</p>
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 group">
-                  <div
-                    className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
-                      autoNotifySlack
-                        ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
-                        : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
-                    }`}
-                  >
-                    {autoNotifySlack && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={autoNotifySlack}
-                    onChange={(e) => setAutoNotifySlack(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <span>Bật thông báo</span>
-                </label>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Teams Incoming Webhook URL:</label>
-                  <Input
-                    value={teamsWebhookUrl}
-                    onChange={(e) => setTeamsWebhookUrl(e.target.value)}
-                    className="font-mono text-xs bg-slate-50 rounded-lg border-slate-200"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toast.success("Đã gửi tin nhắn test thành công tới kênh Teams UX MBBank!")}
-                  className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+            {/* ReUI Stacked Settings List (Divider-separated boxes matching Reference UI) */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden">
+              {/* 1. Google Sheets Database Gateway */}
+              <div className="transition-colors">
+                <div
+                  onClick={() => setExpandedGateway(expandedGateway === "google_sheets" ? null : "google_sheets")}
+                  className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
                 >
-                  <span>Gửi tin nhắn mẫu (Test Alert)</span>
-                </Button>
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-700 shrink-0">
+                      <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-slate-900">Google Sheets Database Gateway</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                            sheetSyncEnabled
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                              : "bg-amber-50 text-amber-700 border-amber-200/60"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${sheetSyncEnabled ? "bg-emerald-500" : "bg-amber-500"}`} />
+                          {sheetSyncEnabled ? "Active" : "Paused"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        {sheetSyncEnabled
+                          ? `Đồng bộ 2 chiều dữ liệu bài toán UX & SLA · Chu kỳ: ${sheetSyncInterval === "manual" ? "Thủ công" : `Mỗi ${sheetSyncInterval} phút`}`
+                          : "Đã tạm dừng tự động đồng bộ cơ sở dữ liệu Google Sheets"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={sheetSyncEnabled}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = !sheetSyncEnabled
+                        setSheetSyncEnabled(next)
+                        toast.success(`Google Sheets Gateway: Đã ${next ? "BẬT" : "TẮT"} đồng bộ!`)
+                      }}
+                      className={`w-11 h-6 rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer ${
+                        sheetSyncEnabled ? "bg-slate-900" : "bg-slate-200"
+                      }`}
+                      title={sheetSyncEnabled ? "Nhấn để tạm dừng" : "Nhấn để kích hoạt"}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full bg-white transition-transform shadow-xs ${
+                          sheetSyncEnabled ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpandedGateway(expandedGateway === "google_sheets" ? null : "google_sheets")
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Mở cấu hình chi tiết"
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          expandedGateway === "google_sheets" ? "rotate-180 text-slate-900" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {expandedGateway === "google_sheets" && (
+                  <div className="bg-slate-50/70 border-t border-slate-100 p-5 space-y-4 animate-in fade-in duration-150">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">
+                        Google Apps Script Webhook Endpoint (Web App URL):
+                      </label>
+                      <Input
+                        value={sheetUrl}
+                        onChange={(e) => setSheetUrl(e.target.value)}
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        className="font-mono text-xs bg-white rounded-lg border-slate-200"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1 max-w-sm">
+                        <label className="text-xs font-medium text-slate-700 block mb-1">
+                          Chu kỳ tự động đồng bộ dữ liệu:
+                        </label>
+                        <DropdownMenu
+                          className="w-full"
+                          value={sheetSyncInterval}
+                          onChange={(val) => setSheetSyncInterval(val)}
+                          options={[
+                            { value: "1", label: "Mỗi 1 phút" },
+                            { value: "5", label: "Mỗi 5 phút (Khuyến nghị)" },
+                            { value: "15", label: "Mỗi 15 phút" },
+                            { value: "manual", label: "Chỉ đồng bộ thủ công" },
+                          ]}
+                        />
+                      </div>
+
+                      <div className="sm:pt-5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setTestingConnection(true)
+                            setTimeout(() => {
+                              setTestingConnection(false)
+                              toast.success("Kết nối thành công tới MBBank Google Sheets Gateway (Latency: 38ms)!")
+                            }, 800)
+                          }}
+                          disabled={testingConnection}
+                          className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${testingConnection ? "animate-spin text-slate-900" : ""}`} />
+                          <span>{testingConnection ? "Đang kiểm tra..." : "Test kết nối Gateway"}</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Microsoft Teams Notifications */}
+              <div className="transition-colors">
+                <div
+                  onClick={() => setExpandedGateway(expandedGateway === "teams_webhook" ? null : "teams_webhook")}
+                  className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-700 shrink-0">
+                      <Bell className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-slate-900">Microsoft Teams Notifications</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                            autoNotifySlack
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                              : "bg-amber-50 text-amber-700 border-amber-200/60"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${autoNotifySlack ? "bg-emerald-500" : "bg-amber-500"}`} />
+                          {autoNotifySlack ? "Active" : "Paused"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        {autoNotifySlack
+                          ? "Bắn thông báo realtime khi có đề bài mới, duyệt nghiệm thu hoặc cảnh báo SLA vi phạm"
+                          : "Đã tạm dừng gửi thông báo realtime tới Microsoft Teams"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={autoNotifySlack}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = !autoNotifySlack
+                        setAutoNotifySlack(next)
+                        toast.success(`Microsoft Teams Webhook: Đã ${next ? "BẬT" : "TẮT"} thông báo!`)
+                      }}
+                      className={`w-11 h-6 rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer ${
+                        autoNotifySlack ? "bg-slate-900" : "bg-slate-200"
+                      }`}
+                      title={autoNotifySlack ? "Nhấn để tạm dừng" : "Nhấn để kích hoạt"}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full bg-white transition-transform shadow-xs ${
+                          autoNotifySlack ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpandedGateway(expandedGateway === "teams_webhook" ? null : "teams_webhook")
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Mở cấu hình chi tiết"
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          expandedGateway === "teams_webhook" ? "rotate-180 text-slate-900" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {expandedGateway === "teams_webhook" && (
+                  <div className="bg-slate-50/70 border-t border-slate-100 p-5 space-y-4 animate-in fade-in duration-150">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">
+                        Teams Incoming Webhook URL:
+                      </label>
+                      <Input
+                        value={teamsWebhookUrl}
+                        onChange={(e) => setTeamsWebhookUrl(e.target.value)}
+                        placeholder="https://mbbank.webhook.office.com/webhookb2/..."
+                        className="font-mono text-xs bg-white rounded-lg border-slate-200"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <p className="text-xs text-slate-500">
+                        Kênh nhận thông báo mặc định: <span className="font-medium text-slate-700">UX MBBank Alert Center</span>
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toast.success("Đã gửi tin nhắn test thành công tới kênh Teams UX MBBank!")}
+                        className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                      >
+                        <Send className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Gửi tin nhắn mẫu (Test Alert)</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Team Leaves & Availability Gateway (Tích hợp Lịch nghỉ phép nhân sự) */}
+              <div className="transition-colors">
+                <div
+                  onClick={() => setExpandedGateway(expandedGateway === "team_leaves" ? null : "team_leaves")}
+                  className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl border border-slate-200/80 bg-slate-50 flex items-center justify-center text-slate-700 shrink-0">
+                      <CalendarOff className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-slate-900">Team Leaves & Availability Gateway</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                            leaveSyncEnabled
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                              : "bg-amber-50 text-amber-700 border-amber-200/60"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${leaveSyncEnabled ? "bg-emerald-500" : "bg-amber-500"}`} />
+                          {leaveSyncEnabled ? "Active" : "Paused"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        {leaveSyncEnabled
+                          ? `Tự động đồng bộ lịch nghỉ phép nhân sự từ Google Sheet ngoài · Chu kỳ: ${leaveSyncInterval === "manual" ? "Thủ công" : `Mỗi ${leaveSyncInterval} phút`}`
+                          : "Đã tạm dừng đồng bộ lịch nghỉ phép nhân sự"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={leaveSyncEnabled}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = !leaveSyncEnabled
+                        setLeaveSyncEnabled(next)
+                        saveSystemConfig({
+                          leaveSheet: {
+                            enabled: next,
+                            sheetUrl: leaveSheetUrl,
+                            sheetGid: leaveSheetGid,
+                            autoSyncInterval: leaveSyncInterval,
+                          },
+                        })
+                        toast.success(`Cổng Lịch Nghỉ Phép: Đã ${next ? "BẬT" : "TẮT"} đồng bộ!`)
+                      }}
+                      className={`w-11 h-6 rounded-full p-0.5 transition-colors relative flex items-center cursor-pointer ${
+                        leaveSyncEnabled ? "bg-slate-900" : "bg-slate-200"
+                      }`}
+                      title={leaveSyncEnabled ? "Nhấn để tạm dừng" : "Nhấn để kích hoạt"}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full bg-white transition-transform shadow-xs ${
+                          leaveSyncEnabled ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpandedGateway(expandedGateway === "team_leaves" ? null : "team_leaves")
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Mở cấu hình chi tiết"
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          expandedGateway === "team_leaves" ? "rotate-180 text-slate-900" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {expandedGateway === "team_leaves" && (
+                  <div className="bg-slate-50/70 border-t border-slate-100 p-5 space-y-4 animate-in fade-in duration-150">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-medium text-slate-700 block mb-1">
+                          Đường dẫn URL Google Sheet Lịch Nghỉ Phép:
+                        </label>
+                        <Input
+                          value={leaveSheetUrl}
+                          onChange={(e) => setLeaveSheetUrl(e.target.value)}
+                          placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                          className="font-mono text-xs bg-white rounded-lg border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-700 block mb-1">
+                          Tab GID (Mã định danh Sheet):
+                        </label>
+                        <Input
+                          value={leaveSheetGid}
+                          onChange={(e) => setLeaveSheetGid(e.target.value)}
+                          placeholder="917777763"
+                          className="font-mono text-xs bg-white rounded-lg border-slate-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                      <div className="flex-1 max-w-sm">
+                        <label className="text-xs font-medium text-slate-700 block mb-1">
+                          Chu kỳ quét & làm mới dữ liệu:
+                        </label>
+                        <DropdownMenu
+                          className="w-full"
+                          value={leaveSyncInterval}
+                          onChange={(val) => {
+                            setLeaveSyncInterval(val)
+                            saveSystemConfig({
+                              leaveSheet: {
+                                enabled: leaveSyncEnabled,
+                                sheetUrl: leaveSheetUrl,
+                                sheetGid: leaveSheetGid,
+                                autoSyncInterval: val,
+                              },
+                            })
+                          }}
+                          options={[
+                            { value: "1", label: "Mỗi 1 phút" },
+                            { value: "5", label: "Mỗi 5 phút (Khuyến nghị)" },
+                            { value: "15", label: "Mỗi 15 phút" },
+                            { value: "manual", label: "Chỉ quét thủ công" },
+                          ]}
+                        />
+                      </div>
+
+                      <div className="sm:pt-5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTestLeaveConnection}
+                          disabled={leaveTesting}
+                          className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${leaveTesting ? "animate-spin text-slate-900" : "text-rose-600"}`} />
+                          <span>{leaveTesting ? "Đang quét dữ liệu..." : "Test kết nối & Quét dữ liệu"}</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50/60 rounded-xl p-3.5 border border-amber-200/60 text-xs text-amber-800 space-y-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Quy tắc trích xuất dữ liệu tích hợp:</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-amber-800 pl-5">
+                        Hệ thống tự động lọc 4 cột chính: <strong>Cột C</strong> (Ngày nghỉ), <strong>Cột D</strong> (Loại nghỉ: Sáng/Chiều/Cả ngày), <strong>Cột E</strong> (Lý do nghỉ), <strong>Cột G</strong> (Email MB). Dòng nào có <strong>Cột G trống sẽ được tự động bỏ qua</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* TAB 7: AUDIT LOGS & HỆ THỐNG */}
         {activeTab === "audit" && (
           <div className="space-y-6">
             {/* ReUI Section Header Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <History className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900">Nhật ký Quản trị & Audit Trail</h2>
-                    <p className="text-xs text-slate-500">Truy vết toàn bộ thao tác can thiệp hệ thống, thêm/sửa nhân sự và thay đổi SLA</p>
-                  </div>
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold shrink-0">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Nhật ký Quản trị & Audit Trail</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Truy vết toàn bộ thao tác can thiệp hệ thống, thêm/sửa nhân sự và thay đổi SLA</p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span>{auditLogs.length} sự kiện · Auto-saved Local & Cloud</span>
                 </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportBackup}
-                  className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 shadow-xs hover:bg-slate-50 text-slate-700 h-8"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Xuất JSON Log</span>
-                </Button>
-                {auditLogs.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      if (confirm("Bạn có chắc muốn dọn sạch nhật ký kiểm toán trên trình duyệt?")) {
-                        setAuditLogs([])
-                        localStorage.removeItem(AUDIT_LOGS_STORAGE_KEY)
-                        toast.success("Đã dọn dẹp toàn bộ Audit Logs nội bộ!")
-                      }
-                    }}
-                    className="rounded-lg text-xs font-medium gap-1 cursor-pointer bg-white border-slate-200 shadow-xs hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-500 h-8"
-                    title="Xóa bộ nhớ đệm Audit Logs trên máy"
+                    onClick={handleExportBackup}
+                    className="rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-slate-200 shadow-xs hover:bg-slate-50 text-slate-700 h-8"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Dọn nhật ký</span>
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Xuất JSON Log</span>
                   </Button>
-                )}
+                  {auditLogs.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("Bạn có chắc muốn dọn sạch nhật ký kiểm toán trên trình duyệt?")) {
+                          setAuditLogs([])
+                          localStorage.removeItem(AUDIT_LOGS_STORAGE_KEY)
+                          toast.success("Đã dọn dẹp toàn bộ Audit Logs nội bộ!")
+                        }
+                      }}
+                      className="rounded-lg text-xs font-medium gap-1 cursor-pointer bg-white border-slate-200 shadow-xs hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-500 h-8"
+                      title="Xóa bộ nhớ đệm Audit Logs trên máy"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Dọn nhật ký</span>
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -5908,7 +6243,7 @@ export default function QuanLyPage() {
                   <h3 className="text-sm font-semibold text-slate-900">Nhật ký Quản trị Hệ thống (Admin Audit Trail)</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Ghi nhận toàn bộ thao tác thêm/sửa nhân sự, phân bổ Đa-Squad, thay đổi SLA, khâu UX và cài đặt bảo mật</p>
                 </div>
-                <span className="text-xs font-mono text-slate-400">Tổng cộng: {auditLogs.length} bản ghi</span>
+                <span className="text-xs font-mono text-slate-400 shrink-0">Tổng cộng: {auditLogs.length} bản ghi</span>
               </div>
 
               <div data-slot="data-grid" className="w-full select-none">
@@ -5961,361 +6296,362 @@ export default function QuanLyPage() {
       {/* ======================================================== */}
       {/* MODAL: SỬA THÀNH VIÊN (EDIT MEMBER MODAL - MULTI SQUADS) */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {editingMember && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-xl shadow-xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-slate-700" />
-                  <span>Sửa Phân bổ & Phân quyền: {editingMember.name}</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setEditingMember(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingMember && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              {/* Click outside backdrop to close */}
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setEditingMember(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Edit3 className="w-4 h-4 text-slate-700" />
+                    <span>Sửa Phân bổ & Phân quyền: {editingMember.name}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-              <form onSubmit={handleUpdateMemberSubmit} className="space-y-4">
-                {/* Avatar Preview & Upload */}
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <UserAvatar name={editingMember.name} avatarUrl={editingMember.avatarUrl} size="md" />
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs font-medium text-slate-700 block">Ảnh đại diện (Avatar):</label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="Dán link ảnh (URL) hoặc tải từ máy..."
-                        value={editingMember.avatarUrl || ""}
-                        onChange={(e) => setEditingMember({ ...editingMember, avatarUrl: e.target.value })}
-                        className="text-xs rounded-lg h-8 bg-white border-slate-200 flex-1"
-                      />
-                      <label className="shrink-0 h-8 px-3 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer">
-                        <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Tải ảnh</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            e.target.value = ""
-                            toast.info("Đang xử lý ảnh avatar...")
-                            const res = await uploadAvatarToDrive(f, editingMember.email)
-                            if (res.success && res.avatarUrl) {
-                              setEditingMember({ ...editingMember, avatarUrl: res.avatarUrl })
-                              toast.success("Đã tải ảnh đại diện thành công!")
-                            }
-                          }}
-                          className="hidden"
+                <form onSubmit={handleUpdateMemberSubmit} className="space-y-4">
+                  {/* Avatar Preview & Upload */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <UserAvatar name={editingMember.name} avatarUrl={editingMember.avatarUrl} size="md" />
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs font-medium text-slate-700 block">Ảnh đại diện (Avatar):</label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Dán link ảnh (URL) hoặc tải từ máy..."
+                          value={editingMember.avatarUrl || ""}
+                          onChange={(e) => setEditingMember({ ...editingMember, avatarUrl: e.target.value })}
+                          className="text-xs rounded-xl h-8 bg-white border-slate-200 flex-1 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
                         />
-                      </label>
+                        <label className="shrink-0 h-8 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer">
+                          <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Tải ảnh</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0]
+                              if (!f) return
+                              e.target.value = ""
+                              toast.info("Đang xử lý ảnh avatar...")
+                              const res = await uploadAvatarToDrive(f, editingMember.email)
+                              if (res.success && res.avatarUrl) {
+                                setEditingMember({ ...editingMember, avatarUrl: res.avatarUrl })
+                                toast.success("Đã tải ảnh đại diện thành công!")
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Họ và tên:</label>
-                    <Input
-                      required
-                      value={editingMember.name}
-                      onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
-                      className="text-xs rounded-lg border-slate-200"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Họ và tên:</label>
+                      <Input
+                        required
+                        value={editingMember.name}
+                        onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                        className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Email Teams (Nhận OTP):</label>
+                      <Input
+                        required
+                        type="email"
+                        value={editingMember.teamsEmail || editingMember.email || ""}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setEditingMember({
+                            ...editingMember,
+                            teamsEmail: val,
+                            email: val,
+                          })
+                        }}
+                        className="text-xs rounded-xl border-slate-200 font-mono focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                        placeholder="vd: maianhpkk@gmail.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Email Cá nhân (Dự phòng):</label>
+                      <Input
+                        type="email"
+                        value={editingMember.personalEmail || ""}
+                        onChange={(e) => setEditingMember({ ...editingMember, personalEmail: e.target.value })}
+                        className="text-xs rounded-xl border-slate-200 font-mono focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                        placeholder="vd: canhan@gmail.com"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Email Teams (Nhận OTP):</label>
-                    <Input
-                      required
-                      type="email"
-                      value={editingMember.teamsEmail || editingMember.email || ""}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setEditingMember({
-                          ...editingMember,
-                          teamsEmail: val,
-                          email: val,
-                        })
-                      }}
-                      className="text-xs rounded-lg border-slate-200 font-mono"
-                      placeholder="vd: maianhpkk@gmail.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Email cá nhân (Đăng nhập):</label>
-                    <Input
-                      type="email"
-                      value={editingMember.personalEmail || ""}
-                      onChange={(e) => setEditingMember({ ...editingMember, personalEmail: e.target.value })}
-                      className="text-xs rounded-lg border-slate-200 font-mono"
-                      placeholder="vd: anhptm.os@mbbank.com.vn"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Vai trò (Role):</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Vai trò:</label>
+                      <DropdownMenu
+                        className="w-full"
+                        buttonClassName="w-full text-xs h-9 bg-white border-slate-200 rounded-xl"
+                        value={editingMember.role}
+                        onChange={(val) => setEditingMember({ ...editingMember, role: val as TeamMember["role"] })}
+                        options={[
+                          { value: "Admin", label: "Admin Quản trị" },
+                          { value: "Design Owner", label: "Design Owner" },
+                          { value: "Designer", label: "Designer" },
+                          { value: "PO", label: "Product Owner (PO)" },
+                          { value: "Business", label: "Business Stakeholder" },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Trạng thái:</label>
+                      <DropdownMenu
+                        className="w-full"
+                        buttonClassName="w-full text-xs h-9 bg-white border-slate-200 rounded-xl"
+                        value={editingMember.status}
+                        onChange={(val) => setEditingMember({ ...editingMember, status: val as TeamMember["status"] })}
+                        options={[
+                          { value: "Active", label: "Hoạt động (Active)" },
+                          { value: "Leave", label: "Nghỉ phép (Leave)" },
+                          { value: "Inactive", label: "Ngừng hoạt động (Inactive)" },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Tải tối đa (Task):</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={editingMember.capacity}
+                        onChange={(e) => setEditingMember({ ...editingMember, capacity: parseInt(e.target.value) || 5 })}
+                        className="text-xs rounded-xl border-slate-200 text-center font-bold focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cấu hình Chính sách phiên đăng nhập riêng cho cá nhân */}
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-800">
+                        Chính sách Phiên đăng nhập riêng (Session Policy):
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Mặc định theo vai trò: {editingMember.role === "Admin" ? "Cố định 8h" : "Trượt 24h"}
+                      </span>
+                    </div>
                     <DropdownMenu
                       className="w-full"
-                      value={editingMember.role}
-                      onChange={(val) => setEditingMember({ ...editingMember, role: val as TeamMember["role"] })}
+                      buttonClassName="w-full text-xs h-8 bg-white border-slate-200 rounded-xl"
+                      value={editingMember.sessionPolicy || "inherit"}
+                      onChange={(val) => setEditingMember({
+                        ...editingMember,
+                        sessionPolicy: val as "inherit" | "fixed_8h" | "sliding_24h"
+                      })}
                       options={[
-                        { value: "Designer", label: "UX Designer" },
-                        { value: "Design Owner", label: "Design Owner" },
-                        { value: "PO", label: "Product Owner (PO)" },
-                        { value: "Business", label: "Business (Nghiệp vụ / Kinh doanh)" },
-                        { value: "Admin", label: "Admin" },
+                        { value: "inherit", label: "Kế thừa theo Vai trò (Khuyên dùng)" },
+                        { value: "fixed_8h", label: "Cố định 8 tiếng (Fixed 8h - Bắt buộc sau 8h)" },
+                        { value: "sliding_24h", label: "Trượt 24 tiếng khi thoát (Sliding 24h - Tự gia hạn)" },
                       ]}
                     />
+                    <p className="text-[11px] text-slate-400">
+                      Cấu hình cơ chế phiên riêng biệt cho cá nhân này hoặc chọn "Kế thừa" để theo chính sách chung của vai trò.
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Trạng thái:</label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={editingMember.status}
-                      onChange={(val) => setEditingMember({ ...editingMember, status: val as TeamMember["status"] })}
-                      options={[
-                        { value: "Active", label: "Active (Sẵn sàng)" },
-                        { value: "On Leave", label: "On Leave (Nghỉ phép)" },
-                        { value: "Busy", label: "Busy (Quá tải)" },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Hạn mức (Max task):</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={editingMember.capacityLimit}
-                      onChange={(e) => setEditingMember({ ...editingMember, capacityLimit: parseInt(e.target.value) || 5 })}
-                      className="text-xs rounded-lg border-slate-200 text-center font-bold"
-                    />
-                  </div>
-                </div>
 
-                {/* Session Policy Selection */}
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Chính sách Phiên đăng nhập (Session Policy):</span>
-                    </label>
-                    <span className="text-[11px] text-slate-500">
-                      Đang áp dụng: <strong className="text-slate-800 font-semibold">
-                        {(editingMember.sessionPolicy && editingMember.sessionPolicy !== "inherit")
-                          ? (editingMember.sessionPolicy === "sliding_24h" ? "Trượt 24h khi thoát (Riêng)" : "Cố định 8 tiếng (Riêng)")
-                          : `Kế thừa vai trò (${roleSessionPolicies[editingMember.role as keyof RoleSessionPolicies] === "sliding_24h" ? "Trượt 24h" : "Cố định 8h"})`}
-                      </strong>
-                    </span>
-                  </div>
-                  <DropdownMenu
-                    className="w-full"
-                    value={editingMember.sessionPolicy || "inherit"}
-                    onChange={(val) => setEditingMember({ ...editingMember, sessionPolicy: val as UserSessionPolicyOverride })}
-                    options={[
-                      {
-                        value: "inherit",
-                        label: `Kế thừa từ vai trò (${editingMember.role}: ${roleSessionPolicies[editingMember.role as keyof RoleSessionPolicies] === "sliding_24h" ? "Trượt 24h khi thoát" : "Cố định 8 tiếng"})`,
-                      },
-                      {
-                        value: "fixed_8h",
-                        label: "Cố định 8 tiếng (Fixed 8h - Hết hạn đúng 8h sau khi nhập OTP)",
-                      },
-                      {
-                        value: "sliding_24h",
-                        label: "Trượt 24 tiếng khi thoát (Sliding 24h - Tự động gia hạn khi truy cập)",
-                      },
-                    ]}
-                  />
-                  <p className="text-[11px] text-slate-400">
-                    Cấu hình cơ chế phiên riêng biệt cho cá nhân này hoặc chọn "Kế thừa" để theo chính sách chung của vai trò.
-                  </p>
-                </div>
+                  {/* HIERARCHICAL PRODUCT -> SQUADS SELECTION */}
+                  <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-800">
+                        Phân bổ Sản phẩm & Squads phụ trách:
+                      </label>
+                      <span className="text-[11px] text-slate-500 font-normal">
+                        <span className="font-medium text-slate-800">{(editingMember.products || []).length}</span> SP · <span className="font-medium text-slate-800">{editingMember.squads.length}</span> squads
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-normal">
+                      Chọn sản phẩm và bấm vào các chip Squad tương ứng để phân bổ nhân sự.
+                    </p>
 
-                {/* HIERARCHICAL PRODUCT -> SQUADS SELECTION */}
-                <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-800">
-                      Phân bổ Sản phẩm & Squads phụ trách:
-                    </label>
-                    <span className="text-[11px] text-slate-500 font-normal">
-                      <span className="font-medium text-slate-800">{(editingMember.products || []).length}</span> SP · <span className="font-medium text-slate-800">{editingMember.squads.length}</span> squads
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 font-normal">
-                    Chọn sản phẩm và bấm vào các chip Squad tương ứng để phân bổ nhân sự.
-                  </p>
+                    <div className="space-y-2 pt-1 max-h-72 overflow-y-auto pr-1">
+                      {allAvailableProductNames.map((prodName) => {
+                        const prodSquads = squads
+                          .filter((s) => (s.productName || "").trim().toLowerCase() === prodName.trim().toLowerCase())
+                          .map((s) => s.name)
+                        const isProdSelected = (editingMember.products || []).includes(prodName)
+                        const selectedSquadsInProd = prodSquads.filter((s) => editingMember.squads.includes(s))
+                        const allSquadsSelected = prodSquads.length > 0 && selectedSquadsInProd.length === prodSquads.length
 
-                  <div className="space-y-2 pt-1 max-h-72 overflow-y-auto pr-1">
-                    {allAvailableProductNames.map((prodName) => {
-                      const prodSquads = squads
-                        .filter((s) => (s.productName || "").trim().toLowerCase() === prodName.trim().toLowerCase())
-                        .map((s) => s.name)
-                      const isProdSelected = (editingMember.products || []).includes(prodName)
-                      const selectedSquadsInProd = prodSquads.filter((s) => editingMember.squads.includes(s))
-                      const allSquadsSelected = prodSquads.length > 0 && selectedSquadsInProd.length === prodSquads.length
-
-                      return (
-                        <div
-                          key={`edit-prod-${prodName}`}
-                          className={`rounded-lg border transition-all overflow-hidden ${
-                            isProdSelected ? "bg-white border-blue-200 shadow-2xs" : "bg-white/70 border-slate-200"
-                          }`}
-                        >
-                          <div className="px-3 py-2 flex items-center justify-between bg-slate-50/50">
-                            <label className="flex items-center gap-2 cursor-pointer min-w-0 group">
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
-                                  isProdSelected
-                                    ? "bg-[#1057FB] border-[#1057FB] text-white shadow-2xs"
-                                    : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
-                                }`}
-                              >
-                                {isProdSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={isProdSelected}
-                                onChange={() => {
-                                  const curProds = editingMember.products || []
-                                  if (isProdSelected) {
-                                    setEditingMember({
-                                      ...editingMember,
-                                      products: curProds.filter((p) => p !== prodName),
-                                      squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
-                                    })
-                                  } else {
-                                    setEditingMember({
-                                      ...editingMember,
-                                      products: [...curProds, prodName],
-                                      squads: prodSquads[0] && !editingMember.squads.includes(prodSquads[0])
-                                        ? [...editingMember.squads, prodSquads[0]]
-                                        : editingMember.squads,
-                                    })
-                                  }
-                                }}
-                                className="sr-only"
-                              />
-                              <span className={`text-xs truncate ${isProdSelected ? "font-semibold text-slate-900" : "text-slate-600 font-normal"}`}>
-                                {prodName}
-                              </span>
-                              {selectedSquadsInProd.length > 0 && (
-                                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-blue-50 text-[#1057FB] border border-blue-200/80">
-                                  {selectedSquadsInProd.length}/{prodSquads.length}
+                        return (
+                          <div
+                            key={`edit-prod-${prodName}`}
+                            className={`rounded-xl border transition-all overflow-hidden ${
+                              isProdSelected ? "bg-white border-slate-300 shadow-2xs" : "bg-white/70 border-slate-200"
+                            }`}
+                          >
+                            <div className="px-3 py-2 flex items-center justify-between bg-slate-50/50">
+                              <label className="flex items-center gap-2 cursor-pointer min-w-0 group">
+                                <div
+                                  className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                                    isProdSelected
+                                      ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                                      : "bg-white border-slate-300 hover:border-slate-400 group-hover:border-slate-400"
+                                  }`}
+                                >
+                                  {isProdSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={isProdSelected}
+                                  onChange={() => {
+                                    const curProds = editingMember.products || []
+                                    if (isProdSelected) {
+                                      setEditingMember({
+                                        ...editingMember,
+                                        products: curProds.filter((p) => p !== prodName),
+                                        squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
+                                      })
+                                    } else {
+                                      setEditingMember({
+                                        ...editingMember,
+                                        products: [...curProds, prodName],
+                                        squads: prodSquads[0] && !editingMember.squads.includes(prodSquads[0])
+                                          ? [...editingMember.squads, prodSquads[0]]
+                                          : editingMember.squads,
+                                      })
+                                    }
+                                  }}
+                                  className="sr-only"
+                                />
+                                <span className={`text-xs truncate ${isProdSelected ? "font-semibold text-slate-900" : "text-slate-600 font-normal"}`}>
+                                  {prodName}
                                 </span>
+                                {selectedSquadsInProd.length > 0 && (
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80">
+                                    {selectedSquadsInProd.length}/{prodSquads.length}
+                                  </span>
+                                )}
+                              </label>
+
+                              {prodSquads.length > 0 && isProdSelected && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (allSquadsSelected) {
+                                      setEditingMember({
+                                        ...editingMember,
+                                        squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
+                                      })
+                                    } else {
+                                      const toAdd = prodSquads.filter((s) => !editingMember.squads.includes(s))
+                                      setEditingMember({
+                                        ...editingMember,
+                                        squads: [...editingMember.squads, ...toAdd],
+                                      })
+                                    }
+                                  }}
+                                  className="text-[10px] text-slate-500 hover:text-slate-900 transition-colors cursor-pointer px-1 py-0.5 rounded hover:bg-slate-100"
+                                >
+                                  {allSquadsSelected ? "Bỏ chọn hết" : "Chọn hết"}
+                                </button>
                               )}
-                            </label>
+                            </div>
 
-                            {prodSquads.length > 0 && isProdSelected && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (allSquadsSelected) {
-                                    setEditingMember({
-                                      ...editingMember,
-                                      squads: editingMember.squads.filter((s) => !prodSquads.includes(s)),
-                                    })
-                                  } else {
-                                    const toAdd = prodSquads.filter((s) => !editingMember.squads.includes(s))
-                                    setEditingMember({
-                                      ...editingMember,
-                                      squads: [...editingMember.squads, ...toAdd],
-                                    })
-                                  }
-                                }}
-                                className="text-[10px] text-slate-500 hover:text-[#1057FB] transition-colors cursor-pointer px-1 py-0.5 rounded"
-                              >
-                                {allSquadsSelected ? "Bỏ chọn hết" : "Chọn hết"}
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Squad Chips under Product */}
-                          <div className="p-2 pt-1.5 border-t border-slate-100 bg-white">
-                            {prodSquads.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {prodSquads.map((sqName) => {
-                                  const isSqSelected = editingMember.squads.includes(sqName)
-                                  return (
-                                    <button
-                                      key={`edit-sq-${prodName}-${sqName}`}
-                                      type="button"
-                                      onClick={() => {
-                                        let nextSquads: string[]
-                                        let nextProds = editingMember.products || []
-                                        if (isSqSelected) {
-                                          nextSquads = editingMember.squads.filter((s) => s !== sqName)
-                                        } else {
-                                          nextSquads = [...editingMember.squads, sqName]
-                                          if (!nextProds.includes(prodName)) {
-                                            nextProds = [...nextProds, prodName]
+                            {/* Squad Chips under Product */}
+                            <div className="p-2 pt-1.5 border-t border-slate-100 bg-white">
+                              {prodSquads.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {prodSquads.map((sqName) => {
+                                    const isSqSelected = editingMember.squads.includes(sqName)
+                                    return (
+                                      <button
+                                        key={`edit-sq-${prodName}-${sqName}`}
+                                        type="button"
+                                        onClick={() => {
+                                          let nextSquads: string[]
+                                          let nextProds = editingMember.products || []
+                                          if (isSqSelected) {
+                                            nextSquads = editingMember.squads.filter((s) => s !== sqName)
+                                          } else {
+                                            nextSquads = [...editingMember.squads, sqName]
+                                            if (!nextProds.includes(prodName)) {
+                                              nextProds = [...nextProds, prodName]
+                                            }
                                           }
-                                        }
-                                        setEditingMember({
-                                          ...editingMember,
-                                          squads: nextSquads,
-                                          products: nextProds,
-                                        })
-                                      }}
-                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer select-none border ${
-                                        isSqSelected
-                                          ? "bg-[#1057FB] text-white border-[#1057FB] font-medium shadow-2xs"
-                                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 font-normal hover:border-slate-300"
-                                      }`}
-                                    >
-                                      {isSqSelected ? (
-                                        <Check className="w-2.5 h-2.5 text-white stroke-[2.5]" />
-                                      ) : (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                                      )}
-                                      <span>{sqName}</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-[10px] text-slate-400 italic">
-                                Chưa có squad nào thuộc sản phẩm này.
-                              </p>
-                            )}
+                                          setEditingMember({
+                                            ...editingMember,
+                                            squads: nextSquads,
+                                            products: nextProds,
+                                          })
+                                        }}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer select-none border ${
+                                          isSqSelected
+                                            ? "bg-slate-900 text-white border-slate-900 font-medium shadow-2xs"
+                                            : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 font-normal hover:border-slate-300"
+                                        }`}
+                                      >
+                                        {isSqSelected ? (
+                                          <Check className="w-2.5 h-2.5 text-white stroke-[2.5]" />
+                                        ) : (
+                                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                        )}
+                                        <span>{sqName}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-slate-400 italic">
+                                  Chưa có squad nào thuộc sản phẩm này.
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditingMember(null)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Lưu cập nhật
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditingMember(null)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Lưu cập nhật
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: THÊM NHÂN SỰ MỚI (ADD MEMBER MODAL)               */}
@@ -6350,1461 +6686,1468 @@ export default function QuanLyPage() {
       {/* ======================================================== */}
       {/* MODAL: SỬA KHÂU UX (EDIT UX PHASE MODAL)                 */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {editingPhase && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Workflow className="w-4 h-4 text-slate-700" />
-                  <span>Sửa Khâu UX: Bước {editingPhase.step} · {editingPhase.name}</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setEditingPhase(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdatePhaseSubmit} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Tên khâu:</label>
-                  <Input
-                    required
-                    value={editingPhase.name}
-                    onChange={(e) => setEditingPhase({ ...editingPhase, name: e.target.value })}
-                    className="text-xs rounded-lg border-slate-200 font-semibold"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">SLA cam kết (Ngày):</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="999"
-                      required
-                      value={editingPhase.slaDays}
-                      onChange={(e) => setEditingPhase({ ...editingPhase, slaDays: parseInt(e.target.value) || 1 })}
-                      className="text-xs rounded-lg border-slate-200 font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      required
-                      value={editingPhase.defaultProgress}
-                      onChange={(e) => setEditingPhase({ ...editingPhase, defaultProgress: parseInt(e.target.value) || 0 })}
-                      className="text-xs rounded-lg border-slate-200 font-bold text-center"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả nhiệm vụ khâu:</label>
-                  <Textarea
-                    rows={2}
-                    value={editingPhase.description}
-                    onChange={(e) => setEditingPhase({ ...editingPhase, description: e.target.value })}
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Tài liệu bàn giao bắt buộc:</label>
-                  <Input
-                    value={editingPhase.requiredDeliverable}
-                    onChange={(e) => setEditingPhase({ ...editingPhase, requiredDeliverable: e.target.value })}
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingPhase && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setEditingPhase(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 space-y-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Workflow className="w-4 h-4 text-slate-700" />
+                    <span>Sửa Khâu UX: Bước {editingPhase.step} · {editingPhase.name}</span>
+                  </h3>
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={() => setEditingPhase(null)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
                   >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Lưu cấu hình Khâu
-                  </Button>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
+                <form onSubmit={handleUpdatePhaseSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Tên khâu:</label>
+                    <Input
+                      required
+                      value={editingPhase.name}
+                      onChange={(e) => setEditingPhase({ ...editingPhase, name: e.target.value })}
+                      className="text-xs rounded-xl border-slate-200 font-semibold focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">SLA cam kết (Ngày):</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="999"
+                        required
+                        value={editingPhase.slaDays}
+                        onChange={(e) => setEditingPhase({ ...editingPhase, slaDays: parseInt(e.target.value) || 1 })}
+                        className="text-xs rounded-xl border-slate-200 font-bold text-center focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        required
+                        value={editingPhase.defaultProgress}
+                        onChange={(e) => setEditingPhase({ ...editingPhase, defaultProgress: parseInt(e.target.value) || 0 })}
+                        className="text-xs rounded-xl border-slate-200 font-bold text-center focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả nhiệm vụ khâu:</label>
+                    <Textarea
+                      rows={2}
+                      value={editingPhase.description}
+                      onChange={(e) => setEditingPhase({ ...editingPhase, description: e.target.value })}
+                      className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Tài liệu bàn giao bắt buộc:</label>
+                    <Input
+                      value={editingPhase.requiredDeliverable}
+                      onChange={(e) => setEditingPhase({ ...editingPhase, requiredDeliverable: e.target.value })}
+                      className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditingPhase(null)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Lưu cấu hình Khâu
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: THÊM KHÂU UX MỚI (ADD UX PHASE MODAL)             */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {showAddPhaseModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Workflow className="w-4 h-4 text-slate-700" />
-                  <span>Thêm bước mới vào Quy trình UX</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAddPhaseModal(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddPhaseSubmit} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">
-                    Tên khâu / bước <span className="text-rose-500">*</span>:
-                  </label>
-                  <Input
-                    required
-                    value={newPhaseName}
-                    onChange={(e) => setNewPhaseName(e.target.value)}
-                    placeholder="VD: User Testing / Kiểm thử trải nghiệm"
-                    className="text-xs rounded-lg border-slate-200 font-semibold"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">SLA cam kết (Ngày):</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="999"
-                      required
-                      value={newPhaseSla}
-                      onChange={(e) => setNewPhaseSla(parseInt(e.target.value) || 1)}
-                      className="text-xs rounded-lg border-slate-200 font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      required
-                      value={newPhaseProgress}
-                      onChange={(e) => setNewPhaseProgress(parseInt(e.target.value) || 0)}
-                      className="text-xs rounded-lg border-slate-200 font-bold text-center"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả nhiệm vụ khâu:</label>
-                  <Textarea
-                    rows={2}
-                    value={newPhaseDesc}
-                    onChange={(e) => setNewPhaseDesc(e.target.value)}
-                    placeholder="Mô tả mục tiêu và hành động trong bước này..."
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Tài liệu bàn giao bắt buộc:</label>
-                  <Input
-                    value={newPhaseDeliverable}
-                    onChange={(e) => setNewPhaseDeliverable(e.target.value)}
-                    placeholder="VD: Usability Test Report / Maze metrics link"
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showAddPhaseModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setShowAddPhaseModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 space-y-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Workflow className="w-4 h-4 text-slate-700" />
+                    <span>Thêm bước mới vào Quy trình UX</span>
+                  </h3>
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={() => setShowAddPhaseModal(false)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
                   >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs gap-1 h-8"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Thêm vào quy trình</span>
-                  </Button>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
+                <form onSubmit={handleAddPhaseSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">
+                      Tên khâu / bước <span className="text-rose-500">*</span>:
+                    </label>
+                    <Input
+                      required
+                      value={newPhaseName}
+                      onChange={(e) => setNewPhaseName(e.target.value)}
+                      placeholder="VD: User Testing / Kiểm thử trải nghiệm"
+                      className="text-xs rounded-xl border-slate-200 font-semibold focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">SLA cam kết (Ngày):</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="999"
+                        required
+                        value={newPhaseSla}
+                        onChange={(e) => setNewPhaseSla(parseInt(e.target.value) || 1)}
+                        className="text-xs rounded-xl border-slate-200 font-bold text-center focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-700 block mb-1">Tiến độ mặc định (%):</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        required
+                        value={newPhaseProgress}
+                        onChange={(e) => setNewPhaseProgress(parseInt(e.target.value) || 0)}
+                        className="text-xs rounded-xl border-slate-200 font-bold text-center focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả nhiệm vụ khâu:</label>
+                    <Textarea
+                      rows={2}
+                      value={newPhaseDesc}
+                      onChange={(e) => setNewPhaseDesc(e.target.value)}
+                      placeholder="Mô tả mục tiêu và hành động trong bước này..."
+                      className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Tài liệu bàn giao bắt buộc:</label>
+                    <Input
+                      value={newPhaseDeliverable}
+                      onChange={(e) => setNewPhaseDeliverable(e.target.value)}
+                      placeholder="VD: Usability Test Report / Maze metrics link"
+                      className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAddPhaseModal(false)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs gap-1 h-9 px-4"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Thêm vào quy trình</span>
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: THÊM SQUAD MỚI (ADD SQUAD MODAL)                  */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {showAddSquadModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Boxes className="w-4.5 h-4.5 text-blue-600" />
-                  <span>Thêm Squad chuyên môn mới</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAddSquadModal(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddSquadSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1 py-3">
-                {/* 3 trường cơ bản dàn ngang 3 cột */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Sản phẩm trực thuộc: <span className="text-red-500">*</span>
-                    </label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={newSquadProduct}
-                      onChange={(val) => setNewSquadProduct(val)}
-                      options={products.map((p) => {
-                        const colorDef = getProductColorDef(p.name)
-                        return {
-                          value: p.name,
-                          label: p.name,
-                          badge: (
-                            <span className={`w-2 h-2 rounded-full ${colorDef.dotClass}`} />
-                          ),
-                        }
-                      })}
-                      placeholder="Chọn sản phẩm trực thuộc..."
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">
-                      Squad nằm trong khối sản phẩm này.
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Tên Squad / Nghiệp vụ: <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      required
-                      value={newSquadName}
-                      onChange={(e) => setNewSquadName(e.target.value)}
-                      placeholder="VD: eSaving, Lending & Vay vốn..."
-                      className="text-xs rounded-lg border-slate-200 font-medium bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Lĩnh vực / Phạm vi phụ trách:</label>
-                    <Input
-                      value={newSquadDomain}
-                      onChange={(e) => setNewSquadDomain(e.target.value)}
-                      placeholder="VD: Tiết kiệm trực tuyến, tích lũy số..."
-                      className="text-xs rounded-lg border-slate-200 bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Màu nhận diện Squad */}
-                <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <span>Màu nhận diện Squad:</span>
-                      <span className="text-[11px] font-normal text-slate-500">
-                        (Mặc định đồng bộ theo {newSquadProduct || "Sản phẩm"})
-                      </span>
-                    </label>
-                    {newSquadColor && (
-                      <button
-                        type="button"
-                        onClick={() => setNewSquadColor("")}
-                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
-                      >
-                        Đặt lại theo sản phẩm
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {Object.values(PRODUCT_COLORS).map((c) => {
-                      const effectiveColor = newSquadColor || getProductColorDef(newSquadProduct).key
-                      const isSelected = effectiveColor === c.key
-                      return (
-                        <button
-                          key={`new-sq-color-${c.key}`}
-                          type="button"
-                          onClick={() => setNewSquadColor(c.key)}
-                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
-                            isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-xs" : "opacity-75 hover:opacity-100"
-                          }`}
-                          title={c.label}
-                        >
-                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* 3 Role phân bổ phụ trách dàn ngang 3 cột */}
-                <div>
-                  <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Phân bổ nhân sự phụ trách Squad</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
-                    {/* 1. Chọn 1 hoặc nhiều PO phụ trách (Chỉ nhân sự role PO) */}
-                    <CompactRoleMemberSelector
-                      label="PO phụ trách (Product Owner)"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-purple-500"
-                      badgeClass="text-purple-700 bg-purple-50 border-purple-200"
-                      theme="purple"
-                      members={teamMembers.filter((m) => m.role === "PO")}
-                      selectedNames={newSquadPos}
-                      onChange={setNewSquadPos}
-                      emptyHint="Chưa có nhân sự vai trò Product Owner (PO)"
-                    />
-
-                    {/* 2. Chọn 1 hoặc nhiều Business phụ trách (Chỉ nhân sự role Business) */}
-                    <CompactRoleMemberSelector
-                      label="Business phụ trách (Nghiệp vụ)"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-amber-500"
-                      badgeClass="text-amber-800 bg-amber-50 border-amber-200"
-                      theme="amber"
-                      members={teamMembers.filter((m) => m.role === "Business")}
-                      selectedNames={newSquadBusinesses}
-                      onChange={setNewSquadBusinesses}
-                      emptyHint="Chưa có nhân sự vai trò Business (Nghiệp vụ)"
-                    />
-
-                    {/* 3. Chọn 1 hoặc nhiều Designer phụ trách (Chỉ nhân sự Designer / Design Owner / Admin) */}
-                    <CompactRoleMemberSelector
-                      label="Designer phụ trách"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-blue-500"
-                      badgeClass="text-blue-600 bg-blue-50 border-blue-200"
-                      theme="blue"
-                      members={teamMembers.filter(
-                        (m) => m.role === "Designer" || m.role === "Design Owner" || m.role === "Admin"
-                      )}
-                      selectedNames={newSquadDesigners}
-                      onChange={setNewSquadDesigners}
-                      emptyHint="Chưa có nhân sự vai trò Designer"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
-                  <Button
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showAddSquadModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setShowAddSquadModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Boxes className="w-4.5 h-4.5 text-slate-700" />
+                    <span>Thêm Squad chuyên môn mới</span>
+                  </h3>
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={() => setShowAddSquadModal(false)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
                   >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    tactile
-                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Tạo Squad
-                  </Button>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
+                <form onSubmit={handleAddSquadSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1 py-3">
+                  {/* 3 trường cơ bản dàn ngang 3 cột */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Sản phẩm trực thuộc: <span className="text-rose-500">*</span>
+                      </label>
+                      <DropdownMenu
+                        className="w-full"
+                        buttonClassName="w-full text-xs h-9 bg-white border-slate-200 rounded-xl"
+                        value={newSquadProduct}
+                        onChange={(val) => setNewSquadProduct(val)}
+                        options={products.map((p) => {
+                          const colorDef = getProductColorDef(p.name)
+                          return {
+                            value: p.name,
+                            label: p.name,
+                            badge: (
+                              <span className={`w-2 h-2 rounded-full ${colorDef.dotClass}`} />
+                            ),
+                          }
+                        })}
+                        placeholder="Chọn sản phẩm trực thuộc..."
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">
+                        Squad nằm trong khối sản phẩm này.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Tên Squad / Nghiệp vụ: <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        required
+                        value={newSquadName}
+                        onChange={(e) => setNewSquadName(e.target.value)}
+                        placeholder="VD: eSaving, Lending & Vay vốn..."
+                        className="text-xs rounded-xl border-slate-200 font-medium bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 h-9"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Lĩnh vực / Phạm vi phụ trách:</label>
+                      <Input
+                        value={newSquadDomain}
+                        onChange={(e) => setNewSquadDomain(e.target.value)}
+                        placeholder="VD: Tiết kiệm, chứng chỉ tiền gửi..."
+                        className="text-xs rounded-xl border-slate-200 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 h-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3 Role phân bổ phụ trách dàn ngang 3 cột */}
+                  <div>
+                    <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-slate-700" />
+                      <span>Phân bổ nhân sự phụ trách Squad</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
+                      {/* 1. Chọn 1 hoặc nhiều PO phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="PO phụ trách (Product Owner)"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-purple-500"
+                        badgeClass="text-purple-700 bg-purple-50 border-purple-200"
+                        theme="purple"
+                        members={teamMembers.filter((m) => m.role === "PO")}
+                        selectedNames={newSquadPos}
+                        onChange={setNewSquadPos}
+                        emptyHint="Chưa có nhân sự vai trò Product Owner (PO)"
+                      />
+
+                      {/* 2. Chọn 1 hoặc nhiều Business phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="Business phụ trách (Nghiệp vụ)"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-amber-500"
+                        badgeClass="text-amber-800 bg-amber-50 border-amber-200"
+                        theme="amber"
+                        members={teamMembers.filter((m) => m.role === "Business")}
+                        selectedNames={newSquadBusinesses}
+                        onChange={setNewSquadBusinesses}
+                        emptyHint="Chưa có nhân sự vai trò Business (Nghiệp vụ)"
+                      />
+
+                      {/* 3. Chọn 1 hoặc nhiều Designer phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="Designer phụ trách"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-blue-500"
+                        badgeClass="text-blue-700 bg-blue-50 border-blue-200"
+                        theme="blue"
+                        members={teamMembers.filter(
+                          (m) => m.role === "Designer" || m.role === "Design Owner" || m.role === "Admin"
+                        )}
+                        selectedNames={newSquadDesigners}
+                        onChange={setNewSquadDesigners}
+                        emptyHint="Chưa có nhân sự vai trò Designer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAddSquadModal(false)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      tactile
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Tạo Squad
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: CHỈNH SỬA SQUAD (EDIT SQUAD MODAL)                 */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {editingSquad && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Edit3 className="w-4.5 h-4.5 text-blue-600" />
-                  <span>Sửa thông tin Squad: {editingSquad.name}</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setEditingSquad(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateSquadSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1 py-3">
-                {/* 3 trường cơ bản dàn ngang 3 cột */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Sản phẩm trực thuộc: <span className="text-red-500">*</span>
-                    </label>
-                    <DropdownMenu
-                      className="w-full"
-                      value={editingSquad.productName}
-                      onChange={(val) => setEditingSquad({ ...editingSquad, productName: val })}
-                      options={products.map((p) => {
-                        const colorDef = getProductColorDef(p.name)
-                        return {
-                          value: p.name,
-                          label: p.name,
-                          badge: (
-                            <span className={`w-2 h-2 rounded-full ${colorDef.dotClass}`} />
-                          ),
-                        }
-                      })}
-                      placeholder="Chọn sản phẩm trực thuộc..."
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">
-                      Squad nằm trong khối sản phẩm này.
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Tên Squad / Nghiệp vụ: <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      required
-                      value={editingSquad.name}
-                      onChange={(e) => setEditingSquad({ ...editingSquad, name: e.target.value })}
-                      className="text-xs rounded-lg border-slate-200 font-medium bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Lĩnh vực / Phạm vi phụ trách:</label>
-                    <Input
-                      value={editingSquad.domain || ""}
-                      onChange={(e) => setEditingSquad({ ...editingSquad, domain: e.target.value })}
-                      placeholder="VD: Tiết kiệm, chứng chỉ tiền gửi..."
-                      className="text-xs rounded-lg border-slate-200 bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Màu nhận diện Squad */}
-                <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <span>Màu nhận diện Squad:</span>
-                      <span className="text-[11px] font-normal text-slate-500">
-                        (Mặc định đồng bộ theo {editingSquad.productName || "Sản phẩm"})
-                      </span>
-                    </label>
-                    {editingSquad.color && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingSquad({ ...editingSquad, color: undefined })}
-                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
-                      >
-                        Đặt lại theo sản phẩm
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {Object.values(PRODUCT_COLORS).map((c) => {
-                      const curColor = editingSquad.color || getSquadColorDef(editingSquad.name, editingSquad.productName).key
-                      const isSelected = curColor === c.key
-                      return (
-                        <button
-                          key={`edit-sq-color-${c.key}`}
-                          type="button"
-                          onClick={() => setEditingSquad({ ...editingSquad, color: c.key })}
-                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
-                            isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-xs" : "opacity-75 hover:opacity-100"
-                          }`}
-                          title={c.label}
-                        >
-                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* 3 Role phân bổ phụ trách dàn ngang 3 cột */}
-                <div>
-                  <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Phân bổ nhân sự phụ trách Squad</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
-                    {/* 1. Chọn 1 hoặc nhiều PO phụ trách (Chỉ nhân sự role PO) */}
-                    <CompactRoleMemberSelector
-                      label="PO phụ trách (Product Owner)"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-purple-500"
-                      badgeClass="text-purple-700 bg-purple-50 border-purple-200"
-                      theme="purple"
-                      members={teamMembers.filter((m) => m.role === "PO")}
-                      selectedNames={
-                        editingSquad.pos && editingSquad.pos.length > 0
-                          ? editingSquad.pos
-                          : editingSquad.leadPo
-                          ? [editingSquad.leadPo]
-                          : []
-                      }
-                      onChange={(next) =>
-                        setEditingSquad({
-                          ...editingSquad,
-                          pos: next,
-                          leadPo: next[0] || "",
-                        })
-                      }
-                      emptyHint="Chưa có nhân sự vai trò Product Owner (PO)"
-                    />
-
-                    {/* 2. Chọn 1 hoặc nhiều Business phụ trách (Chỉ nhân sự role Business) */}
-                    <CompactRoleMemberSelector
-                      label="Business phụ trách (Nghiệp vụ)"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-amber-500"
-                      badgeClass="text-amber-800 bg-amber-50 border-amber-200"
-                      theme="amber"
-                      members={teamMembers.filter((m) => m.role === "Business")}
-                      selectedNames={
-                        editingSquad.businesses && editingSquad.businesses.length > 0
-                          ? editingSquad.businesses
-                          : editingSquad.leadBusiness
-                          ? [editingSquad.leadBusiness]
-                          : []
-                      }
-                      onChange={(next) =>
-                        setEditingSquad({
-                          ...editingSquad,
-                          businesses: next,
-                          leadBusiness: next[0] || "",
-                        })
-                      }
-                      emptyHint="Chưa có nhân sự vai trò Business (Nghiệp vụ)"
-                    />
-
-                    {/* 3. Chọn 1 hoặc nhiều Designer phụ trách (Chỉ nhân sự Designer / Design Owner / Admin) */}
-                    <CompactRoleMemberSelector
-                      label="Designer phụ trách"
-                      subtitle="chọn 1 hoặc nhiều"
-                      dotClass="bg-blue-500"
-                      badgeClass="text-blue-600 bg-blue-50 border-blue-200"
-                      theme="blue"
-                      members={teamMembers.filter(
-                        (m) => m.role === "Designer" || m.role === "Design Owner" || m.role === "Admin"
-                      )}
-                      selectedNames={
-                        editingSquad.designers && editingSquad.designers.length > 0
-                          ? editingSquad.designers
-                          : editingSquad.leadDesigner
-                          ? [editingSquad.leadDesigner]
-                          : []
-                      }
-                      onChange={(next) =>
-                        setEditingSquad({
-                          ...editingSquad,
-                          designers: next,
-                          leadDesigner: next[0] || "",
-                        })
-                      }
-                      emptyHint="Chưa có nhân sự vai trò Designer"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
-                  <Button
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingSquad && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setEditingSquad(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Edit3 className="w-4.5 h-4.5 text-slate-700" />
+                    <span>Sửa thông tin Squad: {editingSquad.name}</span>
+                  </h3>
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={() => setEditingSquad(null)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
                   >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    tactile
-                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Lưu thay đổi
-                  </Button>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
+                <form onSubmit={handleUpdateSquadSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1 py-3">
+                  {/* 3 trường cơ bản dàn ngang 3 cột */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Sản phẩm trực thuộc: <span className="text-rose-500">*</span>
+                      </label>
+                      <DropdownMenu
+                        className="w-full"
+                        buttonClassName="w-full text-xs h-9 bg-white border-slate-200 rounded-xl"
+                        value={editingSquad.productName}
+                        onChange={(val) => setEditingSquad({ ...editingSquad, productName: val })}
+                        options={products.map((p) => {
+                          const colorDef = getProductColorDef(p.name)
+                          return {
+                            value: p.name,
+                            label: p.name,
+                            badge: (
+                              <span className={`w-2 h-2 rounded-full ${colorDef.dotClass}`} />
+                            ),
+                          }
+                        })}
+                        placeholder="Chọn sản phẩm trực thuộc..."
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">
+                        Squad nằm trong khối sản phẩm này.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Tên Squad / Nghiệp vụ: <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        required
+                        value={editingSquad.name}
+                        onChange={(e) => setEditingSquad({ ...editingSquad, name: e.target.value })}
+                        className="text-xs rounded-xl border-slate-200 font-medium bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 h-9"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Lĩnh vực / Phạm vi phụ trách:</label>
+                      <Input
+                        value={editingSquad.domain || ""}
+                        onChange={(e) => setEditingSquad({ ...editingSquad, domain: e.target.value })}
+                        placeholder="VD: Tiết kiệm, chứng chỉ tiền gửi..."
+                        className="text-xs rounded-xl border-slate-200 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 h-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Màu nhận diện Squad */}
+                  <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <span>Màu nhận diện Squad:</span>
+                        <span className="text-[11px] font-normal text-slate-500">
+                          (Mặc định đồng bộ theo {editingSquad.productName || "Sản phẩm"})
+                        </span>
+                      </label>
+                      {editingSquad.color && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingSquad({ ...editingSquad, color: undefined })}
+                          className="text-[11px] text-slate-600 hover:text-slate-900 hover:underline cursor-pointer"
+                        >
+                          Đặt lại theo sản phẩm
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3 Role phân bổ phụ trách dàn ngang 3 cột */}
+                  <div>
+                    <div className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-slate-700" />
+                      <span>Phân bổ nhân sự phụ trách Squad</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 items-stretch">
+                      {/* 1. Chọn 1 hoặc nhiều PO phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="PO phụ trách (Product Owner)"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-purple-500"
+                        badgeClass="text-purple-700 bg-purple-50 border-purple-200"
+                        theme="purple"
+                        members={teamMembers.filter((m) => m.role === "PO")}
+                        selectedNames={
+                          editingSquad.pos && editingSquad.pos.length > 0
+                            ? editingSquad.pos
+                            : editingSquad.leadPo
+                            ? [editingSquad.leadPo]
+                            : []
+                        }
+                        onChange={(next) =>
+                          setEditingSquad({
+                            ...editingSquad,
+                            pos: next,
+                            leadPo: next[0] || "",
+                          })
+                        }
+                        emptyHint="Chưa có nhân sự vai trò Product Owner (PO)"
+                      />
+
+                      {/* 2. Chọn 1 hoặc nhiều Business phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="Business phụ trách (Nghiệp vụ)"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-amber-500"
+                        badgeClass="text-amber-800 bg-amber-50 border-amber-200"
+                        theme="amber"
+                        members={teamMembers.filter((m) => m.role === "Business")}
+                        selectedNames={
+                          editingSquad.businesses && editingSquad.businesses.length > 0
+                            ? editingSquad.businesses
+                            : editingSquad.leadBusiness
+                            ? [editingSquad.leadBusiness]
+                            : []
+                        }
+                        onChange={(next) =>
+                          setEditingSquad({
+                            ...editingSquad,
+                            businesses: next,
+                            leadBusiness: next[0] || "",
+                          })
+                        }
+                        emptyHint="Chưa có nhân sự vai trò Business (Nghiệp vụ)"
+                      />
+
+                      {/* 3. Chọn 1 hoặc nhiều Designer phụ trách */}
+                      <CompactRoleMemberSelector
+                        label="Designer phụ trách"
+                        subtitle="chọn 1 hoặc nhiều"
+                        dotClass="bg-blue-500"
+                        badgeClass="text-blue-700 bg-blue-50 border-blue-200"
+                        theme="blue"
+                        members={teamMembers.filter(
+                          (m) => m.role === "Designer" || m.role === "Design Owner" || m.role === "Admin"
+                        )}
+                        selectedNames={
+                          editingSquad.designers && editingSquad.designers.length > 0
+                            ? editingSquad.designers
+                            : editingSquad.leadDesigner
+                            ? [editingSquad.leadDesigner]
+                            : []
+                        }
+                        onChange={(next) =>
+                          setEditingSquad({
+                            ...editingSquad,
+                            designers: next,
+                            leadDesigner: next[0] || "",
+                          })
+                        }
+                        emptyHint="Chưa có nhân sự vai trò Designer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditingSquad(null)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      tactile
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Lưu thay đổi
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: SẮP XẾP THỨ TỰ SẢN PHẨM & SQUADS MASTER DATA       */}
       {/* ======================================================== */}
-      <AnimatePresence>
-        {showReorderModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl border border-slate-200"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
-                    <ArrowUpDown className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 leading-tight">
-                      Sắp xếp thứ tự Sản phẩm & Squads
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Thứ tự này sẽ áp dụng trực tiếp cho các Dropdown chọn Sản phẩm / Squad, bộ lọc và app
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowReorderModal(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Tabs Switcher */}
-              <div className="flex items-center gap-2 pt-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setReorderModalTab("products")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                    reorderModalTab === "products"
-                      ? "bg-slate-900 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
-                  }`}
-                >
-                  1. Thứ tự Sản phẩm ({products.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReorderModalTab("squads")
-                    if (!reorderModalSelectedProduct) {
-                      setReorderModalSelectedProduct(products[0]?.name || "")
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                    reorderModalTab === "squads"
-                      ? "bg-slate-900 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
-                  }`}
-                >
-                  2. Thứ tự Squads trong Sản phẩm
-                </button>
-              </div>
-
-              {/* Body Content */}
-              <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
-                {reorderModalTab === "products" ? (
-                  <div className="space-y-2">
-                    <p className="text-[11.5px] text-slate-500">
-                      Kéo thả hoặc dùng mũi tên để đổi thứ tự xuất hiện của các Sản phẩm trong hệ thống:
-                    </p>
-                    <div className="space-y-1.5">
-                      {products.map((pr, pIdx) => {
-                        const cDef = getProductColorDef(pr.name, pr.color)
-                        const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
-                        const isDragging = draggedProductIndex === pIdx
-
-                        return (
-                          <div
-                            key={`modal-reorder-pr-${pr.id}`}
-                            draggable
-                            onDragStart={() => handleProductDragStart(pIdx)}
-                            onDragOver={(e) => {
-                              if (draggedProductIndex !== null) e.preventDefault()
-                            }}
-                            onDrop={() => handleProductDrop(pIdx)}
-                            onDragEnd={() => setDraggedProductIndex(null)}
-                            className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
-                              isDragging ? "opacity-30 ring-2 ring-indigo-500 scale-98" : ""
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
-                                <GripVertical className="w-4 h-4" />
-                              </div>
-                              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
-                                {pIdx + 1}
-                              </span>
-                              <span className={`w-2.5 h-2.5 rounded-full ${cDef.dotClass} shrink-0`} />
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-800 truncate">{pr.name}</p>
-                                <p className="text-[11px] text-slate-400 truncate">{count} squads</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
-                              <button
-                                type="button"
-                                disabled={pIdx === 0}
-                                onClick={() => handleMoveProduct(pIdx, "prev")}
-                                className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
-                                title="Lên trên"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={pIdx === products.length - 1}
-                                onClick={() => handleMoveProduct(pIdx, "next")}
-                                className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
-                                title="Xuống dưới"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showReorderModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
+              <div
+                className="fixed inset-0 cursor-pointer"
+                onClick={() => setShowReorderModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative z-10 bg-white rounded-2xl p-5 sm:p-6 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl border border-slate-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center font-bold">
+                      <ArrowUpDown className="w-4 h-4" />
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {/* Select Product to sort squads */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                      {products.map((pr) => {
-                        const isSelected = (reorderModalSelectedProduct || products[0]?.name) === pr.name
-                        const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
-                        const cDef = getProductColorDef(pr.name, pr.color)
-
-                        return (
-                          <button
-                            key={`modal-prod-sel-${pr.id}`}
-                            type="button"
-                            onClick={() => setReorderModalSelectedProduct(pr.name)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 cursor-pointer border transition-all ${
-                              isSelected
-                                ? `${cDef.badgeClass} border-current font-bold shadow-2xs`
-                                : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"
-                            }`}
-                          >
-                            <span className={`w-2 h-2 rounded-full ${cDef.dotClass}`} />
-                            <span>{pr.name}</span>
-                            <span className="text-[10.5px] opacity-75">({count})</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Squads in the selected product */}
-                    {(() => {
-                      const curProd = products.find(
-                        (p) => p.name === (reorderModalSelectedProduct || products[0]?.name)
-                      )
-                      if (!curProd) return null
-                      const prodSquads = squads.filter((s) => isSquadBelongToProduct(s, curProd))
-
-                      if (prodSquads.length === 0) {
-                        return (
-                          <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                            <p className="text-xs text-slate-500">Sản phẩm này chưa có Squad nào.</p>
-                          </div>
-                        )
-                      }
-
-                      return (
-                        <div className="space-y-1.5">
-                          <p className="text-[11.5px] text-slate-500">
-                            Thứ tự các Squads trong sản phẩm <strong>{curProd.name}</strong> (ảnh hưởng trực tiếp khi chọn Squad trong form tạo/sửa yêu cầu):
-                          </p>
-                          {prodSquads.map((sq, sqIdx) => {
-                            const sqColorDef = getSquadColorDef(sq.name, sq.productName)
-                            const isDragging = draggedSquadInfo?.squadId === sq.id
-
-                            return (
-                              <div
-                                key={`modal-sq-sort-${sq.id}`}
-                                draggable
-                                onDragStart={() => handleSquadDragStart(curProd.id, sq.id)}
-                                onDragOver={(e) => {
-                                  if (draggedSquadInfo && draggedSquadInfo.productId === curProd.id) {
-                                    e.preventDefault()
-                                  }
-                                }}
-                                onDrop={() => handleSquadDrop(curProd.id, sq.id)}
-                                onDragEnd={() => setDraggedSquadInfo(null)}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
-                                  isDragging ? "opacity-30 ring-2 ring-blue-500 scale-98" : ""
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-                                  <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
-                                    {sqIdx + 1}
-                                  </span>
-                                  <span className={`w-2 h-2 rounded-full ${sqColorDef.dotClass} shrink-0`} />
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-bold text-slate-900 truncate">{sq.name}</p>
-                                    <p className="text-[11px] text-slate-400 truncate">
-                                      {sq.domain || "Nghiệp vụ trực thuộc"}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
-                                  <button
-                                    type="button"
-                                    disabled={sqIdx === 0}
-                                    onClick={() => handleMoveSquadInProduct(curProd.id, sq.id, "prev")}
-                                    className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
-                                    title="Lên trên"
-                                  >
-                                    <ArrowUp className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={sqIdx === prodSquads.length - 1}
-                                    onClick={() => handleMoveSquadInProduct(curProd.id, sq.id, "next")}
-                                    className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
-                                    title="Xuống dưới"
-                                  >
-                                    <ArrowDown className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })()}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-between shrink-0">
-                <span className="text-[11.5px] text-slate-400">
-                  Thứ tự được tự động lưu vào bộ nhớ và đồng bộ với Google Sheet
-                </span>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowReorderModal(false)}
-                  className="rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white cursor-pointer px-4"
-                >
-                  Hoàn tất
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ======================================================== */}
-      {/* MODAL: THÊM SẢN PHẨM MỚI (ADD PRODUCT MODAL)            */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {showAddProductModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-blue-600" />
-                  <span>Thêm Sản phẩm số mới (Parent)</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAddProductModal(false)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddProductSubmit} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">
-                    Tên Sản phẩm: <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    required
-                    value={newProdName}
-                    onChange={(e) => setNewProdName(e.target.value)}
-                    placeholder="VD: MB Ageas Life, Wealth Management..."
-                    className="text-xs rounded-lg border-slate-200 font-medium"
-                  />
-                </div>
-
-
-                {/* Chấm màu nhận diện sản phẩm */}
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                    Màu nhận diện sản phẩm:
-                  </label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {Object.values(PRODUCT_COLORS).map((c) => (
-                      <button
-                        key={`color-pick-${c.key}`}
-                        type="button"
-                        onClick={() => setNewProdColor(c.key)}
-                        className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
-                          newProdColor === c.key ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm" : "opacity-75 hover:opacity-100"
-                        }`}
-                        title={c.label}
-                      >
-                        {newProdColor === c.key && <Check className="w-3.5 h-3.5 text-white" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả sản phẩm:</label>
-                  <Textarea
-                    rows={2}
-                    value={newProdDesc}
-                    onChange={(e) => setNewProdDesc(e.target.value)}
-                    placeholder="Mô tả phạm vi khách hàng và nghiệp vụ của sản phẩm..."
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddProductModal(false)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    tactile
-                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Thêm Sản phẩm
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ======================================================== */}
-      {/* MODAL: CHỈNH SỬA SẢN PHẨM (EDIT PRODUCT MODAL)           */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {editingProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-blue-600" />
-                  <span>Sửa thông tin Sản phẩm: {editingProduct.name}</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateProductSubmit} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">
-                    Tên Sản phẩm: <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    required
-                    value={editingProduct.name}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                    className="text-xs rounded-lg border-slate-200 font-medium"
-                  />
-                </div>
-
-
-                {/* Chấm màu nhận diện sản phẩm */}
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                    Màu nhận diện sản phẩm:
-                  </label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {Object.values(PRODUCT_COLORS).map((c) => {
-                      const curColor = editingProduct.color || getProductColorDef(editingProduct.name).key
-                      const isSelected = curColor === c.key
-                      return (
-                        <button
-                          key={`edit-color-pick-${c.key}`}
-                          type="button"
-                          onClick={() => setEditingProduct({ ...editingProduct, color: c.key })}
-                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
-                            isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm" : "opacity-75 hover:opacity-100"
-                          }`}
-                          title={c.label}
-                        >
-                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả sản phẩm:</label>
-                  <Textarea
-                    rows={2}
-                    value={editingProduct.description || ""}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                    placeholder="Mô tả phạm vi khách hàng và nghiệp vụ..."
-                    className="text-xs rounded-lg border-slate-200"
-                  />
-                </div>
-
-                <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditingProduct(null)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    tactile
-                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8"
-                  >
-                    Lưu thay đổi
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-        {/* MODAL CẤU HÌNH QUY TẮC TRẠNG THÁI TỰ ĐỘNG (STATUS AUTOMATION RULE) */}
-        {editingStatusRule && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl p-5 sm:p-6 w-full max-w-4xl xl:max-w-5xl shadow-2xl border border-slate-200 my-auto max-h-[94vh] flex flex-col"
-            >
-              {/* Header Modal */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold">
-                    <Sliders className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
-                      <span>Cấu hình Quy tắc:</span>
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-medium text-xs border h-[22px] ${editingStatusRule.badgeClass}`}>
-                        <span className={`w-2 h-2 rounded-full ${editingStatusRule.dotClass}`} />
-                        {editingStatusRule.name}
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Tự động hóa điều kiện chuyển trạng thái, đồng bộ Khâu UX & kiểm soát đồng hồ SLA
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingStatusRule(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveStatusRuleSubmit} className="mt-4 flex flex-col flex-1 overflow-visible">
-                {/* 2-Column Grid Layout dàn đều ngang để không bị scroll dọc */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5 items-start">
-                  {/* CỘT 1: Nhận diện, Bảng chọn màu, Mô tả & Toggle tự động */}
-                  <div className="space-y-3">
-                    {/* Tên trạng thái */}
                     <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        Tên trạng thái nghiệp vụ: <span className="text-rose-500">*</span>
-                      </label>
-                      <Input
-                        required
-                        value={editingStatusRule.name}
-                        onChange={(e) =>
-                          setEditingStatusRule({ ...editingStatusRule, name: e.target.value })
-                        }
-                        placeholder="Ví dụ: Đang phân loại, Đang thực hiện..."
-                        className="text-xs rounded-lg border-slate-200 font-medium h-9"
-                      />
+                      <h3 className="text-base font-bold text-slate-900 leading-tight">
+                        Sắp xếp thứ tự Sản phẩm & Squads
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Thứ tự này sẽ áp dụng trực tiếp cho các Dropdown chọn Sản phẩm / Squad, bộ lọc và app
+                      </p>
                     </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowReorderModal(false)}
+                    className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-                    {/* BẢNG CHỌN MÀU NHẬN DIỆN TRẠNG THÁI */}
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                          <Tag className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>Chọn màu nhận diện trạng thái:</span>
-                        </label>
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${editingStatusRule.badgeClass}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${editingStatusRule.dotClass}`} />
-                          Xem trước
-                        </span>
+                {/* Tabs Switcher */}
+                <div className="flex items-center gap-2 pt-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setReorderModalTab("products")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                      reorderModalTab === "products"
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                    }`}
+                  >
+                    1. Thứ tự Sản phẩm ({products.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReorderModalTab("squads")
+                      if (!reorderModalSelectedProduct) {
+                        setReorderModalSelectedProduct(products[0]?.name || "")
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                      reorderModalTab === "squads"
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                    }`}
+                  >
+                    2. Thứ tự Squads trong Sản phẩm
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
+                  {reorderModalTab === "products" ? (
+                    <div className="space-y-2">
+                      <p className="text-[11.5px] text-slate-500">
+                        Kéo thả hoặc dùng mũi tên để đổi thứ tự xuất hiện của các Sản phẩm trong hệ thống:
+                      </p>
+                      <div className="space-y-1.5">
+                        {products.map((pr, pIdx) => {
+                          const cDef = getProductColorDef(pr.name, pr.color)
+                          const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
+                          const isDragging = draggedProductIndex === pIdx
+
+                          return (
+                            <div
+                              key={`modal-reorder-pr-${pr.id}`}
+                              draggable
+                              onDragStart={() => handleProductDragStart(pIdx)}
+                              onDragOver={(e) => {
+                                if (draggedProductIndex !== null) e.preventDefault()
+                              }}
+                              onDrop={() => handleProductDrop(pIdx)}
+                              onDragEnd={() => setDraggedProductIndex(null)}
+                              className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
+                                isDragging ? "opacity-30 ring-2 ring-indigo-500 scale-98" : ""
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                                  {pIdx + 1}
+                                </span>
+                                <span className={`w-2.5 h-2.5 rounded-full ${cDef.dotClass} shrink-0`} />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800 truncate">{pr.name}</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{count} squads</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                                <button
+                                  type="button"
+                                  disabled={pIdx === 0}
+                                  onClick={() => handleMoveProduct(pIdx, "prev")}
+                                  className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                  title="Lên trên"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={pIdx === products.length - 1}
+                                  onClick={() => handleMoveProduct(pIdx, "next")}
+                                  className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                  title="Xuống dưới"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Select Product to sort squads */}
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        {products.map((pr) => {
+                          const isSelected = (reorderModalSelectedProduct || products[0]?.name) === pr.name
+                          const cDef = getProductColorDef(pr.name, pr.color)
+                          const count = squads.filter((s) => isSquadBelongToProduct(s, pr)).length
 
-                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                        {Object.values(PRODUCT_COLORS).map((c) => {
-                          const isSelected = editingStatusRule.colorKey === c.key
                           return (
                             <button
-                              key={`status-color-pick-${c.key}`}
+                              key={`modal-reorder-select-pr-${pr.id}`}
                               type="button"
-                              onClick={() =>
-                                setEditingStatusRule({
-                                  ...editingStatusRule,
-                                  colorKey: c.key,
-                                  dotClass: c.dotClass,
-                                  badgeClass: c.badgeClass,
-                                })
-                              }
-                              className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center relative ${
+                              onClick={() => setReorderModalSelectedProduct(pr.name)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 flex items-center gap-1.5 cursor-pointer transition-all border ${
                                 isSelected
-                                  ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm"
-                                  : "opacity-75 hover:opacity-100 hover:scale-105"
+                                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                  : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                               }`}
-                              title={`${c.label} (${c.key})`}
                             >
-                              {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />}
+                              <span className={`w-2 h-2 rounded-full ${cDef.dotClass}`} />
+                              <span>{pr.name}</span>
+                              <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                                isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                              }`}>
+                                {count}
+                              </span>
                             </button>
                           )
                         })}
                       </div>
-                    </div>
 
-                    {/* Mô tả nghiệp vụ */}
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        Mô tả ý nghĩa nghiệp vụ:
-                      </label>
-                      <Textarea
-                        rows={2}
-                        value={editingStatusRule.desc}
-                        onChange={(e) =>
-                          setEditingStatusRule({ ...editingStatusRule, desc: e.target.value })
+                      {/* Squads in selected product */}
+                      {(() => {
+                        const targetProdName = reorderModalSelectedProduct || products[0]?.name || ""
+                        const targetProd = products.find((p) => p.name === targetProdName)
+                        const filteredSquads = squads.filter((s) => targetProd && isSquadBelongToProduct(s, targetProd))
+
+                        if (filteredSquads.length === 0) {
+                          return (
+                            <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
+                              Sản phẩm này chưa có squad nào. Hãy thêm squad mới trong bảng quản trị.
+                            </div>
+                          )
                         }
-                        placeholder="Giải thích mục đích và trạng thái này đại diện cho giai đoạn nào..."
-                        className="text-xs rounded-lg border-slate-200 leading-relaxed resize-none"
-                      />
-                    </div>
 
-                    {/* Toggle Tự động hóa */}
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                            <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Trạng thái Tự động hóa:</span>
-                          </label>
-                          <p className="text-[10.5px] text-slate-500 mt-0.5">
-                            {editingStatusRule.autoEnabled
-                              ? "Hệ thống tự động kích hoạt chuyển trạng thái khi khớp điều kiện."
-                              : "Đang tắt — Chỉ cập nhật thủ công bởi Designer hoặc Lead UX."}
-                          </p>
-                        </div>
-                        <label className="flex items-center cursor-pointer shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={editingStatusRule.autoEnabled}
-                            onChange={(e) =>
-                              setEditingStatusRule({
-                                ...editingStatusRule,
-                                autoEnabled: e.target.checked,
-                              })
-                            }
-                            className="sr-only peer"
-                          />
-                          <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600 relative" />
-                        </label>
-                      </div>
+                        return (
+                          <div className="space-y-1.5">
+                            <p className="text-[11.5px] text-slate-500">
+                              Kéo thả hoặc dùng mũi tên để đổi thứ tự xuất hiện của các Squad thuộc <strong>{targetProdName}</strong>:
+                            </p>
+                            {filteredSquads.map((sq, sIdx) => {
+                              const sColor = getSquadColorDef(sq.name, targetProdName, sq.color)
+                              const isDragging = draggedSquadId === sq.id
+
+                              return (
+                                <div
+                                  key={`modal-reorder-sq-${sq.id}`}
+                                  draggable
+                                  onDragStart={() => handleSquadDragStart(sq.id)}
+                                  onDragOver={(e) => {
+                                    if (draggedSquadId !== null) e.preventDefault()
+                                  }}
+                                  onDrop={() => handleSquadDrop(sq.id, targetProdName)}
+                                  onDragEnd={() => setDraggedSquadId(null)}
+                                  className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
+                                    isDragging ? "opacity-30 ring-2 ring-indigo-500 scale-98" : ""
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                                      {sIdx + 1}
+                                    </span>
+                                    <span className={`w-2.5 h-2.5 rounded-full ${sColor.dotClass} shrink-0`} />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-slate-800 truncate">{sq.name}</p>
+                                      {sq.domain && (
+                                        <p className="text-[11px] text-slate-400 truncate">{sq.domain}</p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                                    <button
+                                      type="button"
+                                      disabled={sIdx === 0}
+                                      onClick={() => handleMoveSquad(sq.id, targetProdName, "prev")}
+                                      className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                      title="Lên trên"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={sIdx === filteredSquads.length - 1}
+                                      onClick={() => handleMoveSquad(sq.id, targetProdName, "next")}
+                                      className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
+                                      title="Xuống dưới"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-between shrink-0">
+                  <span className="text-[11.5px] text-slate-400">
+                    Thứ tự được tự động lưu vào bộ nhớ và đồng bộ với Google Sheet
+                  </span>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowReorderModal(false)}
+                    className="rounded-xl text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white cursor-pointer px-4 h-9"
+                  >
+                    Hoàn tất
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: THÊM SẢN PHẨM MỚI (ADD PRODUCT MODAL)            */}
+      {/* ======================================================== */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showAddProductModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+              onClick={() => setShowAddProductModal(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 space-y-4 my-auto"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span>Thêm Sản phẩm số mới (Parent)</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddProductModal(false)}
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddProductSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">
+                      Tên Sản phẩm: <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      required
+                      value={newProdName}
+                      onChange={(e) => setNewProdName(e.target.value)}
+                      placeholder="VD: MB Ageas Life, Wealth Management..."
+                      className="text-xs rounded-xl border-slate-200 font-medium h-9"
+                    />
+                  </div>
+
+
+                  {/* Chấm màu nhận diện sản phẩm */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                      Màu nhận diện sản phẩm:
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {Object.values(PRODUCT_COLORS).map((c) => (
+                        <button
+                          key={`color-pick-${c.key}`}
+                          type="button"
+                          onClick={() => setNewProdColor(c.key)}
+                          className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
+                            newProdColor === c.key ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm" : "opacity-75 hover:opacity-100"
+                          }`}
+                          title={c.label}
+                        >
+                          {newProdColor === c.key && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* CỘT 2: Sự kiện Trigger, Ánh xạ khâu UX & Hành vi SLA */}
-                  <div className="space-y-3">
-                    {/* 1. Sự kiện kích hoạt tự động (Automation Trigger) */}
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5 text-amber-500" />
-                          <span>Sự kiện kích hoạt tự động:</span>
-                        </label>
-                        <span className="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                          {editingStatusRule.triggerEvent}
-                        </span>
-                      </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả sản phẩm:</label>
+                    <Textarea
+                      rows={2}
+                      value={newProdDesc}
+                      onChange={(e) => setNewProdDesc(e.target.value)}
+                      placeholder="Mô tả phạm vi khách hàng và nghiệp vụ của sản phẩm..."
+                      className="text-xs rounded-xl border-slate-200 resize-none"
+                    />
+                  </div>
 
-                      <DropdownMenu
-                        options={TRIGGER_EVENT_OPTIONS}
-                        value={editingStatusRule.triggerEvent}
-                        onChange={(newVal) => {
-                          const newEvent = newVal as StatusAutomationRule["triggerEvent"]
-                          const matched = TRIGGER_EVENT_OPTIONS.find((o) => o.value === newEvent)
-                          setEditingStatusRule({
-                            ...editingStatusRule,
-                            triggerEvent: newEvent,
-                            triggerDescription: matched ? matched.label : editingStatusRule.triggerDescription,
-                          })
-                        }}
-                        className="w-full"
-                        buttonClassName="h-9 px-3 w-full bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-lg shadow-2xs"
-                        menuClassName="w-full min-w-[340px] max-h-72 overflow-y-auto shadow-xl border border-slate-200 rounded-xl"
-                        placeholder="Chọn sự kiện kích hoạt..."
-                      />
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAddProductModal(false)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      tactile
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Thêm Sản phẩm
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
-                      <Input
-                        value={editingStatusRule.triggerDescription}
-                        onChange={(e) =>
-                          setEditingStatusRule({
-                            ...editingStatusRule,
-                            triggerDescription: e.target.value,
-                          })
-                        }
-                        placeholder="Ví dụ: PO mới gửi bài toán HOẶC chưa phân công UX Designer"
-                        className="text-xs rounded-lg border-slate-200 bg-white h-7 text-[11px]"
-                      />
+      {/* ======================================================== */}
+      {/* MODAL: CHỈNH SỬA SẢN PHẨM (EDIT PRODUCT MODAL)           */}
+      {/* ======================================================== */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingProduct && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+              onClick={() => setEditingProduct(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 space-y-4 my-auto"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Edit3 className="w-4 h-4 text-blue-600" />
+                    <span>Sửa thông tin Sản phẩm: {editingProduct.name}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingProduct(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleUpdateProductSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">
+                      Tên Sản phẩm: <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      required
+                      value={editingProduct.name}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                      className="text-xs rounded-xl border-slate-200 font-medium h-9"
+                    />
+                  </div>
+
+
+                  {/* Chấm màu nhận diện sản phẩm */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                      Màu nhận diện sản phẩm:
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {Object.values(PRODUCT_COLORS).map((c) => {
+                        const curColor = editingProduct.color || getProductColorDef(editingProduct.name).key
+                        const isSelected = curColor === c.key
+                        return (
+                          <button
+                            key={`edit-color-pick-${c.key}`}
+                            type="button"
+                            onClick={() => setEditingProduct({ ...editingProduct, color: c.key })}
+                            className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center ${
+                              isSelected ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm" : "opacity-75 hover:opacity-100"
+                            }`}
+                            title={c.label}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                          </button>
+                        )
+                      })}
                     </div>
+                  </div>
 
-                    {/* 2. Ánh xạ Khâu UX trong Quy trình */}
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                          <Workflow className="w-3.5 h-3.5 text-blue-500" />
-                          <span>Ánh xạ Khâu UX trong Quy trình:</span>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 block mb-1">Mô tả sản phẩm:</label>
+                    <Textarea
+                      rows={2}
+                      value={editingProduct.description || ""}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                      placeholder="Mô tả phạm vi khách hàng và nghiệp vụ..."
+                      className="text-xs rounded-xl border-slate-200 resize-none"
+                    />
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditingProduct(null)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      tactile
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4"
+                    >
+                      Lưu thay đổi
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+      {/* MODAL CẤU HÌNH QUY TẮC TRẠNG THÁI TỰ ĐỘNG (STATUS AUTOMATION RULE) */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingStatusRule && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+              onClick={() => setEditingStatusRule(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl p-5 sm:p-6 w-full max-w-4xl xl:max-w-5xl shadow-2xl border border-slate-200 my-auto max-h-[94vh] flex flex-col"
+              >
+                {/* Header Modal */}
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold">
+                      <Sliders className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
+                        <span>Cấu hình Quy tắc:</span>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-medium text-xs border h-[22px] ${editingStatusRule.badgeClass}`}>
+                          <span className={`w-2 h-2 rounded-full ${editingStatusRule.dotClass}`} />
+                          {editingStatusRule.name}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Tự động hóa điều kiện chuyển trạng thái, đồng bộ Khâu UX & kiểm soát đồng hồ SLA
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingStatusRule(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors rounded-lg hover:bg-slate-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveStatusRuleSubmit} className="mt-4 flex flex-col flex-1 overflow-visible">
+                  {/* 2-Column Grid Layout dàn đều ngang để không bị scroll dọc */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5 items-start">
+                    {/* CỘT 1: Nhận diện, Bảng chọn màu, Mô tả & Toggle tự động */}
+                    <div className="space-y-3">
+                      {/* Tên trạng thái */}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-700 block mb-1">
+                          Tên trạng thái nghiệp vụ: <span className="text-rose-500">*</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingStatusRule({
-                              ...editingStatusRule,
-                              mappedPhaseIds: [],
-                              mappedPhaseNames: "Không cố định (Áp dụng mọi khâu)",
-                            })
-                          }}
-                          className="text-[10.5px] text-blue-600 hover:underline px-1 py-0.5 rounded cursor-pointer font-medium"
-                        >
-                          Áp dụng toàn trình
-                        </button>
+                        <Input
+                          required
+                          value={editingStatusRule.name}
+                          onChange={(e) =>
+                            setEditingStatusRule({ ...editingStatusRule, name: e.target.value })
+                          }
+                          placeholder="Ví dụ: Đang phân loại, Đang thực hiện..."
+                          className="text-xs rounded-xl border-slate-200 font-medium h-9"
+                        />
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                        {uxPhases.map((phase) => {
-                          const isChecked = editingStatusRule.mappedPhaseIds.includes(phase.id)
-                          return (
-                            <label
-                              key={phase.id}
-                              className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all ${
-                                isChecked
-                                  ? "bg-blue-50/80 border-blue-200 text-blue-900 font-medium"
-                                  : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100/60"
-                              }`}
-                            >
-                              <div
-                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all shrink-0 ${
-                                  isChecked
-                                    ? "bg-[#1057FB] border-[#1057FB] text-white"
-                                    : "bg-white border-slate-300"
-                                }`}
-                              >
-                                {isChecked && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  let nextIds: string[]
-                                  if (e.target.checked) {
-                                    nextIds = [...editingStatusRule.mappedPhaseIds, phase.id]
-                                  } else {
-                                    nextIds = editingStatusRule.mappedPhaseIds.filter((id) => id !== phase.id)
-                                  }
-                                  let autoNames = ""
-                                  if (nextIds.length === 0) {
-                                    autoNames = "Không cố định (Áp dụng mọi khâu)"
-                                  } else {
-                                    const selectedPhases = uxPhases.filter((p) => nextIds.includes(p.id))
-                                    if (selectedPhases.length === 1) {
-                                      autoNames = `Khâu ${selectedPhases[0].step}: ${selectedPhases[0].name}`
-                                    } else {
-                                      const sorted = [...selectedPhases].sort((a, b) => a.step - b.step)
-                                      autoNames = `Khâu ${sorted[0].step}: ${sorted[0].name} → Khâu ${sorted[sorted.length - 1].step}: ${sorted[sorted.length - 1].name}`
-                                    }
-                                  }
+                      {/* BẢNG CHỌN MÀU NHẬN DIỆN TRẠNG THÁI */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Chọn màu nhận diện trạng thái:</span>
+                          </label>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${editingStatusRule.badgeClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${editingStatusRule.dotClass}`} />
+                            Xem trước
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                          {Object.values(PRODUCT_COLORS).map((c) => {
+                            const isSelected = editingStatusRule.colorKey === c.key
+                            return (
+                              <button
+                                key={`status-color-pick-${c.key}`}
+                                type="button"
+                                onClick={() =>
                                   setEditingStatusRule({
                                     ...editingStatusRule,
-                                    mappedPhaseIds: nextIds,
-                                    mappedPhaseNames: autoNames,
+                                    colorKey: c.key,
+                                    dotClass: c.dotClass,
+                                    badgeClass: c.badgeClass,
                                   })
-                                }}
-                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
-                              />
-                              <span className="truncate">
-                                {phase.step}. {phase.name}
-                              </span>
-                            </label>
-                          )
-                        })}
+                                }
+                                className={`w-7 h-7 rounded-full ${c.dotClass} transition-all cursor-pointer flex items-center justify-center relative ${
+                                  isSelected
+                                    ? "ring-2 ring-offset-2 ring-slate-900 scale-110 shadow-sm"
+                                    : "opacity-75 hover:opacity-100 hover:scale-105"
+                                }`}
+                                title={`${c.label} (${c.key})`}
+                              >
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
 
-                      <Input
-                        value={editingStatusRule.mappedPhaseNames}
-                        onChange={(e) =>
-                          setEditingStatusRule({
-                            ...editingStatusRule,
-                            mappedPhaseNames: e.target.value,
-                          })
-                        }
-                        placeholder="Nhãn hiển thị khâu..."
-                        className="text-xs rounded-lg border-slate-200 bg-white h-7 text-[11px]"
-                      />
+                      {/* Mô tả nghiệp vụ */}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-700 block mb-1">
+                          Mô tả ý nghĩa nghiệp vụ:
+                        </label>
+                        <Textarea
+                          rows={2}
+                          value={editingStatusRule.desc}
+                          onChange={(e) =>
+                            setEditingStatusRule({ ...editingStatusRule, desc: e.target.value })
+                          }
+                          placeholder="Giải thích mục đích và trạng thái này đại diện cho giai đoạn nào..."
+                          className="text-xs rounded-xl border-slate-200 leading-relaxed resize-none"
+                        />
+                      </div>
+
+                      {/* Toggle Tự động hóa */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                              <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Trạng thái Tự động hóa:</span>
+                            </label>
+                            <p className="text-[10.5px] text-slate-500 mt-0.5">
+                              {editingStatusRule.autoEnabled
+                                ? "Hệ thống tự động kích hoạt chuyển trạng thái khi khớp điều kiện."
+                                : "Đang tắt — Chỉ cập nhật thủ công bởi Designer hoặc Lead UX."}
+                            </p>
+                          </div>
+                          <label className="flex items-center cursor-pointer shrink-0 ml-3">
+                            <input
+                              type="checkbox"
+                              checked={editingStatusRule.autoEnabled}
+                              onChange={(e) =>
+                                setEditingStatusRule({
+                                  ...editingStatusRule,
+                                  autoEnabled: e.target.checked,
+                                })
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600 relative" />
+                          </label>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* 3. Hành vi SLA */}
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                      <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Hành vi Đồng hồ SLA:</span>
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* CỘT 2: Sự kiện Trigger, Ánh xạ khâu UX & Hành vi SLA */}
+                    <div className="space-y-3">
+                      {/* 1. Sự kiện kích hoạt tự động (Automation Trigger) */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Sự kiện kích hoạt tự động:</span>
+                          </label>
+                          <span className="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                            {editingStatusRule.triggerEvent}
+                          </span>
+                        </div>
+
                         <DropdownMenu
-                          options={SLA_ACTION_OPTIONS}
-                          value={editingStatusRule.slaAction}
-                          onChange={(nextVal) => {
-                            const nextAction = nextVal as StatusAutomationRule["slaAction"]
-                            let nextLabel = editingStatusRule.slaActionLabel
-                            if (nextAction === "start") nextLabel = "Kích hoạt tính SLA Tiếp nhận"
-                            if (nextAction === "run") nextLabel = "Đồng bộ tiến độ % và chạy SLA Thiết kế"
-                            if (nextAction === "pause") nextLabel = "Tạm dừng đồng hồ SLA (Không bị phạt hạn)"
-                            if (nextAction === "complete") nextLabel = "Dừng SLA, chốt chỉ số KPI hoàn thành"
-                            if (nextAction === "alert") nextLabel = "Gắn cờ đỏ cảnh báo và gửi email Lead UX"
+                          options={TRIGGER_EVENT_OPTIONS}
+                          value={editingStatusRule.triggerEvent}
+                          onChange={(newVal) => {
+                            const newEvent = newVal as StatusAutomationRule["triggerEvent"]
+                            const matched = TRIGGER_EVENT_OPTIONS.find((o) => o.value === newEvent)
                             setEditingStatusRule({
                               ...editingStatusRule,
-                              slaAction: nextAction,
-                              slaActionLabel: nextLabel,
+                              triggerEvent: newEvent,
+                              triggerDescription: matched ? matched.label : editingStatusRule.triggerDescription,
                             })
                           }}
                           className="w-full"
-                          buttonClassName="h-9 px-3 w-full bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-lg shadow-2xs"
-                          menuClassName="w-full min-w-[220px] max-h-60 overflow-y-auto shadow-xl border border-slate-200 rounded-xl"
-                          placeholder="Chọn hành vi SLA..."
+                          buttonClassName="h-9 px-3 w-full bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-xl shadow-2xs"
+                          menuClassName="w-full min-w-[340px] max-h-72 overflow-y-auto shadow-xl border border-slate-200 rounded-xl"
+                          placeholder="Chọn sự kiện kích hoạt..."
                         />
 
                         <Input
-                          value={editingStatusRule.slaActionLabel}
+                          value={editingStatusRule.triggerDescription}
                           onChange={(e) =>
                             setEditingStatusRule({
                               ...editingStatusRule,
-                              slaActionLabel: e.target.value,
+                              triggerDescription: e.target.value,
                             })
                           }
-                          placeholder="Nhãn hành vi SLA..."
-                          className="text-xs rounded-lg border-slate-200 bg-white h-8"
+                          placeholder="Ví dụ: PO mới gửi bài toán HOẶC chưa phân công UX Designer"
+                          className="text-xs rounded-xl border-slate-200 bg-white h-8 text-[11px]"
                         />
+                      </div>
+
+                      {/* 2. Ánh xạ Khâu UX trong Quy trình */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                            <Workflow className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Ánh xạ Khâu UX trong Quy trình:</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStatusRule({
+                                ...editingStatusRule,
+                                mappedPhaseIds: [],
+                                mappedPhaseNames: "Không cố định (Áp dụng mọi khâu)",
+                              })
+                            }}
+                            className="text-[10.5px] text-blue-600 hover:underline px-1 py-0.5 rounded cursor-pointer font-medium"
+                          >
+                            Áp dụng toàn trình
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {uxPhases.map((phase) => {
+                            const phaseIds = editingStatusRule?.mappedPhaseIds || []
+                            const isChecked = phaseIds.includes(phase.id)
+                            return (
+                              <label
+                                key={phase.id}
+                                className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all ${
+                                  isChecked
+                                    ? "bg-blue-50/80 border-blue-200 text-blue-900 font-medium"
+                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100/60"
+                                }`}
+                              >
+                                <div
+                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all shrink-0 ${
+                                    isChecked
+                                      ? "bg-slate-900 border-slate-900 text-white"
+                                      : "bg-white border-slate-300"
+                                  }`}
+                                >
+                                  {isChecked && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    let nextIds: string[]
+                                    if (e.target.checked) {
+                                      nextIds = [...phaseIds, phase.id]
+                                    } else {
+                                      nextIds = phaseIds.filter((id) => id !== phase.id)
+                                    }
+                                    let autoNames = ""
+                                    if (nextIds.length === 0) {
+                                      autoNames = "Không cố định (Áp dụng mọi khâu)"
+                                    } else {
+                                      const selectedPhases = uxPhases.filter((p) => nextIds.includes(p.id))
+                                      if (selectedPhases.length === 1) {
+                                        autoNames = `Khâu ${selectedPhases[0].step}: ${selectedPhases[0].name}`
+                                      } else {
+                                        const sorted = [...selectedPhases].sort((a, b) => a.step - b.step)
+                                        autoNames = `Khâu ${sorted[0].step}: ${sorted[0].name} → Khâu ${sorted[sorted.length - 1].step}: ${sorted[sorted.length - 1].name}`
+                                      }
+                                    }
+                                    setEditingStatusRule({
+                                      ...editingStatusRule,
+                                      mappedPhaseIds: nextIds,
+                                      mappedPhaseNames: autoNames,
+                                    })
+                                  }}
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 sr-only"
+                                />
+                                <span className="truncate">
+                                  {phase.step}. {phase.name}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+
+                        <Input
+                          value={editingStatusRule.mappedPhaseNames}
+                          onChange={(e) =>
+                            setEditingStatusRule({
+                              ...editingStatusRule,
+                              mappedPhaseNames: e.target.value,
+                            })
+                          }
+                          placeholder="Nhãn hiển thị khâu..."
+                          className="text-xs rounded-xl border-slate-200 bg-white h-8 text-[11px]"
+                        />
+                      </div>
+
+                      {/* 3. Hành vi SLA */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <label className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Hành vi Đồng hồ SLA:</span>
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <DropdownMenu
+                            options={SLA_ACTION_OPTIONS}
+                            value={editingStatusRule.slaAction}
+                            onChange={(nextVal) => {
+                              const nextAction = nextVal as StatusAutomationRule["slaAction"]
+                              let nextLabel = editingStatusRule.slaActionLabel
+                              if (nextAction === "start") nextLabel = "Kích hoạt tính SLA Tiếp nhận"
+                              if (nextAction === "run") nextLabel = "Đồng bộ tiến độ % và chạy SLA Thiết kế"
+                              if (nextAction === "pause") nextLabel = "Tạm dừng đồng hồ SLA (Không bị phạt hạn)"
+                              if (nextAction === "complete") nextLabel = "Dừng SLA, chốt chỉ số KPI hoàn thành"
+                              if (nextAction === "alert") nextLabel = "Gắn cờ đỏ cảnh báo và gửi email Lead UX"
+                              setEditingStatusRule({
+                                ...editingStatusRule,
+                                slaAction: nextAction,
+                                slaActionLabel: nextLabel,
+                              })
+                            }}
+                            className="w-full"
+                            buttonClassName="h-9 px-3 w-full bg-white hover:bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 rounded-xl shadow-2xs"
+                            menuClassName="w-full min-w-[220px] max-h-60 overflow-y-auto shadow-xl border border-slate-200 rounded-xl"
+                            placeholder="Chọn hành vi SLA..."
+                          />
+
+                          <Input
+                            value={editingStatusRule.slaActionLabel}
+                            onChange={(e) =>
+                              setEditingStatusRule({
+                                ...editingStatusRule,
+                                slaActionLabel: e.target.value,
+                              })
+                            }
+                            placeholder="Nhãn hành vi SLA..."
+                            className="text-xs rounded-xl border-slate-200 bg-white h-9"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Footer Buttons */}
-                <div className="pt-3.5 mt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditingStatusRule(null)}
-                    className="rounded-lg text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-8"
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    tactile
-                    className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-8 gap-1.5"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Lưu cấu hình quy tắc</span>
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                  {/* Footer Buttons */}
+                  <div className="pt-3.5 mt-3 flex justify-end gap-2 border-t border-slate-200 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditingStatusRule(null)}
+                      className="rounded-xl text-xs font-medium cursor-pointer bg-white border-slate-200 hover:bg-slate-50 text-slate-700 h-9 px-4"
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      tactile
+                      className="rounded-xl text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 cursor-pointer shadow-xs h-9 px-4 gap-1.5"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Lưu cấu hình quy tắc</span>
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
     </main>
   )

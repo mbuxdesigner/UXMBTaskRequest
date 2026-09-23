@@ -297,6 +297,21 @@ function doGet(e) {
       });
     }
 
+    if (action === "get_team_leaves" || action === "get_leaves") {
+      const forceRefresh = Boolean(e && e.parameter && e.parameter.refresh === "true");
+      const leaves = fetchTeamLeavesData(forceRefresh);
+      return createJsonResponse({
+        status: "success",
+        total: leaves.length,
+        leaves: leaves,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "get_all_operational_data" || action === "get_planner_data") {
+      return handleGetUnifiedOperationalData(e);
+    }
+
     if (action === "get_master_data") {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
@@ -306,6 +321,7 @@ function doGet(e) {
       }
       const masterData = readMasterDataFromSettingsSheet(rawSettings);
       const members = getOrInitTeamMembers(ss);
+      const leaves = fetchTeamLeavesData(false);
       return createJsonResponse({
         status: "success",
         master_data: masterData,
@@ -318,6 +334,7 @@ function doGet(e) {
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: members,
+        team_leaves: leaves,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
         session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
@@ -423,6 +440,7 @@ function doPost(e) {
       }
       const masterData = readMasterDataFromSettingsSheet(rawSettings);
       const members = getOrInitTeamMembers(ss);
+      const leaves = fetchTeamLeavesData(false);
       return createJsonResponse({
         status: "success",
         master_data: masterData,
@@ -435,11 +453,29 @@ function doPost(e) {
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: members,
+        team_leaves: leaves,
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
         session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
+    }
+
+    // 12c. ACTION: GET TEAM LEAVES
+    if (action === "get_team_leaves" || action === "get_leaves") {
+      const forceRefresh = Boolean(data.refresh === true || data.refresh === "true");
+      const leaves = fetchTeamLeavesData(forceRefresh);
+      return createJsonResponse({
+        status: "success",
+        total: leaves.length,
+        leaves: leaves,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 12d. ACTION: GET UNIFIED OPERATIONAL DATA
+    if (action === "get_all_operational_data" || action === "get_planner_data") {
+      return handleGetUnifiedOperationalData(data);
     }
 
     if (action === "get_team_members" || action === "get_users") {
@@ -3532,5 +3568,211 @@ function handleGetSubmissions() {
 
   return createJsonResponse({ status: "success", submissions: submissions });
 }
+
+/**
+ * ==============================================================================
+ * TÍCH HỢP ĐỒNG BỘ LỊCH NGHỈ PHÉP NHÂN SỰ UXMB (TEAM LEAVES SYNC)
+ * Nguồn: Spreadsheet ID: 1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg, GID: 917777763
+ * Quy tắc: Bóc tách Cột C, D, E, G; Cột G trống => TỰ ĐỘNG BỎ QUA.
+ * ==============================================================================
+ */
+const LEAVE_SYNC_CONFIG = {
+  SPREADSHEET_ID: "1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg",
+  SHEET_GID: "917777763",
+  CACHE_KEY: "UXMB_CACHED_TEAM_LEAVES_DATA_V1",
+  CACHE_TTL_SECONDS: 300 // 5 phút cache
+};
+
+function fetchTeamLeavesData(forceRefresh) {
+  try {
+    const cache = CacheService.getScriptCache();
+    if (!forceRefresh) {
+      const cached = cache.get(LEAVE_SYNC_CONFIG.CACHE_KEY);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {}
+      }
+    }
+
+    let rows = [];
+
+    // LỚP 1: Mở trực tiếp bằng SpreadsheetApp
+    try {
+      const ss = SpreadsheetApp.openById(LEAVE_SYNC_CONFIG.SPREADSHEET_ID);
+      const sheets = ss.getSheets();
+      let targetSheet = null;
+      for (let i = 0; i < sheets.length; i++) {
+        if (sheets[i].getSheetId().toString() === LEAVE_SYNC_CONFIG.SHEET_GID.toString()) {
+          targetSheet = sheets[i];
+          break;
+        }
+      }
+      if (!targetSheet && sheets.length > 0) targetSheet = sheets[0];
+      if (targetSheet) {
+        const values = targetSheet.getDataRange().getValues();
+        if (values && values.length > 1) {
+          rows = values.slice(1);
+        }
+      }
+    } catch (errDirect) {
+      Logger.log("Chuyển sang Fallback UrlFetchApp: " + errDirect);
+    }
+
+    // LỚP 2: Fallback qua UrlFetchApp Google Visualization CSV
+    if (!rows || rows.length === 0) {
+      const exportUrl = "https://docs.google.com/spreadsheets/d/" + 
+        LEAVE_SYNC_CONFIG.SPREADSHEET_ID + 
+        "/gviz/tq?tqx=out:csv&gid=" + 
+        LEAVE_SYNC_CONFIG.SHEET_GID;
+
+      const response = UrlFetchApp.fetch(exportUrl, {
+        muteHttpExceptions: true,
+        headers: { "Accept": "text/csv; charset=UTF-8" }
+      });
+
+      if (response.getResponseCode() === 200) {
+        const csvContent = response.getContentText("UTF-8");
+        rows = parseCsvDataRows(csvContent);
+      }
+    }
+
+    // Bóc tách dữ liệu 4 cột C, D, E, G
+    const cleanLeaves = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length < 4) continue;
+
+      let dateRaw = String(row[2] || "").trim();
+      if (row[2] instanceof Date) {
+        dateRaw = Utilities.formatDate(row[2], "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
+      }
+
+      const leaveTypeRaw = String(row[3] || "").trim();
+      const reason = String(row[4] || "").trim();
+      const userName = String(row[5] || "").trim();
+      let emailMbRaw = String(row[6] || "").trim().toLowerCase();
+
+      // BỎ QUA NẾU CỘT G TRỐNG
+      if (!emailMbRaw) continue;
+
+      const emails = emailMbRaw.match(/[a-zA-Z0-9._%+-]+@mbbank\.com\.vn/g) || [emailMbRaw];
+      for (let j = 0; j < emails.length; j++) {
+        const email = emails[j];
+
+        let leaveType = "full_day";
+        const lowerType = leaveTypeRaw.toLowerCase();
+        if (lowerType.indexOf("sáng") !== -1) {
+          leaveType = "morning";
+        } else if (lowerType.indexOf("chiều") !== -1) {
+          leaveType = "afternoon";
+        } else if (lowerType.indexOf("nửa ngày") !== -1) {
+          leaveType = "half_day";
+        }
+
+        let isoDate = "";
+        const parts = dateRaw.split("/");
+        if (parts.length === 3) {
+          isoDate = parts[2] + "-" + 
+            (parts[1].length < 2 ? "0" + parts[1] : parts[1]) + "-" + 
+            (parts[0].length < 2 ? "0" + parts[0] : parts[0]);
+        }
+
+        const usernamePrefix = email.split("@")[0];
+        const recordId = "LEAVE_" + (isoDate || dateRaw).replace(/[^0-9]/g, "") + "_" + usernamePrefix;
+
+        cleanLeaves.push({
+          id: recordId,
+          date: dateRaw,
+          iso_date: isoDate,
+          leave_type: leaveType,
+          leave_type_raw: leaveTypeRaw,
+          reason: reason,
+          user_name: userName,
+          email: email,
+          synced_at: new Date().toISOString()
+        });
+      }
+    }
+
+    try {
+      cache.put(LEAVE_SYNC_CONFIG.CACHE_KEY, JSON.stringify(cleanLeaves), LEAVE_SYNC_CONFIG.CACHE_TTL_SECONDS);
+    } catch (e) {}
+
+    return cleanLeaves;
+  } catch (err) {
+    Logger.log("Lỗi fetchTeamLeavesData: " + err);
+    return [];
+  }
+}
+
+function parseCsvDataRows(csvText) {
+  const lines = csvText.split(/\r?\n/);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const row = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let c = 0; c < line.length; c++) {
+      const char = line[c];
+      if (char === '"') {
+        if (inQuotes && line[c + 1] === '"') {
+          cur += '"';
+          c++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === "," && !inQuotes) {
+        row.push(cur.replace(/^"|"$/g, "").trim());
+        cur = "";
+      } else {
+        cur += char;
+      }
+    }
+    row.push(cur.replace(/^"|"$/g, "").trim());
+    rows.push(row);
+  }
+  return rows;
+}
+
+function handleGetUnifiedOperationalData(data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let requests = [];
+    if (typeof getAllRequestsFromSheet === "function") {
+      requests = getAllRequestsFromSheet();
+    }
+    let members = [];
+    if (typeof getOrInitTeamMembers === "function") {
+      members = getOrInitTeamMembers(ss);
+    }
+    const leaves = fetchTeamLeavesData(false);
+    let masterData = null;
+    let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+    if (rawSettings && typeof readMasterDataFromSettingsSheet === "function") {
+      masterData = readMasterDataFromSettingsSheet(rawSettings);
+    }
+
+    return createJsonResponse({
+      status: "success",
+      total_requests: requests.length,
+      total_members: members.length,
+      total_leaves: leaves.length,
+      requests: requests,
+      members: members,
+      leaves: leaves,
+      master_data: masterData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    return createJsonResponse({
+      status: "error",
+      message: "Lỗi handleGetUnifiedOperationalData: " + error.toString()
+    });
+  }
+}
+
 
 

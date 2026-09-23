@@ -92,7 +92,7 @@ export function DatePicker({
   const dayHeaders = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative ${isOpen ? "z-40" : ""} ${className}`} ref={containerRef}>
       {/* Trigger Button - 2-Line Container matching reference design */}
       {label ? (
         <button

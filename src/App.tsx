@@ -55,6 +55,7 @@ const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
 const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
 const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
 const IAPage = lazy(() => import("./pages/IAPage"))
+const CalendarPage = lazy(() => import("./pages/CalendarPage"))
 
 // Route Preloaders (dynamic import on demand)
 export const preloadPage = (targetPage: Page) => {
@@ -67,6 +68,9 @@ export const preloadPage = (targetPage: Page) => {
       break
     case "track":
       import("./pages/TrackRequestPage")
+      break
+    case "calendar":
+      import("./pages/CalendarPage")
       break
     case "manage":
       import("./pages/QuanLyPage")
@@ -86,6 +90,7 @@ export const preloadPage = (targetPage: Page) => {
 function PageLoadingSkeleton({ page }: { page: Page }) {
   switch (page) {
     case "overview":
+    case "calendar":
       return <DashboardSkeleton />
 
     case "track":
@@ -127,7 +132,7 @@ export default function App() {
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
     const rawHash = window.location.hash.replace(/^#/, "").split("?")[0] as Page
-    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia"]
+    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia", "calendar"]
     const targetPage = validPages.includes(rawHash)
       ? rawHash
       : (s?.role === "PO" || s?.role === "Business"
@@ -202,6 +207,8 @@ export default function App() {
       compressor: "Công cụ nén ảnh Client-side — MB UX Request Portal",
 
       ia: "Information Architecture — MB UX Request Portal",
+
+      calendar: "Lịch & UX Team Planner — MB UX Request Portal",
     }
 
     document.title =
@@ -283,7 +290,8 @@ export default function App() {
         hash === "create" ||
         hash === "test" ||
         hash === "compressor" ||
-        hash === "ia"
+        hash === "ia" ||
+        hash === "calendar"
       ) {
         setPage((prev) => (prev !== (hash as Page) ? (hash as Page) : prev))
       }
@@ -412,12 +420,12 @@ export default function App() {
             }
           />
 
-          {/* Main Content View: Tách biệt IA Canvas toàn màn hình và các trang cuộn tiêu chuẩn để loại bỏ hoàn toàn hiện tượng nháy layout */}
+          {/* Main Content View: Tách biệt IA Canvas & Calendar Planner toàn màn hình và các trang cuộn tiêu chuẩn để loại bỏ hoàn toàn hiện tượng nháy layout */}
           <Suspense fallback={<PageLoadingSkeleton page={page} />}>
-            {page === "ia" ? (
-              <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+            {page === "ia" || page === "calendar" ? (
+              <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] overflow-hidden">
                 <ErrorBoundary>
-                  <IAPage />
+                  {page === "ia" ? <IAPage /> : <CalendarPage />}
                 </ErrorBoundary>
               </div>
             ) : (

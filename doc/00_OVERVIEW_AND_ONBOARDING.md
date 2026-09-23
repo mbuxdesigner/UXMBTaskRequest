@@ -61,8 +61,11 @@ Deploy App/doc/
 │   ├── 📈 11_DASHBOARD_AND_AIOPS_REUI.md
 │   │   └── Đọc khi: Sửa/Làm mới Dashboard điều hành AIOps, Biểu đồ Donut Backlog & Pending (@reui/c-chart-20), Biểu đồ Line Squad Trending (@reui/c-chart-17), NewsFeed Timeline ngược & auto-scroll (@reui/c-timeline-3), Thẻ task Ảnh 4 (Reviewing sources), Double Shell Cards, Lọc theo Tab sản phẩm Admin.
 │   │
-│   └── ⚙️ 12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md
-│       └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
+│   ├── ⚙️ 12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md
+│   │   └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
+│   │
+│   └── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
+│       └── Đọc khi: Sửa/Làm mới Module Lịch Đôi UX Team Planner & Lịch làm việc tập trung (Dual-Calendar Architecture: Planner Sidebar trái + Month/Week/Day Grid lớn trung tâm + Floating Search Dock + ClickUp Command Palette), Tích hợp 4 Tầng dữ liệu (Deadline Đề bài UX kéo thả có ghi nhận Activity Log, Lịch Nghỉ phép Nhân sự tab "Đăng ký nghỉ" có cảnh báo xung đột, Lịch làm việc/nghỉ lễ ngân hàng, Sự kiện nội bộ UX Team), Cấu hình Quản trị Lịch trong Admin (CalendarConfigTab: Quy tắc hiển thị, Ma trận phân quyền Role RBAC, CRUD Danh mục sự kiện, Giám sát kết nối đồng bộ lịch nghỉ).
 ```
 
 ---

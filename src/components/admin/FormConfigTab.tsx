@@ -364,42 +364,42 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
   return (
     <div className="space-y-6">
       {/* 1. TOP TOOLBAR & STATUS BAR */}
-      <Frame className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-xs">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1057FB] flex items-center justify-center font-bold">
-                <SlidersHorizontal className="w-4 h-4" />
-              </div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                Cấu hình Form Tiếp Nhận Yêu Cầu UX
-              </h2>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold text-[11px] px-2 py-0.5">
-                v{config.version}.0
-              </Badge>
-              {isDirty && (
-                <Badge className="bg-amber-500 text-white font-semibold text-[11px] px-2 py-0.5 animate-pulse">
-                  Chưa lưu thay đổi
-                </Badge>
-              )}
+      <Frame className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-xs space-y-4">
+        <div className="space-y-1 w-full">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-xs">
+              <SlidersHorizontal className="w-4 h-4" />
             </div>
-            <p className="text-xs sm:text-sm text-slate-500">
-              Tùy biến hiển thị các trường, quy định bắt buộc, đổi nhãn câu hỏi và danh mục dropdown cho màn hình Gửi yêu cầu.
-            </p>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+              Cấu hình Form Tiếp Nhận Yêu Cầu UX
+            </h2>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold text-[11px] px-2 py-0.5">
+              v{config.version}.0
+            </Badge>
+            {isDirty && (
+              <Badge className="bg-amber-500 text-white font-semibold text-[11px] px-2 py-0.5 animate-pulse">
+                Chưa lưu thay đổi
+              </Badge>
+            )}
           </div>
+          <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-4xl">
+            Tùy biến hiển thị các trường, quy định bắt buộc, đổi nhãn câu hỏi và danh mục dropdown cho màn hình Gửi yêu cầu.
+          </p>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap self-end md:self-auto">
+        {/* Action Buttons Cluster sitting below title */}
+        <div className="pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap justify-between sm:justify-start">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
               onClick={handlePullFromSheet}
               disabled={isPulling}
-              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 cursor-pointer"
+              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 cursor-pointer shadow-2xs"
               title="Tải cấu hình Form mới nhất từ Google Sheet (RAW_SETTINGS)"
             >
               <CloudDownload className={`w-3.5 h-3.5 ${isPulling ? "animate-spin text-blue-600" : "text-blue-500"}`} />
-              <span className="hidden sm:inline">Tải từ Sheet</span>
+              <span>Tải từ Sheet</span>
             </Button>
 
             <label className="cursor-pointer">
@@ -407,7 +407,7 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer"
+                className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer shadow-2xs"
                 title="Nhập cấu hình từ file JSON"
                 type="button"
                 onClick={(e) => {
@@ -416,7 +416,7 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
                 }}
               >
                 <Upload className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Nhập JSON</span>
+                <span>Nhập JSON</span>
               </Button>
             </label>
 
@@ -424,38 +424,38 @@ export default function FormConfigTab({ onLogAction }: FormConfigTabProps) {
               variant="outline"
               size="sm"
               onClick={handleExportJson}
-              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer"
+              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer shadow-2xs"
               title="Xuất file JSON sao lưu"
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Xuất JSON</span>
+              <span>Xuất JSON</span>
             </Button>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleReset}
-              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200 cursor-pointer"
+              className="h-9 px-3 text-xs gap-1.5 rounded-xl border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200 cursor-pointer shadow-2xs"
               title="Khôi phục về form nguyên bản của MBBank"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Mặc định</span>
-            </Button>
-
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-              className={`h-9 px-4 text-xs font-semibold gap-1.5 rounded-xl cursor-pointer shadow-xs transition-all ${
-                isDirty
-                  ? "bg-[#1057FB] hover:bg-blue-700 text-white ring-2 ring-blue-300 ring-offset-1"
-                  : "bg-slate-900 hover:bg-slate-800 text-white"
-              }`}
-            >
-              <Save className={`w-3.5 h-3.5 ${isSaving ? "animate-spin" : ""}`} />
-              <span>{isSaving ? "Đang lưu lên Sheet..." : isDirty ? "Lưu thay đổi *" : "Đã lưu"}</span>
+              <span>Mặc định</span>
             </Button>
           </div>
+
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`h-9 px-4 text-xs font-semibold gap-1.5 rounded-xl cursor-pointer shadow-xs transition-all ml-auto sm:ml-0 ${
+              isDirty
+                ? "bg-slate-900 hover:bg-slate-800 text-white"
+                : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+            }`}
+          >
+            {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>{isSaving ? "Đang lưu..." : isDirty ? "Lưu cấu hình Form *" : "Đã lưu"}</span>
+          </Button>
         </div>
 
         {/* Quick Stats Strip */}

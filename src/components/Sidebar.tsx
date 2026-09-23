@@ -16,6 +16,7 @@ import {
   Eye,
   UserPlus,
   Network,
+  Calendar,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -35,7 +36,7 @@ import {
 } from "@/config/navVisibilityConfig"
 import { APP_CONTENT } from "@/config/content"
 
-export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia"
+export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia" | "calendar"
 
 interface SidebarProps {
   currentPage: Page
@@ -332,6 +333,45 @@ export default function Sidebar({
                       <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0 relative z-10">
                         {activeTaskCount}
                       </span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "calendar" && currentRoleVisibility.calendar) {
+                  const isActive = currentPage === "calendar"
+                  const isHovered = hoveredNav === "calendar"
+                  return (
+                    <button
+                      key="nav-calendar"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("calendar")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("calendar")
+                        preloadPage("calendar")
+                      }}
+                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <Calendar className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <span className="truncate relative z-10">Lịch & Planner</span>
                     </button>
                   )
                 }

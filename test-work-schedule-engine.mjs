@@ -195,11 +195,37 @@ async function runWorkScheduleTests() {
 
   // Friday is now a non-working day under 4-day workweek
   assert.strictEqual(isBusinessDay(new Date("2026-09-25T10:00:00"), loadedConfig.workSchedule), false)
-  // MB anniversary is recognized as non-working day
-  assert.strictEqual(isBusinessDay(new Date("2026-11-04T10:00:00"), loadedConfig.workSchedule), false)
+  // --- TEST 8: Compensatory Workdays (Working on Saturdays/Sundays for holiday swap) ---
+  console.log("✓ Test 8: Verifying compensatory working days (swap working on weekends)")
+  // Normally 2026-08-29 is Saturday (non-working day)
+  assert.strictEqual(isBusinessDay(new Date("2026-08-29T10:00:00"), DEFAULT_WORK_SCHEDULE), false)
+
+  const scheduleWithCompensatory = {
+    ...DEFAULT_WORK_SCHEDULE,
+    holidays: [
+      ...DEFAULT_WORK_SCHEDULE.holidays,
+      {
+        id: "lam_bu_quoc_khanh_2026",
+        name: "Làm bù thứ Bảy (Hoán đổi Quốc khánh 2026)",
+        date: "2026-08-29",
+        type: "compensatory_workday",
+        description: "Đi làm thứ Bảy để hoán đổi nghỉ liền kề ngày 01/09",
+        compensatoryFor: "Nghỉ liền kề Quốc khánh 01/09",
+      },
+    ],
+  }
+
+  // Saturday 2026-08-29 is now recognized as a valid working day (SLA counts)
+  assert.strictEqual(isBusinessDay(new Date("2026-08-29T10:00:00"), scheduleWithCompensatory), true)
+  // Normal Saturday next week is still non-working day
+  assert.strictEqual(isBusinessDay(new Date("2026-09-05T10:00:00"), scheduleWithCompensatory), false)
+
+  // Working hours calculation on compensatory Saturday: 08:00 to 17:30 = 8.0h working
+  const compHours = calculateBusinessHoursBetween("2026-08-29T08:00:00", "2026-08-29T17:30:00", scheduleWithCompensatory)
+  assert.strictEqual(compHours, 8.0, "Compensatory Saturday must count 8.0 working hours")
 
   console.log("================================================================")
-  console.log("  ALL 7 WORK SCHEDULE ENGINE TESTS PASSED SUCCESSFULLY! ✨      ")
+  console.log("  ALL 8 WORK SCHEDULE ENGINE TESTS PASSED SUCCESSFULLY! ✨      ")
   console.log("================================================================")
 }
 

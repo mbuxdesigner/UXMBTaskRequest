@@ -6,6 +6,7 @@ import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, type DropdownOption } from "@/components/reui/dropdown-menu"
+import { Slider } from "@/components/ui/slider"
 import { EmptyState } from "@/components/reui/empty-state"
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table"
 import { Dialog, DialogBody } from "@/components/ui/dialog"
@@ -894,14 +895,13 @@ totalOriginalSize > 0 && convertedImages.length > 0
                       {quality}%
                     </Badge>
                   </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    step="5"
+                  <Slider
+                    min={10}
+                    max={100}
+                    step={5}
                     value={quality}
                     onChange={(e) => setQuality(Number(e.target.value))}
-                    className="w-full accent-[#1B3A6B] cursor-pointer h-1.5 bg-slate-200 rounded-full"
+                    color="#0F172A"
                   />
                   <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
                     {[
@@ -1695,16 +1695,17 @@ totalOriginalSize > 0 && convertedImages.length > 0
 
                     {/* Quick Range Slider input in header */}
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-amber-700">Gốc ({sliderPosition}%)</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={sliderPosition}
-                        onChange={(e) => setSliderPosition(Number(e.target.value))}
-                        className="w-28 sm:w-36 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#1B3A6B]"
-                      />
-                      <span className="text-[11px] font-mono text-emerald-700">Nén ({100 - sliderPosition}%)</span>
+                      <span className="text-[11px] font-mono text-amber-700 whitespace-nowrap">Gốc ({sliderPosition}%)</span>
+                      <div className="w-28 sm:w-36">
+                        <Slider
+                          min={0}
+                          max={100}
+                          value={sliderPosition}
+                          onChange={(e) => setSliderPosition(Number(e.target.value))}
+                          color="#0F172A"
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono text-emerald-700 whitespace-nowrap">Nén ({100 - sliderPosition}%)</span>
                     </div>
                   </div>
 

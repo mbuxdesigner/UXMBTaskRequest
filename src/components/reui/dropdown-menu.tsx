@@ -57,7 +57,10 @@ export function DropdownMenu({
   }, [isOpen])
 
   return (
-    <div className={`relative ${className.includes("w-full") ? "w-full" : "inline-block"} ${className}`} ref={dropdownRef}>
+    <div
+      className={`relative ${isOpen ? "z-40" : ""} ${className.includes("w-full") ? "w-full" : "inline-block"} ${className}`}
+      ref={dropdownRef}
+    >
       {/* Trigger Button - 2-Line Container matching reference design when label is passed */}
       {label ? (
         <motion.button

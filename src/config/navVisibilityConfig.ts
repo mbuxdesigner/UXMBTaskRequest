@@ -3,6 +3,7 @@ import { UserRole } from "../data/mockData"
 export interface RoleNavVisibility {
   overview: boolean
   track: boolean
+  calendar: boolean
   create: boolean
   test: boolean
   compressor: boolean
@@ -19,6 +20,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
   Admin: {
     overview: true,
     track: true,
+    calendar: true,
     create: true,
     test: true,
     compressor: true,
@@ -29,6 +31,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
   "Design Owner": {
     overview: true,
     track: true,
+    calendar: true,
     create: true,
     test: true,
     compressor: true,
@@ -39,6 +42,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
   Designer: {
     overview: true,
     track: true,
+    calendar: true,
     create: true,
     test: true,
     compressor: true,
@@ -49,6 +53,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
   PO: {
     overview: true,
     track: true,
+    calendar: true,
     create: true,
     test: true,
     compressor: false,
@@ -59,6 +64,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
   Business: {
     overview: true,
     track: true,
+    calendar: true,
     create: true,
     test: true,
     compressor: false,
@@ -81,6 +87,7 @@ export function getRoleNavConfig(): RoleNavConfig {
         ...roleData,
         overview: roleData.overview !== undefined ? roleData.overview : defaults.overview,
         track: roleData.track !== undefined ? roleData.track : defaults.track,
+        calendar: roleData.calendar !== undefined ? roleData.calendar : defaults.calendar,
         create: roleData.create !== undefined ? roleData.create : defaults.create,
         test: role === "Admin" ? (roleData.test ?? true) : (roleData.test !== undefined ? roleData.test : defaults.test),
         compressor: role === "Admin" ? (roleData.compressor ?? true) : (roleData.compressor !== undefined ? roleData.compressor : defaults.compressor),
@@ -102,7 +109,7 @@ export function getRoleNavConfig(): RoleNavConfig {
   }
 }
 
-export type PlatformNavItemKey = "overview" | "track" | "create" | "ia"
+export type PlatformNavItemKey = "overview" | "track" | "calendar" | "create" | "ia"
 export type ResourceNavItemKey = "compressor" | "test" | "manage" | "invite"
 export type NavItemKey = PlatformNavItemKey | ResourceNavItemKey
 
@@ -112,7 +119,7 @@ export interface NavOrderConfig {
 }
 
 export const DEFAULT_NAV_ORDER: NavOrderConfig = {
-  platform: ["overview", "track", "create", "ia"],
+  platform: ["overview", "track", "calendar", "create", "ia"],
   resources: ["compressor", "test", "manage", "invite"],
 }
 
@@ -124,6 +131,14 @@ export function getNavOrderConfig(): NavOrderConfig {
     if (!raw) return DEFAULT_NAV_ORDER
     const parsed = JSON.parse(raw)
     let platform = Array.isArray(parsed.platform) && parsed.platform.length > 0 ? [...parsed.platform] : [...DEFAULT_NAV_ORDER.platform]
+    if (!platform.includes("calendar")) {
+      const trackIdx = platform.indexOf("track")
+      if (trackIdx !== -1) {
+        platform.splice(trackIdx + 1, 0, "calendar")
+      } else {
+        platform.push("calendar")
+      }
+    }
     if (!platform.includes("ia")) {
       platform.push("ia")
     }
