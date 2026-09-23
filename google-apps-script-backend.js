@@ -28,6 +28,12 @@ const SHEET_SELECTIONS_VIEW = "Selections_View";
 const SHEET_TEST_BANK = "TEST_BANK";
 const SHEET_TEST_SUBMISSIONS = "TEST_SUBMISSIONS";
 
+// Tên các Sheet dành riêng cho môi trường Test / Preview (5-Tier Sandbox Isolation)
+const SHEET_RAW_TASKS_TEST = "RAW_TASKS_TEST";
+const SHEET_TASKS_TEST_VIEW = "Tasks_Test_View";
+const SHEET_LOGS_TEST_VIEW = "Activity_Logs_Test_View";
+const SHEET_RAW_SETTINGS_TEST = "RAW_SETTINGS_TEST";
+
 // Legacy sheet names for compatibility
 const SHEET_USERS_NAME = "USERS";
 const SHEET_DATA_NAME = "DATA";
@@ -203,10 +209,16 @@ function doGet(e) {
     }
 
     if (action === "get_requests") {
-      const requests = getAllRequestsFromSheet();
+      const isTest = e.parameter.env === "preview" || 
+                     e.parameter.env === "development" || 
+                     e.parameter.client_environment === "preview" || 
+                     e.parameter.client_environment === "development" || 
+                     e.parameter.is_test === "true";
+      const requests = getAllRequestsFromSheet(isTest);
       return createJsonResponse({
         status: "success",
         requests: requests,
+        client_environment: isTest ? "preview" : "production",
         timestamp: new Date().toISOString()
       });
     }
@@ -647,6 +659,84 @@ function getOrInitRawSettingsSheet(ss) {
 }
 
 /**
+ * Kiểm tra xem payload có thuộc môi trường Preview/Test hay không (5-Tier Sandbox)
+ */
+function isTestPayload(data) {
+  if (!data) return false;
+  if (data.is_test === true || data.is_test === "true") return true;
+  if (data.client_environment === "preview" || data.client_environment === "development") return true;
+  if (data.env === "preview" || data.env === "development") return true;
+  const reqId = String(data.request_id || "").trim();
+  if (reqId.startsWith("REQ-TEST-") || reqId.startsWith("TEST-")) return true;
+  const title = String(data.title || "").trim();
+  if (title.startsWith("[TEST]")) return true;
+  return false;
+}
+
+/**
+ * Lấy hoặc khởi tạo sheet RAW_TASKS_TEST dành cho môi trường Preview / Development
+ */
+function getOrInitRawTasksTestSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_RAW_TASKS_TEST);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_RAW_TASKS_TEST);
+    const headers = [
+      "Request_ID",
+      "Title",
+      "Product",
+      "Current_Phase",
+      "Status",
+      "Priority",
+      "Assignee",
+      "Payload_JSON",
+      "Created_At",
+      "Updated_At"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#334155")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 160);
+    sheet.setColumnWidth(2, 240);
+    sheet.setColumnWidth(3, 120);
+    sheet.setColumnWidth(4, 130);
+    sheet.setColumnWidth(5, 120);
+    sheet.setColumnWidth(6, 100);
+    sheet.setColumnWidth(7, 180);
+    sheet.setColumnWidth(8, 500);
+    sheet.setColumnWidth(9, 160);
+    sheet.setColumnWidth(10, 160);
+  }
+  return sheet;
+}
+
+/**
+ * Lấy hoặc khởi tạo sheet RAW_SETTINGS_TEST dành cho cấu hình môi trường test
+ */
+function getOrInitRawSettingsTestSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_RAW_SETTINGS_TEST);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_RAW_SETTINGS_TEST);
+    const headers = ["Config_Key", "Payload_JSON", "Updated_At", "Updated_By"];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#475569")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 240);
+    sheet.setColumnWidth(2, 600);
+    sheet.setColumnWidth(3, 160);
+    sheet.setColumnWidth(4, 200);
+  }
+  return sheet;
+}
+
+/**
  * Đọc toàn bộ Master Data từ sheet RAW_SETTINGS, tự động ghép nối các cấu hình bị phân mảnh (Auto-Reassemble Chunks)
  */
 function readMasterDataFromSettingsSheet(rawSettings) {
@@ -772,6 +862,11 @@ function projectTasksToHumanSheets() {
     const reqId = task.request_id || (isRawTasks ? rawData[i][0] : rawData[i][1]);
     const title = task.title || (isRawTasks ? rawData[i][1] : "");
 
+    // Phòng vệ tầng 4 (Tier 4): Loại trừ toàn bộ task Test/Preview khỏi Tasks_View thực tế
+    if (isTestPayload(task) || String(reqId).startsWith("REQ-TEST-") || String(title).startsWith("[TEST]")) {
+      continue;
+    }
+
     // 1. Dòng tổng quan cho Tasks_View
     tasksViewRows.push([
       reqId,
@@ -846,6 +941,107 @@ function projectTasksToHumanSheets() {
   logsViewSheet.getRange(1, 1, 1, logHeaders.length)
     .setBackground("#1E293B")
     .setFontColor("#FFFFFF")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
+  logsViewSheet.setFrozenRows(1);
+  if (logsViewRows.length > 0) {
+    logsViewSheet.getRange(2, 1, logsViewRows.length, logHeaders.length).setValues(logsViewRows);
+  }
+
+  return { success: true, tasksCount: tasksViewRows.length, logsCount: logsViewRows.length };
+}
+
+/**
+ * Phân tách RAW_TASKS_TEST -> Tasks_Test_View & Activity_Logs_Test_View (5-Tier Sandbox Isolation)
+ */
+function projectTestTasksToHumanSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let rawSheet = ss.getSheetByName(SHEET_RAW_TASKS_TEST);
+  if (!rawSheet || rawSheet.getLastRow() < 2) return { success: true, tasksCount: 0, logsCount: 0 };
+
+  const rawData = rawSheet.getRange(2, 1, rawSheet.getLastRow() - 1, 10).getValues();
+  const tasksViewRows = [];
+  const logsViewRows = [];
+
+  for (let i = 0; i < rawData.length; i++) {
+    const jsonStr = rawData[i][7];
+    if (!jsonStr) continue;
+    let task = null;
+    try {
+      task = JSON.parse(jsonStr);
+    } catch (e) {
+      continue;
+    }
+
+    const reqId = task.request_id || rawData[i][0];
+    const title = task.title || rawData[i][1] || "[TEST] Yêu cầu";
+
+    tasksViewRows.push([
+      reqId,
+      title,
+      task.product || "",
+      task.request_type || "",
+      task.current_phase || "Ghi nhận",
+      task.status || "Đang thực hiện",
+      task.priority || "Normal",
+      task.assigned_designer || task.ux_owner || "",
+      task.requester_name || task.requester_email || "",
+      task.expected_deadline || task.release_date || "",
+      (typeof task.progress === "number" ? task.progress : 0) + "%",
+      (task.deliverables && task.deliverables.figma_url) || task.doc_link || "",
+      (task.deliverables && task.deliverables.spec_url) || "",
+      task.submitted_at || rawData[i][8],
+      task.last_updated || rawData[i][9]
+    ]);
+
+    if (Array.isArray(task.task_updates) && task.task_updates.length > 0) {
+      task.task_updates.forEach((u, idx) => {
+        logsViewRows.push([
+          u.id || ("LOG-" + reqId + "-" + (idx + 1)),
+          reqId,
+          title,
+          u.timestamp || "",
+          u.updated_by || "",
+          u.author_role || "Designer",
+          u.new_phase || "",
+          (typeof u.new_progress === "number" ? u.new_progress : 0) + "%",
+          u.note || "",
+          u.deliverable_link || ""
+        ]);
+      });
+    }
+  }
+
+  let tasksViewSheet = ss.getSheetByName(SHEET_TASKS_TEST_VIEW);
+  if (!tasksViewSheet) tasksViewSheet = ss.insertSheet(SHEET_TASKS_TEST_VIEW);
+  tasksViewSheet.clearContents();
+  const taskHeaders = [
+    "Mã Request", "Tiêu đề yêu cầu [TEST]", "Sản phẩm", "Loại yêu cầu", "Khâu UX", "Trạng thái",
+    "Độ ưu tiên", "Designer phụ trách", "PO / Người tạo", "Hạn chót", "Tiến độ",
+    "Link Figma", "Link Spec", "Ngày tạo", "Cập nhật cuối"
+  ];
+  tasksViewSheet.getRange(1, 1, 1, taskHeaders.length).setValues([taskHeaders]);
+  tasksViewSheet.getRange(1, 1, 1, taskHeaders.length)
+    .setBackground("#334155")
+    .setFontColor("#F8FAFC")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
+  tasksViewSheet.setFrozenRows(1);
+  if (tasksViewRows.length > 0) {
+    tasksViewSheet.getRange(2, 1, tasksViewRows.length, taskHeaders.length).setValues(tasksViewRows);
+  }
+
+  let logsViewSheet = ss.getSheetByName(SHEET_LOGS_TEST_VIEW);
+  if (!logsViewSheet) logsViewSheet = ss.insertSheet(SHEET_LOGS_TEST_VIEW);
+  logsViewSheet.clearContents();
+  const logHeaders = [
+    "Mã Log ID", "Mã Request", "Tiêu đề Task", "Thời gian", "Người thực hiện",
+    "Vai trò", "Khâu bàn giao", "Tiến độ", "Ghi chú hoạt động", "Link đính kèm"
+  ];
+  logsViewSheet.getRange(1, 1, 1, logHeaders.length).setValues([logHeaders]);
+  logsViewSheet.getRange(1, 1, 1, logHeaders.length)
+    .setBackground("#334155")
+    .setFontColor("#F8FAFC")
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
   logsViewSheet.setFrozenRows(1);
@@ -991,12 +1187,14 @@ function handleLogRequest(data) {
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const rawSheet = getOrInitRawTasksSheet(ss);
+    const isTest = isTestPayload(data);
+    // Tier 2 Isolation: Tách bảng vật lý RAW_TASKS_TEST độc lập với RAW_TASKS
+    const rawSheet = isTest ? getOrInitRawTasksTestSheet(ss) : getOrInitRawTasksSheet(ss);
     const now = new Date();
     const formattedDate = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-    const todayPrefix = "UXMB-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd") + "-";
+    const todayPrefix = (isTest ? "REQ-TEST-" : "UXMB-") + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd") + "-";
 
-    // Quét toàn bộ mã ID đã tồn tại trong cột A của RAW_TASKS để đảm bảo không bao giờ trùng lặp
+    // Quét toàn bộ mã ID đã tồn tại trong cột A của sheet đích để đảm bảo không bao giờ trùng lặp
     const existingIds = new Set();
     let maxDailySeq = 0;
     const lastRow = rawSheet.getLastRow();
@@ -1021,6 +1219,11 @@ function handleLogRequest(data) {
       ? String(data.request_id).trim() 
       : "";
 
+    // Kiểm tra định dạng ID cho môi trường Test
+    if (isTest && finalRequestId && !finalRequestId.startsWith("REQ-TEST-")) {
+      finalRequestId = "";
+    }
+
     // Nếu không có ID hoặc ID đã bị trùng trong Sheet: tự động cấp mã mới duy nhất
     if (!finalRequestId || existingIds.has(finalRequestId)) {
       let nextSeq = maxDailySeq + 1;
@@ -1034,6 +1237,15 @@ function handleLogRequest(data) {
 
     const rawObj = data.raw_data || data;
     rawObj.request_id = finalRequestId;
+
+    // Tier 3 Isolation: Tự động gắn tiền tố [TEST] vào tiêu đề nếu là môi trường Test
+    if (isTest) {
+      const rawTitle = String(rawObj.title || "Yêu cầu thiết kế UX").trim();
+      rawObj.title = rawTitle.startsWith("[TEST]") ? rawTitle : ("[TEST] " + rawTitle);
+      rawObj.is_test = true;
+      rawObj.client_environment = data.client_environment || data.env || "preview";
+    }
+
     if (!rawObj.submitted_at) rawObj.submitted_at = formattedDate;
     if (!rawObj.last_updated) rawObj.last_updated = formattedDate;
     if (!rawObj.current_phase || rawObj.current_phase === "Phân loại" || rawObj.current_phase === "Chờ tiếp nhận") rawObj.current_phase = "Chờ xác nhận";
@@ -1045,12 +1257,13 @@ function handleLogRequest(data) {
       rawObj.task_updates = [
         {
           id: "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
+          request_id: finalRequestId,
           timestamp: formattedDate,
-          updated_by: rawObj.requester_name || rawObj.requester_email || "PO",
+          updated_by: rawObj.requester_name || rawObj.requester_email || (isTest ? "Tester (Preview)" : "PO"),
           author_role: "PO",
           new_phase: "Chờ xác nhận",
           new_progress: 10,
-          note: "Khởi tạo yêu cầu thiết kế UX",
+          note: isTest ? "Khởi tạo yêu cầu thử nghiệm [TEST]" : "Khởi tạo yêu cầu thiết kế UX",
           deliverable_link: ""
         }
       ];
@@ -1058,10 +1271,10 @@ function handleLogRequest(data) {
 
     const jsonPayloadString = JSON.stringify(rawObj);
 
-    // Ghi 1 hàng vào RAW_TASKS
+    // Ghi 1 hàng vào RAW_TASKS (hoặc RAW_TASKS_TEST)
     rawSheet.appendRow([
       finalRequestId,
-      rawObj.title || "Yêu cầu thiết kế UX",
+      rawObj.title || (isTest ? "[TEST] Yêu cầu thiết kế UX" : "Yêu cầu thiết kế UX"),
       rawObj.product || "Khác",
       rawObj.current_phase || "Chờ xác nhận",
       rawObj.status || "Chờ xác nhận",
@@ -1072,18 +1285,34 @@ function handleLogRequest(data) {
       formattedDate
     ]);
 
-    // Đồng bộ legacy Requests_Log nếu tồn tại
+    // Đồng bộ legacy Requests_Log nếu tồn tại (chỉ dành cho production)
+    if (!isTest) {
+      try {
+        const legSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
+        if (legSheet) {
+          legSheet.appendRow([formattedDate, finalRequestId, jsonPayloadString]);
+        }
+      } catch (e) {}
+    }
+
+    // Tự động đồng bộ projection views tương ứng
     try {
-      const legSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
-      if (legSheet) {
-        legSheet.appendRow([formattedDate, finalRequestId, jsonPayloadString]);
+      if (isTest) {
+        projectTestTasksToHumanSheets();
+      } else {
+        projectTasksToHumanSheets();
       }
     } catch (e) {}
 
     return createJsonResponse({
       status: "success",
-      message: "Đã lưu yêu cầu vào RAW_TASKS thành công!",
+      message: isTest 
+        ? "Đã lưu yêu cầu vào RAW_TASKS_TEST thành công (Chế độ Preview/Test cách ly)!" 
+        : "Đã lưu yêu cầu vào RAW_TASKS thành công!",
       request_id: finalRequestId,
+      is_test: isTest,
+      client_environment: isTest ? (data.client_environment || "preview") : "production",
+      target_sheet: isTest ? SHEET_RAW_TASKS_TEST : SHEET_RAW_TASKS,
       row: rawSheet.getLastRow(),
       timestamp: formattedDate
     });
@@ -1189,8 +1418,15 @@ function handleUpdateTaskProgress(data) {
     }
   }
 
-  let rawSheet = ss.getSheetByName(SHEET_RAW_TASKS);
-  if (!rawSheet) rawSheet = getOrInitRawTasksSheet(ss);
+  const isTest = isTestPayload(data) || requestId.startsWith("REQ-TEST-");
+  let rawSheet = null;
+  if (isTest) {
+    rawSheet = ss.getSheetByName(SHEET_RAW_TASKS_TEST);
+    if (!rawSheet) rawSheet = getOrInitRawTasksTestSheet(ss);
+  } else {
+    rawSheet = ss.getSheetByName(SHEET_RAW_TASKS);
+    if (!rawSheet) rawSheet = getOrInitRawTasksSheet(ss);
+  }
 
   const lastRow = rawSheet.getLastRow();
   let updatedItem = null;
@@ -1388,21 +1624,32 @@ function handleUpdateTaskProgress(data) {
     }
   }
 
-  // Đồng bộ legacy TASK_UPDATES và Requests_Log
+  // Đồng bộ legacy TASK_UPDATES và Requests_Log (chỉ cho production)
+  if (!isTest) {
+    try {
+      const updatesSheet = ss.getSheetByName(SHEET_TASK_UPDATES_NAME);
+      if (updatesSheet) {
+        updatesSheet.appendRow([
+          "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
+          requestId,
+          formattedDate,
+          user.displayName ? (user.displayName + " (" + userEmail + ")") : userEmail,
+          userRole,
+          newPhase,
+          newProgress + "%",
+          note,
+          figmaUrl
+        ]);
+      }
+    } catch (e) {}
+  }
+
+  // Tự động phân tách đồng bộ lại các View tương ứng
   try {
-    const updatesSheet = ss.getSheetByName(SHEET_TASK_UPDATES_NAME);
-    if (updatesSheet) {
-      updatesSheet.appendRow([
-        "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
-        requestId,
-        formattedDate,
-        user.displayName ? (user.displayName + " (" + userEmail + ")") : userEmail,
-        userRole,
-        newPhase,
-        newProgress + "%",
-        note,
-        figmaUrl
-      ]);
+    if (isTest) {
+      projectTestTasksToHumanSheets();
+    } else {
+      projectTasksToHumanSheets();
     }
   } catch (e) {}
 
@@ -1423,16 +1670,19 @@ function handleUpdateTaskProgress(data) {
 }
 
 /**
- * Đọc toàn bộ danh sách yêu cầu từ RAW_TASKS (hoặc Requests_Log)
+ * Đọc toàn bộ danh sách yêu cầu từ RAW_TASKS (hoặc RAW_TASKS_TEST nếu isTest)
  */
-function getAllRequestsFromSheet() {
+function getAllRequestsFromSheet(isTest) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let rawSheet = ss.getSheetByName(SHEET_RAW_TASKS);
+  const targetSheetName = isTest ? SHEET_RAW_TASKS_TEST : SHEET_RAW_TASKS;
+  let rawSheet = ss.getSheetByName(targetSheetName);
   let isRawTasks = true;
 
   if (!rawSheet || rawSheet.getLastRow() < 2) {
-    rawSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
-    isRawTasks = false;
+    if (!isTest) {
+      rawSheet = ss.getSheetByName(SHEET_REQUESTS_LOG_NAME);
+      isRawTasks = false;
+    }
   }
   
   if (!rawSheet || rawSheet.getLastRow() < 2) {
@@ -1457,6 +1707,11 @@ function getAllRequestsFromSheet() {
     }
 
     if (item) {
+      // Tier 4 Phòng vệ: Nếu đang đọc cho production (!isTest), loại trừ triệt để mọi task mang cờ is_test hoặc mã REQ-TEST
+      if (!isTest && isTestPayload(item)) {
+        continue;
+      }
+
       if (!item.request_id && isRawTasks) item.request_id = rawRows[i][0];
       if (!item.submitted_at && isRawTasks) item.submitted_at = String(rawRows[i][8] || "");
       if (!item.priority && isRawTasks && rawRows[i][5]) item.priority = String(rawRows[i][5]);
@@ -1580,9 +1835,31 @@ function handleRequestOtpFast(data) {
       } catch (e) {}
     }
 
+    const isTest = isTestPayload(data);
     const webhookUrl = PropertiesService.getScriptProperties().getProperty("TEAMS_WEBHOOK_URL");
     let webhookSent = false;
     let webhookError = null;
+
+    // Tier 5 Isolation: Alert Suppression - Không bắn Webhook Teams thật khi ở môi trường Preview/Test
+    if (isTest) {
+      Logger.log("[TIER 5 ALERT SUPPRESSION] Bỏ qua gửi Teams Webhook thật trên môi trường Preview/Dev cho: " + userRowInfo.teamsEmail);
+      logActionToSheet(ss, {
+        personalEmail: userRowInfo.personalEmail,
+        teamsEmail: userRowInfo.teamsEmail,
+        action: "REQUEST_OTP_PREVIEW",
+        details: "[TIER 5 ALERT ISOLATION] Bỏ qua Webhook Teams thật để tránh spam kênh. Mã OTP test: " + otp,
+        status: "SUCCESS"
+      });
+      return createJsonResponse({
+        status: "success",
+        message: "Mã xác thực đã được tạo (Môi trường Preview/Test - Kênh Teams thật được cách ly an toàn).",
+        expires_in: OTP_EXPIRY_MINUTES * 60,
+        teams_webhook_configured: true,
+        webhook_sent: false,
+        is_test: true,
+        preview_otp: otp
+      });
+    }
 
     if (webhookUrl && webhookUrl.trim()) {
       const webhookRes = sendOtpToTeams(webhookUrl, userRowInfo.teamsEmail, otp);
@@ -3232,8 +3509,9 @@ function handleSyncTeamMembers(data) {
  */
 function handleSyncMasterData(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
-  if (!rawSettings) {
+  const isTest = isTestPayload(data);
+  let rawSettings = isTest ? getOrInitRawSettingsTestSheet(ss) : ss.getSheetByName(SHEET_RAW_SETTINGS);
+  if (!rawSettings && !isTest) {
     initCoreSheets();
     rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
   }
@@ -3309,13 +3587,19 @@ function handleSyncMasterData(data) {
     }
   }
 
-  try {
-    projectSettingsToHumanSheets();
-  } catch (e) {}
+  if (!isTest) {
+    try {
+      projectSettingsToHumanSheets();
+    } catch (e) {}
+  }
 
   return createJsonResponse({
     status: "success",
-    message: "Đã đồng bộ Master Data cấu hình vào Google Sheet thành công!",
+    message: isTest 
+      ? "Đã đồng bộ Master Data vào RAW_SETTINGS_TEST thành công (Chế độ Preview/Test cách ly)!" 
+      : "Đã đồng bộ Master Data cấu hình vào Google Sheet thành công!",
+    is_test: isTest,
+    target_sheet: isTest ? SHEET_RAW_SETTINGS_TEST : SHEET_RAW_SETTINGS,
     timestamp: formattedDate
   });
 }

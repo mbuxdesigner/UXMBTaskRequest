@@ -103,6 +103,8 @@ export interface UXRequest {
   pending_reason?: string
   viewers?: string[]
   isRestricted?: boolean
+  is_test?: boolean
+  client_environment?: string
 }
 
 export function evaluatePoPendingStatus(request: UXRequest): UXRequest {

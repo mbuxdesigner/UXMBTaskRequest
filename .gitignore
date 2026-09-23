@@ -2,7 +2,12 @@ node_modules/
 dist/
 build/
 .cache/
-.env*
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.development
+!.env.production
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
@@ -26,4 +31,5 @@ ORIGINAL_REQUEST.md
 !/test-ia-auto-layout-lv3-horizontal.mjs
 !/test-ia-performance-viewport-culling.mjs
 !/test-ia-cloud-autochunk-and-sanitizer.mjs
+!/test-m1-vercel-pipeline-and-sheet-isolation.mjs
 /*.webp

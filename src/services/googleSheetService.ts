@@ -12,10 +12,46 @@ import {
   mockRequests,
   isDemoRequest,
 } from "../data/mockData"
-import { getGoogleSheetConfig, saveGoogleSheetConfig } from "../config/googleSheetConfig"
+import {
+  getGoogleSheetConfig,
+  saveGoogleSheetConfig,
+  getAppEnvironment,
+  isTestEnvironment,
+} from "../config/googleSheetConfig"
 import { getStoredSession } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
 import { getMemberDisplayName } from "../components/common/UserAvatar"
+
+export interface RequestPayloadMeta {
+  client_environment: "production" | "preview" | "development"
+  is_test?: boolean
+  csrf_token?: string
+  session_token?: string
+}
+
+/**
+ * Check if a task is a test task generated in preview or development
+ */
+export function isTestTask(req: Partial<UXRequest> | Record<string, any> | null | undefined): boolean {
+  if (!req) return false
+  const id = String(req.request_id || "").trim()
+  const title = String(req.title || "").trim()
+  return (
+    Boolean(req.is_test) ||
+    req.client_environment === "preview" ||
+    req.client_environment === "development" ||
+    id.startsWith("REQ-TEST-") ||
+    id.startsWith("TEST-") ||
+    title.startsWith("[TEST]")
+  )
+}
+
+/**
+ * Defensive filtering: Exclude test tasks on production dashboard and KPI calculations
+ */
+export function filterProductionTasks(requests: UXRequest[]): UXRequest[] {
+  return requests.filter((r) => !isTestTask(r))
+}
 
 export interface SelectionsData {
   products: string[]
@@ -318,6 +354,15 @@ export function normalizeSheetRequest(data: any): UXRequest {
 
       return []
     })(),
+    is_test: Boolean(
+      data.is_test ||
+      String(data.request_id || "").startsWith("REQ-TEST-") ||
+      String(data.request_id || "").startsWith("TEST-") ||
+      String(data.title || "").startsWith("[TEST]")
+    ),
+    client_environment:
+      data.client_environment ||
+      (isTestTask(data) ? "preview" : "production"),
   }
 }
 
@@ -426,13 +471,15 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
   }
 
   // 2. LocalStorage fast cache (1ms)
+  const envConfig = getAppEnvironment()
   if (!forceRefresh) {
     try {
       const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
       if (localCached) {
         const parsed = JSON.parse(localCached)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = parsed.filter((r) => !isDemoRequest(r))
+          const envFiltered = envConfig.isProduction ? filterProductionTasks(parsed) : parsed
+          const cleaned = envFiltered.filter((r) => !isDemoRequest(r))
           if (cleaned.length !== parsed.length) {
             try {
               localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
@@ -463,6 +510,10 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       try {
         const url = new URL(config.scriptUrl.trim())
         url.searchParams.set("action", "get_requests")
+        if (envConfig.appEnv !== "production") {
+          url.searchParams.set("client_environment", envConfig.appEnv)
+          url.searchParams.set("is_test", "true")
+        }
         if (forceRefresh) {
           url.searchParams.set("_t", Date.now().toString())
         }
@@ -481,7 +532,10 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
             const data = await res.json()
             if (data.status === "success" && Array.isArray(data.requests)) {
               lastRemoteFetchSucceeded = true
-              const cleanRemote = data.requests.filter((r: any) => !isDemoRequest(r))
+              const envFiltered = envConfig.isProduction
+                ? filterProductionTasks(data.requests)
+                : data.requests
+              const cleanRemote = envFiltered.filter((r: any) => !isDemoRequest(r))
               const normalized = deduplicateTaskIds(cleanRemote.map(normalizeSheetRequest))
               cachedRequestsMemory = normalized
               try {
@@ -509,7 +563,8 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       if (cached) {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((r) => !isDemoRequest(r))
+          const envFiltered = envConfig.isProduction ? filterProductionTasks(parsed) : parsed
+          const cleaned = envFiltered.filter((r) => !isDemoRequest(r))
           if (cleaned.length !== parsed.length) {
             try {
               localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
@@ -525,7 +580,8 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
     }
 
     // Return starter mock requests if cache/sheet is empty (đã dọn sạch demo data)
-    const fallback = deduplicateTaskIds(mockRequests.filter((r) => !isDemoRequest(r)).map(normalizeSheetRequest))
+    const fallbackRaw = envConfig.isProduction ? filterProductionTasks(mockRequests) : mockRequests
+    const fallback = deduplicateTaskIds(fallbackRaw.filter((r) => !isDemoRequest(r)).map(normalizeSheetRequest))
     cachedRequestsMemory = fallback
     return fallback
   })().finally(() => {
@@ -540,8 +596,13 @@ async function backgroundSyncRequests() {
     const config = getGoogleSheetConfig()
     if (!config.scriptUrl || !config.scriptUrl.trim()) return
 
+    const envConfig = getAppEnvironment()
     const url = new URL(config.scriptUrl.trim())
     url.searchParams.set("action", "get_requests")
+    if (envConfig.appEnv !== "production") {
+      url.searchParams.set("client_environment", envConfig.appEnv)
+      url.searchParams.set("is_test", "true")
+    }
     url.searchParams.set("_t", Date.now().toString())
 
     const controller = new AbortController()
@@ -557,7 +618,10 @@ async function backgroundSyncRequests() {
       if (res.ok) {
         const data = await res.json()
         if (data.status === "success" && Array.isArray(data.requests)) {
-          const normalized = deduplicateTaskIds(data.requests.map(normalizeSheetRequest))
+          const envFiltered = envConfig.isProduction
+            ? filterProductionTasks(data.requests)
+            : data.requests
+          const normalized = deduplicateTaskIds(envFiltered.map(normalizeSheetRequest))
           cachedRequestsMemory = normalized
           localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
           broadcastTaskEvent("GLOBAL_REFRESH")
@@ -733,12 +797,49 @@ export async function logRequestToGoogleSheet(
   requestData: Record<string, unknown>
 ): Promise<{ success: boolean; message: string; sheetRow?: number; requestId?: string }> {
   const config = getGoogleSheetConfig()
+  const envConfig = getAppEnvironment()
+  const isTestMode = envConfig.appEnv !== "production"
+
+  // 1. In preview or development mode, automatically prepend [TEST] to task titles
+  const rawTitle = String(requestData.title || "Yêu cầu thiết kế UX").trim()
+  const finalTitle = isTestMode
+    ? rawTitle.startsWith("[TEST]")
+      ? rawTitle
+      : `[TEST] ${rawTitle}`
+    : rawTitle
+
+  // 2. Generate IDs with prefix REQ-TEST-YYYYMMDD-xxx in preview or development mode
+  const now = new Date()
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
+  let finalRequestId = String(requestData.request_id || "").trim()
+
+  if (isTestMode) {
+    if (
+      !finalRequestId ||
+      finalRequestId.includes("PENDING") ||
+      finalRequestId.includes("TMP") ||
+      !finalRequestId.startsWith("REQ-TEST-")
+    ) {
+      const randSeq = Math.floor(100 + Math.random() * 900)
+      finalRequestId = `REQ-TEST-${ymd}-${randSeq}`
+    }
+  }
+
+  // 3. Enriched payload with client_environment and is_test
+  const enrichedRequestData = {
+    ...requestData,
+    request_id: finalRequestId || requestData.request_id,
+    title: finalTitle,
+    client_environment: envConfig.appEnv,
+    is_test: isTestMode,
+  }
+
   const payload = {
     action: "log_request",
-    timestamp: new Date().toISOString(),
-    submitted_at_vn: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
-    request_id: requestData.request_id,
-    title: requestData.title,
+    timestamp: now.toISOString(),
+    submitted_at_vn: now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+    request_id: finalRequestId || requestData.request_id,
+    title: finalTitle,
     product: requestData.product,
     request_type: requestData.request_type,
     requester_email: requestData.requester_email || "requester@bank.com",
@@ -750,14 +851,17 @@ export async function logRequestToGoogleSheet(
     user_problem: requestData.user_problem,
     target_user: requestData.target_user,
     doc_link: requestData.doc_link,
-    json_payload: JSON.stringify(requestData, null, 2),
-    raw_data: requestData,
+    client_environment: envConfig.appEnv,
+    is_test: isTestMode,
+    json_payload: JSON.stringify(enrichedRequestData, null, 2),
+    raw_data: enrichedRequestData,
   }
 
   if (!config.scriptUrl || !config.scriptUrl.trim()) {
     return {
       success: true,
       message: "Yêu cầu đã được lưu thành công (Chế độ nội bộ / Local)",
+      requestId: finalRequestId || String(payload.request_id),
     }
   }
 
@@ -777,7 +881,7 @@ export async function logRequestToGoogleSheet(
           success: true,
           message: `Đã ghi log thành công vào Google Sheet (Dòng ${data.row || "mới"})!`,
           sheetRow: data.row,
-          requestId: data.request_id,
+          requestId: data.request_id || finalRequestId,
         }
       }
     } catch {
@@ -787,13 +891,14 @@ export async function logRequestToGoogleSheet(
     return {
       success: true,
       message: "Đã đồng bộ và ghi log thành công vào Google Sheet!",
-      requestId: String(payload.request_id),
+      requestId: finalRequestId || String(payload.request_id),
     }
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err)
     return {
       success: false,
       message: `Không thể gửi log tới Google Sheet: ${errorMsg}`,
+      requestId: finalRequestId,
     }
   }
 }
@@ -931,12 +1036,17 @@ export async function updateTaskProgressInSheet(
     try {
       const currentReq = updatedReq || cachedRequestsMemory?.find((r) => r.request_id === requestId)
 
+      const envConfig = getAppEnvironment()
+      const isTestMode = envConfig.appEnv !== "production" || isTestTask(currentReq) || requestId.startsWith("REQ-TEST-")
+
       const payload = {
         action: "update_task_progress",
         session_token: session?.sessionToken || "DEMO_TOKEN",
         user_email: session?.teamsEmail || session?.personalEmail || "",
         user_role: session?.role || "",
         request_id: requestId,
+        client_environment: envConfig.appEnv,
+        is_test: isTestMode,
         new_phase: params.new_phase,
         new_status: params.new_status,
         new_progress: params.new_progress,

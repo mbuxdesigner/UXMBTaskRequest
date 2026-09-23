@@ -14,6 +14,7 @@ import {
   SelectionsData,
   isLastRemoteFetchSuccessful,
 } from "../services/googleSheetService"
+import { getAppEnvironment } from "../config/googleSheetConfig"
 import { searchProtectedData } from "../services/otpAuthService"
 import { broadcastTaskEvent } from "../services/realtimeSyncService"
 
@@ -132,19 +133,34 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
   requestId: string
   googleSheetResult: { success: boolean; message: string }
 }> {
+  const envConfig = getAppEnvironment()
+  const isTest = envConfig.appEnv !== "production"
   const now = new Date()
   const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
     now.getMonth() + 1,
   ).padStart(2, "0")}/${now.getFullYear()}`
 
+  const rawTitle = String(data.title || "Yêu cầu thiết kế UX").trim()
+  const finalTitle = isTest
+    ? rawTitle.startsWith("[TEST]")
+      ? rawTitle
+      : `[TEST] ${rawTitle}`
+    : rawTitle
+
   // Initial ID placeholder
-  const initialId = `UXMB-PENDING`
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
+  const initialId = isTest
+    ? `REQ-TEST-${ymd}-${Math.floor(100 + Math.random() * 900)}`
+    : `UXMB-PENDING`
 
   // Log to Google Sheet first to get the official atomic sequential Request ID
   const fullPayload = {
     ...data,
+    title: finalTitle,
     request_id: initialId,
     submitted_at: formattedDate,
+    client_environment: envConfig.appEnv,
+    is_test: isTest,
   }
 
   const googleSheetResult = await logRequestToGoogleSheet(fullPayload)
@@ -152,14 +168,19 @@ export async function submitRequest(data: Record<string, unknown>): Promise<{
   // Use the server-assigned sequential ID from Google Sheet (UXMB-001, UXMB-002...), or fallback to timestamp
   const finalRequestId = (googleSheetResult.requestId && !googleSheetResult.requestId.includes("PENDING"))
     ? googleSheetResult.requestId
+    : isTest
+    ? initialId
     : `UXMB-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.floor(100 + Math.random() * 900)}`
 
   // Create complete local request object and cache immediately in localStorage
   const newRequest: UXRequest = normalizeSheetRequest({
     ...data,
     request_id: finalRequestId,
+    title: finalTitle,
     submitted_at: formattedDate,
     last_updated: formattedDate,
+    client_environment: envConfig.appEnv,
+    is_test: isTest,
     current_phase: "Chờ xác nhận",
     status: "Chờ xác nhận",
     progress: 10,
