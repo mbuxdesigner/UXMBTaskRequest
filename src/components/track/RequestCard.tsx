@@ -1,4 +1,4 @@
-import { UXRequest } from "../../data/mockData"
+import { UXRequest, getRequestDisplayTitle } from "../../data/mockData"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { getStatusConfig, getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
@@ -121,7 +121,7 @@ export default function RequestCard({ request, onClick }: RequestCardProps) {
 
             {/* Task Title */}
             <h3 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-[#1057FB] transition-colors line-clamp-1 break-words">
-              {request.title}
+              {getRequestDisplayTitle(request)}
             </h3>
           </div>
 

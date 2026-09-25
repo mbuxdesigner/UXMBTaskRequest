@@ -11,9 +11,11 @@ Khi bạn được giao một nhiệm vụ, hãy mở ngay tài liệu chuyên t
 
 ```
 Deploy App/doc/
-│
-├── 📖 00_OVERVIEW_AND_ONBOARDING.md   <-- BẠN ĐANG ĐỌC TÀI LIỆU NÀY (Tổng quan, Bản đồ tra cứu)
-├── 🎨 UI_DESIGN_SYSTEM.md              <-- TÀI LIỆU THIẾT KẾ TOÀN DIỆN: Tokens (#0F172A), Pills, Badges, ReUI Sonner Toast, Responsive 4 breakpoint
+├── 📖 00_OVERVIEW_AND_ONBOARDING.md             <-- BẠN ĐANG ĐỌC TÀI LIỆU NÀY (Tổng quan, Bản đồ tra cứu)
+├── 📐 ONBOARDING_DOCUMENTATION_STANDARD.md       <-- QUY CHUẨN SOẠN THẢO TÀI LIỆU ONB: 5 Nguyên tắc, 7 Phần bắt buộc, Rubric chấm điểm
+├── 🚀 GIT_WORKFLOW_VERCEL_PIPELINE.md            <-- QUY TRÌNH DEPLOY VERCEL: Tách nhánh develop/main, Zero-Downtime, Cô lập Sheet test
+├── 🛡️ CLOUDFLARE_HARDENING_GUIDE.md             <-- CẨM NANG BẢO VỆ HẠ TẦNG: Cloudflare WAF, Bot Fight Mode, DNS an toàn
+├── 🎨 UI_DESIGN_SYSTEM.md                        <-- TÀI LIỆU THIẾT KẾ TOÀN DIỆN: Tokens (#0F172A), Pills, Badges, ReUI Sonner Toast
 │
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
 │   ├── 📋 2026-09-04_DAILY_UPDATE_REPORT.md  <-- Báo cáo chi tiết nâng cấp ReUI 8 Tabs, Role Preview, Xuất CSV

@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { IANode, IATier, IATouchpointType, IANodeDisplaySettings, getTierDefaultDisplaySettings, IAProductInfo } from "@/types/ia"
 import { getAdminSquadsList, getAdminSquadsForProduct } from "@/data/iaMockData"
-import { UXRequest, isDemoRequest } from "@/data/mockData"
+import { UXRequest, getRequestDisplayTitle, isDemoRequest } from "@/data/mockData"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export type ModalMode = "add" | "edit" | "delete" | "reset" | "view" | null
@@ -725,7 +725,7 @@ export default function IANodeEditorModal({
                                       </span>
                                     </div>
                                     <div className="font-semibold text-slate-800 truncate text-xs">
-                                      {req.title}
+                                      {getRequestDisplayTitle(req)}
                                     </div>
                                     <div className="text-[11px] text-slate-500">
                                       {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
@@ -792,7 +792,7 @@ export default function IANodeEditorModal({
                                       </span>
                                     </div>
                                     <div className="font-semibold text-slate-800 truncate text-xs">
-                                      {req.title}
+                                      {getRequestDisplayTitle(req)}
                                     </div>
                                     <div className="text-[11px] text-slate-500">
                                       {req.squad || req.squad_name || "Chưa gán squad"} · {req.assigned_designer || req.design_owner || "Chưa có designer"}
@@ -929,7 +929,7 @@ export default function IANodeEditorModal({
                               <span className="font-mono font-bold text-blue-600 text-[11px]">{tid}</span>
                               {req?.title && (
                                 <span className="max-w-[160px] truncate text-[11px] text-slate-600">
-                                  {req.title}
+                                  {getRequestDisplayTitle(req)}
                                 </span>
                               )}
                               <button
@@ -1023,7 +1023,7 @@ export default function IANodeEditorModal({
                                 )}
                               </div>
                               <p className="text-xs font-medium text-slate-800 break-words leading-relaxed">
-                                {req.title}
+                                {getRequestDisplayTitle(req)}
                               </p>
                             </div>
                             <div className="shrink-0 pt-0.5">
@@ -1499,7 +1499,7 @@ export default function IANodeEditorModal({
                                           )}
                                         </div>
                                         <p className="text-xs font-semibold text-slate-800 break-words leading-relaxed">
-                                          {req ? req.title : tid}
+                                          {req ? getRequestDisplayTitle(req) : tid}
                                         </p>
                                       </div>
                                       <Tooltip content="Bỏ liên kết task này" side="left">
@@ -1606,7 +1606,7 @@ export default function IANodeEditorModal({
                                           )}
                                         </div>
                                         <p className="text-xs font-medium text-slate-800 break-words leading-relaxed">
-                                          {req.title}
+                                          {getRequestDisplayTitle(req)}
                                         </p>
                                       </div>
                                       <div className="shrink-0 pt-0.5">

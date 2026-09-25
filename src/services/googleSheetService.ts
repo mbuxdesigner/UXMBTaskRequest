@@ -246,6 +246,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
   return {
     request_id: String(data.request_id || "UXMB-PENDING"),
     title: String(data.title || "Yêu cầu thiết kế UX"),
+    nickname: data.nickname ? String(data.nickname).trim() : undefined,
     product: rawProduct,
     request_type: String(data.request_type || "Tính năng mới"),
     feature_journey: String(data.feature_journey || data.title || "Core Journey"),
@@ -537,6 +538,24 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
                 : data.requests
               const cleanRemote = envFiltered.filter((r: any) => !isDemoRequest(r))
               const normalized = deduplicateTaskIds(cleanRemote.map(normalizeSheetRequest))
+
+              // Phòng vệ mất danh sách: một deployment GAS lỗi hoặc trỏ nhầm
+              // RAW_TASKS_TEST có thể trả success nhưng mảng rỗng. Không được dùng
+              // phản hồi bất thường đó để xoá cache task hợp lệ đang có.
+              if (normalized.length === 0) {
+                try {
+                  const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
+                  const localList = localCached ? JSON.parse(localCached) : []
+                  if (Array.isArray(localList) && localList.length > 0) {
+                    lastRemoteFetchSucceeded = false
+                    const preserved = deduplicateTaskIds(localList.map(normalizeSheetRequest))
+                    cachedRequestsMemory = preserved
+                    console.warn("Google Sheet returned an unexpected empty task list; preserved the existing cache.")
+                    return preserved
+                  }
+                } catch {}
+              }
+
               cachedRequestsMemory = normalized
               try {
                 localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
@@ -622,6 +641,10 @@ async function backgroundSyncRequests() {
             ? filterProductionTasks(data.requests)
             : data.requests
           const normalized = deduplicateTaskIds(envFiltered.map(normalizeSheetRequest))
+          if (normalized.length === 0 && cachedRequestsMemory && cachedRequestsMemory.length > 0) {
+            console.warn("Background sync returned an unexpected empty task list; preserved the existing cache.")
+            return
+          }
           cachedRequestsMemory = normalized
           localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
           broadcastTaskEvent("GLOBAL_REFRESH")
@@ -834,15 +857,19 @@ export async function logRequestToGoogleSheet(
     is_test: isTestMode,
   }
 
+  const session = getStoredSession()
+
   const payload = {
     action: "log_request",
+    session_token: session?.sessionToken || "",
+    csrf_token: session?.csrfToken || "",
     timestamp: now.toISOString(),
     submitted_at_vn: now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
     request_id: finalRequestId || requestData.request_id,
     title: finalTitle,
     product: requestData.product,
     request_type: requestData.request_type,
-    requester_email: requestData.requester_email || "requester@bank.com",
+    requester_email: requestData.requester_email || session?.teamsEmail || session?.personalEmail || "requester@bank.com",
     preferred_squad: requestData.preferred_squad,
     expected_deadline: requestData.release_date || requestData.expected_deadline,
     deadline_reason: requestData.deadline_reason,
@@ -923,6 +950,7 @@ export async function updateTaskProgressInSheet(
     squad_name?: string
     preferred_squad?: string
     title?: string
+    nickname?: string
     description?: string
     business_need?: string
     user_problem?: string
@@ -977,6 +1005,7 @@ export async function updateTaskProgressInSheet(
         squad_name: params.squad_name !== undefined ? params.squad_name : oldReq.squad_name,
         preferred_squad: params.preferred_squad !== undefined ? params.preferred_squad : (params.squad_name !== undefined ? params.squad_name : oldReq.preferred_squad),
         title: params.title !== undefined ? params.title : oldReq.title,
+        nickname: params.nickname !== undefined ? (params.nickname.trim() || undefined) : oldReq.nickname,
         description: params.description !== undefined ? params.description : oldReq.description,
         business_need: params.business_need !== undefined ? params.business_need : oldReq.business_need,
         user_problem: params.user_problem !== undefined ? params.user_problem : oldReq.user_problem,
@@ -1042,6 +1071,7 @@ export async function updateTaskProgressInSheet(
       const payload = {
         action: "update_task_progress",
         session_token: session?.sessionToken || "DEMO_TOKEN",
+        csrf_token: session?.csrfToken || "",
         user_email: session?.teamsEmail || session?.personalEmail || "",
         user_role: session?.role || "",
         request_id: requestId,
@@ -1059,6 +1089,8 @@ export async function updateTaskProgressInSheet(
           ? params.preferred_squad
           : (currentReq?.preferred_squad || currentReq?.squad_name || ""),
         title: params.title !== undefined ? params.title : (currentReq?.title || ""),
+        // Chỉ gửi field khi người dùng thực sự sửa tên gợi nhớ; tránh chặn các thao tác PO khác.
+        nickname: params.nickname !== undefined ? params.nickname.trim() : undefined,
         description: params.description !== undefined ? params.description : (currentReq?.description || ""),
         business_need: params.business_need !== undefined ? params.business_need : (currentReq?.business_need || ""),
         user_problem: params.user_problem !== undefined ? params.user_problem : (currentReq?.user_problem || ""),
@@ -1070,6 +1102,7 @@ export async function updateTaskProgressInSheet(
         design_deadline: params.design_deadline !== undefined ? params.design_deadline : (currentReq?.design_deadline || currentReq?.expected_deadline || ""),
         release_date: params.release_date !== undefined ? params.release_date : (currentReq?.release_date || currentReq?.expected_deadline || ""),
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
+        is_comment: params.is_comment === true,
         figma_url: params.figma_url || (currentReq?.deliverables?.figma_url || ""),
         assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : (currentReq?.assigned_designer || ""),
         sent_to_po_at: params.sent_to_po_at !== undefined ? params.sent_to_po_at : (currentReq?.sent_to_po_at || ""),
@@ -1257,10 +1290,15 @@ export async function syncProjectionsFromSheet(): Promise<{
   }
 
   try {
+    const session = getStoredSession()
     const res = await fetch(scriptUrl.trim(), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "sync_projections" }),
+      body: JSON.stringify({
+        action: "sync_projections",
+        session_token: session?.sessionToken || "",
+        csrf_token: session?.csrfToken || "",
+      }),
     })
 
     if (!res.ok) {
@@ -1337,9 +1375,12 @@ export async function uploadFileToDrive(
   }
 
   try {
+    const session = getStoredSession()
     const base64Data = await fileToBase64(file)
     const payload = {
       action: "upload_file",
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
       base64Data,
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
@@ -1411,9 +1452,12 @@ export async function uploadAvatarToDrive(
   }
 
   try {
+    const session = getStoredSession()
     const base64Data = await fileToBase64(file)
     const payload = {
       action: "upload_avatar",
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
       base64Data,
       email: email.trim().toLowerCase(),
       fileName: file.name,
@@ -1496,6 +1540,8 @@ export async function syncTeamMembersToSheet(
     const payload = {
       action: "sync_team_members",
       members,
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
       user_email: actorEmail || session?.teamsEmail || session?.personalEmail || "admin@mbbank.com.vn",
       updated_by: session?.displayName || "Admin Portal",
     }
@@ -1530,6 +1576,47 @@ export async function syncTeamMembersToSheet(
       success: false,
       message: `Lỗi đồng bộ nhân sự: ${errorMsg}`,
     }
+  }
+}
+
+/**
+ * Cập nhật Teams Webhook URL lên Google Apps Script Backend (yêu cầu quyền Admin - Item 2)
+ */
+export async function setTeamsWebhookToSheet(webhookUrl: string): Promise<{ success: boolean; message: string }> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return { success: true, message: "Đã lưu Webhook URL nội bộ." }
+  }
+
+  try {
+    const session = getStoredSession()
+    const payload = {
+      action: "set_teams_webhook",
+      webhook_url: webhookUrl.trim(),
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
+      user_email: session?.teamsEmail || session?.personalEmail || "",
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Máy chủ Google Sheet trả về mã lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      return { success: true, message: data.message || "Đã lưu Microsoft Teams Webhook URL thành công!" }
+    }
+    return { success: false, message: data.message || "Không thể lưu Microsoft Teams Webhook URL." }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return { success: false, message: `Lỗi cấu hình Teams Webhook: ${errorMsg}` }
   }
 }
 
@@ -1607,6 +1694,8 @@ export async function syncMasterDataToSheet(params: {
     const payload = {
       action: "sync_master_data",
       ...params,
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
       ...(sanitizedIATrees ? { ia_trees: sanitizedIATrees } : {}),
       user_email: params.actorEmail || session?.teamsEmail || session?.personalEmail || "admin@mbbank.com.vn",
       updated_by: session?.displayName || "Admin Portal",

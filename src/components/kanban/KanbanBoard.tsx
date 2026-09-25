@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { cascadeWaveContainerVariants, cascadeWaveItemVariants, dataContinuityTransition, durations } from "@/lib/motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KanbanBoardSkeleton } from "@/components/common/ReuiSkeletons"
-import { UXRequest } from "@/data/mockData"
+import { UXRequest, getRequestDisplayTitle } from "@/data/mockData"
 import { getUserInitials } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { getRequestPendingClassification, formatPriority } from "@/config/statusConfig"
@@ -600,7 +600,7 @@ export default function KanbanBoard({
 
                           {/* Title */}
                           <h4 className="font-semibold text-xs sm:text-[13px] text-slate-900 leading-snug line-clamp-2 group-hover:text-[#1057FB] transition-colors break-words [overflow-wrap:break-word] max-w-full">
-                            {capitalizeFirstLetter(req.title)}
+                            {capitalizeFirstLetter(getRequestDisplayTitle(req))}
                           </h4>
 
                         {/* Bottom Row: Assignee Avatar | Date Pill | Circular Progress */}

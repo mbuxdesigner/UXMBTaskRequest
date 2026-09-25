@@ -18,10 +18,73 @@ function compressionMiddlewarePlugin(): Plugin {
   }
 }
 
+function dropConsolePlugin(mode: string): Plugin {
+  return {
+    name: 'drop-console-plugin',
+    apply: 'build',
+    enforce: 'post',
+    renderChunk(code) {
+      if (mode !== 'production') return null
+      let result = ''
+      let i = 0
+      const len = code.length
+      while (i < len) {
+        if (code.startsWith('debugger', i) && !/[a-zA-Z0-9_$]/.test(code[i - 1] || '') && !/[a-zA-Z0-9_$]/.test(code[i + 8] || '')) {
+          result += 'void 0'
+          i += 8
+          if (code[i] === ';') i++
+          continue
+        }
+        if (code.startsWith('console.', i) && !/[a-zA-Z0-9_$]/.test(code[i - 1] || '')) {
+          const match = code.slice(i).match(/^console\.[a-zA-Z0-9_$]+(\.[a-zA-Z0-9_$]+)?\s*\(/)
+          if (match) {
+            let depth = 1
+            let j = i + match[0].length
+            let inString = false
+            let stringChar = ''
+            let escape = false
+            while (j < len && depth > 0) {
+              const ch = code[j]
+              if (inString) {
+                if (escape) {
+                  escape = false
+                } else if (ch === '\\') {
+                  escape = true
+                } else if (ch === stringChar) {
+                  inString = false
+                }
+              } else {
+                if (ch === '"' || ch === "'" || ch === '`') {
+                  inString = true
+                  stringChar = ch
+                } else if (ch === '(') {
+                  depth++
+                } else if (ch === ')') {
+                  depth--
+                }
+              }
+              j++
+            }
+            result += 'void 0'
+            i = j
+            continue
+          }
+        }
+        result += code[i]
+        i++
+      }
+      return { code: result, map: null }
+    },
+  }
+}
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : './',
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : [],
+    },
     build: {
       sourcemap: false,
       minify: true,
@@ -68,6 +131,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      dropConsolePlugin(mode),
       compressionMiddlewarePlugin(),
       react(),
       tailwindcss(),

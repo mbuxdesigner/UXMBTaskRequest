@@ -2,6 +2,7 @@ import {
   mockSquads,
   Squad,
   UXRequest,
+  getRequestDisplayTitle,
   buildPhases,
 } from "../data/mockData"
 import {
@@ -57,8 +58,8 @@ export async function fetchSquads(forceRefresh = false): Promise<Squad[]> {
       queued_tasks: queuedRequests.length,
       capacity_threshold: squad.capacity_threshold || squad.capacityThreshold || 6,
       ux_owner: squad.ux_owner || squad.leadDesigner || "",
-      active_task_titles: activeRequests.map((r) => r.title),
-      queued_task_titles: queuedRequests.map((r) => r.title),
+      active_task_titles: activeRequests.map(getRequestDisplayTitle),
+      queued_task_titles: queuedRequests.map(getRequestDisplayTitle),
     }
   })
 }
@@ -78,6 +79,7 @@ export async function searchRequests(query: string): Promise<UXRequest[]> {
       normalizeSheetRequest({
         request_id: item.id || item.request_id,
         title: item.title,
+        nickname: item.nickname,
         product: item.product,
         ux_owner: item.ux_owner,
         assigned_designer: item.assigned_designer,
@@ -104,6 +106,7 @@ export async function searchRequests(query: string): Promise<UXRequest[]> {
     const designer = (r.assigned_designer || "").toLowerCase()
     const owner = (r.design_owner || "").toLowerCase()
     const title = (r.title || "").toLowerCase()
+    const nickname = (r.nickname || "").toLowerCase()
     const product = (r.product || "").toLowerCase()
     const squad = (r.preferred_squad || r.squad_name || "").toLowerCase()
     const journey = (r.feature_journey || "").toLowerCase()
@@ -114,6 +117,7 @@ export async function searchRequests(query: string): Promise<UXRequest[]> {
       designer.includes(q) ||
       owner.includes(q) ||
       title.includes(q) ||
+      nickname.includes(q) ||
       product.includes(q) ||
       squad.includes(q) ||
       journey.includes(q)
@@ -228,6 +232,7 @@ export async function updateTaskProgress(
     squad_name?: string
     preferred_squad?: string
     title?: string
+    nickname?: string
     description?: string
     business_need?: string
     user_problem?: string

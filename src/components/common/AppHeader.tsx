@@ -37,7 +37,7 @@ import {
   Network,
 } from "lucide-react"
 import type { Page } from "../Sidebar"
-import { UserRole, UXRequest } from "@/data/mockData"
+import { UserRole, UXRequest, getRequestDisplayTitle } from "@/data/mockData"
 import { UserSession, logoutTeamsSession, startRolePreview, stopRolePreview, getStoredSession } from "@/services/otpAuthService"
 import { uploadAvatarToDrive } from "@/services/googleSheetService"
 import { fetchRequests } from "@/api/api"
@@ -584,7 +584,7 @@ export default function AppHeader({
         kind: "task" as const,
         id: `task-${r.request_id || r.id}`,
         task: r,
-        title: r.title || "Bài toán không tên",
+        title: getRequestDisplayTitle(r),
         requestId: r.request_id || "",
         product: r.product || "",
         squad: r.preferred_squad || r.squad_name || r.squad || "",
@@ -616,7 +616,7 @@ export default function AppHeader({
 
     if (categoryFilter === "all" || categoryFilter === "tasks") {
       for (const r of roleFilteredRequests) {
-        const normTitle = normalizeVietnameseString(r.title)
+        const normTitle = normalizeVietnameseString(`${getRequestDisplayTitle(r)} ${r.title || ""}`)
         const normId = normalizeVietnameseString(r.request_id || "")
         const normProduct = normalizeVietnameseString(r.product || "")
         const normSquad = normalizeVietnameseString(r.preferred_squad || r.squad_name || r.squad || "")
@@ -640,7 +640,7 @@ export default function AppHeader({
             kind: "task",
             id: `task-${r.request_id || r.id}`,
             task: r,
-            title: r.title || "Bài toán không tên",
+            title: getRequestDisplayTitle(r),
             requestId: r.request_id || "",
             product: r.product || "",
             squad: r.preferred_squad || r.squad_name || r.squad || "",
@@ -1555,7 +1555,16 @@ export default function AppHeader({
         open={Boolean(activeDetailRequest)}
         request={activeDetailRequest}
         onClose={() => setActiveDetailRequest(null)}
-        onUpdated={async () => {
+        onUpdated={async (updatedRequest) => {
+          if (updatedRequest) {
+            setAllRequests((current) =>
+              current.map((item) =>
+                item.request_id === updatedRequest.request_id ? { ...item, ...updatedRequest } : item
+              )
+            )
+            setActiveDetailRequest(updatedRequest)
+            return
+          }
           const updated = await fetchRequests(true)
           setAllRequests(updated || [])
           if (activeDetailRequest) {

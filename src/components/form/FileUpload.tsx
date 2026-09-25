@@ -1,6 +1,7 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react"
 import { UploadCloud, FileText, X, Image as ImageIcon, FileSpreadsheet, FileBox, CheckCircle2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "@/components/ui/toast"
 
 interface FileUploadProps {
   files: File[]
@@ -8,7 +9,9 @@ interface FileUploadProps {
   onFilesChange?: (files: any) => void
 }
 
-const ACCEPTED = [".pdf", ".docx", ".pptx", ".xlsx", ".png", ".jpg", ".jpeg"]
+export const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB
+export const ALLOWED_EXTENSIONS = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg"]
+const ACCEPTED = ALLOWED_EXTENSIONS.map((ext) => `.${ext}`)
 const ACCEPT_ATTR = ACCEPTED.join(",")
 
 function fileExt(name: string) {
@@ -39,7 +42,30 @@ export default function FileUpload({ files, onChange, onFilesChange }: FileUploa
 
   const addFiles = (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles)
-    const deduped = [...files, ...arr].filter(
+    const validFiles: File[] = []
+
+    for (const f of arr) {
+      const ext = fileExt(f.name)
+      if (f.size > MAX_FILE_SIZE) {
+        toast.error(
+          "Tệp vượt quá dung lượng",
+          `Tệp "${f.name}" (${formatSize(f.size)}) vượt quá giới hạn tối đa cho phép là 25MB.`
+        )
+        continue
+      }
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        toast.error(
+          "Định dạng tệp không được hỗ trợ",
+          `Định dạng .${ext} của tệp "${f.name}" không hợp lệ. Chỉ chấp nhận: PDF, DOCX, PPTX, XLSX, PNG, JPG.`
+        )
+        continue
+      }
+      validFiles.push(f)
+    }
+
+    if (validFiles.length === 0) return
+
+    const deduped = [...files, ...validFiles].filter(
       (f, i, a) => a.findIndex((x) => x.name === f.name && x.size === f.size) === i,
     )
     handleUpdate(deduped)

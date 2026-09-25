@@ -64,6 +64,8 @@ export interface UXRequest {
   id?: string
   request_id: string
   title: string
+  /** Tên gợi nhớ do đội ngũ thiết kế đặt, dùng ưu tiên tại các danh sách task. */
+  nickname?: string
   product: string
   request_type: string
   feature_journey: string
@@ -105,6 +107,14 @@ export interface UXRequest {
   isRestricted?: boolean
   is_test?: boolean
   client_environment?: string
+}
+
+/**
+ * Nhãn ngắn gọn dùng để hiển thị task. Tiêu đề đề bài gốc luôn được giữ lại
+ * trong `title` để phục vụ tra cứu, audit và tương thích dữ liệu cũ.
+ */
+export function getRequestDisplayTitle(request?: Pick<UXRequest, "title" | "nickname"> | null): string {
+  return request?.nickname?.trim() || request?.title?.trim() || "Chưa đặt tiêu đề bài toán"
 }
 
 export function evaluatePoPendingStatus(request: UXRequest): UXRequest {

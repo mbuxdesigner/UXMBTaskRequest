@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Squad,
   recommendSquad,
@@ -95,6 +95,27 @@ interface FormState {
   expected_output: string[]
 }
 
+/**
+ * Khử khuẩn chuỗi đầu vào ngăn chặn XSS (Item 7)
+ */
+export function sanitizeXss(input: string): string {
+  if (typeof input !== "string") return ""
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
+    .replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, "")
+    .replace(/javascript\s*:/gi, "")
+    .replace(/vbscript\s*:/gi, "")
+    .replace(/data\s*:\s*text\/html/gi, "")
+    .replace(/on\w+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/on\w+\s*=\s*[^>\s]+/gi, "")
+    .trim()
+}
+
+export const FORM_DRAFT_KEY = "ux_request_form_draft"
+
 export default function RequestForm({ squads, onSuccessChange }: RequestFormProps) {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
   const [attachMode, setAttachMode] = useState<"link" | "file">("link")
@@ -147,15 +168,85 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
     expected_output: ["Wireframe", "Prototype tương tác"],
   })
 
+  // Ref theo dõi nội dung form mới nhất cho bộ đếm lưu nháp ngầm 15 giây
+  const formRef = useRef(form)
+  useEffect(() => {
+    formRef.current = form
+  }, [form])
+
+  // Hàm tự động lưu bản nháp form vào localStorage
+  const autoSaveDraft = () => {
+    try {
+      const current = formRef.current
+      const hasContent = Boolean(
+        (current.title && current.title.trim()) ||
+        (current.description && current.description.trim()) ||
+        (current.business_need && current.business_need.trim()) ||
+        (current.user_problem && current.user_problem.trim()) ||
+        (current.product && current.product.trim())
+      )
+      if (hasContent) {
+        localStorage.setItem(
+          FORM_DRAFT_KEY,
+          JSON.stringify({
+            ...current,
+            savedAt: Date.now(),
+          })
+        )
+      }
+    } catch (e) {
+      console.warn("Could not auto-save form draft:", e)
+    }
+  }
+
+  // Tự động khôi phục bản nháp khi mở trang & kích hoạt hẹn giờ lưu nháp 15s
   useEffect(() => {
     const cur = getStoredSession()
     setSession(cur)
-    if (cur) {
-      setForm((f) => ({
-        ...f,
-        requester_email: cur.teamsEmail || cur.personalEmail,
-      }))
+
+    try {
+      const rawDraft = localStorage.getItem(FORM_DRAFT_KEY)
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft)
+        const hasContent = Boolean(
+          (draft.title && draft.title.trim()) ||
+          (draft.description && draft.description.trim()) ||
+          (draft.business_need && draft.business_need.trim()) ||
+          (draft.user_problem && draft.user_problem.trim()) ||
+          (draft.product && draft.product.trim())
+        )
+        if (hasContent) {
+          setForm((prev) => ({
+            ...prev,
+            ...draft,
+            requester_email:
+              cur?.teamsEmail || cur?.personalEmail || draft.requester_email || prev.requester_email,
+          }))
+          toast.info(
+            "Đã khôi phục bản nháp chưa gửi!",
+            "Dữ liệu bài toán đang nhập dở trước đó đã được tự động phục hồi."
+          )
+        } else if (cur) {
+          setForm((f) => ({
+            ...f,
+            requester_email: cur.teamsEmail || cur.personalEmail,
+          }))
+        }
+      } else if (cur) {
+        setForm((f) => ({
+          ...f,
+          requester_email: cur.teamsEmail || cur.personalEmail,
+        }))
+      }
+    } catch (e) {
+      console.warn("Could not restore draft from localStorage:", e)
     }
+
+    const intervalId = setInterval(() => {
+      autoSaveDraft()
+    }, 15000)
+
+    return () => clearInterval(intervalId)
   }, [])
 
   // Cho phép dán ảnh chụp màn hình trực tiếp bằng Ctrl + V vào form yêu cầu
@@ -243,7 +334,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
 
   const rec = recommendSquad(form.product)
 
-  // Validate form linh hoạt theo cấu hình Admin
+  // Validate form linh hoạt theo cấu hình Admin và giới hạn độ dài ký tự (Item 7)
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     
@@ -275,17 +366,42 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       }
     })
 
+    // Ràng buộc độ dài ký tự an toàn (Item 7: title <= 150 chars, brief/mô tả <= 10,000 chars)
+    if (form.title && form.title.trim().length > 150) {
+      e.title = `Tiêu đề không được vượt quá 150 ký tự (Hiện tại: ${form.title.trim().length} ký tự)`
+    }
+    if (form.description && form.description.trim().length > 10000) {
+      e.description = `Mô tả không được vượt quá 10,000 ký tự (Hiện tại: ${form.description.trim().length} ký tự)`
+    }
+    if (form.business_need && form.business_need.trim().length > 10000) {
+      e.business_need = `Nhu cầu kinh doanh không được vượt quá 10,000 ký tự (Hiện tại: ${form.business_need.trim().length} ký tự)`
+    }
+    if (form.user_problem && form.user_problem.trim().length > 10000) {
+      e.user_problem = `Vấn đề người dùng không được vượt quá 10,000 ký tự (Hiện tại: ${form.user_problem.trim().length} ký tự)`
+    }
+
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
-  // Khi bấm "Gửi yêu cầu UX" ở màn hình nhập -> Chuyển sang màn Review
+  // Khi bấm "Gửi yêu cầu UX" ở màn hình nhập -> Khử khuẩn XSS và Chuyển sang màn Review
   const handleProceedToReview = (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!validate()) {
       window.scrollTo({ top: 0, behavior: "smooth" })
       return
     }
+
+    setForm((prev) => ({
+      ...prev,
+      title: sanitizeXss(prev.title),
+      description: sanitizeXss(prev.description),
+      business_need: sanitizeXss(prev.business_need),
+      user_problem: sanitizeXss(prev.user_problem),
+      target_user: sanitizeXss(prev.target_user),
+      leader_report_note: sanitizeXss(prev.leader_report_note),
+    }))
+
     setViewMode("review")
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -316,11 +432,11 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       // 2. Gửi bản ghi Task hoàn chỉnh lên Google Sheet
       const res = await submitRequest({
         ...form,
-        title: capitalizeFirstLetter(form.title),
-        description: capitalizeSentences(form.description),
-        user_problem: capitalizeSentences(form.user_problem),
-        business_need: capitalizeSentences(form.business_need),
-        target_user: capitalizeFirstLetter(form.target_user),
+        title: capitalizeFirstLetter(sanitizeXss(form.title)),
+        description: capitalizeSentences(sanitizeXss(form.description)),
+        user_problem: capitalizeSentences(sanitizeXss(form.user_problem)),
+        business_need: capitalizeSentences(sanitizeXss(form.business_need)),
+        target_user: capitalizeFirstLetter(sanitizeXss(form.target_user)),
         doc_link: validLinks.join("\n"),
         requester_email: finalEmail,
         requester_name: session?.displayName || "PO",
@@ -335,6 +451,9 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
       setSheetLogResult(res.googleSheetResult)
       setViewMode("success")
       onSuccessChange?.(true)
+      try {
+        localStorage.removeItem(FORM_DRAFT_KEY)
+      } catch {}
       window.scrollTo({ top: 0, behavior: "smooth" })
 
       // Tìm Designer Owner phụ trách Squad
@@ -572,6 +691,9 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
             squad={rec}
             syncMessage={sheetLogResult?.message}
             onCreateAnother={() => {
+              try {
+                localStorage.removeItem(FORM_DRAFT_KEY)
+              } catch {}
               setForm({
                 title: "",
                 requester_email: session?.teamsEmail || session?.personalEmail || "",
@@ -653,6 +775,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 <Input
                   type="text"
                   value={form.title}
+                  maxLength={150}
                   onChange={(e) => set("title")(e.target.value)}
                   placeholder={getFieldPlaceholder("title", "VD: Thiết kế lại màn hình chuyển tiền quốc tế")}
                   className="h-12 bg-white rounded-xl border-slate-200 text-sm px-4"
@@ -761,6 +884,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 </label>
                 <Textarea
                   value={form.description}
+                  maxLength={10000}
                   onChange={(e) => set("description")(e.target.value)}
                   placeholder={getFieldPlaceholder("description", "Mô tả ngắn gọn bối cảnh và mục tiêu nghiệp vụ...")}
                   className="min-h-[100px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"
@@ -779,6 +903,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 </label>
                 <Textarea
                   value={form.business_need}
+                  maxLength={10000}
                   onChange={(e) => set("business_need")(e.target.value)}
                   placeholder={getFieldPlaceholder("business_need", "Giải thích vì sao bài toán này cần thực hiện...")}
                   className="min-h-[80px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"
@@ -796,6 +921,7 @@ export default function RequestForm({ squads, onSuccessChange }: RequestFormProp
                 </label>
                 <Textarea
                   value={form.user_problem}
+                  maxLength={10000}
                   onChange={(e) => set("user_problem")(e.target.value)}
                   placeholder={getFieldPlaceholder("user_problem", "Khách hàng đang gặp khó khăn hay điểm nghẽn gì...")}
                   className="min-h-[80px] bg-white rounded-xl border-slate-200 text-sm p-4 leading-relaxed"

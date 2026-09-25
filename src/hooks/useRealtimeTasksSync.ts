@@ -38,6 +38,7 @@ export function hasTaskChanged(oldReq: UXRequest, newReq: UXRequest): boolean {
   if (oldReq.ux_owner !== newReq.ux_owner) return true
   if (oldReq.design_owner !== newReq.design_owner) return true
   if (oldReq.title !== newReq.title) return true
+  if (oldReq.nickname !== newReq.nickname) return true
   if (oldReq.priority !== newReq.priority) return true
   if (oldReq.last_updated !== newReq.last_updated) return true
   if (oldReq.release_date !== newReq.release_date) return true

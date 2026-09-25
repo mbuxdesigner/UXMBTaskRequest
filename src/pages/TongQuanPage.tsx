@@ -66,7 +66,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { springs, cascadeWaveContainerVariants, cascadeWaveItemVariants } from "@/lib/motion"
-import { Squad, UXRequest, mockRequests, mockSquads } from "../data/mockData"
+import { Squad, UXRequest, getRequestDisplayTitle, mockRequests, mockSquads } from "../data/mockData"
 import { fetchSquads, fetchRequests } from "../api/api"
 import { getStoredSession, UserSession } from "../services/otpAuthService"
 import { canUserAccessRequest, generateMaskedTitle } from "@/lib/accessControl"
@@ -84,7 +84,6 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import { OverviewContentSkeleton } from "@/components/common/ReuiSkeletons"
-import { SyncProgressStatus } from "@/components/reui/c-progress-4"
 
 export default function TongQuanPage() {
   const [squads, setSquads] = useState<Squad[]>(() => {
@@ -218,7 +217,8 @@ export default function TongQuanPage() {
       if (canAccess) return { ...req, isRestricted: false }
       return {
         ...req,
-        title: generateMaskedTitle(req.request_id || req.id, req.title),
+        title: generateMaskedTitle(req.request_id || req.id, getRequestDisplayTitle(req)),
+        nickname: undefined,
         isRestricted: true,
       }
     })
@@ -379,25 +379,6 @@ export default function TongQuanPage() {
           }
           className="pb-0"
         />
-
-        {/* ReUI c-progress-4 Sync Status Banner when Refreshing */}
-        <AnimatePresence>
-          {isRefreshing && (
-            <motion.div
-              initial={{ opacity: 0, height: 0, y: -6 }}
-              animate={{ opacity: 1, height: "auto", y: 0 }}
-              exit={{ opacity: 0, height: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-            >
-              <SyncProgressStatus
-                active={isRefreshing}
-                type="refresh"
-                label="Đang đồng bộ dữ liệu Live Sync (Google Sheets & Squads)..."
-                className="max-w-md bg-blue-50/50 border-blue-200/80 shadow-xs"
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* =========================================================================
             PRODUCT NAVIGATION TABS (Admin-configured products - IA segmented style)

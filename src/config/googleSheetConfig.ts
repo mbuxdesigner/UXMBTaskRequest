@@ -1,10 +1,15 @@
 // Configuration for Google Sheets Integration & Environment Detection
 
+export const GATEWAY_PROXY_URL = "/api/gateway"
+
 export interface GoogleSheetConfig {
   scriptUrl: string
   sheetId?: string
   autoSync: boolean
   lastSyncedAt?: string
+  useGateway?: boolean
+  gatewayUrl?: string
+  fallbackScriptUrl?: string
 }
 
 export interface AppEnvironmentConfig {
@@ -15,6 +20,9 @@ export interface AppEnvironmentConfig {
   scriptUrl: string
   sheetId: string
   enableDevOtpBypass: boolean
+  useGateway: boolean
+  gatewayUrl: string
+  fallbackScriptUrl: string
 }
 
 export const PRODUCTION_SCRIPT_URL =
@@ -72,11 +80,12 @@ export function getAppEnvironment(): AppEnvironmentConfig {
   const isPreview = appEnv === "preview"
   const isLocal = appEnv === "development"
 
-  // Dynamically resolve endpoints from environment with fallback to production constants
-  const scriptUrl =
+  // Direct backend script URL fallback
+  const directScriptUrl =
     (typeof import.meta !== "undefined" &&
       (import.meta.env?.VITE_APPS_SCRIPT_URL as string | undefined)) ||
     PRODUCTION_SCRIPT_URL
+
   const sheetId =
     (typeof import.meta !== "undefined" &&
       (import.meta.env?.VITE_GOOGLE_SHEET_ID as string | undefined)) ||
@@ -87,6 +96,22 @@ export function getAppEnvironment(): AppEnvironmentConfig {
       import.meta.env?.VITE_ENABLE_DEV_OTP_BYPASS === "true") ||
     (isLocal && typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV))
 
+  // Reverse proxy routing configuration
+  const gatewayUrl =
+    (typeof import.meta !== "undefined" &&
+      (import.meta.env?.VITE_GATEWAY_URL as string | undefined)) ||
+    (typeof import.meta !== "undefined" &&
+      (import.meta.env?.VITE_API_ENDPOINT as string | undefined)) ||
+    GATEWAY_PROXY_URL
+
+  // Enable gateway when explicitly configured via env, or default on Vercel hosting
+  const useGateway =
+    typeof import.meta !== "undefined" && import.meta.env?.VITE_USE_GATEWAY !== undefined
+      ? import.meta.env.VITE_USE_GATEWAY === "true"
+      : isProduction || isPreview
+
+  const scriptUrl = useGateway ? gatewayUrl : directScriptUrl
+
   return {
     isProduction,
     isPreview,
@@ -95,6 +120,9 @@ export function getAppEnvironment(): AppEnvironmentConfig {
     scriptUrl,
     sheetId,
     enableDevOtpBypass,
+    useGateway,
+    gatewayUrl,
+    fallbackScriptUrl: directScriptUrl,
   }
 }
 
@@ -105,6 +133,14 @@ export function isTestEnvironment(): boolean {
   return getAppEnvironment().appEnv !== "production"
 }
 
+export function getFallbackScriptUrl(): string {
+  return (
+    (typeof import.meta !== "undefined" &&
+      (import.meta.env?.VITE_APPS_SCRIPT_URL as string | undefined)) ||
+    PRODUCTION_SCRIPT_URL
+  )
+}
+
 export const DEFAULT_CONFIG: GoogleSheetConfig = {
   scriptUrl:
     (typeof import.meta !== "undefined" && import.meta.env?.VITE_APPS_SCRIPT_URL) ||
@@ -113,6 +149,9 @@ export const DEFAULT_CONFIG: GoogleSheetConfig = {
     (typeof import.meta !== "undefined" && import.meta.env?.VITE_GOOGLE_SHEET_ID) ||
     PRODUCTION_SHEET_ID,
   autoSync: true,
+  useGateway: false,
+  gatewayUrl: GATEWAY_PROXY_URL,
+  fallbackScriptUrl: PRODUCTION_SCRIPT_URL,
 }
 
 export function getGoogleSheetConfig(): GoogleSheetConfig {
@@ -121,6 +160,9 @@ export function getGoogleSheetConfig(): GoogleSheetConfig {
     scriptUrl: dynamicEnv.scriptUrl,
     sheetId: dynamicEnv.sheetId,
     autoSync: true,
+    useGateway: dynamicEnv.useGateway,
+    gatewayUrl: dynamicEnv.gatewayUrl,
+    fallbackScriptUrl: dynamicEnv.fallbackScriptUrl,
   }
 
   try {
@@ -134,6 +176,7 @@ export function getGoogleSheetConfig(): GoogleSheetConfig {
         scriptUrl: parsed.scriptUrl || baseConfig.scriptUrl,
         sheetId:
           parsed.sheetId && parsed.sheetId.trim() ? parsed.sheetId : baseConfig.sheetId,
+        fallbackScriptUrl: baseConfig.fallbackScriptUrl,
       }
     }
   } catch (err) {

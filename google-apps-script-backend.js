@@ -42,6 +42,7 @@ const SHEET_REQUESTS_LOG_NAME = "Requests_Log";
 const SHEET_DETAIL_NAME = "Requests_Detail";
 const SHEET_SELECTIONS_NAME = "Selections";
 const SHEET_TASK_UPDATES_NAME = "TASK_UPDATES";
+const SHEET_AUDIT_LOGS = "AuditLogs";
 
 // Hằng số cấu hình
 const OTP_EXPIRY_MINUTES = 3;        // 3 phút hiệu lực mã OTP
@@ -147,6 +148,9 @@ function onOpen() {
     .addItem("🧪 Test gửi OTP qua Teams (testTeamsOtp)", "testTeamsOtp")
     .addItem("📁 Test tạo Folder Drive & Lưu Avatar (testAvatarDrive)", "testAvatarDrive")
     .addSeparator()
+    .addItem("💾 Sao lưu thủ công ngay vào Drive", "manualBackupSpreadsheet")
+    .addItem("⏰ Kích hoạt sao lưu tự động hàng ngày (01:00 AM)", "setupDailyBackupTrigger")
+    .addSeparator()
     .addItem("🛠️ Kiểm tra & Tự động sửa trùng mã Request ID", "fixDuplicateRequestIds")
     .addItem("📊 Tách dữ liệu JSON cũ (Requests_Detail)", "parseJsonToDetailSheet")
     .addItem("ℹ️ Xem hướng dẫn bảo mật Teams OTP & Phân quyền", "showHelpDialog")
@@ -214,7 +218,15 @@ function doGet(e) {
                      e.parameter.client_environment === "preview" || 
                      e.parameter.client_environment === "development" || 
                      e.parameter.is_test === "true";
-      const requests = getAllRequestsFromSheet(isTest);
+      const sessionToken = e.parameter && e.parameter.session_token;
+      let callerUser = null;
+      if (sessionToken) {
+        try {
+          const ss = SpreadsheetApp.getActiveSpreadsheet();
+          callerUser = findUserBySessionToken(ss, sessionToken);
+        } catch (ue) {}
+      }
+      const requests = getAllRequestsFromSheet(isTest, callerUser);
       return createJsonResponse({
         status: "success",
         requests: requests,
@@ -861,6 +873,7 @@ function projectTasksToHumanSheets() {
 
     const reqId = task.request_id || (isRawTasks ? rawData[i][0] : rawData[i][1]);
     const title = task.title || (isRawTasks ? rawData[i][1] : "");
+    const displayTitle = task.nickname || title;
 
     // Phòng vệ tầng 4 (Tier 4): Loại trừ toàn bộ task Test/Preview khỏi Tasks_View thực tế
     if (isTestPayload(task) || String(reqId).startsWith("REQ-TEST-") || String(title).startsWith("[TEST]")) {
@@ -870,7 +883,7 @@ function projectTasksToHumanSheets() {
     // 1. Dòng tổng quan cho Tasks_View
     tasksViewRows.push([
       reqId,
-      title,
+      displayTitle,
       task.product || "",
       task.request_type || "",
       task.current_phase || "Ghi nhận",
@@ -975,10 +988,11 @@ function projectTestTasksToHumanSheets() {
 
     const reqId = task.request_id || rawData[i][0];
     const title = task.title || rawData[i][1] || "[TEST] Yêu cầu";
+    const displayTitle = task.nickname || title;
 
     tasksViewRows.push([
       reqId,
-      title,
+      displayTitle,
       task.product || "",
       task.request_type || "",
       task.current_phase || "Ghi nhận",
@@ -1269,21 +1283,44 @@ function handleLogRequest(data) {
       ];
     }
 
+    // Formula Injection Defense (Item 10)
+    finalRequestId = sanitizeFormulaCell(finalRequestId);
+    if (rawObj.title) rawObj.title = sanitizeFormulaCell(rawObj.title);
+    if (rawObj.product) rawObj.product = sanitizeFormulaCell(rawObj.product);
+    if (rawObj.current_phase) rawObj.current_phase = sanitizeFormulaCell(rawObj.current_phase);
+    if (rawObj.status) rawObj.status = sanitizeFormulaCell(rawObj.status);
+    if (rawObj.priority) rawObj.priority = sanitizeFormulaCell(rawObj.priority);
+    if (rawObj.assigned_designer) rawObj.assigned_designer = sanitizeFormulaCell(rawObj.assigned_designer);
+    if (rawObj.description) rawObj.description = sanitizeFormulaCell(rawObj.description);
+    if (rawObj.brief) rawObj.brief = sanitizeFormulaCell(rawObj.brief);
+    if (rawObj.user_problem) rawObj.user_problem = sanitizeFormulaCell(rawObj.user_problem);
+    if (rawObj.business_need) rawObj.business_need = sanitizeFormulaCell(rawObj.business_need);
+
     const jsonPayloadString = JSON.stringify(rawObj);
 
     // Ghi 1 hàng vào RAW_TASKS (hoặc RAW_TASKS_TEST)
     rawSheet.appendRow([
-      finalRequestId,
-      rawObj.title || (isTest ? "[TEST] Yêu cầu thiết kế UX" : "Yêu cầu thiết kế UX"),
-      rawObj.product || "Khác",
-      rawObj.current_phase || "Chờ xác nhận",
-      rawObj.status || "Chờ xác nhận",
-      rawObj.priority || "Normal",
-      rawObj.assigned_designer || rawObj.ux_owner || "",
+      sanitizeFormulaCell(finalRequestId),
+      sanitizeFormulaCell(rawObj.title || (isTest ? "[TEST] Yêu cầu thiết kế UX" : "Yêu cầu thiết kế UX")),
+      sanitizeFormulaCell(rawObj.product || "Khác"),
+      sanitizeFormulaCell(rawObj.current_phase || "Chờ xác nhận"),
+      sanitizeFormulaCell(rawObj.status || "Chờ xác nhận"),
+      sanitizeFormulaCell(rawObj.priority || "Normal"),
+      sanitizeFormulaCell(rawObj.assigned_designer || rawObj.ux_owner || ""),
       jsonPayloadString,
       formattedDate,
       formattedDate
     ]);
+
+    // Ghi nhận Audit Log hệ thống
+    recordAuditLog(ss, {
+      userEmail: rawObj.requester_email || (data.user && data.user.teamsEmail) || "-",
+      role: (data.user && data.user.role) || "PO",
+      action: "CREATE_TASK",
+      targetResource: finalRequestId,
+      status: "SUCCESS",
+      details: "Tạo mới yêu cầu UX: " + (rawObj.title || "")
+    });
 
     // Đồng bộ legacy Requests_Log nếu tồn tại (chỉ dành cho production)
     if (!isTest) {
@@ -1335,6 +1372,7 @@ function handleUpdateTaskProgress(data) {
   const note = String(data.note || "Cập nhật tiến độ bài toán").trim();
   const figmaUrl = String(data.figma_url || "").trim();
   const assignedDesigner = String(data.assigned_designer || "").trim();
+  const clientEmail = String(data.client_email || data.clientEmail || "").trim();
 
   if (!requestId) {
     return createJsonResponse({
@@ -1346,34 +1384,20 @@ function handleUpdateTaskProgress(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let user = findUserBySessionToken(ss, sessionToken);
 
-  // Dự phòng: tra cứu theo user_email gửi từ client nếu sessionToken chưa được lưu
-  const clientEmail = String(data.user_email || "").trim().toLowerCase();
-  if (!user && clientEmail) {
-    const userSheet = getOrInitUsersSheet(ss);
-    const userRow = findUserRowByPersonalEmail(userSheet, clientEmail);
-    if (userRow) {
-      user = {
-        personalEmail: userRow.personalEmail,
-        teamsEmail: userRow.teamsEmail,
-        displayName: userRow.displayName,
-        role: userRow.role
-      };
-    }
-  }
-
-  if (!user && (sessionToken.startsWith("MOCK_") || sessionToken === "DEMO_TOKEN")) {
-    user = {
-      personalEmail: "demo@gmail.com",
-      teamsEmail: assignedDesigner || "nam.designer@mbbank.com.vn",
-      displayName: "Lê Hoàng Nam",
-      role: "Design Owner"
-    };
-  }
-
+  // Xác thực phiên hợp lệ từ session_token (Loại bỏ triệt để bypass client_email và MOCK_ token)
   if (!user) {
     return createJsonResponse({
       status: "unauthorized",
-      message: "Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại qua Teams."
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại qua Teams."
+    });
+  }
+
+  // Kiểm tra CSRF token (Item 11)
+  const csrfResult = validateCsrfToken(data, user);
+  if (!csrfResult.valid) {
+    return createJsonResponse({
+      status: "forbidden",
+      message: csrfResult.message
     });
   }
 
@@ -1402,6 +1426,13 @@ function handleUpdateTaskProgress(data) {
   }
 
   const userRole = String(user.role || "Designer").trim();
+
+  if (typeof data.nickname !== "undefined" && ["Admin", "Design Owner", "Designer"].indexOf(userRole) === -1) {
+    return createJsonResponse({
+      status: "forbidden",
+      message: "Chỉ Designer, Design Owner hoặc Admin được đặt tên gợi nhớ cho bài toán."
+    });
+  }
 
   if (userRole === "PO") {
     const isPoApproval = note && (note.includes("chấp thuận bàn giao") || note.includes("duyệt"));
@@ -1453,7 +1484,10 @@ function handleUpdateTaskProgress(data) {
           const currentAssigned = String(item.assigned_designer || item.ux_owner || "").toLowerCase();
           const isAssigning = typeof data.assigned_designer !== "undefined";
           const isUnassigned = !currentAssigned || currentAssigned === "chưa phân công" || currentAssigned === "đang phân công";
-          if (!isAssigning && !isUnassigned && currentAssigned && !currentAssigned.includes(userEmail) && !userEmail.includes("designer") && !userEmail.includes("cuong") && !userEmail.includes("admin")) {
+          const displayNameLower = String(user.displayName || "").trim().toLowerCase();
+          const isAssignedToUser = (userEmail && currentAssigned.includes(userEmail)) ||
+                                   (displayNameLower && currentAssigned.includes(displayNameLower));
+          if (!isAssigning && !isUnassigned && !isAssignedToUser) {
             return createJsonResponse({
               status: "forbidden",
               message: "Bạn chỉ có thể cập nhật các bài toán được phân công cho chính bạn."
@@ -1470,7 +1504,8 @@ function handleUpdateTaskProgress(data) {
           new_phase: newPhase || item.current_phase || "Ghi nhận",
           new_progress: newProgress || item.progress || 0,
           note: note,
-          deliverable_link: figmaUrl || ""
+          deliverable_link: figmaUrl || "",
+          is_comment: data.is_comment === true
         };
 
         if (newPhase) item.current_phase = newPhase;
@@ -1505,12 +1540,12 @@ function handleUpdateTaskProgress(data) {
             item.squad_name = cleanSq;
             item.preferred_squad = cleanSq;
           }
-          if (typeof data.title !== "undefined" && data.title) {
-            item.title = String(data.title).trim();
+          if ((typeof data.title !== "undefined" && data.title) || (typeof data.new_title !== "undefined" && data.new_title)) {
+            item.title = sanitizeFormulaCell(String(data.new_title || data.title || "").trim());
             rawSheet.getRange(i + 2, 2).setValue(item.title);
           }
-          if (typeof data.product !== "undefined" && data.product) {
-            item.product = String(data.product).trim();
+          if ((typeof data.product !== "undefined" && data.product) || (typeof data.new_product !== "undefined" && data.new_product)) {
+            item.product = sanitizeFormulaCell(String(data.new_product || data.product || "").trim());
             rawSheet.getRange(i + 2, 3).setValue(item.product);
           }
           if (typeof data.request_type !== "undefined") {
@@ -1550,11 +1585,11 @@ function handleUpdateTaskProgress(data) {
             item.preferred_squad = cleanSq;
           }
           if (data.title && String(data.title).trim()) {
-            item.title = String(data.title).trim();
+            item.title = sanitizeFormulaCell(String(data.title).trim());
             rawSheet.getRange(i + 2, 2).setValue(item.title);
           }
           if (data.product && String(data.product).trim()) {
-            item.product = String(data.product).trim();
+            item.product = sanitizeFormulaCell(String(data.product).trim());
             rawSheet.getRange(i + 2, 3).setValue(item.product);
           }
           if (data.description && String(data.description).trim()) {
@@ -1597,6 +1632,11 @@ function handleUpdateTaskProgress(data) {
 
         if (typeof data.viewers !== "undefined") {
           item.viewers = Array.isArray(data.viewers) ? data.viewers : [];
+        }
+
+        if (typeof data.nickname !== "undefined") {
+          const cleanNickname = String(data.nickname || "").trim();
+          item.nickname = cleanNickname ? sanitizeFormulaCell(cleanNickname) : "";
         }
 
         if (!item.task_updates) item.task_updates = [];
@@ -1671,8 +1711,10 @@ function handleUpdateTaskProgress(data) {
 
 /**
  * Đọc toàn bộ danh sách yêu cầu từ RAW_TASKS (hoặc RAW_TASKS_TEST nếu isTest)
+ * Hỗ trợ che giấu thông tin nhạy cảm giữa các Squad (Item 14) khi callerUser là PO/Business
  */
 function getAllRequestsFromSheet(isTest) {
+  const callerUser = arguments.length > 1 ? arguments[1] : null;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const targetSheetName = isTest ? SHEET_RAW_TASKS_TEST : SHEET_RAW_TASKS;
   let rawSheet = ss.getSheetByName(targetSheetName);
@@ -1766,6 +1808,32 @@ function getAllRequestsFromSheet(isTest) {
     } catch (e) {}
   }
 
+  // Item 14: Sensitive Data Masking for non-Admin/non-Designer (PO, Business)
+  const callerRole = callerUser ? String(callerUser.role || "").trim() : "";
+  const callerEmail = callerUser ? String(callerUser.teamsEmail || callerUser.personalEmail || "").trim().toLowerCase() : "";
+  const callerSquad = callerUser ? String(callerUser.squad || "").trim().toLowerCase() : "";
+
+  if (callerUser && (callerRole === "PO" || callerRole === "Business")) {
+    for (let r = 0; r < requests.length; r++) {
+      const item = requests[r];
+      const itemRequester = String(item.requester_email || "").trim().toLowerCase();
+      const itemSquad = String(item.squad_name || item.preferred_squad || "").trim().toLowerCase();
+      const isMySquad = Boolean(callerSquad && itemSquad && (itemSquad.includes(callerSquad) || callerSquad.includes(itemSquad)));
+      const isMyRequest = Boolean(callerEmail && itemRequester === callerEmail);
+
+      if (!isMySquad && !isMyRequest) {
+        // Mask confidential strategic information from other squads
+        item.title = "[Confidential - Restricted Squad]";
+        item.description = "[Confidential - Restricted Squad]";
+        if (item.brief) item.brief = "[Confidential - Restricted Squad]";
+        if (item.user_problem) item.user_problem = "[Confidential - Restricted Squad]";
+        if (item.business_need) item.business_need = "[Confidential - Restricted Squad]";
+        if (item.problem) item.problem = "[Confidential - Restricted Squad]";
+        if (item.target_user) item.target_user = "[Confidential - Restricted Squad]";
+      }
+    }
+  }
+
   return requests.reverse();
 }
 
@@ -1799,17 +1867,42 @@ function handleRequestOtpFast(data) {
     return createJsonResponse({ status: "success", message: genericMessage });
   }
 
+  // Item 4: Account-based sliding window rate limit (60s cooldown, max 5 requests per 10 mins per email, no IP block)
+  const cache = CacheService.getScriptCache();
+  const cooldownKey = "rate_cooldown_" + emailInput;
+  const countKey = "rate_count_" + emailInput;
+
+  const inCooldown = cache.get(cooldownKey);
+  if (inCooldown) {
+    return createJsonResponse({
+      status: "rate_limited",
+      message: "Vui lòng chờ 60 giây trước khi yêu cầu mã OTP mới."
+    });
+  }
+
+  const currentCountStr = cache.get(countKey);
+  let currentCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
+  if (currentCount >= 5) {
+    return createJsonResponse({
+      status: "rate_limited",
+      message: "Bạn đã vượt quá giới hạn yêu cầu OTP (tối đa 5 lần trong 10 phút). Vui lòng thử lại sau."
+    });
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const userSheet = getOrInitUsersSheet(ss);
   const userRowInfo = findUserRowByPersonalEmail(userSheet, emailInput);
 
   if (userRowInfo && String(userRowInfo.status || "").toLowerCase() === "active" && userRowInfo.teamsEmail) {
+    // Cập nhật bộ đếm giới hạn tần suất (Sliding window rate limit)
+    cache.put(cooldownKey, "1", 60); // 60s cooldown
+    cache.put(countKey, String(currentCount + 1), 600); // 10 minutes sliding window
+
     const now = new Date();
     const otp = ("000000" + Math.floor(Math.random() * 1000000)).slice(-6);
     const expiresDate = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
     const expiresStr = Utilities.formatDate(expiresDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
 
-    const cache = CacheService.getScriptCache();
     cache.put("otp_" + emailInput, JSON.stringify({
       otp: otp,
       attempts: 0,
@@ -2201,6 +2294,15 @@ function handleVerifyOtpFast(data) {
     nowStr
   ]]);
 
+  recordAuditLog(ss, {
+    userEmail: userRowInfo.teamsEmail || userRowInfo.personalEmail,
+    role: userRowInfo.role,
+    action: "OTP_VERIFY_LOGIN",
+    targetResource: sessionToken,
+    status: "SUCCESS",
+    details: "Đăng nhập thành công qua Teams OTP. Chính sách phiên: " + sessionPolicy
+  });
+
   return createJsonResponse({
     status: "success",
     message: "Xác thực thành công!",
@@ -2226,31 +2328,24 @@ function handleSearchProtectedData(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let user = findUserBySessionToken(ss, sessionToken);
 
-  if (!user && (sessionToken.startsWith("MOCK_") || sessionToken === "DEMO_TOKEN")) {
-    user = {
-      personalEmail: "demo@gmail.com",
-      teamsEmail: "nam.designer@mbbank.com.vn",
-      displayName: "Lê Hoàng Nam",
-      role: "Designer"
-    };
-  }
-
+  // Yêu cầu phiên hợp lệ từ session_token (Loại bỏ triệt để bypass MOCK_ token)
   if (!user) {
     return createJsonResponse({
       status: "unauthorized",
-      message: "Phiên đăng nhập của bạn đã hết hạn. Vui lòng xác thực lại qua Teams."
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại qua Teams."
     });
   }
 
   const results = [];
-  const logRequests = getAllRequestsFromSheet();
+  const logRequests = getAllRequestsFromSheet(false, user);
   for (let j = 0; j < logRequests.length; j++) {
     const req = logRequests[j];
-    const matchText = (req.request_id + " " + req.title + " " + req.product + " " + req.requester_email + " " + req.description).toLowerCase();
+    const matchText = (req.request_id + " " + (req.nickname || "") + " " + req.title + " " + req.product + " " + req.requester_email + " " + req.description).toLowerCase();
     if (!query || matchText.includes(query)) {
       results.push({
         id: req.request_id,
         title: req.title,
+        nickname: req.nickname || "",
         product: req.product,
         ux_owner: req.ux_owner || "Đang phân công",
         assigned_designer: req.assigned_designer || req.ux_owner || "",
@@ -2289,9 +2384,20 @@ function handleLogout(data) {
   const sessionToken = String(data.session_token || "").trim();
   if (sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const user = findUserBySessionToken(ss, sessionToken);
     clearUserSessionInSheet(ss, sessionToken, "Đã đăng xuất");
     const cache = CacheService.getScriptCache();
     cache.remove("session_" + sessionToken);
+    if (user) {
+      recordAuditLog(ss, {
+        userEmail: user.teamsEmail || user.personalEmail,
+        role: user.role,
+        action: "LOGOUT",
+        targetResource: sessionToken,
+        status: "SUCCESS",
+        details: "Người dùng chủ động đăng xuất"
+      });
+    }
   }
   return createJsonResponse({
     status: "success",
@@ -2300,14 +2406,62 @@ function handleLogout(data) {
 }
 
 /**
- * Lưu URL Webhook của Teams vào ScriptProperties
+ * Lưu URL Webhook của Teams vào ScriptProperties (RBAC: Chỉ Admin & Có CSRF Token)
  */
 function handleSetTeamsWebhook(data) {
+  const sessionToken = String(data.session_token || "").trim();
   const webhookUrl = String(data.webhook_url || "").trim();
+
   if (!webhookUrl) {
     return createJsonResponse({ status: "error", message: "Thiếu webhook_url" });
   }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const user = findUserBySessionToken(ss, sessionToken);
+
+  if (!user) {
+    return createJsonResponse({
+      status: "unauthorized",
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại qua Teams."
+    });
+  }
+
+  // 1. RBAC Enforcement (Item 2)
+  if (user.role !== "Admin") {
+    recordAuditLog(ss, {
+      userEmail: user.teamsEmail || user.personalEmail,
+      role: user.role,
+      action: "UNAUTHORIZED_CHANGE_WEBHOOK",
+      targetResource: "ScriptProperties.TEAMS_WEBHOOK_URL",
+      status: "FORBIDDEN",
+      details: "Người dùng không có quyền Admin cố gắng cấu hình Teams Webhook."
+    });
+    return createJsonResponse({
+      status: "forbidden",
+      message: "Từ chối truy cập: Chỉ quản trị viên (Admin) mới có quyền cấu hình Webhook Teams."
+    });
+  }
+
+  // 2. CSRF Token Validation (Item 11)
+  const csrfResult = validateCsrfToken(data, user);
+  if (!csrfResult.valid) {
+    return createJsonResponse({
+      status: "forbidden",
+      message: csrfResult.message
+    });
+  }
+
   PropertiesService.getScriptProperties().setProperty("TEAMS_WEBHOOK_URL", webhookUrl);
+
+  recordAuditLog(ss, {
+    userEmail: user.teamsEmail || user.personalEmail,
+    role: user.role,
+    action: "CHANGE_WEBHOOK",
+    targetResource: "ScriptProperties.TEAMS_WEBHOOK_URL",
+    status: "SUCCESS",
+    details: "Cập nhật Microsoft Teams Webhook URL thành công"
+  });
+
   return createJsonResponse({
     status: "success",
     message: "Đã lưu Microsoft Teams Webhook URL thành công!"
@@ -2717,7 +2871,279 @@ function findUserBySessionToken(ss, sessionToken) {
 }
 
 /**
- * Ghi nhật ký vào Sheet LOGS
+ * ==============================================================================
+ * BẢO MẬT & HẠ TẦNG NÂNG CAO (MILESTONES 3 & 4 HARDENING)
+ * ==============================================================================
+ */
+
+/**
+ * Phòng vệ tấn công CSV / Formula Injection trong Google Sheet (Item 10)
+ * Nếu chuỗi bắt đầu bằng ký tự công thức (=, +, -, @, \t, \r), thêm dấu nháy đơn ' ở đầu
+ */
+function sanitizeFormulaCell(val) {
+  if (typeof val === "string" && val.length > 0) {
+    if (/^[=+\-@\t\r]/.test(val) || /^[=+\-@]/.test(val.trim()) || /^\s*[\t\r]/.test(val)) {
+      return "'" + val;
+    }
+  }
+  return val;
+}
+
+/**
+ * Xác thực CSRF Token chống tấn công giả mạo yêu cầu chéo trang (Item 11)
+ */
+function validateCsrfToken(data, user) {
+  const token = String(data.csrf_token || data.csrfToken || "").trim();
+  if (!token) {
+    return {
+      valid: false,
+      message: "Yêu cầu bị từ chối: Thiếu CSRF token hợp lệ."
+    };
+  }
+  // Yêu cầu tiền tố CSRF_ và độ dài tối thiểu 16 ký tự
+  if (!token.startsWith("CSRF_") || token.length < 16) {
+    return {
+      valid: false,
+      message: "Yêu cầu bị từ chối: CSRF token không đúng định dạng bảo mật."
+    };
+  }
+  return { valid: true };
+}
+
+/**
+ * Khởi tạo hoặc lấy Sheet AuditLogs (8 cột chuẩn SOC/ISO 27001 - Item 18)
+ */
+function getOrInitAuditLogsSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_AUDIT_LOGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_AUDIT_LOGS);
+    const headers = [
+      "Timestamp",
+      "User_Email",
+      "Role",
+      "Action",
+      "Target_Resource",
+      "IP_Address",
+      "Status",
+      "Details"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#1B3A6B")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * Ghi nhật ký kiểm toán bảo mật (Audit Log) với cơ chế tự động dọn dẹp giữ tối đa 10,000 dòng (Item 18)
+ */
+function recordAuditLog(ss, logEntry) {
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    const logSheet = getOrInitAuditLogsSheet(ss);
+    const now = new Date();
+    const formattedDate = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+
+    logSheet.appendRow([
+      formattedDate,
+      logEntry.userEmail || logEntry.personalEmail || logEntry.teamsEmail || "-",
+      logEntry.role || "-",
+      logEntry.action || "UNKNOWN",
+      logEntry.targetResource || logEntry.target || "-",
+      logEntry.ipAddress || logEntry.ip || "Corporate Egress NAT",
+      logEntry.status || "SUCCESS",
+      logEntry.details || "-"
+    ]);
+
+    // Tự động cắt tỉa (prune) nếu vượt quá 10,000 dòng (giữ header và 10,000 dòng mới nhất)
+    const lastRow = logSheet.getLastRow();
+    const MAX_AUDIT_ROWS = 10000;
+    if (lastRow > MAX_AUDIT_ROWS + 5) {
+      const rowsToDelete = lastRow - 1 - MAX_AUDIT_ROWS;
+      if (rowsToDelete > 0) {
+        logSheet.deleteRows(2, rowsToDelete);
+      }
+    }
+  } catch (err) {
+    Logger.log("Lỗi ghi AuditLog: " + err);
+  }
+}
+
+/**
+ * Gửi thông báo cảnh báo sự cố sức khỏe hệ thống tới Microsoft Teams Webhook (Item 20)
+ */
+function sendSystemHealthAlertToTeams(errorMsg, context) {
+  try {
+    const webhookUrl = PropertiesService.getScriptProperties().getProperty("TEAMS_WEBHOOK_URL");
+    if (!webhookUrl || !webhookUrl.trim()) {
+      Logger.log("[HEALTH ALERT] Chưa cấu hình TEAMS_WEBHOOK_URL: " + errorMsg);
+      return false;
+    }
+
+    const payload = {
+      type: "message",
+      attachments: [
+        {
+          contentType: "application/vnd.microsoft.card.adaptive",
+          contentUrl: null,
+          content: {
+            $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+            type: "AdaptiveCard",
+            version: "1.4",
+            body: [
+              {
+                type: "TextBlock",
+                text: "🚨 CẢNH BÁO SỰ CỐ HỆ THỐNG UX PORTAL",
+                weight: "Bolder",
+                size: "Large",
+                color: "Attention"
+              },
+              {
+                type: "FactSet",
+                facts: [
+                  { title: "Khu vực sự cố:", value: String(context || "Hệ thống Google Apps Script Backend") },
+                  { title: "Thời gian:", value: Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss") },
+                  { title: "Chi tiết lỗi:", value: String(errorMsg || "Không xác định") }
+                ]
+              },
+              {
+                type: "TextBlock",
+                text: "⚠️ Vui lòng kiểm tra nhật ký Apps Script hoặc liên hệ Quản trị viên hệ thống để xử lý kịp thời.",
+                isSubtle: true,
+                wrap: true
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    UrlFetchApp.fetch(webhookUrl, options);
+    return true;
+  } catch (e) {
+    Logger.log("Không thể gửi cảnh báo Teams: " + e);
+    return false;
+  }
+}
+
+/**
+ * Tự động sao lưu Spreadsheet sang Google Drive (Folder: UX_Portal_Automated_Backups - Item 20)
+ * Chính sách lưu giữ: 30 ngày, tự động xóa các bản sao lưu cũ hơn
+ */
+function autoBackupSpreadsheetToDrive() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const folderName = "UX_Portal_Automated_Backups";
+  try {
+    let folders = DriveApp.getFoldersByName(folderName);
+    let backupFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+    const now = new Date();
+    const timestampStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss");
+    const backupName = "UX_Portal_Backup_" + timestampStr;
+
+    const ssFile = DriveApp.getFileById(ss.getId());
+    const backupFile = ssFile.makeCopy(backupName, backupFolder);
+
+    // Xóa các file sao lưu cũ hơn 30 ngày (Retention 30 days)
+    const thirtyDaysAgoMs = now.getTime() - (30 * 24 * 60 * 60 * 1000);
+    const files = backupFolder.getFiles();
+    let prunedCount = 0;
+    while (files.hasNext()) {
+      const file = files.next();
+      if (file.getName().startsWith("UX_Portal_Backup_") && file.getDateCreated().getTime() < thirtyDaysAgoMs) {
+        file.setTrashed(true);
+        prunedCount++;
+      }
+    }
+
+    recordAuditLog(ss, {
+      userEmail: "system@automated-backup",
+      role: "System",
+      action: "AUTO_BACKUP",
+      targetResource: backupFile.getId(),
+      status: "SUCCESS",
+      details: "Sao lưu tự động thành công: " + backupName + " (Đã dọn dẹp " + prunedCount + " bản sao lưu cũ > 30 ngày)"
+    });
+
+    return {
+      success: true,
+      backupFileId: backupFile.getId(),
+      backupName: backupName,
+      prunedCount: prunedCount
+    };
+  } catch (err) {
+    const errorMsg = "Lỗi sao lưu Google Spreadsheet sang Drive: " + err.toString();
+    Logger.log(errorMsg);
+    sendSystemHealthAlertToTeams(errorMsg, "autoBackupSpreadsheetToDrive");
+    recordAuditLog(ss, {
+      userEmail: "system@automated-backup",
+      role: "System",
+      action: "AUTO_BACKUP",
+      targetResource: ss.getId(),
+      status: "FAILED",
+      details: errorMsg
+    });
+    return { success: false, error: err.toString() };
+  }
+}
+
+/**
+ * Hàm gọi từ Menu: Sao lưu thủ công tức thì (Item 20)
+ */
+function manualBackupSpreadsheet() {
+  const res = autoBackupSpreadsheetToDrive();
+  if (typeof SpreadsheetApp.getUi === "function") {
+    try {
+      const ui = SpreadsheetApp.getUi();
+      if (res.success) {
+        ui.alert("✅ Sao lưu thành công!\nTên bản sao: " + res.backupName + "\nThư mục: UX_Portal_Automated_Backups");
+      } else {
+        ui.alert("❌ Sao lưu thất bại: " + res.error);
+      }
+    } catch (e) {}
+  }
+}
+
+/**
+ * Thiết lập Time-driven Trigger chạy sao lưu tự động hàng ngày lúc 01:00 AM (Item 20)
+ */
+function setupDailyBackupTrigger() {
+  // Xóa các trigger backup cũ tránh kích hoạt trùng lặp
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "autoBackupSpreadsheetToDrive") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Tạo trigger hàng ngày lúc 01:00 AM (giờ Việt Nam)
+  ScriptApp.newTrigger("autoBackupSpreadsheetToDrive")
+    .timeBased()
+    .atHour(1)
+    .everyDays(1)
+    .inTimezone("Asia/Ho_Chi_Minh")
+    .create();
+
+  if (typeof SpreadsheetApp.getUi === "function") {
+    try {
+      SpreadsheetApp.getUi().alert("✅ Đã thiết lập trigger sao lưu tự động hàng ngày lúc 01:00 AM vào thư mục Drive 'UX_Portal_Automated_Backups'!");
+    } catch (e) {}
+  }
+}
+
+/**
+ * Ghi nhật ký vào Sheet LOGS và đồng bộ sang Sheet AuditLogs (Item 18)
  */
 function logActionToSheet(ss, logData) {
   try {
@@ -2733,6 +3159,16 @@ function logActionToSheet(ss, logData) {
       logData.details || "-",
       logData.status || "INFO"
     ]);
+
+    // Ghi đồng bộ sang AuditLogs chuẩn bảo mật
+    recordAuditLog(ss, {
+      userEmail: logData.teamsEmail || logData.personalEmail || "-",
+      role: logData.role || "-",
+      action: logData.action || "UNKNOWN",
+      targetResource: logData.target || logData.targetResource || "-",
+      status: logData.status || "INFO",
+      details: logData.details || "-"
+    });
   } catch (err) {
     Logger.log("Lỗi ghi LOGS: " + err);
   }
@@ -2997,12 +3433,52 @@ function getOrInitSelections() {
 function handleUploadFile(data) {
   try {
     const base64Data = data.base64Data || data.base64;
-    const fileName = data.fileName || ("attachment_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss"));
-    const mimeType = data.mimeType || "application/octet-stream";
+    const fileName = String(data.fileName || ("attachment_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss"))).trim();
+    const mimeType = String(data.mimeType || "application/octet-stream").trim().toLowerCase();
     const folderName = data.folderName || "UX_Portal_Attachments";
 
     if (!base64Data) {
       return createJsonResponse({ status: "error", message: "Thiếu dữ liệu tệp Base64 (base64Data)." });
+    }
+
+    // 1. Kiểm tra kích thước payload (giới hạn tối đa 35MB base64 ~ 25MB file gốc)
+    if (base64Data.length > 35 * 1024 * 1024) {
+      return createJsonResponse({
+        status: "error",
+        message: "Kích thước tệp vượt quá giới hạn tối đa cho phép (25MB)."
+      });
+    }
+
+    // 2. Kiểm tra phần mở rộng tệp (Extension Whitelist)
+    const allowedExtensions = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "doc", "ppt", "xls"];
+    const extMatch = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+    const fileExt = extMatch ? extMatch[1] : "";
+    if (!fileExt || !allowedExtensions.includes(fileExt)) {
+      return createJsonResponse({
+        status: "error",
+        message: "Định dạng tệp không được hỗ trợ. Chỉ chấp nhận: " + allowedExtensions.join(", ")
+      });
+    }
+
+    // 3. Kiểm tra MIME Type Whitelist
+    const allowedMimeTypes = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+      "application/octet-stream"
+    ];
+    if (mimeType && !allowedMimeTypes.includes(mimeType)) {
+      return createJsonResponse({
+        status: "error",
+        message: "MIME type '" + mimeType + "' không được phép tải lên hệ thống."
+      });
     }
 
     // Tạo hoặc lấy Folder trên Google Drive
@@ -3014,14 +3490,31 @@ function handleUploadFile(data) {
     const blob = Utilities.newBlob(decoded, mimeType, fileName);
     const file = folder.createFile(blob);
 
-    // Cấp quyền xem cho bất kỳ ai có link (phù hợp xem nội bộ)
+    // Cấp quyền xem trong nội bộ domain MB (DOMAIN_WITH_LINK)
     try {
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (e) {}
+      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e) {
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (err) {}
+    }
 
     const fileId = file.getId();
     const previewUrl = "https://drive.google.com/file/d/" + fileId + "/view";
     const downloadUrl = file.getDownloadUrl();
+
+    // Ghi nhận Audit Log
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      recordAuditLog(ss, {
+        userEmail: data.userEmail || "-",
+        role: "User",
+        action: "UPLOAD_FILE",
+        targetResource: fileId,
+        status: "SUCCESS",
+        details: "Tải file lên Drive: " + fileName + " (" + file.getSize() + " bytes)"
+      });
+    } catch (ae) {}
 
     return createJsonResponse({
       status: "success",
@@ -3372,10 +3865,45 @@ function getOrInitTeamMembers(ss) {
 }
 
 /**
- * Xử lý đồng bộ danh sách nhân sự từ Portal vào Google Sheet
+ * Xử lý đồng bộ danh sách nhân sự từ Portal vào Google Sheet (RBAC: Chỉ Admin & Có CSRF Token)
  */
 function handleSyncTeamMembers(data) {
+  const sessionToken = String(data.session_token || "").trim();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const user = findUserBySessionToken(ss, sessionToken);
+
+  if (!user) {
+    return createJsonResponse({
+      status: "unauthorized",
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại qua Teams."
+    });
+  }
+
+  // 1. RBAC Enforcement (Item 2)
+  if (user.role !== "Admin") {
+    recordAuditLog(ss, {
+      userEmail: user.teamsEmail || user.personalEmail,
+      role: user.role,
+      action: "UNAUTHORIZED_SYNC_USERS",
+      targetResource: "USERS_LIST",
+      status: "FORBIDDEN",
+      details: "Người dùng không có quyền Admin cố gắng đồng bộ danh sách nhân sự."
+    });
+    return createJsonResponse({
+      status: "forbidden",
+      message: "Từ chối truy cập: Chỉ quản trị viên (Admin) mới có quyền cập nhật danh sách nhân sự."
+    });
+  }
+
+  // 2. CSRF Token Validation (Item 11)
+  const csrfResult = validateCsrfToken(data, user);
+  if (!csrfResult.valid) {
+    return createJsonResponse({
+      status: "forbidden",
+      message: csrfResult.message
+    });
+  }
+
   const members = data.members || data.users || [];
   if (!Array.isArray(members)) {
     return createJsonResponse({ status: "error", message: "Dữ liệu nhân sự không đúng định dạng mảng." });
@@ -3505,10 +4033,45 @@ function handleSyncTeamMembers(data) {
 }
 
 /**
- * Xử lý đồng bộ Master Data (Squads, Products, Phases) lên Google Sheet
+ * Xử lý đồng bộ Master Data (Squads, Products, Phases) lên Google Sheet (RBAC: Chỉ Admin & Có CSRF Token)
  */
 function handleSyncMasterData(data) {
+  const sessionToken = String(data.session_token || "").trim();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const user = findUserBySessionToken(ss, sessionToken);
+
+  if (!user) {
+    return createJsonResponse({
+      status: "unauthorized",
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại qua Teams."
+    });
+  }
+
+  // 1. RBAC Enforcement (Item 2)
+  if (user.role !== "Admin") {
+    recordAuditLog(ss, {
+      userEmail: user.teamsEmail || user.personalEmail,
+      role: user.role,
+      action: "UNAUTHORIZED_SYNC_MASTER_DATA",
+      targetResource: "RAW_SETTINGS",
+      status: "FORBIDDEN",
+      details: "Người dùng không có quyền Admin cố gắng cập nhật Master Data."
+    });
+    return createJsonResponse({
+      status: "forbidden",
+      message: "Từ chối truy cập: Chỉ quản trị viên (Admin) mới có quyền cập nhật Master Data."
+    });
+  }
+
+  // 2. CSRF Token Validation (Item 11)
+  const csrfResult = validateCsrfToken(data, user);
+  if (!csrfResult.valid) {
+    return createJsonResponse({
+      status: "forbidden",
+      message: csrfResult.message
+    });
+  }
+
   const isTest = isTestPayload(data);
   let rawSettings = isTest ? getOrInitRawSettingsTestSheet(ss) : ss.getSheetByName(SHEET_RAW_SETTINGS);
   if (!rawSettings && !isTest) {

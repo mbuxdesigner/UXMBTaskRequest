@@ -1119,7 +1119,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           selectedRequestRef.current = null
           setSelectedRequest(null)
         }}
-        onUpdated={async () => {
+        onUpdated={async (updatedRequest) => {
+          if (updatedRequest) {
+            setAllRequests((current) =>
+              current.map((item) =>
+                item.request_id === updatedRequest.request_id ? { ...item, ...updatedRequest } : item
+              )
+            )
+            selectedRequestRef.current = updatedRequest
+            setSelectedRequest(updatedRequest)
+            return
+          }
           const reqs = await fetchRequests(true)
           setAllRequests(reqs)
           // CHỈ cập nhật bài toán NẾU người dùng VẪN ĐANG MỞ bài toán đó.

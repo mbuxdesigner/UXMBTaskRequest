@@ -28,6 +28,7 @@ export const INACTIVITY_LIMIT_24H_MS = SESSION_DURATION_SLIDING_HOURS * 3600 * 1
 
 export interface UserSession {
   sessionToken: string
+  csrfToken?: string
   personalEmail: string
   teamsEmail: string
   displayName: string
@@ -43,6 +44,18 @@ export interface UserSession {
   isImpersonating?: boolean
   originalRole?: UserRole
   originalDisplayName?: string
+}
+
+/**
+ * Tạo Anti-tamper CSRF Token gắn liền với phiên người dùng (Item 11)
+ */
+export function generateCsrfToken(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return "CSRF_" + crypto.randomUUID().replace(/-/g, "")
+    }
+  } catch {}
+  return "CSRF_" + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
 // Lưu trong sessionStorage & localStorage
@@ -298,6 +311,155 @@ export function touchSessionActivity(forceSave = false): boolean {
 }
 
 /**
+ * Tự động di chuyển cấu trúc phiên làm việc (migrateSessionSchema)
+ * Đảm bảo các phiên từ phiên bản cũ trong localStorage được nâng cấp mượt mà
+ * không làm người dùng đang làm việc bị đăng xuất đột ngột.
+ */
+export function migrateSessionSchema(): boolean {
+  try {
+    let raw: string | null = null
+    try {
+      raw = localStorage.getItem(SESSION_STORAGE_KEY)
+      if (!raw) {
+        raw = localStorage.getItem("ux_portal_session")
+      }
+    } catch {
+      return false
+    }
+
+    if (!raw) return false
+
+    let parsed: any = null
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return false
+    }
+
+    if (!parsed || typeof parsed !== "object") return false
+
+    let modified = false
+    const now = Date.now()
+
+    // 1. Nếu sessionToken được lưu dưới tên 'token' hoặc nằm trong 'user'
+    if (!parsed.sessionToken) {
+      if (parsed.token) {
+        parsed.sessionToken = parsed.token
+        modified = true
+      } else if (parsed.user && parsed.user.token) {
+        parsed.sessionToken = parsed.user.token
+        modified = true
+      } else if (parsed.user && parsed.user.sessionToken) {
+        parsed.sessionToken = parsed.user.sessionToken
+        modified = true
+      }
+    }
+
+    if (!parsed.sessionToken) return false
+
+    // 2. Chuẩn hóa email
+    if (!parsed.personalEmail) {
+      if (parsed.email) {
+        parsed.personalEmail = parsed.email
+        modified = true
+      } else if (parsed.user && (parsed.user.personalEmail || parsed.user.email)) {
+        parsed.personalEmail = parsed.user.personalEmail || parsed.user.email
+        modified = true
+      }
+    }
+    if (!parsed.teamsEmail) {
+      if (parsed.email) {
+        parsed.teamsEmail = parsed.email
+        modified = true
+      } else if (parsed.user && (parsed.user.teamsEmail || parsed.user.email)) {
+        parsed.teamsEmail = parsed.user.teamsEmail || parsed.user.email
+        modified = true
+      }
+    }
+
+    // 3. Chuẩn hóa vai trò (role)
+    if (!parsed.role) {
+      if (parsed.user && parsed.user.role) {
+        parsed.role = parsed.user.role
+      } else {
+        parsed.role = "Designer"
+      }
+      modified = true
+    }
+
+    // 4. Chuẩn hóa tên hiển thị
+    if (!parsed.displayName) {
+      if (parsed.user && parsed.user.displayName) {
+        parsed.displayName = parsed.user.displayName
+      } else if (parsed.name) {
+        parsed.displayName = parsed.name
+      } else if (parsed.personalEmail) {
+        parsed.displayName = parsed.personalEmail.split("@")[0]
+      }
+      modified = true
+    }
+
+    // 5. Chuẩn hóa chính sách phiên (sessionPolicy)
+    if (!parsed.sessionPolicy || (parsed.sessionPolicy !== "fixed_8h" && parsed.sessionPolicy !== "sliding_24h")) {
+      parsed.sessionPolicy = resolveEffectiveSessionPolicy(
+        parsed.teamsEmail || parsed.personalEmail || "",
+        parsed.role
+      )
+      modified = true
+    }
+
+    // 6. Chuẩn hóa các mốc thời gian: loginAt, lastActiveAt, expiresAt
+    let loginAt = Number(parsed.loginAt)
+    let lastActiveAt = Number(parsed.lastActiveAt)
+    let expiresAt = Number(parsed.expiresAt)
+
+    if (isNaN(loginAt) || loginAt <= 0) {
+      loginAt = now
+      parsed.loginAt = loginAt
+      modified = true
+    }
+    if (isNaN(lastActiveAt) || lastActiveAt <= 0) {
+      lastActiveAt = now
+      parsed.lastActiveAt = lastActiveAt
+      modified = true
+    }
+    if (isNaN(expiresAt) || expiresAt <= 0) {
+      expiresAt = parsed.sessionPolicy === "sliding_24h"
+        ? now + INACTIVITY_LIMIT_24H_MS
+        : loginAt + SESSION_DURATION_SECONDS * 1000
+      parsed.expiresAt = expiresAt
+      modified = true
+    }
+
+    // 7. Gán cờ schemaVersion
+    if (parsed._schemaVersion !== 2) {
+      parsed._schemaVersion = 2
+      modified = true
+    }
+
+    // 8. Đảm bảo session có CSRF token (Item 11)
+    if (!parsed.csrfToken) {
+      parsed.csrfToken = generateCsrfToken()
+      modified = true
+    }
+
+    if (modified) {
+      const serialized = JSON.stringify(parsed)
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, serialized)
+        localStorage.setItem("ux_portal_session", serialized)
+        sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
+      } catch {}
+      return true
+    }
+    return false
+  } catch (err) {
+    console.warn("Could not migrate session schema:", err)
+    return false
+  }
+}
+
+/**
  * Lấy thông tin phiên làm việc hiện tại từ localStorage / sessionStorage
  * Áp dụng logic 2 cơ chế:
  * 1. Fixed 8h: Hết hạn sau đúng 8 giờ kể từ lúc xác thực OTP
@@ -305,6 +467,9 @@ export function touchSessionActivity(forceSave = false): boolean {
  */
 export function getStoredSession(): UserSession | null {
   try {
+    // Tự động nâng cấp schema phiên cũ nếu có
+    migrateSessionSchema()
+
     // Ưu tiên đọc từ localStorage để đồng bộ tức thì giữa tất cả tab và sau khi tắt trình duyệt
     let raw: string | null = null
     let isLocalStorageAccessible = true
@@ -427,7 +592,8 @@ export function saveSession(
   expiresInSeconds?: number,
   squads?: string[],
   products?: string[],
-  sessionPolicy?: SessionPolicyType
+  sessionPolicy?: SessionPolicyType,
+  csrfToken?: string
 ): UserSession {
   let resolvedDisplayName = displayName
   if (!resolvedDisplayName) {
@@ -464,6 +630,7 @@ export function saveSession(
 
   const session: UserSession = {
     sessionToken,
+    csrfToken: csrfToken || generateCsrfToken(),
     personalEmail,
     teamsEmail,
     displayName: finalDisplayName,
@@ -784,79 +951,66 @@ function createLocalBypassSession(cleanEmail: string): UserSession {
 }
 
 /**
- * Kiểm tra trạng thái đã được xác thực (VERIFIED) trực tiếp trên Sheet USERS
- * Dùng khi Google Apps Script đã cập nhật VERIFIED trên Sheet nhưng kết nối HTTP bị nghẽn/timeout
+ * Kiểm tra trạng thái đã được xác thực từ máy chủ thông qua endpoint bảo mật (check_session)
+ * Thay thế hoàn toàn việc đọc trực tiếp file CSV USERS qua Google Sheet GViz công khai
  */
-export async function checkVerifiedStatusFromSheet(cleanEmail: string): Promise<UserSession | null> {
+export async function checkVerifiedStatusFromSheet(
+  cleanEmail: string,
+  sessionToken?: string
+): Promise<UserSession | null> {
   const config = getGoogleSheetConfig()
-  const sheetId = config?.sheetId || "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw"
-  if (!sheetId) return null
+  const scriptUrl = config?.scriptUrl
+  if (!scriptUrl || !sessionToken) return null
 
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId.trim()}/gviz/tq?tqx=out:csv&sheet=USERS&_t=${Date.now()}`
-    const res = await fetch(gvizUrl)
+    const url = new URL(scriptUrl)
+    url.searchParams.set("action", "check_session")
+    url.searchParams.set("session_token", sessionToken)
+    url.searchParams.set("_t", String(Date.now()))
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
     if (!res.ok) return null
-    const text = await res.text()
-    const lines = text.split(/\r?\n/)
-    const myEmail = cleanEmail.trim().toLowerCase()
-    const myPrefix = myEmail.split("@")[0]
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]
-      if (!line) continue
-      const cols = line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim())
-      const pEmail = (cols[2] || "").toLowerCase()
-      const tEmail = (cols[3] || "").toLowerCase()
-
-      const match = (
-        pEmail === myEmail ||
-        tEmail === myEmail ||
-        (myPrefix && (pEmail.split("@")[0] === myPrefix || tEmail.split("@")[0] === myPrefix))
+    const data = await res.json()
+    if (data.status === "success" && data.valid && data.user) {
+      const u = data.user
+      const role: UserRole = data.role || u.role || "Designer"
+      const policy: SessionPolicyType =
+        data.session_policy === "sliding_24h" || data.session_policy === "fixed_8h"
+          ? data.session_policy
+          : resolveEffectiveSessionPolicy(cleanEmail, role)
+      const session = saveSession(
+        sessionToken,
+        u.personalEmail || cleanEmail,
+        u.teamsEmail || cleanEmail,
+        role,
+        undefined,
+        u.displayName || cleanEmail.split("@")[0],
+        u.avatarUrl || "",
+        policy === "sliding_24h" ? 24 * 3600 : 8 * 3600,
+        undefined,
+        undefined,
+        policy
       )
-
-      if (match) {
-        const otpCol = cols[6] || ""
-        const sessionToken = cols[9] || ""
-        const isVerified = otpCol.toUpperCase().includes("VERIFIED") || sessionToken.startsWith("ST_")
-
-        if (isVerified) {
-          const rawRole = (cols[5] || "").toLowerCase()
-          let role: UserRole = "Designer"
-          if (rawRole.includes("admin")) role = "Admin"
-          else if (rawRole.includes("owner")) role = "Design Owner"
-          else if (rawRole.includes("po")) role = "PO"
-          else if (rawRole.includes("biz") || rawRole.includes("business")) role = "Business"
-
-          const displayName = cols[0] || cleanEmail.split("@")[0]
-          const avatarUrl = cols[1] || ""
-          const rawPolicy = (cols[12] || "").toLowerCase().trim()
-          const policy: SessionPolicyType = (rawPolicy === "sliding_24h" || rawPolicy === "fixed_8h")
-            ? rawPolicy
-            : resolveEffectiveSessionPolicy(cleanEmail, role)
-
-          const token = sessionToken || ("ST_LIVE_" + Date.now())
-          const session = saveSession(
-            token,
-            pEmail || cleanEmail,
-            tEmail || cleanEmail,
-            role,
-            undefined,
-            displayName,
-            avatarUrl,
-            policy === "sliding_24h" ? 24 * 3600 : 8 * 3600,
-            undefined,
-            undefined,
-            policy
-          )
-          refreshAllDataOnLogin().catch(() => {})
-          return session
-        }
-      }
+      refreshAllDataOnLogin().catch(() => {})
+      return session
     }
   } catch (err) {
-    console.warn("Could not check verified status from sheet:", err)
+    console.warn("Could not check session from backend:", err)
   }
   return null
+}
+
+/**
+ * Kiểm tra xem môi trường hiện tại có cho phép bypass OTP thử nghiệm hay không
+ */
+export function isDevOtpBypassAllowed(): boolean {
+  return Boolean(
+    (typeof import.meta !== "undefined" && import.meta.env?.DEV === true) ||
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_ENABLE_DEV_OTP_BYPASS === "true")
+  )
 }
 
 /**
@@ -875,35 +1029,30 @@ export async function verifyTeamsOtp(
   const cleanEmail = personalEmail.trim().toLowerCase()
   const cleanOtp = otp.trim()
 
-  // 1. Cho phép mã Master OTP (123456 hoặc 583921) xác thực ngay lập tức
-  if (cleanOtp === "123456" || cleanOtp === "583921") {
+  // 1. Cho phép mã Master OTP (123456 hoặc 583921) xác thực ngay lập tức CHỈ trong môi trường DEV hoặc có cờ VITE_ENABLE_DEV_OTP_BYPASS
+  const devBypass = isDevOtpBypassAllowed()
+  if (devBypass && (cleanOtp === "123456" || cleanOtp === "583921")) {
     const session = createLocalBypassSession(cleanEmail)
     refreshAllDataOnLogin().catch(() => {})
     return {
       success: true,
-      message: `Xác thực thành công với vai trò: ${session.role}!`,
+      message: `[DEV/TEST BYPASS] Xác thực thành công với vai trò: ${session.role}!`,
       session,
     }
   }
 
-  // 2. Kiểm tra nếu Sheet USERS đã ghi nhận VERIFIED (tránh bị kẹt nếu GAS đã duyệt nhưng request trước bị delay)
-  try {
-    const preVerified = await checkVerifiedStatusFromSheet(cleanEmail)
-    if (preVerified) {
+  if (!config.scriptUrl || !config.scriptUrl.trim()) {
+    if (devBypass) {
+      const session = createLocalBypassSession(cleanEmail)
       return {
         success: true,
-        message: "Xác thực thành công từ máy chủ!",
-        session: preVerified,
+        message: `[DEV/TEST BYPASS] Xác thực thành công với vai trò: ${session.role}!`,
+        session,
       }
     }
-  } catch {}
-
-  if (!config.scriptUrl || !config.scriptUrl.trim()) {
-    const session = createLocalBypassSession(cleanEmail)
     return {
-      success: true,
-      message: `Xác thực thành công với vai trò: ${session.role}!`,
-      session,
+      success: false,
+      message: "Chưa cấu hình đường dẫn kết nối máy chủ xác thực (scriptUrl).",
     }
   }
 
@@ -915,9 +1064,9 @@ export async function verifyTeamsOtp(
       timestamp: new Date().toISOString(),
     }
 
-    // Thiết lập timeout 6 giây để không bao giờ bị treo ở "Đang kiểm tra mã..."
+    // Thiết lập timeout 8 giây
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 6000)
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
       const res = await fetch(config.scriptUrl.trim(), {
@@ -947,7 +1096,8 @@ export async function verifyTeamsOtp(
           data.expires_in,
           undefined,
           undefined,
-          serverPolicy
+          serverPolicy,
+          data.csrf_token
         )
 
         try {
@@ -971,29 +1121,13 @@ export async function verifyTeamsOtp(
       }
     } catch (fetchErr) {
       clearTimeout(timeoutId)
-      console.warn("GAS fetch timed out or failed, checking USERS sheet:", fetchErr)
+      console.warn("GAS fetch timed out or failed:", fetchErr)
 
-      // Đối chiếu ngay với Sheet USERS: rất nhiều trường hợp GAS đã set VERIFIED nhưng response HTTP bị nghẽn
-      const sheetVerified = await checkVerifiedStatusFromSheet(cleanEmail)
-      if (sheetVerified) {
-        return {
-          success: true,
-          message: "Xác thực thành công từ máy chủ!",
-          session: sheetVerified,
-        }
-      }
-
-      // Nếu môi trường local/dev và nhập 6 số, tự động bypass
-      const isLocal = typeof window !== "undefined" && (
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        Boolean(import.meta.env?.DEV)
-      )
-      if (isLocal && cleanOtp.length === 6) {
+      if (devBypass && cleanOtp.length === 6) {
         const session = createLocalBypassSession(cleanEmail)
         return {
           success: true,
-          message: `Đăng nhập dự phòng thành công (${session.role})!`,
+          message: `[DEV/TEST BYPASS] Đăng nhập dự phòng thành công (${session.role})!`,
           session,
         }
       }
@@ -1002,32 +1136,17 @@ export async function verifyTeamsOtp(
     }
   } catch (err) {
     console.error("Lỗi khi xác thực OTP:", err)
-    // Lần kiểm tra cuối cùng đối chiếu với Sheet
-    const sheetVerified = await checkVerifiedStatusFromSheet(cleanEmail)
-    if (sheetVerified) {
-      return {
-        success: true,
-        message: "Xác thực thành công!",
-        session: sheetVerified,
-      }
-    }
-
-    const isLocal = typeof window !== "undefined" && (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      Boolean(import.meta.env?.DEV)
-    )
-    if (isLocal && cleanOtp.length === 6) {
+    if (devBypass && cleanOtp.length === 6) {
       const session = createLocalBypassSession(cleanEmail)
       return {
         success: true,
-        message: `Đăng nhập dự phòng thành công (${session.role})!`,
+        message: `[DEV/TEST BYPASS] Đăng nhập dự phòng thành công (${session.role})!`,
         session,
       }
     }
     return {
       success: false,
-      message: "Lỗi kết nối tới máy chủ xác thực. Vui lòng bấm Đăng nhập lại.",
+      message: "Không thể kết nối đến máy chủ xác thực. Vui lòng kiểm tra lại mạng hoặc liên hệ quản trị viên.",
     }
   }
 }
@@ -1147,75 +1266,60 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
   if (currentSession.isImpersonating) return currentSession
 
   const config = getGoogleSheetConfig()
-  const sheetId = config?.sheetId || "1gpe5W7whAMxIZLjsjVxEW23vcaa9ny0m9Qj327zKYzw"
-  if (!sheetId) return currentSession
+  const scriptUrl = config?.scriptUrl
+  if (!scriptUrl) return currentSession
 
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId.trim()}/gviz/tq?tqx=out:csv&sheet=USERS&_t=${Date.now()}`
-    const res = await fetch(gvizUrl)
+    // Sử dụng endpoint xác thực check_session thay vì truy vấn công khai GViz Sheet USERS
+    const url = new URL(scriptUrl)
+    url.searchParams.set("action", "check_session")
+    url.searchParams.set("session_token", currentSession.sessionToken)
+    url.searchParams.set("_t", String(Date.now()))
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
     if (!res.ok) return currentSession
-    const text = await res.text()
+    const data = await res.json()
+    if (data.status === "success" && data.valid && data.user) {
+      const u = data.user
+      const newRole: UserRole = data.role || u.role || currentSession.role
+      const rawPolicy = (data.session_policy || "").toLowerCase().trim()
+      let resolvedPolicy: SessionPolicyType = currentSession.sessionPolicy
+      if (rawPolicy === "fixed_8h" || rawPolicy === "sliding_24h") {
+        resolvedPolicy = rawPolicy
+      } else {
+        resolvedPolicy = getRoleSessionPolicies()[newRole] || "fixed_8h"
+      }
 
-    const lines = text.split(/\r?\n/)
-    const myEmail = (currentSession.teamsEmail || currentSession.personalEmail || "").trim().toLowerCase()
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]
-      if (!line) continue
-      const cols = line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim())
-      const pEmail = (cols[2] || "").toLowerCase()
-      const tEmail = (cols[3] || "").toLowerCase()
+      const newDisplayName = u.displayName || currentSession.displayName
+      const newAvatar = u.avatarUrl || currentSession.avatarUrl
 
       if (
-        pEmail === myEmail ||
-        tEmail === myEmail ||
-        (myEmail && (pEmail.includes(myEmail.split("@")[0]) || tEmail.includes(myEmail.split("@")[0])))
+        newRole !== currentSession.role ||
+        resolvedPolicy !== currentSession.sessionPolicy ||
+        (newAvatar && newAvatar !== currentSession.avatarUrl) ||
+        (newDisplayName && newDisplayName !== currentSession.displayName)
       ) {
-        const rawRole = (cols[5] || "").toLowerCase()
-        let newRole: UserRole = "Designer"
-        if (rawRole.includes("admin")) newRole = "Admin"
-        else if (rawRole.includes("owner")) newRole = "Design Owner"
-        else if (rawRole.includes("po")) newRole = "PO"
-        else if (rawRole.includes("biz") || rawRole.includes("business")) newRole = "Business"
-        else newRole = "Designer"
-
-        const rawPolicy = (cols[12] || "").toLowerCase().trim()
-        let resolvedPolicy: SessionPolicyType = currentSession.sessionPolicy
-        if (rawPolicy === "fixed_8h" || rawPolicy === "sliding_24h") {
-          resolvedPolicy = rawPolicy
-        } else {
-          resolvedPolicy = getRoleSessionPolicies()[newRole] || "fixed_8h"
-        }
-
-        const newDisplayName = cols[0] || currentSession.displayName
-        const newAvatar = cols[1] || currentSession.avatarUrl
-
-        if (
-          newRole !== currentSession.role ||
-          resolvedPolicy !== currentSession.sessionPolicy ||
-          (newAvatar && newAvatar !== currentSession.avatarUrl) ||
-          (newDisplayName && newDisplayName !== currentSession.displayName)
-        ) {
-          const updated = saveSession(
-            currentSession.sessionToken,
-            currentSession.personalEmail,
-            currentSession.teamsEmail,
-            newRole,
-            currentSession.squad,
-            newDisplayName,
-            newAvatar,
-            Math.max(300, Math.floor((currentSession.expiresAt - Date.now()) / 1000)),
-            currentSession.squads,
-            currentSession.products,
-            resolvedPolicy
-          )
-          return updated
-        }
-        break
+        const updated = saveSession(
+          currentSession.sessionToken,
+          currentSession.personalEmail,
+          currentSession.teamsEmail,
+          newRole,
+          currentSession.squad,
+          newDisplayName,
+          newAvatar,
+          Math.max(300, Math.floor((currentSession.expiresAt - Date.now()) / 1000)),
+          currentSession.squads,
+          currentSession.products,
+          resolvedPolicy
+        )
+        return updated
       }
     }
   } catch (e) {
-    console.warn("Could not sync role from sheet:", e)
+    console.warn("Could not sync role via check_session:", e)
   }
   return currentSession
 }
@@ -1353,6 +1457,7 @@ if (typeof window !== "undefined") {
     if (now - lastTouch > 30000) {
       lastTouch = now
       touchSessionActivity(false)
+      checkSessionExpiry()
     }
   }
   window.addEventListener("mousemove", throttledTouch, { passive: true })
@@ -1360,6 +1465,208 @@ if (typeof window !== "undefined") {
   window.addEventListener("click", throttledTouch, { passive: true })
   window.addEventListener("touchstart", throttledTouch, { passive: true })
   window.addEventListener("scroll", throttledTouch, { passive: true })
+
+  // 4. Khởi chạy định kỳ kiểm tra cảnh báo hết hạn phiên (mỗi 30s)
+  setTimeout(() => {
+    checkSessionExpiry()
+  }, 1000)
+  setInterval(() => {
+    checkSessionExpiry()
+  }, 30000)
+}
+
+export const SESSION_EXPIRY_WARNING_EVENT = "ux_session_expiry_warning"
+export const SESSION_EXPIRY_WARNING_THRESHOLD_MS = 15 * 60 * 1000 // 15 phút trước khi hết hạn
+
+export interface SessionExpiryWarningDetail {
+  remainingMs: number
+  remainingMinutes: number
+  session: UserSession
+}
+
+let expiryWarningShown = false
+
+/**
+ * Kiểm tra thời gian còn lại của phiên làm việc và phát cảnh báo 15 phút trước khi timeout
+ */
+export function checkSessionExpiry(): void {
+  const session = getStoredSession()
+  if (!session || !session.expiresAt) {
+    expiryWarningShown = false
+    hideSessionExpiryWarningDialog()
+    return
+  }
+
+  const now = Date.now()
+  const remainingMs = session.expiresAt - now
+
+  if (remainingMs <= 0) {
+    expiryWarningShown = false
+    hideSessionExpiryWarningDialog()
+    clearSession()
+    return
+  }
+
+  if (remainingMs <= SESSION_EXPIRY_WARNING_THRESHOLD_MS) {
+    if (!expiryWarningShown) {
+      expiryWarningShown = true
+      const remainingMinutes = Math.max(1, Math.ceil(remainingMs / (60 * 1000)))
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(SESSION_EXPIRY_WARNING_EVENT, {
+            detail: { remainingMs, remainingMinutes, session } as SessionExpiryWarningDetail,
+          })
+        )
+        showSessionExpiryWarningDialog(remainingMinutes)
+      }
+    }
+  } else {
+    // Nếu phiên còn > 15 phút (do vừa được gia hạn), ẩn dialog và reset cờ cảnh báo
+    expiryWarningShown = false
+    hideSessionExpiryWarningDialog()
+  }
+}
+
+/**
+ * Gia hạn phiên làm việc (Extend session)
+ * Gửi yêu cầu touch_session lên Google Apps Script và cập nhật mốc thời gian tại client
+ */
+export async function extendSession(): Promise<{
+  success: boolean
+  message: string
+  session?: UserSession
+}> {
+  const current = getStoredSession()
+  if (!current || !current.sessionToken) {
+    return { success: false, message: "Không tìm thấy phiên làm việc để gia hạn." }
+  }
+
+  const now = Date.now()
+  current.lastActiveAt = now
+  if (current.sessionPolicy === "sliding_24h") {
+    current.expiresAt = now + INACTIVITY_LIMIT_24H_MS
+  } else {
+    current.loginAt = now
+    current.expiresAt = now + SESSION_DURATION_SECONDS * 1000
+  }
+
+  const updated = saveSession(
+    current.sessionToken,
+    current.personalEmail,
+    current.teamsEmail,
+    current.role,
+    current.squad,
+    current.displayName,
+    current.avatarUrl,
+    current.sessionPolicy === "sliding_24h" ? 24 * 3600 : 8 * 3600,
+    current.squads,
+    current.products,
+    current.sessionPolicy
+  )
+
+  // Gọi endpoint touch_session trên backend Google Apps Script để đồng bộ
+  const config = getGoogleSheetConfig()
+  if (config.scriptUrl) {
+    try {
+      fetch(config.scriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "touch_session",
+          session_token: current.sessionToken,
+          force_save: true,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch((e) => console.warn("Background touch_session on extend:", e))
+    } catch {}
+  }
+
+  expiryWarningShown = false
+  hideSessionExpiryWarningDialog()
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ux_session_extended", { detail: { session: updated } }))
+    window.dispatchEvent(new Event("auth_session_changed"))
+  }
+
+  return {
+    success: true,
+    message: "Gia hạn phiên thành công! Bạn có thêm thời gian để tiếp tục làm việc.",
+    session: updated,
+  }
+}
+
+/**
+ * Hiển thị Modal Cảnh báo Hết hạn Phiên (Session Expiry Warning Dialog)
+ */
+export function showSessionExpiryWarningDialog(remainingMinutes: number): void {
+  if (typeof document === "undefined") return
+
+  let modal = document.getElementById("ux-session-expiry-warning-modal")
+  if (!modal) {
+    modal = document.createElement("div")
+    modal.id = "ux-session-expiry-warning-modal"
+    modal.className =
+      "fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
+    modal.innerHTML = `
+      <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-amber-200/80">
+        <div class="flex items-start gap-4">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-base font-semibold text-slate-900">
+              Cảnh báo: Sắp hết hạn phiên làm việc
+            </h3>
+            <p id="ux-session-warning-desc" class="mt-1.5 text-sm text-slate-600 leading-relaxed">
+              Phiên đăng nhập của bạn sẽ hết hạn trong <strong class="text-amber-600">${remainingMinutes} phút</strong>. Vui lòng gia hạn để tiếp tục làm việc mà không bị gián đoạn.
+            </p>
+          </div>
+        </div>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button id="ux-session-logout-btn" type="button" class="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
+            Đăng xuất
+          </button>
+          <button id="ux-session-extend-btn" type="button" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Gia hạn phiên
+          </button>
+        </div>
+      </div>
+    `
+    document.body.appendChild(modal)
+
+    const extendBtn = document.getElementById("ux-session-extend-btn")
+    if (extendBtn) {
+      extendBtn.onclick = () => {
+        extendSession()
+      }
+    }
+    const logoutBtn = document.getElementById("ux-session-logout-btn")
+    if (logoutBtn) {
+      logoutBtn.onclick = () => {
+        hideSessionExpiryWarningDialog()
+        logoutTeamsSession()
+      }
+    }
+  } else {
+    modal.style.display = "flex"
+    const desc = document.getElementById("ux-session-warning-desc")
+    if (desc) {
+      desc.innerHTML = `Phiên đăng nhập của bạn sẽ hết hạn trong <strong class="text-amber-600">${remainingMinutes} phút</strong>. Vui lòng gia hạn để tiếp tục làm việc mà không bị gián đoạn.`
+    }
+  }
+}
+
+/**
+ * Ẩn Modal Cảnh báo Hết hạn Phiên
+ */
+export function hideSessionExpiryWarningDialog(): void {
+  if (typeof document === "undefined") return
+  const modal = document.getElementById("ux-session-expiry-warning-modal")
+  if (modal) {
+    modal.style.display = "none"
+  }
 }
 
 

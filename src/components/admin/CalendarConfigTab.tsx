@@ -307,26 +307,36 @@ export default function CalendarConfigTab({ onLogAction }: CalendarConfigTabProp
       </div>
 
       {/* 2. Grid 2 Cột: Cài đặt hiển thị + Phân quyền Role */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Box 1: Cấu hình Hiển thị & Quy tắc */}
-        <Frame variant="default" padding="default" className="space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+      {/* 2. Cấu hình Hiển thị & Quy tắc Hoạt động */}
+      <Frame variant="default" padding="default" className="space-y-5">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-slate-700" />
-            <h3 className="text-sm font-bold text-slate-900">Quy tắc Hiển thị & Hoạt động</h3>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Quy tắc Hiển thị & Hoạt động</h3>
+              <p className="text-[11px] text-slate-500">Thiết lập chế độ xem mặc định, lịch làm việc và các quy tắc hiển thị lưới lịch</p>
+            </div>
           </div>
 
-          <div className="space-y-4 text-xs">
+          <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-600" />
+            <span>Phân quyền vai trò quản trị tại mục <strong>Quản lý &gt; Phân quyền</strong></span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+          {/* Cột trái: Chế độ xem & Bắt đầu tuần */}
+          <div className="space-y-4">
             {/* Chế độ xem mặc định */}
             <div>
               <label className="block font-semibold text-slate-700 mb-2">
                 Chế độ xem mặc định khi mở màn hình:
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: "month", label: "Tháng (Month)" },
                   { id: "week", label: "Tuần (Week)" },
                   { id: "day", label: "Ngày (Day)" },
-                  { id: "agenda", label: "Lịch trình" },
                 ].map((mode) => {
                   const isActive = config.defaultView === mode.id
                   return (
@@ -348,7 +358,7 @@ export default function CalendarConfigTab({ onLogAction }: CalendarConfigTabProp
             </div>
 
             {/* Ngày bắt đầu tuần */}
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-3 border-t border-slate-100">
               <label className="block font-semibold text-slate-700 mb-2">
                 Ngày bắt đầu trong tuần:
               </label>
@@ -377,7 +387,7 @@ export default function CalendarConfigTab({ onLogAction }: CalendarConfigTabProp
             </div>
 
             {/* Khung giờ làm việc tiêu chuẩn */}
-            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3">
+            <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Giờ bắt đầu làm việc:</label>
                 <Input
@@ -397,156 +407,60 @@ export default function CalendarConfigTab({ onLogAction }: CalendarConfigTabProp
                 />
               </div>
             </div>
+          </div>
 
-            {/* Toggles using ReUI Switch component */}
-            <div className="pt-2 border-t border-slate-100 space-y-2.5">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                <div className="pr-3">
-                  <div className="font-semibold text-slate-800">Cảnh báo xung đột lịch trình (Conflict Alert)</div>
-                  <div className="text-[11px] text-slate-500">Phát cảnh báo khi deadline task hoặc lịch họp trùng ngày nhân sự nghỉ phép</div>
-                </div>
-                <Switch
-                  checked={config.enableConflictAlert}
-                  onCheckedChange={(checked) => setConfig({ ...config, enableConflictAlert: checked })}
-                  size="sm"
-                />
+          {/* Cột phải: Các công tắc bật tắt */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+              <div className="pr-3">
+                <div className="font-semibold text-slate-800">Cảnh báo xung đột lịch trình (Conflict Alert)</div>
+                <div className="text-[11px] text-slate-500">Phát cảnh báo khi deadline task trùng ngày nhân sự nghỉ phép</div>
               </div>
+              <Switch
+                checked={config.enableConflictAlert}
+                onCheckedChange={(checked) => setConfig({ ...config, enableConflictAlert: checked })}
+                size="sm"
+              />
+            </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                <div className="pr-3">
-                  <div className="font-semibold text-slate-800">Hiển thị ngày cuối tuần (Thứ 7 & Chủ Nhật)</div>
-                  <div className="text-[11px] text-slate-500">Bật để hiển thị đầy đủ 7 ngày trên lưới lịch tháng và tuần</div>
-                </div>
-                <Switch
-                  checked={config.showWeekends}
-                  onCheckedChange={(checked) => setConfig({ ...config, showWeekends: checked })}
-                  size="sm"
-                />
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+              <div className="pr-3">
+                <div className="font-semibold text-slate-800">Hiển thị ngày cuối tuần (Thứ 7 & Chủ Nhật)</div>
+                <div className="text-[11px] text-slate-500">Bật để hiển thị 7 ngày trên lưới lịch tháng và tuần</div>
               </div>
+              <Switch
+                checked={config.showWeekends}
+                onCheckedChange={(checked) => setConfig({ ...config, showWeekends: checked })}
+                size="sm"
+              />
+            </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                <div className="pr-3">
-                  <div className="font-semibold text-slate-800">Làm mờ giờ ngoài hành chính (Lighten non-working)</div>
-                  <div className="text-[11px] text-slate-500">Làm nổi bật khoảng thời gian 08:00 - 18:00 trên chế độ xem Tuần/Ngày</div>
-                </div>
-                <Switch
-                  checked={config.lightenNonWorkingHours}
-                  onCheckedChange={(checked) => setConfig({ ...config, lightenNonWorkingHours: checked })}
-                  size="sm"
-                />
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+              <div className="pr-3">
+                <div className="font-semibold text-slate-800">Làm mờ giờ ngoài hành chính</div>
+                <div className="text-[11px] text-slate-500">Làm nổi bật khoảng thời gian 08:00 - 18:00 trên chế độ xem Tuần/Ngày</div>
               </div>
+              <Switch
+                checked={config.lightenNonWorkingHours}
+                onCheckedChange={(checked) => setConfig({ ...config, lightenNonWorkingHours: checked })}
+                size="sm"
+              />
+            </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                <div className="pr-3">
-                  <div className="font-semibold text-slate-800">Hiển thị số thứ tự tuần (Week numbers)</div>
-                  <div className="text-[11px] text-slate-500">Đánh số thứ tự các tuần (W1 → W52) ở cột đầu lưới tháng</div>
-                </div>
-                <Switch
-                  checked={config.showWeekNumbers}
-                  onCheckedChange={(checked) => setConfig({ ...config, showWeekNumbers: checked })}
-                  size="sm"
-                />
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+              <div className="pr-3">
+                <div className="font-semibold text-slate-800">Hiển thị số thứ tự tuần (Week numbers)</div>
+                <div className="text-[11px] text-slate-500">Đánh số thứ tự các tuần (W1 → W52) ở cột đầu lưới tháng</div>
               </div>
+              <Switch
+                checked={config.showWeekNumbers}
+                onCheckedChange={(checked) => setConfig({ ...config, showWeekNumbers: checked })}
+                size="sm"
+              />
             </div>
           </div>
-        </Frame>
-
-        {/* Box 2: Ma trận Phân quyền Role (RBAC Matrix) */}
-        <Frame variant="default" padding="default" className="space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-            <ShieldCheck className="w-4 h-4 text-slate-700" />
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Ma trận Phân quyền theo Role</h3>
-              <p className="text-[11px] text-slate-500">Quyền xem lịch, quản lý sự kiện và thao tác dời hạn deadline</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto select-none rounded-xl border border-slate-200/80">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200/80 bg-slate-50/90 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">
-                  <th className="py-2.5 px-3">Vai trò (Role)</th>
-                  <th className="py-2.5 px-2 text-center" title="Xem màn hình Lịch">
-                    Xem Lịch
-                  </th>
-                  <th className="py-2.5 px-2 text-center" title="Tạo/Sửa/Xóa Sự kiện">
-                    QL Sự kiện
-                  </th>
-                  <th className="py-2.5 px-2 text-center" title="Kéo thả dời hạn Deadline">
-                    Dời Deadline
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {ALL_ROLES.map((role) => {
-                  const perms = config.rolePermissions || DEFAULT_CALENDAR_CONFIG.rolePermissions
-                  const canView = perms.viewCalendar?.includes(role) ?? true
-                  const canManageEv = perms.manageEvents?.includes(role) ?? false
-                  const canModifyDl = perms.modifyDeadlines?.includes(role) ?? false
-
-                  return (
-                    <tr key={`role-${role}`} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-slate-800">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              role === "Admin"
-                                ? "bg-rose-500"
-                                : role === "Design Owner"
-                                ? "bg-purple-500"
-                                : role === "Designer"
-                                ? "bg-blue-500"
-                                : "bg-emerald-500"
-                            }`}
-                          />
-                          <span>{role}</span>
-                        </div>
-                      </td>
-
-                      {/* Quyền xem */}
-                      <td className="py-3 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={canView}
-                          onChange={() => toggleRolePermission("viewCalendar", role)}
-                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/30 accent-slate-900 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Quyền quản lý sự kiện */}
-                      <td className="py-3 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={canManageEv}
-                          onChange={() => toggleRolePermission("manageEvents", role)}
-                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/30 accent-slate-900 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Quyền dời deadline */}
-                      <td className="py-3 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={canModifyDl}
-                          onChange={() => toggleRolePermission("modifyDeadlines", role)}
-                          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/30 accent-slate-900 cursor-pointer"
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-[11px] text-slate-700 flex items-start gap-2.5">
-            <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-slate-900" />
-            <p className="leading-relaxed">
-              <strong>Lưu ý:</strong> Khi nhân sự có quyền dời deadline thực hiện kéo thả hoặc sửa ngày trên UX Planner, hệ thống sẽ tự động ghi nhật ký <code className="bg-slate-200/80 px-1 py-0.2 rounded font-mono text-[10px]">TaskUpdateRecord</code> có ghi nhận hạn cũ, hạn mới và tên người thực hiện vào nhật ký bài toán.
-            </p>
-          </div>
-        </Frame>
-      </div>
+        </div>
+      </Frame>
 
       {/* 3. Card Quản lý Danh mục Sự kiện Team */}
       <Frame variant="default" padding="default" className="space-y-4">

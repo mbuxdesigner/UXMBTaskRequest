@@ -14,7 +14,6 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({
-  breadcrumb,
   title,
   badge,
   subtitle,
@@ -29,14 +28,6 @@ export default function PageHeader({
       )}
     >
       <div className="space-y-1 min-w-0">
-        {breadcrumb && (breadcrumb.parent || breadcrumb.current) && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
-            {breadcrumb.parent && <span>{breadcrumb.parent}</span>}
-            {breadcrumb.parent && breadcrumb.current && <span>/</span>}
-            {breadcrumb.current && <span className="text-slate-800">{breadcrumb.current}</span>}
-          </div>
-        )}
-
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight">
             {title}

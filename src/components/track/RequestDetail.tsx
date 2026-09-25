@@ -5,6 +5,7 @@ import { dialogOverlayVariants, dialogContentVariants, drawerVariants, springs, 
 import { 
   UXRequest, 
   TaskUpdateRecord, 
+  getRequestDisplayTitle,
   PRODUCTS as DEFAULT_PRODUCTS, 
   REQUEST_TYPES, 
   DEADLINE_REASONS, 
@@ -115,7 +116,7 @@ interface RequestDetailProps {
   open?: boolean
   onBack?: () => void
   onClose?: () => void
-  onUpdated?: () => void
+  onUpdated?: (updatedRequest?: UXRequest) => void
 }
 
 export type ActivityItemType = "create" | "status_change" | "phase_change" | "assignment" | "deliverable" | "comment"
@@ -226,6 +227,12 @@ export const isSystemActivityNote = (note?: string, isCommentExplicit?: boolean)
     lower.includes("hạn gửi wireframe") ||
     lower.includes("ngày hand off") ||
     lower.includes("hạn hand off") ||
+    lower.includes("ngày hoàn thành") ||
+    lower.includes("ngày bắt đầu") ||
+    lower.includes("ngày release") ||
+    lower.startsWith("cập nhật ngày") ||
+    lower.startsWith("đã cập nhật ngày") ||
+    lower.startsWith("gỡ bỏ ngày") ||
     lower.startsWith("cập nhật ngày gửi") ||
     lower.startsWith("gỡ bỏ ngày gửi") ||
     lower.startsWith("cập nhật ngày hand off") ||
@@ -262,14 +269,17 @@ export const isSystemActivityNote = (note?: string, isCommentExplicit?: boolean)
     lower.includes("độ ưu tiên") ||
     lower.startsWith("đã cập nhật độ ưu tiên") ||
 
-    // 6. Khởi tạo / tiếp nhận
+    // 6. Tên gợi nhớ / tên hiển thị nội bộ của task
+    lower.includes("tên gợi nhớ") ||
+
+    // 7. Khởi tạo / tiếp nhận
     lower.startsWith("khởi tạo yêu cầu") ||
     lower.startsWith("ghi nhận yêu cầu") ||
     lower.startsWith("đã tạo yêu cầu") ||
     lower.startsWith("yêu cầu đã được tiếp nhận") ||
     lower.includes("bài toán được đánh dấu pending") ||
 
-    // 7. Thông báo gửi PO mặc định của hệ thống
+    // 8. Thông báo gửi PO mặc định của hệ thống
     lower.includes("đã gửi phương án thiết kế cho po xem xét")
   ) {
     return true
@@ -636,6 +646,7 @@ export default function RequestDetail({
 
       if (payload.task) {
         if (payload.task.title) request.title = payload.task.title
+        if (payload.task.nickname !== undefined) request.nickname = payload.task.nickname
         if (payload.task.description !== undefined) request.description = payload.task.description
         if (payload.task.deliverables) request.deliverables = payload.task.deliverables
         if (payload.task.status) request.status = payload.task.status
@@ -680,6 +691,7 @@ export default function RequestDetail({
         if (fresh) {
           setLiveSyncTime("Vừa xong")
           if (fresh.title) request.title = fresh.title
+          if (fresh.nickname !== undefined) request.nickname = fresh.nickname
           if (fresh.description !== undefined) request.description = fresh.description
           if (fresh.deliverables) request.deliverables = fresh.deliverables
           if (fresh.current_phase) request.current_phase = fresh.current_phase
@@ -989,7 +1001,8 @@ export default function RequestDetail({
 
   // Inline Title & Description Editing
   const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [titleValue, setTitleValue] = useState(request?.title || "")
+  const titleSaveInFlightRef = useRef(false)
+  const [titleValue, setTitleValue] = useState(getRequestDisplayTitle(request))
   const [isEditingDesc, setIsEditingDesc] = useState(false)
   const [descValue, setDescValue] = useState(request?.description || "")
 
@@ -1041,10 +1054,10 @@ export default function RequestDetail({
   }, [request?.request_id, request?.priority])
 
   useEffect(() => {
-    if (!isEditingTitle && request?.title) {
-      setTitleValue(request.title)
+    if (!isEditingTitle && request) {
+      setTitleValue(getRequestDisplayTitle(request))
     }
-  }, [request?.request_id, request?.title, isEditingTitle])
+  }, [request?.request_id, request?.title, request?.nickname, isEditingTitle])
 
   useEffect(() => {
     if (!isEditingDesc && request?.description !== undefined) {
@@ -2226,7 +2239,7 @@ export default function RequestDetail({
 
   useEffect(() => {
     if (request) {
-      setTitleValue(request.title || "")
+      setTitleValue(getRequestDisplayTitle(request))
       setDescValue(request.description || "")
       setCustomDeadline(request.design_deadline || request.expected_deadline || "")
       setCustomDeliverables(request.deliverables || {})
@@ -2477,6 +2490,14 @@ export default function RequestDetail({
     }
     return false
   })()
+
+  const canEditNickname = Boolean(
+    canEdit && (
+      session?.role === "Admin" ||
+      session?.role === "Design Owner" ||
+      session?.role === "Designer"
+    )
+  )
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -3025,9 +3046,60 @@ export default function RequestDetail({
   }
 
   const handleSaveTitle = async () => {
-    if (!titleValue.trim() || !request) return
+    if (!request || !canEditNickname || titleSaveInFlightRef.current) return
+    const nextNickname = titleValue.trim().slice(0, 120)
+    const previousNickname = request.nickname || ""
+    const previousDisplayTitle = getRequestDisplayTitle(request)
+
+    if (nextNickname === previousNickname.trim() || (!nextNickname && !previousNickname)) {
+      setTitleValue(nextNickname || request.title)
+      setIsEditingTitle(false)
+      return
+    }
+
+    request.nickname = nextNickname || undefined
+    setTitleValue(nextNickname || request.title)
     setIsEditingTitle(false)
-    toast.success("Đã lưu tiêu đề bài toán!")
+    titleSaveInFlightRef.current = true
+    const toastId = toast.loading("Đang lưu tên gợi nhớ...")
+
+    try {
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase,
+        new_status: request.status,
+        new_progress: request.progress,
+        note: nextNickname
+          ? `Đặt tên gợi nhớ cho bài toán: [${nextNickname}]`
+          : "Đã xoá tên gợi nhớ của bài toán",
+        nickname: nextNickname,
+        assigned_designer: request.assigned_designer,
+        is_comment: false,
+      })
+
+      if (!res.success) {
+        request.nickname = previousNickname || undefined
+        setTitleValue(previousDisplayTitle)
+        titleSaveInFlightRef.current = false
+        toast.error(res.message || "Không thể lưu tên gợi nhớ", undefined, { id: toastId })
+        return
+      }
+
+      toast.success(
+        nextNickname ? "Đã lưu tên gợi nhớ!" : "Đã xoá tên gợi nhớ!",
+        nextNickname ? "Tên này sẽ thay tiêu đề tại các danh sách task." : "Các danh sách sẽ dùng lại tiêu đề gốc.",
+        { id: toastId },
+      )
+      titleSaveInFlightRef.current = false
+      // Cập nhật đúng một task tại component cha. Không force-refresh toàn bộ danh sách:
+      // nếu GAS tạm lỗi hoặc preview trả RAW_TASKS_TEST rỗng, danh sách production
+      // đang hiển thị có thể bị thay thế bởi mảng rỗng.
+      onUpdated?.({ ...request })
+    } catch {
+      request.nickname = previousNickname || undefined
+      setTitleValue(previousDisplayTitle)
+      titleSaveInFlightRef.current = false
+      toast.error("Không thể lưu tên gợi nhớ", undefined, { id: toastId })
+    }
   }
 
   const handleSaveDesc = async () => {
@@ -3975,13 +4047,58 @@ export default function RequestDetail({
                   )}
 
                   {/* Task Title Header */}
-                  <div>
-                    <h1 
-                      className="text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug break-words [overflow-wrap:break-word] max-w-full cursor-default"
-                      title="Tiêu đề bài toán"
-                    >
-                      {capitalizeFirstLetter(titleValue) || "Chưa đặt tiêu đề bài toán"}
-                    </h1>
+                  <div className="group/title min-w-0">
+                    {isEditingTitle && canEditNickname ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={titleValue}
+                          maxLength={120}
+                          onChange={(event) => setTitleValue(event.target.value)}
+                          onBlur={handleSaveTitle}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault()
+                              void handleSaveTitle()
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault()
+                              setTitleValue(getRequestDisplayTitle(request))
+                              setIsEditingTitle(false)
+                            }
+                          }}
+                          aria-label="Tên gợi nhớ của bài toán"
+                          className="min-w-0 flex-1 rounded-lg border border-blue-300 bg-white px-3 py-2 text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug outline-none ring-2 ring-blue-100 focus:border-blue-500 focus:ring-blue-200"
+                        />
+                        <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">
+                          {titleValue.length}/120
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canEditNickname}
+                        onClick={() => canEditNickname && setIsEditingTitle(true)}
+                        className={`flex max-w-full items-start gap-2 text-left rounded-md -m-1 p-1 transition-colors ${
+                          canEditNickname
+                            ? "cursor-text hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                            : "cursor-default"
+                        }`}
+                        title={canEditNickname ? "Bấm để đặt tên gợi nhớ cho bài toán" : "Tên gợi nhớ của bài toán"}
+                      >
+                        <h1 className="text-lg sm:text-xl lg:text-[21px] font-semibold text-slate-900 tracking-tight leading-snug break-words [overflow-wrap:break-word] max-w-full">
+                          {capitalizeFirstLetter(titleValue) || "Chưa đặt tiêu đề bài toán"}
+                        </h1>
+                        {canEditNickname && (
+                          <Edit3 className="mt-1 size-4 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-100" />
+                        )}
+                      </button>
+                    )}
+                    {request.nickname && (
+                      <p className="mt-1 text-[11px] text-slate-400" title={request.title}>
+                        Tiêu đề gốc: {request.title}
+                      </p>
+                    )}
                   </div>
 
                   {/* ClickUp Task Properties Grid (Status replaces Khâu UX, Dates, Assignees, Priority) */}
@@ -5492,6 +5609,12 @@ export default function RequestDetail({
                                               valLower.includes("hạn gửi wireframe") ||
                                               valLower.includes("ngày hand off") ||
                                               valLower.includes("hạn hand off") ||
+                                              valLower.includes("ngày hoàn thành") ||
+                                              valLower.includes("ngày bắt đầu") ||
+                                              valLower.includes("ngày release") ||
+                                              valLower.startsWith("cập nhật ngày") ||
+                                              valLower.startsWith("đã cập nhật ngày") ||
+                                              valLower.startsWith("gỡ bỏ ngày") ||
                                               (valLower.startsWith("cập nhật") && (valLower.includes("hạn") || valLower.includes("ngày gửi") || valLower.includes("hand off"))) ||
                                               (valLower.startsWith("gỡ bỏ") && (valLower.includes("hạn") || valLower.includes("ngày gửi") || valLower.includes("hand off")))
 
@@ -5501,6 +5624,12 @@ export default function RequestDetail({
                                                 deadlineAction = "ngày gửi Wireframe"
                                               } else if (valLower.includes("hand off") || valLower.includes("handoff")) {
                                                 deadlineAction = "ngày Hand off"
+                                              } else if (valLower.includes("ngày hoàn thành")) {
+                                                deadlineAction = "ngày hoàn thành"
+                                              } else if (valLower.includes("ngày bắt đầu")) {
+                                                deadlineAction = "ngày bắt đầu"
+                                              } else if (valLower.includes("ngày release")) {
+                                                deadlineAction = "ngày Release"
                                               } else if (valLower.includes("gửi ui") || valLower.includes("ui design")) {
                                                 deadlineAction = "ngày gửi UI"
                                               } else {

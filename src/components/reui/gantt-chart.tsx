@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { UXRequest } from "../../data/mockData"
+import { UXRequest, getRequestDisplayTitle } from "../../data/mockData"
 import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
@@ -760,8 +760,8 @@ export default function ReUIGanttChart({
 
               if (barEndPx < scrollLeft - 8) {
                 chips.push({
-                  id: req.request_id || req.title,
-                  title: req.title,
+                  id: req.request_id || getRequestDisplayTitle(req),
+                  title: getRequestDisplayTitle(req),
                   dateLabel: formatDueDate(req.release_date || req.expected_deadline),
                   side: "start",
                   top: currentRowTop + 18,
@@ -770,8 +770,8 @@ export default function ReUIGanttChart({
                 })
               } else if (barStartPx > scrollLeft + clientWidth + 8) {
                 chips.push({
-                  id: req.request_id || req.title,
-                  title: req.title,
+                  id: req.request_id || getRequestDisplayTitle(req),
+                  title: getRequestDisplayTitle(req),
                   dateLabel: formatDueDate(req.release_date || req.expected_deadline),
                   side: "end",
                   top: currentRowTop + 18,
@@ -1302,7 +1302,7 @@ export default function ReUIGanttChart({
                                   <div className="flex-1 flex items-center min-w-[140px] pl-10">
                                     {/* Title */}
                                     <span className={`text-[12.5px] font-normal ${stageInfo.isPending ? "text-slate-500 italic" : "text-slate-800"} truncate group-hover:text-blue-600 transition-colors`}>
-                                      {req.title}
+                                      {getRequestDisplayTitle(req)}
                                     </span>
                                   </div>
 
@@ -1695,7 +1695,7 @@ export default function ReUIGanttChart({
                                         left: `calc(${leftPct + Math.max(1.5, widthPct)}% + 8px)`,
                                       }}
                                       className={`absolute text-[11.5px] font-normal ${taskBar.isPending ? "text-slate-400 italic" : "text-slate-700"} hover:text-blue-600 truncate max-w-[320px] cursor-pointer z-10 transition-colors pointer-events-auto select-none whitespace-nowrap inline-flex items-center gap-1.5`}
-                                      title={req.title}
+                                      title={getRequestDisplayTitle(req)}
                                     >
                                       {req.assigned_designer && req.assigned_designer !== "Chưa phân công" && (
                                         <div className="inline-flex -space-x-1 shrink-0">
@@ -1710,7 +1710,7 @@ export default function ReUIGanttChart({
                                           ))}
                                         </div>
                                       )}
-                                      <span className="truncate">{req.title}</span>
+                                      <span className="truncate">{getRequestDisplayTitle(req)}</span>
                                       {taskBar.isPending && (
                                         <span className="ml-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 not-italic shrink-0">
                                           {taskBar.stageInfo.text}
@@ -1838,7 +1838,7 @@ export default function ReUIGanttChart({
 
             {/* Full Task Title */}
             <p className="text-xs font-bold text-slate-900 leading-snug">
-              {hoveredTooltip.request.title}
+              {getRequestDisplayTitle(hoveredTooltip.request)}
             </p>
 
             {/* Details Grid */}

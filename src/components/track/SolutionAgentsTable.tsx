@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { UXRequest } from "@/data/mockData"
+import { UXRequest, getRequestDisplayTitle } from "@/data/mockData"
 import { UserAvatar, getDesignerAvatar, getMemberDisplayName } from "@/components/common/UserAvatar"
 import { toast } from "@/components/ui/toast"
 import { getRequestPendingClassification, getStatusConfig, formatPriority } from "@/config/statusConfig"
@@ -871,9 +871,9 @@ export default function SolutionAgentsTable({
                                   <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
                                     <span
                                       className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
-                                      title={capitalizeFirstLetter(req.title)}
+                                      title={capitalizeFirstLetter(getRequestDisplayTitle(req))}
                                     >
-                                      {capitalizeFirstLetter(req.title)}
+                                      {capitalizeFirstLetter(getRequestDisplayTitle(req))}
                                     </span>
                                     {pendingInfo.isPending && group.id !== "pending" && (
                                       <span

@@ -8,7 +8,7 @@
  * Tầng 4: Sự kiện team nội bộ (Design Review, Workshop, Teambuilding, Nhắc việc)
  */
 
-import type { UXRequest, TaskUpdateRecord, UserRole } from "../data/mockData.ts"
+import { getRequestDisplayTitle, type UXRequest, type TaskUpdateRecord, type UserRole } from "../data/mockData.ts"
 import { fetchTeamLeaves, type TeamLeaveRecord } from "./leaveService.ts"
 import {
   getSystemConfig,
@@ -638,6 +638,7 @@ export async function loadAllCalendarItems(): Promise<{
   leaves: TeamLeaveRecord[]
   todayLeaves: TeamLeaveRecord[]
   categories: EventCategoryConfig[]
+  holidays: HolidayException[]
 }> {
   const sysConfig = getSystemConfig()
   const categories = sysConfig.calendar.eventCategories || []
@@ -701,7 +702,7 @@ export async function loadAllCalendarItems(): Promise<{
     items.push({
       id: `task-${req.request_id}`,
       layer: 1,
-      title: req.title,
+      title: getRequestDisplayTitle(req),
       date: plannedYMD, // Hiển thị trên ô ngày làm việc
       startDate: plannedYMD,
       endDate: dateYMD,
@@ -750,30 +751,9 @@ export async function loadAllCalendarItems(): Promise<{
     })
   })
 
-  // 4. Tầng 3: Lịch nghỉ lễ ngân hàng & ngày làm bù (workSchedule.holidays)
+  // 4. Tầng 3: Lịch nghỉ lễ ngân hàng & ngày làm bù:
+  // Được xử lý ở cấp độ ô lịch (Day Cell: Disabled/Màu nền khác biệt), KHÔNG tạo thành Event rác
   const holidays = sysConfig.workSchedule?.holidays || []
-  holidays.forEach((hol) => {
-    const startYMD = normalizeDateToYMD(hol.date)
-    const endYMD = normalizeDateToYMD(hol.endDate) || startYMD
-    if (!startYMD) return
-
-    const isCompensatory = hol.type === "compensatory_workday"
-    const color = isCompensatory ? "#6366f1" : "#64748b" // Indigo nếu làm bù, Slate nếu nghỉ lễ
-
-    items.push({
-      id: `holiday-${hol.id}`,
-      layer: 3,
-      title: isCompensatory ? `💼 ${hol.name} (Làm bù)` : `🏦 ${hol.name} (Nghỉ lễ)`,
-      date: startYMD,
-      startDate: startYMD,
-      endDate: endYMD,
-      allDay: true,
-      color,
-      category: "bank_holiday",
-      categoryLabel: isCompensatory ? "Làm bù ngân hàng" : "Nghỉ lễ ngân hàng",
-      rawItem: hol,
-    })
-  })
 
   // 5. Tầng 4: Sự kiện team nội bộ (Team Events)
   const teamEvents = sysConfig.calendar?.teamEvents || []
@@ -818,7 +798,7 @@ export async function loadAllCalendarItems(): Promise<{
     })
   })
 
-  return { items, leaves, todayLeaves, categories }
+  return { items, leaves, todayLeaves, categories, holidays }
 }
 
 export interface CalendarDayCell {

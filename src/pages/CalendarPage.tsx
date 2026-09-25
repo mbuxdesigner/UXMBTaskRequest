@@ -35,6 +35,7 @@ import {
   normalizeDateToYMD,
   getLocalUXRequests,
   computeCalendarWeeks,
+  isPersonOnLeave,
 } from "@/services/calendarService"
 import { fetchTeamLeaves, TeamLeaveRecord } from "@/services/leaveService"
 import {
@@ -43,11 +44,12 @@ import {
   EventCategoryConfig,
   TeamEvent,
   CalendarViewMode,
+  HolidayException,
   DEFAULT_CALENDAR_CONFIG,
   SYSTEM_CONFIG_EVENT_NAME,
 } from "@/config/systemConfig"
 import { getStoredSession, UserSession } from "@/services/otpAuthService"
-import { UXRequest } from "@/data/mockData"
+import { UXRequest, getRequestDisplayTitle } from "@/data/mockData"
 import {
   springs,
   durations,
@@ -174,6 +176,7 @@ export default function CalendarPage() {
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<"delivery" | "capacity">("delivery")
   const [freshnessInfo, setFreshnessInfo] = useState(getLeavesFreshnessInfo())
   const [isSyncingLeaves, setIsSyncingLeaves] = useState(false)
+  const [holidays, setHolidays] = useState<HolidayException[]>([])
 
   // Tải dữ liệu lịch
   const reloadData = async () => {
@@ -184,6 +187,7 @@ export default function CalendarPage() {
       setLeaves(data.leaves)
       setTodayLeaves(data.todayLeaves)
       setCategories(data.categories)
+      setHolidays(data.holidays || [])
       setRawRequests(getLocalUXRequests())
       setFreshnessInfo(getLeavesFreshnessInfo())
     } catch (err) {
@@ -475,7 +479,7 @@ export default function CalendarPage() {
       }
 
       toast.success(
-        `Đã xếp lịch làm việc cho [${req.title}] vào ngày ${targetDateYMD}!${
+        `Đã xếp lịch làm việc cho [${getRequestDisplayTitle(req)}] vào ngày ${targetDateYMD}!${
           targetDesigner ? ` (Gán cho ${targetDesigner})` : ""
         }`
       )
@@ -699,78 +703,82 @@ export default function CalendarPage() {
               </div>
 
               {/* Sidebar Content Sections: Action & Triage Hub */}
-              <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs no-scrollbar">
-                {/* KHỐI 1: CẦN CAN THIỆP GẤP (NEEDS ATTENTION) */}
-                <div className="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      <span className="font-bold text-slate-900 text-xs tracking-tight">
-                        Cần can thiệp gấp
-                      </span>
+              <div className="flex-1 overflow-y-auto p-3 space-y-4 text-xs no-scrollbar">
+                {/* NHÓM 1: CẦN CAN THIỆP GẤP (NEEDS ATTENTION) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Cần can thiệp</span>
                     </div>
                     {(atRiskTasks.length > 0 || overdueTasks.length > 0 || overloadedDesigners.length > 0) ? (
-                      <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">
+                      <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
                         {atRiskTasks.length + overdueTasks.length + overloadedDesigners.length}
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                        Tối ưu ✨
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                        Tối ưu
                       </span>
                     )}
                   </div>
 
                   {atRiskTasks.length === 0 && overdueTasks.length === 0 && overloadedDesigners.length === 0 ? (
-                    <div className="text-[11px] text-slate-400 italic py-1">
+                    <div className="text-[11px] text-slate-400 italic px-1 py-1">
                       Không có đề bài nguy cơ hoặc nhân sự quá tải 👍
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto no-scrollbar">
-                      {/* Danh sách Designer quá tải */}
+                    <div className="space-y-1 max-h-[220px] overflow-y-auto no-scrollbar">
+                      {/* Designer quá tải */}
                       {overloadedDesigners.map((w) => (
                         <div
                           key={`overload-${w.name}`}
-                          className="p-2 rounded-xl bg-red-50/80 border border-red-200/80 text-[11px] space-y-1"
+                          className="p-2 rounded-lg bg-rose-50/80 border border-rose-200/80 text-[11px] space-y-1"
                         >
-                          <div className="flex items-center justify-between font-bold text-red-900">
-                            <span className="truncate">🔥 {w.name} quá tải</span>
-                            <span className="font-mono text-red-700">{w.utilizationPercent}%</span>
+                          <div className="flex items-center justify-between font-bold text-rose-900">
+                            <span className="truncate">{w.name} quá tải</span>
+                            <span className="font-mono text-rose-700">{w.utilizationPercent}%</span>
                           </div>
-                          <div className="text-[10px] text-red-700 leading-tight">
+                          <div className="text-[10px] text-rose-700 leading-tight">
                             Gánh {w.assignedHours}h / Khả dụng {w.availableHours}h
                           </div>
                         </div>
                       ))}
 
-                      {/* Danh sách Task At-Risk */}
-                      {atRiskTasks.map(({ req, risk }) => (
-                        <div
-                          key={`risk-${req.request_id}`}
-                          onClick={() => handleOpenDeadlineModal(req)}
-                          className="p-2 rounded-xl bg-amber-50/90 border border-amber-200/90 hover:border-amber-300 transition-colors cursor-pointer text-[11px] space-y-1"
-                        >
-                          <div className="flex items-center justify-between font-bold text-amber-950">
-                            <span className="truncate">{req.title}</span>
-                            <span className="text-[10px] font-mono text-amber-800 shrink-0 ml-1">
-                              {req.expected_deadline?.substring(5)}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-amber-800 leading-tight font-medium">
-                            ⚠️ {risk.riskReason}
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Danh sách Task Quá Hạn */}
+                      {/* Task Quá Hạn */}
                       {overdueTasks.map((req) => (
                         <div
                           key={`overdue-${req.request_id}`}
                           onClick={() => handleOpenDeadlineModal(req)}
-                          className="p-2 rounded-xl bg-red-50/70 border border-red-200 hover:border-red-300 transition-colors cursor-pointer text-[11px] flex items-center justify-between gap-1"
+                          className="p-2 rounded-lg bg-white border border-slate-200/80 hover:border-rose-300 hover:shadow-2xs transition-all cursor-pointer text-[11px] flex items-center justify-between gap-1.5 group"
                         >
-                          <span className="truncate font-semibold text-red-950">🔴 {req.title}</span>
-                          <span className="text-[10px] font-mono text-red-700 font-bold shrink-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                            <span className="truncate text-slate-800 font-medium group-hover:text-rose-900">
+                              {getRequestDisplayTitle(req)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-bold text-rose-700 bg-rose-100/80 px-1.5 py-0.5 rounded shrink-0">
                             Quá hạn
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Task At-Risk */}
+                      {atRiskTasks.map(({ req, risk }) => (
+                        <div
+                          key={`risk-${req.request_id}`}
+                          onClick={() => handleOpenDeadlineModal(req)}
+                          className="p-2 rounded-lg bg-white border border-slate-200/80 hover:border-amber-300 hover:shadow-2xs transition-all cursor-pointer text-[11px] flex items-center justify-between gap-1.5 group"
+                          title={risk.riskReason}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span className="truncate text-slate-800 font-medium group-hover:text-amber-900">
+                              {getRequestDisplayTitle(req)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded shrink-0">
+                            Rủi ro
                           </span>
                         </div>
                       ))}
@@ -778,83 +786,76 @@ export default function CalendarPage() {
                   )}
                 </div>
 
-                {/* KHỐI 2: ĐỀ BÀI CHƯA LÊN LỊCH (UNSCHEDULED WORK) */}
-                <div className="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Inbox className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="font-bold text-slate-900 text-xs tracking-tight">
-                        Chờ xếp lịch (Unscheduled)
-                      </span>
+                {/* NHÓM 2: CHỜ XẾP LỊCH (UNSCHEDULED WORK) */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                  <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Inbox className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Chờ xếp lịch</span>
                     </div>
-                    <Badge variant="secondary" size="xs">
+                    <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold font-mono">
                       {unscheduledTasks.length}
-                    </Badge>
+                    </span>
                   </div>
-                  <p className="text-[10px] text-slate-400">
-                    Kéo thả vào ô ngày hoặc hàng của Designer để phân bổ
-                  </p>
 
-                  <div className="space-y-1.5 max-h-[190px] overflow-y-auto no-scrollbar pt-1">
+                  <div className="space-y-1 max-h-[190px] overflow-y-auto no-scrollbar">
                     {unscheduledTasks.length === 0 ? (
                       <div className="text-center py-2 text-slate-400 text-[11px] italic">
                         Đã lên lịch toàn bộ đề bài! ✨
                       </div>
                     ) : (
                       unscheduledTasks.slice(0, 6).map((req) => (
-                        <motion.div
+                        <div
                           key={`unsched-${req.request_id}`}
-                          {...tactileProps.card}
                           draggable={canModifyDeadlines}
                           onDragStart={(e) => handleDragStartTask(e as any, req)}
                           onClick={() => handleOpenDeadlineModal(req)}
-                          className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 hover:border-blue-300 flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing transition-colors group"
+                          className="p-2 rounded-lg bg-white border border-slate-200/80 hover:border-blue-300 hover:shadow-2xs flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing transition-all group"
+                          title="Kéo thả vào ô lịch ngày làm việc"
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <CircleDot className="w-3 h-3 text-blue-500 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-blue-500 shrink-0" />
                             <span className="truncate text-slate-800 font-medium text-[11px]">
-                              {req.title}
+                              {getRequestDisplayTitle(req)}
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                          <span className="text-[10px] font-mono text-slate-400 group-hover:text-slate-600 shrink-0">
                             {getTaskEffort(req)}h
                           </span>
-                        </motion.div>
+                        </div>
                       ))
                     )}
                   </div>
                 </div>
 
-                {/* KHỐI 3: LỊCH VẮNG MẶT & TÁC ĐỘNG (LEAVE IMPACT) */}
-                <div className="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Palmtree className="w-3.5 h-3.5 text-pink-600" />
-                      <span className="font-bold text-slate-900 text-xs tracking-tight">
-                        Nghỉ phép hôm nay
-                      </span>
+                {/* NHÓM 3: LỊCH VẮNG MẶT & TÁC ĐỘNG (LEAVE IMPACT) */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                  <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Palmtree className="w-3.5 h-3.5 text-pink-500" />
+                      <span>Nghỉ phép hôm nay</span>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setShowAllLeavesModal(true)}
-                      className="text-pink-600 hover:text-pink-700 h-6 px-1.5"
-                    >
-                      Chi tiết ({todayLeaves.length})
-                    </Button>
+                    {todayLeaves.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllLeavesModal(true)}
+                        className="text-pink-600 hover:text-pink-700 text-[10px] font-semibold cursor-pointer"
+                      >
+                        ({todayLeaves.length})
+                      </button>
+                    )}
                   </div>
 
                   {todayLeaves.length === 0 ? (
-                    <div className="text-[11px] text-slate-400 italic">
+                    <div className="text-[11px] text-slate-400 italic px-1 py-1">
                       Toàn bộ nhân sự đi làm đầy đủ ✨
                     </div>
                   ) : (
-                    <div className="space-y-1.5 max-h-[140px] overflow-y-auto no-scrollbar">
+                    <div className="space-y-1 max-h-[140px] overflow-y-auto no-scrollbar">
                       {leaveImpactList.map(({ leave, affectedTasks }) => (
                         <div
                           key={`leave-impact-${leave.id}`}
-                          className="p-1.5 rounded-xl border border-pink-100 bg-pink-50/50 flex items-center justify-between gap-2"
+                          className="p-1.5 rounded-lg border border-slate-200/80 bg-white flex items-center justify-between gap-2"
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <UserAvatar
@@ -873,7 +874,7 @@ export default function CalendarPage() {
                             </div>
                           </div>
                           {affectedTasks.length > 0 && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[9px] shrink-0">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold text-[9px] shrink-0">
                               {affectedTasks.length} task
                             </span>
                           )}
@@ -917,10 +918,10 @@ export default function CalendarPage() {
         {/* KHU VỰC TRUNG TÂM: LỊCH LỚN CHUẨN REUI & CLICKUP PLANNER               */}
         {/* ----------------------------------------------------------------------- */}
         <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
-          {/* Top Navigation Toolbar */}
-          <div className="p-3 px-4 flex items-center justify-between border-b border-slate-200/80 bg-white flex-wrap gap-2.5">
-            {/* Left: Sidebar Toggle + Month Title + Navigation Controls */}
-            <div className="flex items-center gap-2">
+          {/* Top Navigation Toolbar - Clean Single-Row SaaS Header */}
+          <div className="h-14 px-4 border-b border-slate-200/80 bg-white flex items-center justify-between gap-3 shrink-0 select-none overflow-x-auto no-scrollbar">
+            {/* Left: Sidebar Toggle + Month Title + Navigation Controls + Dual-View Switcher */}
+            <div className="flex items-center gap-2.5 min-w-0 shrink-0">
               {!showLeftSidebar && (
                 <Tooltip content="Mở thanh bên" shortcut="⌘ \">
                   <Button
@@ -928,19 +929,22 @@ export default function CalendarPage() {
                     variant="outline"
                     size="iconSm"
                     onClick={() => setShowLeftSidebar(true)}
+                    className="h-8 w-8 text-slate-600"
                   >
                     <ChevronsRight className="w-4 h-4" />
                   </Button>
                 </Tooltip>
               )}
 
-              <div className="flex items-center gap-1">
+              {/* Prev / Next controls */}
+              <div className="flex items-center gap-0.5 border border-slate-200/80 rounded-lg p-0.5 bg-slate-50/50">
                 <Tooltip content="Kỳ trước" shortcut="←">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="iconSm"
                     onClick={handlePrev}
+                    className="h-7 w-7 text-slate-600 hover:text-slate-900"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -949,17 +953,19 @@ export default function CalendarPage() {
                 <Tooltip content="Kỳ sau" shortcut="→">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="iconSm"
                     onClick={handleNext}
+                    className="h-7 w-7 text-slate-600 hover:text-slate-900"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </Tooltip>
               </div>
 
-              <span className="text-base sm:text-lg font-bold text-slate-900 ml-1.5 tracking-tight">
-                {clickUpMonthYearTitle}
+              {/* Month Year Title */}
+              <span className="text-base font-bold text-slate-900 tracking-tight whitespace-nowrap">
+                Tháng {currentDate.getMonth() + 1}, {currentDate.getFullYear()}
               </span>
 
               <Button
@@ -967,36 +973,38 @@ export default function CalendarPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleToday}
-                className="ml-2 font-semibold"
+                className="h-7 text-xs font-semibold px-2.5 text-slate-700 hover:bg-slate-100"
               >
                 Hôm nay
               </Button>
 
+              <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+
               {/* DUAL-VIEW SWITCHER: DELIVERY VS CAPACITY */}
-              <div className="flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200/90 text-xs font-semibold ml-2">
+              <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200/80 text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setActiveWorkspaceView("delivery")}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all cursor-pointer ${
                     activeWorkspaceView === "delivery"
                       ? "bg-white text-slate-900 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   <Package className="w-3.5 h-3.5 text-blue-600" />
-                  <span>📦 Delivery</span>
+                  <span>Delivery</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveWorkspaceView("capacity")}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all cursor-pointer ${
                     activeWorkspaceView === "capacity"
                       ? "bg-white text-slate-900 shadow-2xs font-bold"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   <Users className="w-3.5 h-3.5 text-purple-600" />
-                  <span>👥 Capacity & Workload</span>
+                  <span>Capacity</span>
                   {overloadedDesigners.length > 0 && (
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   )}
@@ -1004,164 +1012,110 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Right: Integrated Search + Freshness + Mode Switchers */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* HEADER SEARCH BAR (Chuẩn SaaS Desktop) */}
-              <div className="relative flex items-center">
+            {/* Right: Integrated Search + Freshness + View Modes + Action CTA */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* HEADER SEARCH BAR */}
+              <div className="relative flex items-center hidden md:flex">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="Tìm đề bài, designer..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-8 pr-14 text-xs w-[200px] lg:w-[240px] bg-slate-50 border-slate-200"
+                  className="h-8 pl-8 pr-12 text-xs w-[170px] lg:w-[200px] bg-slate-50 border-slate-200/80 focus:bg-white"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCommandPalette(true)}
-                  className="absolute right-1.5 flex items-center gap-0.5 p-1 rounded hover:bg-slate-200 text-slate-500 cursor-pointer"
+                  className="absolute right-1.5 flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-200/50 hover:bg-slate-200 cursor-pointer"
                   title="Mở Command Palette (Ctrl+K)"
                 >
-                  <Kbd size="xs">Ctrl</Kbd>
-                  <Kbd size="xs">K</Kbd>
+                  ⌘K
                 </button>
               </div>
 
-              {/* ĐỘ TƯƠI DỮ LIỆU NGHỈ PHÉP (FRESHNESS BADGE) */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px]">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    freshnessInfo.isFresh ? "bg-emerald-500" : "bg-amber-500"
-                  }`}
-                />
-                <span className="text-slate-600 font-medium">Lịch nghỉ: {freshnessInfo.text}</span>
-                <Tooltip content="Quét đồng bộ lại lịch nghỉ từ Google Sheets">
-                  <button
-                    type="button"
-                    onClick={handleForceSyncLeaves}
-                    disabled={isSyncingLeaves}
-                    className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isSyncingLeaves ? "animate-spin text-blue-600" : ""}`} />
-                  </button>
-                </Tooltip>
-              </div>
+              {/* ĐỘ TƯƠI DỮ LIỆU NGHỈ PHÉP (FRESHNESS BADGE GỌN) */}
+              <Tooltip content={`Lịch nghỉ: ${freshnessInfo.text} - Nhấn để quét đồng bộ lại`}>
+                <button
+                  type="button"
+                  onClick={handleForceSyncLeaves}
+                  disabled={isSyncingLeaves}
+                  className="h-8 px-2 rounded-lg border border-slate-200/80 bg-slate-50 hover:bg-slate-100 flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      freshnessInfo.isFresh ? "bg-emerald-500" : "bg-amber-500"
+                    }`}
+                  />
+                  <RefreshCw className={`w-3 h-3 text-slate-500 ${isSyncingLeaves ? "animate-spin text-blue-600" : ""}`} />
+                </button>
+              </Tooltip>
 
               {/* View Modes chỉ hiển thị khi ở Delivery View */}
               {activeWorkspaceView === "delivery" && (
                 <>
-                  <div
-                    role="tablist"
-                    aria-label="Chế độ xem lịch"
-                    className="relative flex items-center rounded-xl bg-slate-100/90 p-1 border border-slate-200/80 text-xs select-none"
-                    onMouseLeave={() => setHoveredMode(null)}
-                  >
-                    {VIEW_MODES.map((mode) => {
-                      const isActive = viewMode === mode.id
-                      const isHovered = hoveredMode === mode.id
-                      const Icon = mode.icon
-
-                      return (
-                        <button
-                          key={mode.id}
-                          role="tab"
-                          aria-selected={isActive}
-                          type="button"
-                          onClick={() => setViewMode(mode.id as CalendarViewMode)}
-                          onMouseEnter={() => setHoveredMode(mode.id)}
-                          className={`relative h-7 px-2.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors cursor-pointer z-10 ${
-                            isActive ? "text-slate-900 font-bold" : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          {isHovered && !isActive && (
-                            <motion.span
-                              layoutId="calendar-view-mode-hover-pill"
-                              className="absolute inset-0 rounded-lg bg-slate-200/50 -z-10"
-                              transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                            />
-                          )}
-                          {isActive && (
-                            <motion.span
-                              layoutId="calendar-view-mode-active-pill"
-                              className="absolute inset-0 rounded-lg bg-white shadow-2xs border border-slate-200/50 -z-10"
-                              transition={springs.floating}
-                            />
-                          )}
-                          <Icon className="w-3.5 h-3.5 relative z-10" />
-                          <span className="relative z-10">{mode.label}</span>
-                        </button>
-                      )
-                    })}
+                  <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200/80 text-xs font-semibold">
+                    {[
+                      { id: "month", label: "Tháng" },
+                      { id: "week", label: "Tuần" },
+                      { id: "day", label: "Ngày" },
+                    ].map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => setViewMode(mode.id as CalendarViewMode)}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                          viewMode === mode.id
+                            ? "bg-white text-slate-900 shadow-2xs font-bold"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
                   </div>
 
-                  <div className="relative flex items-center rounded-xl bg-slate-100/90 p-1 border border-slate-200/80 text-xs select-none">
+                  {/* 5D / 7D Toggle */}
+                  <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200/80 text-xs font-semibold">
                     <button
                       type="button"
                       onClick={() => setShowWeekends(false)}
-                      className={`relative h-7 px-2.5 rounded-lg font-semibold transition-colors cursor-pointer z-10 ${
-                        !showWeekends ? "text-slate-900 font-bold" : "text-slate-500 hover:text-slate-900"
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        !showWeekends
+                          ? "bg-white text-slate-900 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-900"
                       }`}
                       title="Chỉ xem 5 ngày làm việc (Thứ 2 - Thứ 6)"
                     >
-                      {!showWeekends && (
-                        <motion.span
-                          layoutId="calendar-weekend-pill"
-                          className="absolute inset-0 rounded-lg bg-white shadow-2xs border border-slate-200/50 -z-10"
-                          transition={springs.floating}
-                        />
-                      )}
-                      <span className="relative z-10">5D</span>
+                      5D
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowWeekends(true)}
-                      className={`relative h-7 px-2.5 rounded-lg font-semibold transition-colors cursor-pointer z-10 ${
-                        showWeekends ? "text-slate-900 font-bold" : "text-slate-500 hover:text-slate-900"
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        showWeekends
+                          ? "bg-white text-slate-900 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-900"
                       }`}
                       title="Xem đầy đủ 7 ngày kể cả cuối tuần"
                     >
-                      {showWeekends && (
-                        <motion.span
-                          layoutId="calendar-weekend-pill"
-                          className="absolute inset-0 rounded-lg bg-white shadow-2xs border border-slate-200/50 -z-10"
-                          transition={springs.floating}
-                        />
-                      )}
-                      <span className="relative z-10">7D</span>
+                      7D
                     </button>
                   </div>
                 </>
               )}
 
-              {/* Lighten non-working hours toggle */}
-              <Tooltip content="Làm nổi bật giờ hành chính">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="iconSm"
-                  onClick={() => {
-                    setCalendarConfig((prev) => ({
-                      ...prev,
-                      lightenNonWorkingHours: !prev.lightenNonWorkingHours,
-                    }))
-                    toast.success("Đã đổi chế độ làm sáng/tối")
-                  }}
-                >
-                  <Sun className="w-3.5 h-3.5 text-slate-600" />
-                </Button>
-              </Tooltip>
-
-              {/* Add event CTA with Dark Navy Primary Token */}
+              {/* Add event CTA */}
               {canManageEvents && (
                 <Button
                   type="button"
                   variant="default"
                   size="sm"
                   onClick={() => handleOpenAddEvent()}
-                  className="gap-1.5"
+                  className="h-8 gap-1.5 text-xs font-semibold px-3 bg-slate-900 hover:bg-slate-800 text-white shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Sự kiện</span>
+                  <span className="hidden sm:inline">Sự kiện</span>
                 </Button>
               )}
 
@@ -1203,6 +1157,24 @@ export default function CalendarPage() {
                     {week.days.map((cell) => {
                       const dayItems = filteredItems.filter((it) => it.date === cell.dateYMD)
                       const isHoveredTarget = hoveredDateYMD === cell.dateYMD
+                      const holiday = holidays.find((h) => {
+                        if (h.type === "compensatory_workday") return false
+                        if (!h.endDate || h.endDate === h.date) return h.date === cell.dateYMD
+                        return cell.dateYMD >= h.date && cell.dateYMD <= h.endDate
+                      })
+                      const isWeekend = cell.dayOfWeekIndex === 5 || cell.dayOfWeekIndex === 6
+
+                      // Shaded / disabled background for holidays and weekends
+                      let cellBg = "bg-white"
+                      if (!cell.isCurrentMonth) {
+                        cellBg = "bg-slate-50/50 text-slate-300"
+                      } else if (holiday) {
+                        cellBg = "bg-slate-100/75"
+                      } else if (isWeekend) {
+                        cellBg = "bg-slate-50/70"
+                      } else if (cell.isToday) {
+                        cellBg = "bg-blue-50/20"
+                      }
 
                       return (
                         <div
@@ -1219,41 +1191,58 @@ export default function CalendarPage() {
                               setHoveredDateYMD(null)
                             }
                           }}
-                          onDrop={() => handleDropOnDate(cell.dateYMD)}
-                          className={`p-2 flex flex-col justify-between transition-colors relative group ${
-                            !cell.isCurrentMonth
-                              ? "bg-slate-50/60 text-slate-400"
-                              : cell.isToday
-                              ? "bg-blue-50/20"
-                              : "bg-white"
-                          } ${
+                          onDrop={() => {
+                            if (holiday) {
+                              toast.warning(`Lưu ý: Ngày ${cell.dateYMD} là ngày nghỉ lễ (${holiday.name})!`)
+                            }
+                            handleDropOnDate(cell.dateYMD)
+                          }}
+                          className={`p-2 flex flex-col justify-between transition-colors relative group ${cellBg} ${
                             isHoveredTarget ? "ring-2 ring-slate-900 bg-blue-50/60 shadow-inner z-10" : ""
                           }`}
                         >
-                          {/* Top Date Badge: Today = Red Circle, Day 1 = Dark Navy Pill */}
-                          <div className="flex items-center justify-between mb-1.5">
-                            {cell.isToday ? (
-                              <span className="w-5.5 h-5.5 rounded-full bg-[#E53935] text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                                {cell.dayNumber}
-                              </span>
-                            ) : cell.isFirstOfMonth ? (
-                              <span className="inline-flex items-center gap-1 font-bold text-xs text-slate-900">
-                                <span className="px-1.5 py-0.2 rounded-md bg-slate-900 text-white text-[10px] font-bold">
-                                  {cell.monthShort}
+                          {/* Top Header of Day Cell: Date Number + Holiday Badge / Quick Add */}
+                          <div className="flex items-center justify-between mb-1.5 select-none">
+                            <div className="flex items-center gap-1.5">
+                              {cell.isToday ? (
+                                <span className="w-5.5 h-5.5 rounded-full bg-[#E53935] text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                                  {cell.dayNumber}
                                 </span>
-                                <span>{cell.dayNumber}</span>
-                              </span>
-                            ) : (
-                              <span
-                                className={`text-xs font-semibold ${
-                                  cell.isCurrentMonth ? "text-slate-700" : "text-slate-300"
-                                }`}
-                              >
-                                {cell.dayNumber}
-                              </span>
-                            )}
+                              ) : cell.isFirstOfMonth ? (
+                                <span className="inline-flex items-center gap-1 font-bold text-xs text-slate-900">
+                                  <span className="px-1.5 py-0.2 rounded-md bg-slate-900 text-white text-[10px] font-bold">
+                                    {cell.monthShort}
+                                  </span>
+                                  <span>{cell.dayNumber}</span>
+                                </span>
+                              ) : (
+                                <span
+                                  className={`text-xs font-semibold ${
+                                    !cell.isCurrentMonth
+                                      ? "text-slate-300"
+                                      : holiday || isWeekend
+                                      ? "text-slate-400"
+                                      : "text-slate-700"
+                                  }`}
+                                >
+                                  {cell.dayNumber}
+                                </span>
+                              )}
+                            </div>
 
-                            {cell.isCurrentMonth && canManageEvents && (
+                            {/* Holiday Badge OR Weekend label OR Quick Add */}
+                            {holiday ? (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200/80 text-slate-600 truncate max-w-[125px]"
+                                title={holiday.name}
+                              >
+                                {holiday.name}
+                              </span>
+                            ) : isWeekend && showWeekends ? (
+                              <span className="text-[10px] font-medium text-slate-400 select-none">
+                                Cuối tuần
+                              </span>
+                            ) : cell.isCurrentMonth && canManageEvents ? (
                               <button
                                 type="button"
                                 onClick={() => handleOpenAddEvent(cell.dateYMD)}
@@ -1262,25 +1251,33 @@ export default function CalendarPage() {
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
-                            )}
+                            ) : null}
                           </div>
 
                           {/* Items List inside Day Cell */}
-                          <div className="space-y-1.5 flex-1 overflow-y-auto no-scrollbar max-h-[96px]">
+                          <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar max-h-[96px]">
+                            {/* If holiday with no work tasks, render subtle clean text */}
+                            {holiday && dayItems.filter((i) => i.layer === 1).length === 0 && (
+                              <div className="h-full flex items-center justify-center text-[11px] text-slate-400 font-medium italic select-none">
+                                Nghỉ lễ
+                              </div>
+                            )}
+
                             {dayItems.slice(0, 3).map((item, itIdx) => {
                               const isTask = item.layer === 1
                               const isDraggable = isTask && canModifyDeadlines
                               const itemKey = `item-${item.id || item.title}-${cell.dateYMD}-${itIdx}`
 
                               // Layer 4: Sự kiện Team
-                              if (item.layer === 4 || item.title.includes("Tập thể dục")) {
+                              if (item.layer === 4) {
                                 return (
                                   <div
                                     key={itemKey}
                                     onClick={() => setDetailItem(item)}
-                                    className="px-2 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-semibold truncate cursor-pointer shadow-2xs hover:brightness-105 transition-all flex items-center gap-1.5"
+                                    className="px-2 py-1 rounded-md bg-purple-50 text-purple-900 border border-purple-200/80 text-[11px] font-medium truncate cursor-pointer shadow-2xs hover:bg-purple-100 transition-colors flex items-center gap-1.5"
                                     title={item.title}
                                   >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
                                     <span className="truncate">{item.title}</span>
                                   </div>
                                 )
@@ -1290,44 +1287,47 @@ export default function CalendarPage() {
                               if (item.layer === 1) {
                                 const isAtRisk = item.riskLevel === "at_risk"
                                 const isOverdue = item.riskLevel === "overdue"
+                                const isDone = item.status === "Hoàn thành"
+
+                                let cardStyle = "bg-blue-50/70 text-blue-950 border-blue-200/80 hover:bg-blue-100 hover:border-blue-300 font-medium"
+                                let dotColor = "bg-blue-500"
+
+                                if (isDone) {
+                                  cardStyle = "bg-slate-50 text-slate-400 border-slate-200/60 line-through"
+                                  dotColor = "bg-slate-300"
+                                } else if (isOverdue) {
+                                  cardStyle = "bg-rose-50/90 text-rose-900 border-rose-200/90 hover:bg-rose-100 hover:border-rose-300 font-medium"
+                                  dotColor = "bg-rose-500"
+                                } else if (isAtRisk) {
+                                  cardStyle = "bg-amber-50/90 text-amber-900 border-amber-200/90 hover:bg-amber-100 hover:border-amber-300 font-medium"
+                                  dotColor = "bg-amber-500"
+                                }
 
                                 return (
                                   <div
                                     key={itemKey}
                                     draggable={isDraggable}
                                     onDragStart={(e) => {
-                                      if (item.rawItem) {
-                                        handleDragStartTask(e, item.rawItem as UXRequest)
-                                      }
+                                      if (item.rawItem) handleDragStartTask(e, item.rawItem as UXRequest)
                                     }}
                                     onClick={() => handleOpenDeadlineModal(item.rawItem as UXRequest)}
-                                    className={`px-2 py-1 rounded-lg text-[11px] font-semibold truncate cursor-pointer transition-all flex items-center justify-between gap-1.5 shadow-2xs ${
-                                      item.status === "Hoàn thành"
-                                        ? "bg-slate-100 text-slate-500 line-through border border-slate-200"
-                                        : isOverdue
-                                        ? "bg-red-700 text-white hover:bg-red-800"
-                                        : isAtRisk
-                                        ? "bg-amber-600 text-white hover:bg-amber-700"
-                                        : "bg-slate-900 text-white hover:bg-slate-800"
-                                    }`}
+                                    className={`px-2 py-1 rounded-md text-[11px] font-medium truncate cursor-pointer transition-all flex items-center justify-between gap-1.5 border shadow-2xs group ${cardStyle}`}
                                     title={`Kế hoạch: ${item.title} (${item.estimatedHours || 16}h) - Hạn: ${item.committedDeadline || "Chưa có"}`}
                                   >
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                      <Headphones className="w-3 h-3 shrink-0 text-slate-300" />
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
                                       <span className="truncate">{item.title}</span>
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <span className="text-[9px] font-mono px-1 py-0.2 bg-white/20 rounded">
-                                        {item.estimatedHours || 16}h
-                                      </span>
-                                      {isAtRisk && (
-                                        <span className="text-amber-200 text-xs" title={item.riskReason || item.conflictReason}>
-                                          ⚠️
+                                    <div className="flex items-center gap-1 shrink-0 text-[10px] font-mono opacity-80 group-hover:opacity-100">
+                                      <span>{item.estimatedHours || 16}h</span>
+                                      {isOverdue && (
+                                        <span className="text-rose-600 font-bold text-[9px] bg-rose-100 px-1 py-0.2 rounded">
+                                          Trễ
                                         </span>
                                       )}
-                                      {isOverdue && (
-                                        <span className="text-red-200 text-xs" title="Đã quá hạn hoàn thành!">
-                                          🔴
+                                      {isAtRisk && !isOverdue && (
+                                        <span className="text-amber-700 font-bold text-[9px] bg-amber-100 px-1 py-0.2 rounded">
+                                          Rủi ro
                                         </span>
                                       )}
                                     </div>
@@ -1335,33 +1335,22 @@ export default function CalendarPage() {
                                 )
                               }
 
-                              // Layer 2: Nghỉ phép nhân sự
+                              // Layer 2: Nghỉ phép nhân sự (Chỉ hiện nhẹ)
                               if (item.layer === 2) {
                                 return (
                                   <div
                                     key={itemKey}
                                     onClick={() => setDetailItem(item)}
-                                    className="px-2 py-1 rounded-lg bg-pink-50 text-pink-700 text-[10.5px] font-semibold truncate cursor-pointer flex items-center gap-1.5 border border-pink-200/80 hover:bg-pink-100 transition-colors"
+                                    className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 text-[10.5px] font-medium truncate cursor-pointer flex items-center gap-1.5 border border-pink-200/60 hover:bg-pink-100 transition-colors"
                                     title={item.title}
                                   >
-                                    <Palmtree className="w-3 h-3 text-pink-600 shrink-0" />
+                                    <Palmtree className="w-3 h-3 text-pink-500 shrink-0" />
                                     <span className="truncate">{item.title}</span>
                                   </div>
                                 )
                               }
 
-                              // Layer 3: Lịch nghỉ lễ ngân hàng / thông báo nhẹ
-                              return (
-                                <div
-                                  key={itemKey}
-                                  onClick={() => setDetailItem(item)}
-                                  className="px-2 py-0.5 rounded-lg text-slate-600 hover:bg-slate-100 text-[11px] font-medium truncate cursor-pointer flex items-center gap-1.5"
-                                  title={item.title}
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                                  <span className="truncate">{item.title}</span>
-                                </div>
-                              )
+                              return null
                             })}
 
                             {dayItems.length > 3 && (
@@ -1632,6 +1621,7 @@ export default function CalendarPage() {
                             const cur = new Date(mon)
                             cur.setDate(cur.getDate() + colIdx)
                             const colYMD = normalizeDateToYMD(cur)
+                            const holiday = holidays.find((h) => normalizeDateToYMD(h.date) === colYMD)
                             const leaveCheck = isPersonOnLeave(leaves, designer.name, colYMD)
                             const isHovered = hoveredDateYMD === `${designer.name}-${colYMD}`
 
@@ -1660,14 +1650,22 @@ export default function CalendarPage() {
                                 }}
                                 onDrop={() => handleDropOnDate(colYMD, designer.name)}
                                 className={`p-2 flex flex-col justify-between transition-colors relative ${
-                                  leaveCheck.onLeave
+                                  holiday
+                                    ? "bg-slate-100/75"
+                                    : leaveCheck.onLeave
                                     ? "bg-pink-50/40"
                                     : isHovered
                                     ? "bg-purple-50/70 ring-2 ring-purple-500 z-10"
                                     : "bg-white"
                                 }`}
                               >
-                                {leaveCheck.onLeave && (
+                                {holiday && (
+                                  <div className="px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 text-[10px] font-semibold flex items-center gap-1 mb-1.5 border border-slate-300/60">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
+                                    <span className="truncate">{holiday.name}</span>
+                                  </div>
+                                )}
+                                {!holiday && leaveCheck.onLeave && (
                                   <div className="p-1 rounded-lg bg-pink-100/70 text-pink-800 text-[10px] font-semibold flex items-center gap-1 mb-1.5 border border-pink-200/60">
                                     <Palmtree className="w-3 h-3 text-pink-600 shrink-0" />
                                     <span className="truncate">
@@ -2148,7 +2146,7 @@ export default function CalendarPage() {
             <DialogBody className="space-y-3.5 text-xs">
               {deadlineModalTask && (
                 <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1">
-                  <div className="font-bold text-slate-900">{deadlineModalTask.title}</div>
+                  <div className="font-bold text-slate-900">{getRequestDisplayTitle(deadlineModalTask)}</div>
                   <div className="text-slate-500 flex items-center gap-2">
                     <span>Mã: <strong className="font-mono text-slate-700">{deadlineModalTask.request_id}</strong></span>
                     <span>•</span>

@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useEffect } from "react"
 import { Check, Loader2, Calendar } from "lucide-react"
-import type { UXRequest } from "@/data/mockData"
+import { getRequestDisplayTitle, type UXRequest } from "@/data/mockData"
 import { getStoredSession } from "@/services/otpAuthService"
 import { canUserAccessRequest, generateMaskedTitle } from "@/lib/accessControl"
 import UserAvatar from "@/components/common/UserAvatar"
@@ -257,7 +257,7 @@ export default function ReleaseNewsfeedTimeline({
       const user = resolveSettingUser(r.assigned_designer || r.ux_owner || "MB Designer")
       taskMap.get(formatted)!.tasks.push({
         id: r.request_id || r.id || "",
-        title: r.title,
+        title: getRequestDisplayTitle(r),
         designerName: user.name,
         designerAvatar: user.avatarUrl,
         rawRequest: r,

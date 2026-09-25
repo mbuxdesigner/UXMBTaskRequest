@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { IconTile } from "@/components/reui/icon-tile"
 import { Slider } from "@/components/ui/slider"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
-import { UXRequest, ALL_PHASES, UserRole } from "../../data/mockData"
+import { UXRequest, ALL_PHASES, UserRole, getRequestDisplayTitle } from "../../data/mockData"
 import { updateTaskProgress } from "../../api/api"
 import { UserSession } from "../../services/otpAuthService"
 import { toast } from "@/components/ui/toast"
@@ -138,7 +138,7 @@ export default function UpdateProgressModal({
               </Badge>
             </div>
             <DialogDescription className="text-xs text-slate-500 mt-0.5">
-              {request.title} — {request.product}
+              {getRequestDisplayTitle(request)} — {request.product}
             </DialogDescription>
           </div>
         </div>
