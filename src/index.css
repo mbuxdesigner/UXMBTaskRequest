@@ -638,17 +638,11 @@ select:focus-visible,
 
 /* View Transitions delegated cleanly to Framer Motion page choreography */
 
-/* Accessibility: Prefers Reduced Motion */
+/* Keep essential application motion enabled. Only native smooth scrolling is
+   disabled when the operating system requests reduced motion. */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html {
     scroll-behavior: auto !important;
-  }
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
   }
 }
 
@@ -664,8 +658,8 @@ input[type="checkbox"] {
    Chuẩn hóa theo UI/UX ReUI (https://reui.io/components/sonner) & MB Bank UX:
    1. Đặt nút hành động CTA (Button) nằm dưới nội dung (Row 2), text trải rộng full-width không bị bóp nghẽn
    2. Căn đỉnh (items-start) cho Icon và thẳng hàng với dòng chữ đầu tiên
-   3. Nút đóng (Close Button) ghim chuẩn ở góc trên bên phải (top-right: 12px, top: 12px)
-   4. GIỮ NGUYÊN 100% ĐỘ ĐẬM (opacity: 1) cho nút X, viền rõ nét, không bị mờ nhạt
+   3. Sonner toàn quyền quản lý position/transform của toast stack
+   4. Nút đóng chỉ hiển thị trên toast phía trước
    ========================================================================== */
 
 [data-sonner-toaster] {
@@ -681,7 +675,6 @@ input[type="checkbox"] {
   align-items: flex-start !important;
   padding: 14px 16px !important;
   border-radius: 16px !important;
-  position: relative !important;
   gap: 0 !important;
 }
 
@@ -801,7 +794,7 @@ input[type="checkbox"] {
   margin-left: 0 !important;
 }
 
-/* Nút đóng Close Button: Ghim góc trên bên phải (top: 12px, right: 12px), GIỮ NGUYÊN 100% OPACITY KHÔNG MỜ NHẠT */
+/* Nút đóng Close Button: ghim góc trên bên phải của toast phía trước */
 [data-sonner-toaster] [data-sonner-toast] [data-close-button] {
   position: absolute !important;
   left: auto !important;
@@ -821,8 +814,18 @@ input[type="checkbox"] {
   justify-content: center !important;
   cursor: pointer !important;
   z-index: 50 !important;
-  opacity: 1 !important; /* Đảm bảo luôn giữ 100% opacity, không giảm độ trong suốt */
   transition: all 0.15s ease !important;
+}
+
+/* Toast phía sau phải để Sonner ẩn toàn bộ nội dung khi stack đang thu gọn. */
+[data-sonner-toaster] [data-sonner-toast]:not([data-front="true"]) [data-close-button] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-front="true"] [data-close-button] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 [data-sonner-toaster] [data-sonner-toast] [data-close-button]:hover {

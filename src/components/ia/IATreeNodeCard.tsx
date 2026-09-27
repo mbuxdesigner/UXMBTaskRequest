@@ -381,7 +381,10 @@ function IATreeNodeCardComponent({
     return completedTasksCount === totalTasks
   }, [isRollup, subtreeMetrics.allCompleted, totalTasks, hasActiveTask, completedTasksCount])
 
-  const themeStyles = getTierThemeStyles(node.tier, node.colorTheme)
+  // Màu node phải thể hiện cấp IA, không kế thừa màu sản phẩm xuống toàn cây.
+  // Trước đây App MB dùng theme "blue" nên vô tình rơi về palette theo level,
+  // còn các sản phẩm amber/emerald/purple lại bị tô một màu từ Lv1 đến Lv5.
+  const themeStyles = getTierThemeStyles(node.tier)
 
   // Drag and drop arranger logic
   const handlePointerDown = (e: React.PointerEvent) => {

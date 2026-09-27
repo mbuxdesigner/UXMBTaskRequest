@@ -369,7 +369,7 @@ export default function App() {
 
   if (!session) {
     return (
-      <MotionConfig reducedMotion="user">
+      <MotionConfig reducedMotion="never">
         <LoginGate
           onAuthSuccess={(newSession) => {
             setSession(newSession)
@@ -393,7 +393,7 @@ export default function App() {
   }
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="never">
       <div className="min-h-screen bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative">
         {/* Role Impersonation / Preview Floating Controller */}
         <RolePreviewBanner session={session} />

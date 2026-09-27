@@ -395,11 +395,12 @@ runTest("tier1", "T1.F2.4", "Prefix stripping normalizes numbered phase labels (
 })
 
 runTest("tier1", "T1.F2.5", "Dual Pending classification distinguishes PO Pending (>24h amber) from Designer Pending (slate)", () => {
-  // Case 1: PO Pending overdue > 24 hours
-  const past25h = new Date(Date.now() - 25 * 3600 * 1000).toISOString()
+  // Case 1: PO Pending overdue by more than 24 working hours. Use a full
+  // week so the assertion stays deterministic when CI runs on a weekend.
+  const pastWorkingWeek = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
   const poPendingReq = {
     status: "Đã gửi PO",
-    sent_to_po_at: past25h,
+    sent_to_po_at: pastWorkingWeek,
   }
   const poClassification = getRequestPendingClassification(poPendingReq)
   assert.equal(poClassification.isPending, true)

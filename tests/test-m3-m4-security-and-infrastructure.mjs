@@ -202,7 +202,7 @@ runTest("Item 11: google-apps-script-backend.js validates CSRF tokens on write o
 // -----------------------------------------------------------------------------
 // Group 6: Item 2 - RBAC Server-Side Enforcement (Admin HTTP 403)
 // -----------------------------------------------------------------------------
-runTest("Item 2: google-apps-script-backend.js enforces Admin role for team members, master data, and webhook setup", () => {
+runTest("Item 2: google-apps-script-backend.js enforces Admin role with a capability-scoped IA-only exception", () => {
   const backendPath = path.join(rootDir, "google-apps-script-backend.js")
   const content = fs.readFileSync(backendPath, "utf-8")
 
@@ -214,8 +214,19 @@ runTest("Item 2: google-apps-script-backend.js enforces Admin role for team memb
 
   // handleSyncMasterData
   const syncMasterIdx = content.indexOf("function handleSyncMasterData")
-  const syncMasterSnippet = content.slice(syncMasterIdx, syncMasterIdx + 1200)
-  assert.ok(syncMasterSnippet.includes('user.role !== "Admin"'), "handleSyncMasterData must require Admin role")
+  const syncMasterSnippet = content.slice(syncMasterIdx, syncMasterIdx + 3200)
+  assert.ok(
+    syncMasterSnippet.includes('user.role !== "Admin" && !canSyncIA'),
+    "handleSyncMasterData must require Admin unless the request is an authorized IA-only sync",
+  )
+  assert.ok(
+    syncMasterSnippet.includes("isIAOnlySync") && syncMasterSnippet.includes('RBAC_CONFIG["cap-ia-edit"]'),
+    "IA exception must be limited to IA-only payloads and roles configured for cap-ia-edit",
+  )
+  assert.ok(
+    syncMasterSnippet.includes("nonIAMasterKeys"),
+    "IA-capable users must still be blocked from updating other master-data keys",
+  )
   assert.ok(syncMasterSnippet.includes('status: "forbidden"'), "handleSyncMasterData must reject non-admins with forbidden")
 
   // handleSetTeamsWebhook

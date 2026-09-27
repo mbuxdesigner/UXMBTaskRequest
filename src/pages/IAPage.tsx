@@ -266,15 +266,15 @@ export default function IAPage() {
     setIsSyncingCloud(true)
     const startTime = Date.now()
     try {
-      const ok = await syncCloud()
+      const result = await syncCloud()
       const elapsed = Date.now() - startTime
       if (elapsed < 1200) {
         await new Promise((r) => setTimeout(r, 1200 - elapsed))
       }
-      if (ok) {
+      if (result.success) {
         toast.success("Đã đồng bộ sơ đồ IA lên Cloud thành công!")
       } else {
-        toast.error("Không thể đồng bộ lên Cloud. Vui lòng thử lại!")
+        toast.error(result.message || "Không thể đồng bộ lên Cloud. Vui lòng thử lại!")
       }
     } catch (e: any) {
       toast.error(e?.message || "Lỗi đồng bộ Cloud")
@@ -288,16 +288,16 @@ export default function IAPage() {
     setIsPullingCloud(true)
     const startTime = Date.now()
     try {
-      const ok = await pullCloud()
+      const result = await pullCloud()
       const elapsed = Date.now() - startTime
       if (elapsed < 800) {
         await new Promise((r) => setTimeout(r, 800 - elapsed))
       }
-      if (ok) {
+      if (result.success) {
         toast.success("Đã đồng bộ dữ liệu Information Architecture mới nhất từ Cloud!")
         setTimeout(() => handleFitToView(), 150)
       } else if (!isAuto) {
-        toast.info("Dữ liệu sơ đồ hiện tại đã khớp với Cloud.")
+        toast.info(result.message || "Dữ liệu sơ đồ hiện tại đã khớp với Cloud.")
       }
     } catch (e: any) {
       if (!isAuto) toast.error(e?.message || "Lỗi tải từ Cloud")

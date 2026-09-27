@@ -115,6 +115,9 @@ async function runTestSuite() {
   // --- TEST 3: Dynamic PO Pending Classification ---
   console.log("✓ Test 3: Verifying dynamic PO Pending timeout in statusConfig.ts")
   const now = Date.now()
+  // This test verifies timeout thresholds, not the weekend-exclusion policy.
+  // Keep it deterministic when the suite happens to run on Saturday/Sunday.
+  const timeoutTestSla = { ...cfg.sla, excludeWeekendsInSla: false }
   // Task sent 18 hours ago
   const taskSent18hAgo = {
     id: "task-test-po",
@@ -123,14 +126,14 @@ async function runTestSuite() {
   }
 
   // With timeout = 12h: 18h > 12h -> must be PO Pending!
-  saveSystemConfig({ sla: { ...cfg.sla, poPendingTimeoutHours: 12 } })
+  saveSystemConfig({ sla: { ...timeoutTestSla, poPendingTimeoutHours: 12 } })
   const result12h = getRequestPendingClassification(taskSent18hAgo)
   assert.strictEqual(result12h.isPending, true, "Task sent 18h ago must be pending when timeout is 12h")
   assert.strictEqual(result12h.type, "po_pending")
   assert.ok(result12h.reason.includes("12h"), "Reason must mention 12h")
 
   // With timeout = 24h: 18h < 24h -> must NOT be PO Pending yet!
-  saveSystemConfig({ sla: { ...cfg.sla, poPendingTimeoutHours: 24 } })
+  saveSystemConfig({ sla: { ...timeoutTestSla, poPendingTimeoutHours: 24 } })
   const result24h = getRequestPendingClassification(taskSent18hAgo)
   assert.strictEqual(result24h.isPending, false, "Task sent 18h ago must NOT be pending when timeout is 24h")
 
@@ -145,7 +148,7 @@ async function runTestSuite() {
   assert.ok(result30h.reason.includes("24h"), "Reason must mention 24h")
 
   // With timeout = 48h: 30h < 48h -> must NOT be PO Pending yet!
-  saveSystemConfig({ sla: { ...cfg.sla, poPendingTimeoutHours: 48 } })
+  saveSystemConfig({ sla: { ...timeoutTestSla, poPendingTimeoutHours: 48 } })
   const result48h = getRequestPendingClassification(taskSent30hAgo)
   assert.strictEqual(result48h.isPending, false, "Task sent 30h ago must NOT be pending when timeout is 48h")
 

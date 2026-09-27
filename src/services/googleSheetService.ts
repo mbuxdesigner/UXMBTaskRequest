@@ -21,6 +21,10 @@ import {
 import { getStoredSession } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
 import { getMemberDisplayName } from "../components/common/UserAvatar"
+import {
+  mergeRemoteRequestsPreservingNicknames,
+  preserveCachedNickname,
+} from "../lib/nicknameSync"
 
 export interface RequestPayloadMeta {
   client_environment: "production" | "preview" | "development"
@@ -79,8 +83,20 @@ export const FALLBACK_SELECTIONS: SelectionsData = {
 let cachedSelections: SelectionsData | null = null
 let cachedRequestsMemory: UXRequest[] | null = null
 let inflightRequestsPromise: Promise<UXRequest[]> | null = null
+let inflightBackgroundSyncPromise: Promise<void> | null = null
 let inflightSelectionsPromise: Promise<SelectionsData> | null = null
 let lastRemoteFetchSucceeded: boolean | null = null
+let didWarnAboutEmptyRemoteList = false
+
+function warnAboutEmptyRemoteListOnce(message: string): void {
+  if (didWarnAboutEmptyRemoteList) return
+  didWarnAboutEmptyRemoteList = true
+  console.warn(message)
+}
+
+function markRemoteListHealthy(): void {
+  didWarnAboutEmptyRemoteList = false
+}
 
 export function isLastRemoteFetchSuccessful(): boolean {
   return lastRemoteFetchSucceeded !== false
@@ -89,6 +105,26 @@ export function isLastRemoteFetchSuccessful(): boolean {
 const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
 export const TASK_VIEWERS_STORE_KEY = "ux_task_viewers_map"
+
+function getCachedRequestsSnapshot(): UXRequest[] {
+  if (cachedRequestsMemory) return cachedRequestsMemory
+
+  try {
+    const raw = localStorage.getItem(REQUESTS_CACHE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function normalizeRemoteRequestsPreservingNicknames(remoteRequests: any[]): UXRequest[] {
+  return mergeRemoteRequestsPreservingNicknames(
+    remoteRequests,
+    normalizeSheetRequest,
+    getCachedRequestsSnapshot()
+  )
+}
 
 export function clearSelectionsCache(): void {
   cachedSelections = null
@@ -532,12 +568,13 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
           if (res.ok) {
             const data = await res.json()
             if (data.status === "success" && Array.isArray(data.requests)) {
-              lastRemoteFetchSucceeded = true
               const envFiltered = envConfig.isProduction
                 ? filterProductionTasks(data.requests)
                 : data.requests
               const cleanRemote = envFiltered.filter((r: any) => !isDemoRequest(r))
-              const normalized = deduplicateTaskIds(cleanRemote.map(normalizeSheetRequest))
+              const normalized = deduplicateTaskIds(
+                normalizeRemoteRequestsPreservingNicknames(cleanRemote)
+              )
 
               // Phòng vệ mất danh sách: một deployment GAS lỗi hoặc trỏ nhầm
               // RAW_TASKS_TEST có thể trả success nhưng mảng rỗng. Không được dùng
@@ -550,12 +587,14 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
                     lastRemoteFetchSucceeded = false
                     const preserved = deduplicateTaskIds(localList.map(normalizeSheetRequest))
                     cachedRequestsMemory = preserved
-                    console.warn("Google Sheet returned an unexpected empty task list; preserved the existing cache.")
+                    warnAboutEmptyRemoteListOnce("Google Sheet returned an unexpected empty task list; preserved the existing cache.")
                     return preserved
                   }
                 } catch {}
               }
 
+              lastRemoteFetchSucceeded = true
+              markRemoteListHealthy()
               cachedRequestsMemory = normalized
               try {
                 localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
@@ -610,7 +649,16 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
   return inflightRequestsPromise
 }
 
-async function backgroundSyncRequests() {
+function backgroundSyncRequests(): Promise<void> {
+  if (inflightBackgroundSyncPromise) return inflightBackgroundSyncPromise
+
+  inflightBackgroundSyncPromise = runBackgroundSyncRequests().finally(() => {
+    inflightBackgroundSyncPromise = null
+  })
+  return inflightBackgroundSyncPromise
+}
+
+async function runBackgroundSyncRequests(): Promise<void> {
   try {
     const config = getGoogleSheetConfig()
     if (!config.scriptUrl || !config.scriptUrl.trim()) return
@@ -640,11 +688,16 @@ async function backgroundSyncRequests() {
           const envFiltered = envConfig.isProduction
             ? filterProductionTasks(data.requests)
             : data.requests
-          const normalized = deduplicateTaskIds(envFiltered.map(normalizeSheetRequest))
+          const normalized = deduplicateTaskIds(
+            normalizeRemoteRequestsPreservingNicknames(envFiltered)
+          )
           if (normalized.length === 0 && cachedRequestsMemory && cachedRequestsMemory.length > 0) {
-            console.warn("Background sync returned an unexpected empty task list; preserved the existing cache.")
+            lastRemoteFetchSucceeded = false
+            warnAboutEmptyRemoteListOnce("Background sync returned an unexpected empty task list; preserved the existing cache.")
             return
           }
+          lastRemoteFetchSucceeded = true
+          markRemoteListHealthy()
           cachedRequestsMemory = normalized
           localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
           broadcastTaskEvent("GLOBAL_REFRESH")
@@ -1118,7 +1171,47 @@ export async function updateTaskProgressInSheet(
 
       const data = await res.json()
       if (data.status === "success") {
-        return { success: true, message: data.message || "Cập nhật tiến độ thành công!" }
+        if (
+          params.nickname !== undefined &&
+          (data.nickname_persistence_version !== 1 || data.nickname_persisted !== true)
+        ) {
+          return {
+            success: false,
+            message: "Google Apps Script hiện tại chưa xác nhận đã lưu tên gợi nhớ. Cần deploy backend version mới.",
+            updatedRequest: updatedReq,
+          }
+        }
+
+        const rawUpdatedItem = data.updated_item
+        if (rawUpdatedItem && typeof rawUpdatedItem === "object") {
+          const serverUpdated = preserveCachedNickname(
+            rawUpdatedItem,
+            normalizeSheetRequest(rawUpdatedItem),
+            currentReq
+          )
+          const currentList = getCachedRequestsSnapshot()
+          const targetIndex = currentList.findIndex((request) => request.request_id === requestId)
+          if (targetIndex >= 0) {
+            currentList[targetIndex] = serverUpdated
+          } else {
+            currentList.unshift(serverUpdated)
+          }
+          cachedRequestsMemory = currentList
+          try {
+            localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(currentList))
+          } catch {}
+          broadcastTaskEvent("TASK_UPDATED", requestId, serverUpdated, params.note)
+          return {
+            success: true,
+            message: data.message || "Cập nhật tiến độ thành công!",
+            updatedRequest: serverUpdated,
+          }
+        }
+        return {
+          success: true,
+          message: data.message || "Cập nhật tiến độ thành công!",
+          updatedRequest: updatedReq,
+        }
       }
       return { success: false, message: data.message || "Không thể cập nhật trên Google Sheet." }
     } catch (err: unknown) {
@@ -1197,7 +1290,7 @@ export async function fetchSingleTaskUpdate(requestId: string): Promise<UXReques
         const data = await res.json()
         if (data.status === "success" && Array.isArray(data.requests)) {
           lastSingleTaskFetchTimes.set(requestId, Date.now())
-          const normalized = data.requests.map(normalizeSheetRequest)
+          const normalized = normalizeRemoteRequestsPreservingNicknames(data.requests)
           cachedRequestsMemory = normalized
           try {
             localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))

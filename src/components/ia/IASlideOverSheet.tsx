@@ -449,6 +449,9 @@ export default function IASlideOverSheet({
 
   if (!activeTool) return null
 
+  const isCompactDataPanel =
+    activeTool !== "add-node" && dataSystemSubTab === "data-sync"
+
   return (
     <motion.aside
       data-testid="ia-slide-over-sheet"
@@ -458,7 +461,11 @@ export default function IASlideOverSheet({
       exit={{ x: 380, opacity: 0 /* exit={{ x: -360, opacity: 0 }} */ }}
       transition={{ type: "spring", damping: 26, stiffness: 280 }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute top-4 bottom-24 z-35 w-[380px] /* w-[360px] */ bg-white/98 backdrop-blur-xl border border-slate-200/90 shadow-2xl rounded-2xl flex flex-col select-none overflow-hidden"
+      className={`absolute top-4 z-35 w-[380px] max-w-[calc(100%-2rem)] bg-white/98 backdrop-blur-xl border border-slate-200/90 shadow-2xl rounded-2xl flex flex-col select-none overflow-hidden ${
+        isCompactDataPanel
+          ? "h-auto max-h-[calc(100%-7rem)]"
+          : "bottom-24"
+      }`}
       style={{ right: "16px" /* style={{ left: "56px" }} */ }}
     >
       {/* 1. Header Bar: Title and Close (X) */}

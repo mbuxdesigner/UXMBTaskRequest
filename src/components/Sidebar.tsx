@@ -236,7 +236,7 @@ export default function Sidebar({
               className="w-7 h-7 object-contain rounded-lg shrink-0 group-hover:scale-105 transition-transform"
             />
             <span className="text-[15px] font-bold text-slate-900 tracking-tight">
-              UX Workspace
+              Workspace
             </span>
           </button>
         </div>

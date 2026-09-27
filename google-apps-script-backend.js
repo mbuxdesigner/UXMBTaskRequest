@@ -230,6 +230,7 @@ function doGet(e) {
       return createJsonResponse({
         status: "success",
         requests: requests,
+        nickname_persistence_version: 1,
         client_environment: isTest ? "preview" : "production",
         timestamp: new Date().toISOString()
       });
@@ -1656,9 +1657,37 @@ function handleUpdateTaskProgress(data) {
           trimmedItem._updates_truncated = true;
           itemPayload = JSON.stringify(trimmedItem);
         }
-        rawSheet.getRange(i + 2, 8).setValue(itemPayload);
+        const payloadCell = rawSheet.getRange(i + 2, 8);
+        payloadCell.setValue(itemPayload);
         rawSheet.getRange(i + 2, 10).setValue(formattedDate);
-        updatedItem = item;
+        try {
+          updatedItem = JSON.parse(itemPayload);
+        } catch (payloadParseError) {
+          updatedItem = item;
+        }
+
+        // Nickname changes require a read-after-write check. This guarantees
+        // success is returned only after Payload_JSON (not just activity log)
+        // contains the exact nickname value that was requested.
+        if (typeof data.nickname !== "undefined") {
+          SpreadsheetApp.flush();
+          try {
+            const persistedItem = JSON.parse(String(payloadCell.getValue() || "{}"));
+            if (!Object.prototype.hasOwnProperty.call(persistedItem, "nickname") ||
+                persistedItem.nickname !== item.nickname) {
+              return createJsonResponse({
+                status: "error",
+                message: "Nickname was not persisted to RAW_TASKS.Payload_JSON."
+              });
+            }
+            updatedItem = persistedItem;
+          } catch (nicknameReadbackError) {
+            return createJsonResponse({
+              status: "error",
+              message: "Could not verify nickname persistence in RAW_TASKS.Payload_JSON."
+            });
+          }
+        }
         break;
       }
     }
@@ -1705,7 +1734,16 @@ function handleUpdateTaskProgress(data) {
     status: "success",
     message: "Đã cập nhật tiến độ và ghi nhận nhật ký thành công!",
     request_id: requestId,
-    updated_item: updatedItem
+    updated_item: updatedItem,
+    // Contract marker: the deployed version persists nickname in
+    // RAW_TASKS.Payload_JSON and returns it with the updated task.
+    nickname_persistence_version: 1,
+    nickname_persisted: typeof data.nickname === "undefined"
+      ? null
+      : Boolean(updatedItem && Object.prototype.hasOwnProperty.call(updatedItem, "nickname")),
+    nickname: updatedItem && Object.prototype.hasOwnProperty.call(updatedItem, "nickname")
+      ? updatedItem.nickname
+      : null
   });
 }
 
@@ -4033,7 +4071,8 @@ function handleSyncTeamMembers(data) {
 }
 
 /**
- * Xử lý đồng bộ Master Data (Squads, Products, Phases) lên Google Sheet (RBAC: Chỉ Admin & Có CSRF Token)
+ * Xử lý đồng bộ Master Data lên Google Sheet.
+ * Admin được đồng bộ toàn bộ; payload chỉ chứa IA_TREES_DATA đi theo quyền cap-ia-edit.
  */
 function handleSyncMasterData(data) {
   const sessionToken = String(data.session_token || "").trim();
@@ -4047,8 +4086,29 @@ function handleSyncMasterData(data) {
     });
   }
 
-  // 1. RBAC Enforcement (Item 2)
-  if (user.role !== "Admin") {
+  // 1. RBAC Enforcement (Item 2). IA tree là dữ liệu nghiệp vụ riêng,
+  // cho phép các role có cap-ia-edit đồng bộ khi payload không chứa master data khác.
+  const hasIATrees = typeof data.ia_trees !== "undefined" || typeof data.iaTrees !== "undefined";
+  const nonIAMasterKeys = [
+    "squads", "products", "phases", "selections", "status_rules", "audit_logs",
+    "rbac", "nav_items", "team_members", "members", "form_config", "formConfig",
+    "session_policies", "sessionPolicies"
+  ];
+  const isIAOnlySync = hasIATrees && !nonIAMasterKeys.some(function(key) {
+    return typeof data[key] !== "undefined";
+  });
+  let iaEditRoles = ["Admin", "Design Owner", "Designer"];
+  if (isIAOnlySync) {
+    try {
+      const settingsForRbac = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      const currentMasterData = readMasterDataFromSettingsSheet(settingsForRbac);
+      const configuredRoles = currentMasterData.RBAC_CONFIG && currentMasterData.RBAC_CONFIG["cap-ia-edit"];
+      if (Array.isArray(configuredRoles)) iaEditRoles = configuredRoles;
+    } catch (rbacReadError) {}
+  }
+  const canSyncIA = isIAOnlySync && iaEditRoles.indexOf(String(user.role || "")) !== -1;
+
+  if (user.role !== "Admin" && !canSyncIA) {
     recordAuditLog(ss, {
       userEmail: user.teamsEmail || user.personalEmail,
       role: user.role,

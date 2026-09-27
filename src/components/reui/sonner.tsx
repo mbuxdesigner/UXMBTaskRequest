@@ -68,7 +68,7 @@ export function Toaster({
       toastOptions={{
         classNames: {
           toast:
-            "group toast font-sans rounded-2xl border border-slate-200/90 bg-white text-slate-900 shadow-xl shadow-slate-950/10 p-3.5 !flex !flex-wrap !items-start select-none transition-all duration-300 data-[styled=true]:bg-white data-[styled=true]:text-slate-900 hover:shadow-2xl hover:border-slate-300",
+            "group toast font-sans rounded-2xl border border-slate-200/90 bg-white text-slate-900 shadow-xl shadow-slate-950/10 p-3.5 !flex !flex-wrap !items-start select-none data-[styled=true]:bg-white data-[styled=true]:text-slate-900 hover:shadow-2xl hover:border-slate-300",
           title: "text-xs font-semibold text-slate-900 leading-snug tracking-tight",
           description: "text-[11px] text-slate-500 mt-0.5 leading-relaxed font-normal",
           actionButton:

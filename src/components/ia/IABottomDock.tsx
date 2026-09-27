@@ -16,7 +16,7 @@ import {
   Grid,
   ZoomIn,
   ZoomOut,
-  Maximize2,
+  LocateFixed,
   Maximize,
   Minimize,
   Map as MapIcon,
@@ -115,7 +115,9 @@ export default function IABottomDock({
     <nav
       data-testid="ia-bottom-dock"
       aria-label="Thanh điều hướng công cụ sơ đồ IA"
-      className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-xl text-slate-700 select-none max-w-[calc(100vw-2rem)] overflow-x-auto scrollbar-none"
+      className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-xl text-slate-700 select-none max-w-[calc(100vw-2rem)] overflow-x-auto scrollbar-none ${
+        isFullscreen ? "" : "md:ml-[7.5rem]"
+      }`}
     >
       {/* ======================================================== */}
       {/* 1. TƯƠNG TÁC CANVAS (Select V / Pan H)                    */}
@@ -430,7 +432,7 @@ export default function IABottomDock({
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
-        {/* Căn giữa toàn bộ sơ đồ (BỎ TEXT theo yêu cầu, chỉ hiển thị icon Maximize2) */}
+        {/* Căn giữa toàn bộ sơ đồ — dùng tâm ngắm để không nhầm với fullscreen */}
         <Tooltip content="Căn giữa toàn bộ sơ đồ (Fit to View)" shortcut="F" side="top">
           <motion.button
             type="button"
@@ -439,7 +441,7 @@ export default function IABottomDock({
             className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
             {...tactileProps.button}
           >
-            <Maximize2 className="w-4 h-4 text-slate-600" />
+            <LocateFixed className="w-4 h-4 text-slate-600" />
           </motion.button>
         </Tooltip>
 

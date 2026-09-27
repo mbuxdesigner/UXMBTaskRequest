@@ -12,6 +12,7 @@ import {
   mockSquads 
 } from "../../data/mockData"
 import UpdateProgressModal from "./UpdateProgressModal"
+import TaskIALinkField from "./TaskIALinkField"
 import { getStoredSession, getUserInitials } from "../../services/otpAuthService"
 import { uploadFileToDrive, fetchSingleTaskUpdate, fetchTeamMembersFromSheet, getStoredTaskViewers, saveStoredTaskViewers } from "../../services/googleSheetService"
 import {
@@ -322,11 +323,26 @@ export function getAdminPhases() {
     if (saved) {
       const parsed: any[] = JSON.parse(saved)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((p, idx) => ({
-          key: p.name,
-          label: `${idx + 1}. ${p.name}`,
-          progress: p.defaultProgress,
-        }))
+        const seenNames = new Set<string>()
+        const phases = parsed.flatMap((p) => {
+          const name = String(p?.name || "").trim()
+          const normalizedName = name.toLocaleLowerCase("vi")
+          if (!name || seenNames.has(normalizedName)) return []
+          seenNames.add(normalizedName)
+          return [{
+            key: name,
+            label: name,
+            progress: Number.isFinite(Number(p?.defaultProgress))
+              ? Number(p.defaultProgress)
+              : 0,
+          }]
+        })
+        if (phases.length > 0) {
+          return phases.map((phase, idx) => ({
+            ...phase,
+            label: `${idx + 1}. ${phase.label}`,
+          }))
+        }
       }
     }
   } catch {}
@@ -3864,7 +3880,7 @@ export default function RequestDetail({
                         const status: StepStatus = idx < currentPhaseIndex ? "complete" : idx === currentPhaseIndex ? "current" : "upcoming"
                         return (
                           <Step
-                            key={step.key}
+                            key={`${step.key}-${idx}`}
                             step={idx}
                             title={stepTitle}
                             state={status}
@@ -4105,7 +4121,7 @@ export default function RequestDetail({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 py-5 border-y border-slate-100 text-xs">
                     
                     {/* 1. Status (Chính là Khâu UX: Phân loại, Discovery, User Flow, UI Design, Prototype, Bàn giao) */}
-                    <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="order-1 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Target className="w-4 h-4 text-slate-400" />
                         <span>Status</span>
@@ -4170,7 +4186,7 @@ export default function RequestDetail({
                                       const phaseCfg = getStatusConfig(phase.key)
                                       return (
                                         <button
-                                          key={`drop-phase-${phase.key}`}
+                                          key={`drop-phase-${phase.key}-${pIdx}`}
                                           type="button"
                                           onClick={() => handleUpdatePhase(phase.key, phase.progress)}
                                           className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 cursor-pointer text-xs transition-colors group ${
@@ -4202,7 +4218,7 @@ export default function RequestDetail({
                     </div>
 
                     {/* 2. Assignees (Click to select - Support Multi-Assignees) */}
-                    <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="order-5 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <UserCheck className="w-4 h-4 text-slate-400" />
                         <span>Assignees</span>
@@ -4484,7 +4500,7 @@ export default function RequestDetail({
                       } = getPhaseDeadlineInfo(request.current_phase)
 
                       return (
-                        <div className="flex items-center gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
+                        <div className="order-3 flex items-center gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
                           {/* Label cột trái: 1 dòng duy nhất, không xuống dòng */}
                           <div className="flex items-center gap-2 text-slate-500 font-normal shrink-0 whitespace-nowrap" title="Lịch trình thiết kế UX của Designer">
                             <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
@@ -4548,7 +4564,7 @@ export default function RequestDetail({
                     })()}
 
                     {/* 4. Priority (Click to select) */}
-                    <div className="flex items-center relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="order-2 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Flag className="w-4 h-4 text-amber-500" />
                         <span>Priority</span>
@@ -4601,7 +4617,14 @@ export default function RequestDetail({
                     </div>
 
                     {/* 5. Viewers (Người theo dõi bài toán) */}
-                    <div className="flex items-center relative col-span-1 sm:col-span-2 pt-3 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+                    <TaskIALinkField
+                      request={request}
+                      onUpdated={onUpdated}
+                      onBeforeOpen={() => setOpenDropdown(null)}
+                      className="order-4"
+                    />
+
+                    <div className="order-6 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Users className="w-4 h-4 text-slate-400" />
                         <span>Viewers</span>
@@ -4728,8 +4751,8 @@ export default function RequestDetail({
                               exit={{ opacity: 0, y: viewerPlacement === "top" ? -4 : 4, scale: 0.96 }}
                               className={`absolute z-50 w-80 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden select-none flex flex-col text-xs ${
                                 viewerPlacement === "top"
-                                  ? "bottom-full mb-1.5 right-0 sm:right-auto sm:left-0"
-                                  : "top-full mt-1.5 right-0 sm:right-auto sm:left-0"
+                                  ? "bottom-full mb-1.5 right-0"
+                                  : "top-full mt-1.5 right-0"
                               }`}
                               style={{ maxHeight: `${viewerMaxHeight}px` }}
                             >

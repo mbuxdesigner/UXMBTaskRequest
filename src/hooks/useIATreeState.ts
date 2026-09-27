@@ -11,6 +11,7 @@ import {
 import { mockRequests, UXRequest, isDemoRequest } from "@/data/mockData"
 import { syncMasterDataToSheet, fetchMasterDataFromSheet, fetchRequestsFromSheet } from "@/services/googleSheetService"
 import { DEFAULT_TIER_DIMENSIONS } from "@/components/ia/IASettingsModal"
+import { mergeCloudIATreesPreservingDirtyProducts } from "@/lib/iaTaskLink"
 
 export const IA_STORAGE_KEY = "ux_portal_ia_tree_data_v4"
 export const IA_TIER_DIMENSIONS_KEY = "ux_ia_tier_dimensions_v2"
@@ -361,6 +362,37 @@ export function saveTreesToStorage(trees: Record<string, IANode>): void {
   } catch (err) {
     console.warn("Failed to persist IA tree data to localStorage:", err)
   }
+}
+
+const IA_DIRTY_PRODUCTS_KEY = "ux_ia_dirty_products_v1"
+
+export function getDirtyIAProductIds(): Set<string> {
+  if (typeof window === "undefined" || !window.localStorage) return new Set()
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(IA_DIRTY_PRODUCTS_KEY) || "[]")
+    return new Set(Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function markIAProductDirty(productId: string): void {
+  if (!productId || typeof window === "undefined" || !window.localStorage) return
+  const dirtyIds = getDirtyIAProductIds()
+  dirtyIds.add(productId)
+  window.localStorage.setItem(IA_DIRTY_PRODUCTS_KEY, JSON.stringify([...dirtyIds]))
+}
+
+export function clearDirtyIAProducts(productIds?: string[]): void {
+  if (typeof window === "undefined" || !window.localStorage) return
+  if (!productIds) {
+    window.localStorage.removeItem(IA_DIRTY_PRODUCTS_KEY)
+    return
+  }
+  const dirtyIds = getDirtyIAProductIds()
+  productIds.forEach((productId) => dirtyIds.delete(productId))
+  if (dirtyIds.size === 0) window.localStorage.removeItem(IA_DIRTY_PRODUCTS_KEY)
+  else window.localStorage.setItem(IA_DIRTY_PRODUCTS_KEY, JSON.stringify([...dirtyIds]))
 }
 
 // Helper: Load and save Tier Dimension Settings
@@ -1483,13 +1515,17 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
 
   // Listen to cross-tab storage changes
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === IA_STORAGE_KEY) {
+    const handleStorageChange = (e: StorageEvent | Event) => {
+      if (!(e instanceof StorageEvent) || e.key === IA_STORAGE_KEY) {
         setTrees(loadSavedTrees())
       }
     }
     window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
+    window.addEventListener("ia_trees_changed", handleStorageChange)
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("ia_trees_changed", handleStorageChange)
+    }
   }, [])
 
   // Compute Metrics across all root nodes
@@ -2144,6 +2180,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
   const syncCloud = useCallback(async () => {
     try {
       const res = await syncMasterDataToSheet({ ia_trees: trees })
+      if (res.success) clearDirtyIAProducts()
       return res
     } catch (err: any) {
       return { success: false, message: err?.message || "Lỗi đồng bộ Google Sheet" }
@@ -2165,7 +2202,12 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         }
         if (typeof loadedTrees === "object" && loadedTrees !== null) {
           setTrees((prev) => {
-            const updated = { ...prev, ...loadedTrees }
+            const dirtyProductIds = getDirtyIAProductIds()
+            const updated = mergeCloudIATreesPreservingDirtyProducts(
+              prev,
+              loadedTrees as Record<string, IANode>,
+              dirtyProductIds,
+            )
             saveTreesToStorage(updated)
             return updated
           })
