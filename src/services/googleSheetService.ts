@@ -296,6 +296,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
     expected_deadline: String(data.release_date || data.expected_deadline || ""),
     release_date: String(data.release_date || data.expected_deadline || ""),
     design_deadline: String(data.design_deadline || data.ux_deadline || data.expected_deadline || ""),
+    planned_work_date: String(data.planned_work_date || ""),
     deadline_reason: String(data.deadline_reason || "Ra mắt sản phẩm"),
     preferred_squad: cleanSquad,
     requester_email: String(data.requester_email || ""),
@@ -999,6 +1000,7 @@ export async function updateTaskProgressInSheet(
     priority?: string
     design_deadline?: string
     release_date?: string
+    planned_work_date?: string
     product?: string
     squad_name?: string
     preferred_squad?: string
@@ -1069,6 +1071,7 @@ export async function updateTaskProgressInSheet(
         doc_link: rawDocLink,
         design_deadline: params.design_deadline !== undefined ? params.design_deadline : (oldReq.design_deadline || oldReq.expected_deadline),
         release_date: params.release_date !== undefined ? params.release_date : (oldReq.release_date || oldReq.expected_deadline),
+        planned_work_date: params.planned_work_date !== undefined ? params.planned_work_date : oldReq.planned_work_date,
         expected_deadline: params.release_date || oldReq.expected_deadline,
         last_updated: formattedDate,
         assigned_designer: params.assigned_designer !== undefined ? params.assigned_designer : oldReq.assigned_designer,
@@ -1154,6 +1157,7 @@ export async function updateTaskProgressInSheet(
         is_po_edit: params.is_po_edit || false,
         design_deadline: params.design_deadline !== undefined ? params.design_deadline : (currentReq?.design_deadline || currentReq?.expected_deadline || ""),
         release_date: params.release_date !== undefined ? params.release_date : (currentReq?.release_date || currentReq?.expected_deadline || ""),
+        planned_work_date: params.planned_work_date !== undefined ? params.planned_work_date : (currentReq?.planned_work_date || ""),
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
         is_comment: params.is_comment === true,
         figma_url: params.figma_url || (currentReq?.deliverables?.figma_url || ""),

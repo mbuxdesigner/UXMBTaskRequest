@@ -288,3 +288,55 @@ node test-ia-cloud-autochunk-and-sanitizer.mjs
   - 🟢 **Best Practices:** **100 / 100**
   - 🟢 **SEO:** **100 / 100**
 
+---
+
+## 9. TASK ↔ IA, CLOUD MERGE & TINH CHỈNH CANVAS (27/09/2026)
+
+### 9.1. Hợp đồng liên kết Task ↔ IA
+
+```mermaid
+flowchart LR
+  T[Task có Product + Squad] --> F[Lọc cây IA theo Product + Squad]
+  F --> L[Chọn tuần tự Lv1 → Lv5]
+  L --> C{Tạo node mới?}
+  C -->|Có| N[Thêm node, chưa gắn task]
+  N --> L
+  C -->|Không| D[Chọn node cuối]
+  D --> S[Bấm Hoàn tất]
+  S --> A[Gỡ liên kết cũ và gắn vào một node mới]
+```
+
+- Một task chỉ thuộc một node; node có thể chứa nhiều task.
+- Tab Lv tiếp theo chỉ khả dụng sau khi đã chọn node cha hợp lệ.
+- Mỗi tab hiển thị danh sách trực tiếp, hỗ trợ tìm kiếm kiểu Notion; không dùng native `<select>` và không mở modal riêng.
+- Nếu không tìm thấy, người dùng được gợi ý tạo node cùng cấp. Tạo node không tự động liên kết task.
+- Mọi thay đổi chỉ được chốt khi bấm **Hoàn tất**.
+
+### 9.2. Bảo vệ liên kết trước cloud auto-pull
+
+- `useIATreeState` đánh dấu sản phẩm IA đang có thay đổi cục bộ (dirty product).
+- Khi nhận cloud payload, cây của sản phẩm dirty không bị bản cloud cũ ghi đè; các sản phẩm sạch vẫn được merge/cập nhật bình thường.
+- Sau khi lưu thành công, trạng thái dirty được giải phóng và phát sự kiện `ia_trees_changed` cho các consumer cập nhật.
+
+### 9.3. Màu node và công cụ canvas
+
+- Màu node được suy ra từ level Lv1–Lv5 cho mọi sản phẩm, không phụ thuộc tên `APP MB` hay dữ liệu legacy có sẵn màu.
+- Bottom dock dùng `position: fixed`; trên desktop tâm dock được bù theo Sidebar, còn mobile/fullscreen căn giữa viewport.
+- Nút căn giữa cây dùng biểu tượng `LocateFixed`, tách nghĩa với nút fullscreen.
+- Panel Dữ liệu & Hệ thống dùng slide-over gọn để không che quá nhiều canvas.
+
+### 9.4. Phân quyền và phạm vi ảnh hưởng
+
+| Thành phần | File chính | Lưu ý |
+| :--- | :--- | :--- |
+| Task IA picker | `src/components/track/TaskIALinkField.tsx`, `src/lib/iaTaskLink.ts` | Lọc product/squad, tạo node trước, chỉ link khi Hoàn tất |
+| Task Detail | `src/components/track/RequestDetail.tsx` | Hiển thị IA cạnh trường Date |
+| IA state/cloud | `src/hooks/useIATreeState.ts`, `src/services/googleSheetService.ts` | Không ghi đè sản phẩm dirty |
+| Canvas UI | `src/pages/IAPage.tsx`, `src/components/ia/*` | Level color, fixed dock, compact slide-over |
+| Backend RBAC | `google-apps-script-backend.js` | `cap-ia-edit` chỉ được sync payload IA-only |
+
+Kiểm thử chính: `tests/test-task-ia-linking.mjs`, `tests/test-ia-map-magnific.mjs`, `tests/test-ia-squad-filter.mjs`, `tests/test-ia-bottom-dock.mjs` và `test-ia-cloud-autochunk-and-sanitizer.mjs`.
+
+**Last Updated:** 27/09/2026
+**Changelog:** Bổ sung liên kết Task ↔ IA, dirty-product cloud merge, màu node theo level và chuẩn hóa công cụ canvas.
+

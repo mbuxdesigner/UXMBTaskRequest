@@ -2,7 +2,7 @@
 
 > **Document Version**: 2.0.0 (Production Release)  
 > **Status**: Approved & Certified  
-> **Last Updated**: 2026-09-15T21:00:00Z  
+> **Last Updated**: 2026-09-28T18:00:00+07:00
 > **Target Platform**: MBBank UX Task Request Management Platform  
 > **Authoring Team**: UXMB Architecture & Design System Core Team  
 
@@ -533,7 +533,9 @@ Located at `src/components/reui/sonner.tsx` (and aliased at `src/components/ui/s
    - **Container**: `rounded-2xl border border-slate-200/90 bg-white text-slate-900 shadow-xl shadow-slate-950/10 p-3.5 flex items-start gap-3`.
    - **Action Button**: Dark Navy `#0F172A` (`bg-slate-900 text-white hover:bg-slate-800 rounded-xl px-3 h-7 text-xs font-semibold shadow-xs cursor-pointer`).
    - **Cancel Button**: Slate 100 (`bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl px-2.5 h-7 text-xs font-medium cursor-pointer`).
-   - **Close Button (Nút đóng X)**: Nằm cố định tại **góc trên bên phải (Top-Right)** (`right: 10px; top: 10px; left: auto; transform: none; width: 22px; height: 22px; rounded-lg`), xóa bỏ hoàn toàn lỗi nút đóng bị lệch treo lơ lửng ngoài góc trên bên trái của thiết kế mặc định Sonner.
+   - **Close Button (Nút đóng X)**: Nằm cố định tại **góc trên bên phải (Top-Right)** (`right: 10px; top: 10px; left: auto; transform: none; width: 22px; height: 22px; rounded-lg`). Chỉ toast phía trước (`[data-front="true"]`) được hiển thị nút đóng; toast phía sau ẩn nút để stack không xuất hiện nhiều nút `X` rời rạc.
+   - **Sonner Owns Stack Geometry**: Không ghi đè `position`, `top`, `transform` hoặc thứ tự xếp của chính `[data-sonner-toast]`. Các giá trị này thuộc quyền điều phối của Sonner để animation stack và phép biến đổi giữa các toast không bị vỡ. CSS tùy biến chỉ nên tác động màu, border, shadow, spacing nội dung và nút đóng.
+   - **Transition Scope**: Không dùng `transition-all` trên toast shell. Chỉ transition các thuộc tính thị giác cần thiết để tránh can thiệp transform do Sonner quản lý.
 3. **MB Bank UX Semantic Status Icons & Căn Đỉnh Tuyệt Đối (Top-Aligned Icons)**:
    - **Quy tắc căn đỉnh (Top-Alignment)**: Toast container áp dụng `align-items: flex-start !important` và icon wrapper áp dụng `align-self: flex-start !important; margin-top: 2px !important`. Khi văn bản thông báo dài (2 dòng, 3 dòng hoặc nhiều hơn), **icon luôn giữ vị trí ở đỉnh thẳng hàng với dòng chữ đầu tiên**, không bao giờ bị trôi lơ lửng ở giữa thẻ.
    - **Khoảng đệm an toàn**: Phần nội dung văn bản (`[data-content]`) có `padding-right: 28px !important` để tiêu đề và nội dung dài không bao giờ bị đè lên nút đóng `X`.
@@ -820,6 +822,8 @@ UXMB resolves this via elevated breakpoints in `QuanLyPage.tsx`:
 
 - **Slide-Over Drawers**: Enforce `sm:max-w-[calc(100vw-24px)] md:w-[720px]`, eliminating the 24px overflow bug on 768px tablet portrait.
 - **Filter Popovers**: Enforce `max-w-[calc(100vw-2.5rem)]`, ensuring filter popovers fit cleanly on 375px mobile displays without horizontal scrollbars.
+- **Planner Right Sheet**: `RightSheet` portals to `document.body`, slides from the right with a spring, uses `max-w-full`, and becomes full-width on mobile. Any Planner action that previously opened a centered modal must use this sheet pattern.
+- **Hover Preview**: Preview cards portal above app stacking contexts, follow the pointer, and clamp both horizontal edges against the viewport. They are supplementary; click/focus must still expose the underlying action without relying on hover alone.
 
 ---
 

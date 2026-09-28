@@ -77,6 +77,8 @@ export interface UXRequest {
   expected_deadline: string
   release_date?: string
   design_deadline?: string
+  /** Ngày Designer dự kiến thực hiện; tách biệt với deadline cam kết. */
+  planned_work_date?: string
   deadline_reason: string
   preferred_squad: string
   requester_email: string

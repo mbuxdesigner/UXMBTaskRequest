@@ -55,7 +55,7 @@ const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
 const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
 const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
 const IAPage = lazy(() => import("./pages/IAPage"))
-const CalendarPage = lazy(() => import("./pages/CalendarPage"))
+const CalendarPage = lazy(() => import("./pages/DesignerPlannerPage"))
 
 // Route Preloaders (dynamic import on demand)
 export const preloadPage = (targetPage: Page) => {
@@ -70,7 +70,7 @@ export const preloadPage = (targetPage: Page) => {
       import("./pages/TrackRequestPage")
       break
     case "calendar":
-      import("./pages/CalendarPage")
+      import("./pages/DesignerPlannerPage")
       break
     case "manage":
       import("./pages/QuanLyPage")
@@ -208,7 +208,7 @@ export default function App() {
 
       ia: "Information Architecture — MB UX Request Portal",
 
-      calendar: "Lịch & UX Team Planner — MB UX Request Portal",
+      calendar: "Lịch & Planner cá nhân — MB UX Request Portal",
     }
 
     document.title =

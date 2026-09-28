@@ -133,6 +133,51 @@ export function isDateInRange(targetYMD: string, startYMD: string, endYMD: strin
   return targetYMD >= startYMD && targetYMD <= end
 }
 
+function formatLocalEventDateTime(date: Date, allDay: boolean): string {
+  const ymd = normalizeDateToYMD(date)
+  if (allDay) return ymd
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+  return `${ymd}T${hours}:${minutes}`
+}
+
+export function expandTeamEventOccurrences(event: TeamEvent): Array<{ idSuffix: string; date: string; startDate: string; endDate: string }> {
+  const startYMD = normalizeDateToYMD(event.startDate)
+  if (!startYMD) return []
+  const recurrence = event.recurrence || "none"
+  const recurrenceEndYMD = recurrence === "none" ? startYMD : normalizeDateToYMD(event.recurrenceEndDate) || startYMD
+  const baseStart = new Date(event.startDate)
+  const baseEnd = new Date(event.endDate)
+  const validBaseStart = !isNaN(baseStart.getTime()) ? baseStart : new Date(`${startYMD}T00:00`)
+  const durationMs = !isNaN(baseEnd.getTime()) ? Math.max(0, baseEnd.getTime() - validBaseStart.getTime()) : 0
+  const anchorDay = validBaseStart.getDate()
+  const occurrences: Array<{ idSuffix: string; date: string; startDate: string; endDate: string }> = []
+  let cursor = new Date(validBaseStart)
+
+  for (let guard = 0; guard < 730; guard += 1) {
+    const occurrenceYMD = normalizeDateToYMD(cursor)
+    if (!occurrenceYMD || occurrenceYMD > recurrenceEndYMD) break
+    const occurrenceEnd = new Date(cursor.getTime() + durationMs)
+    occurrences.push({
+      idSuffix: recurrence === "none" ? "" : `-${occurrenceYMD}`,
+      date: occurrenceYMD,
+      startDate: formatLocalEventDateTime(cursor, event.allDay),
+      endDate: formatLocalEventDateTime(occurrenceEnd, event.allDay),
+    })
+    if (recurrence === "none") break
+    if (recurrence === "daily") cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1, cursor.getHours(), cursor.getMinutes())
+    else if (recurrence === "weekly") cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 7, cursor.getHours(), cursor.getMinutes())
+    else {
+      const nextMonth = cursor.getMonth() + 1
+      const nextYear = cursor.getFullYear() + Math.floor(nextMonth / 12)
+      const normalizedMonth = ((nextMonth % 12) + 12) % 12
+      const lastDay = new Date(nextYear, normalizedMonth + 1, 0).getDate()
+      cursor = new Date(nextYear, normalizedMonth, Math.min(anchorDay, lastDay), cursor.getHours(), cursor.getMinutes())
+    }
+  }
+  return occurrences
+}
+
 /**
  * Tải toàn bộ danh sách bài toán UX từ localStorage hoặc fallback
  */
@@ -758,43 +803,40 @@ export async function loadAllCalendarItems(): Promise<{
   // 5. Tầng 4: Sự kiện team nội bộ (Team Events)
   const teamEvents = sysConfig.calendar?.teamEvents || []
   teamEvents.forEach((ev) => {
-    const startYMD = normalizeDateToYMD(ev.startDate)
-    const endYMD = normalizeDateToYMD(ev.endDate) || startYMD
-    if (!startYMD) return
-
     const cat = categoryMap.get(ev.categoryId)
     const color = cat?.color || "#8b5cf6"
-
-    // Kiểm tra xem có người tham gia nào đang nghỉ phép vào ngày diễn ra sự kiện không
-    let hasConflict = false
-    let conflictReason = ""
-    if (sysConfig.calendar.enableConflictAlert && Array.isArray(ev.attendees) && ev.attendees.length > 0) {
-      for (const attendee of ev.attendees) {
-        const check = isPersonOnLeave(leaves, attendee, startYMD)
-        if (check.onLeave && check.leaveRecord) {
-          hasConflict = true
-          conflictReason = `Thành viên [${attendee}] đang nghỉ phép (${check.leaveRecord.shift}): "${check.leaveRecord.reason}"`
-          break
+    expandTeamEventOccurrences(ev).forEach((occurrence) => {
+      // Kiểm tra xem có người tham gia nào đang nghỉ phép vào ngày diễn ra sự kiện không
+      let hasConflict = false
+      let conflictReason = ""
+      if (sysConfig.calendar.enableConflictAlert && Array.isArray(ev.attendees) && ev.attendees.length > 0) {
+        for (const attendee of ev.attendees) {
+          const check = isPersonOnLeave(leaves, attendee, occurrence.date)
+          if (check.onLeave && check.leaveRecord) {
+            hasConflict = true
+            conflictReason = `Thành viên [${attendee}] đang nghỉ phép (${check.leaveRecord.shift}): "${check.leaveRecord.reason}"`
+            break
+          }
         }
       }
-    }
 
-    items.push({
-      id: `event-${ev.id}`,
-      layer: 4,
-      title: ev.title,
-      date: startYMD,
-      startDate: ev.startDate,
-      endDate: ev.endDate,
-      allDay: ev.allDay,
-      color,
-      textColor: cat?.textColor,
-      category: ev.categoryId,
-      categoryLabel: cat?.name || "Sự kiện team",
-      assigneeName: ev.attendees?.join(", "),
-      hasConflict,
-      conflictReason,
-      rawItem: ev,
+      items.push({
+        id: `event-${ev.id}${occurrence.idSuffix}`,
+        layer: 4,
+        title: ev.title,
+        date: occurrence.date,
+        startDate: occurrence.startDate,
+        endDate: occurrence.endDate,
+        allDay: ev.allDay,
+        color,
+        textColor: cat?.textColor,
+        category: ev.categoryId,
+        categoryLabel: cat?.name || "Sự kiện team",
+        assigneeName: ev.attendees?.join(", "),
+        hasConflict,
+        conflictReason,
+        rawItem: ev,
+      })
     })
   })
 

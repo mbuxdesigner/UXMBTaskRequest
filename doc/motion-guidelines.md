@@ -659,38 +659,41 @@ export function TaskDetailDrawer({ isOpen, onClose, task }: any) {
 
 ---
 
-## 5. QUY CHUẨN KHẢ NĂNG TIẾP CẬN (WCAG 2.2 SC 2.3.3 COMPLIANCE)
+## 5. CHÍNH SÁCH MOTION RUNTIME & KHẢ NĂNG TIẾP CẬN
 
-Tiêu chuẩn WCAG 2.2 Success Criterion 2.3.3 (Animation from Interactions) quy định rõ: *Người dùng phải có khả năng vô hiệu hóa các chuyển động không thiết yếu từ tương tác mà không làm mất đi thông tin hoặc chức năng của ứng dụng.*
+Tiêu chuẩn WCAG 2.2 Success Criterion 2.3.3 yêu cầu người dùng có cách vô hiệu hóa chuyển động không thiết yếu phát sinh từ tương tác mà không mất thông tin hoặc chức năng. Tuy nhiên, bản runtime ngày 26/09/2026 chủ động giữ motion của ứng dụng vì Windows đang trả `prefers-reduced-motion: reduce` ngoài mong đợi, khiến gần như toàn bộ hiệu ứng biến mất.
 
-### 5.1. Tích Hợp Toàn Cục Tại Cấp Ứng Dụng (`App.tsx`)
-Framer Motion bỏ qua thuộc tính thời lượng CSS thuần. Do đó, gốc ứng dụng tại `src/App.tsx` bắt buộc phải được bọc trong `<MotionConfig reducedMotion="user">`:
+### 5.1. Chính sách runtime hiện tại tại `App.tsx`
+
+Gốc ứng dụng hiện dùng `<MotionConfig reducedMotion="never">` để Framer Motion không tự làm phẳng animation theo media feature của hệ điều hành:
 
 ```tsx
 import { MotionConfig } from "framer-motion"
 
 export default function App() {
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="never">
       <div className="min-h-screen bg-[#FCFCFD]">
-        {/* Mọi hoạt ảnh lò xo và di chuyển x/y bên trong tự động làm phẳng */}
+        {/* Giữ motion chức năng theo chính sách runtime hiện tại */}
       </div>
     </MotionConfig>
   )
 }
 ```
 
-### 5.2. Đồng Bộ Hóa Với CSS Media Query (`index.css`)
+### 5.2. Phạm vi media query trong `index.css`
+
+Không dùng selector toàn cục để ép mọi animation và transition về `0.01ms`, vì cách đó làm mất cả motion chức năng và xung đột với Framer Motion. Media query hiện chỉ tắt smooth scrolling:
+
 ```css
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html {
     scroll-behavior: auto !important;
   }
 }
 ```
+
+> **Lưu ý accessibility:** Đây là trạng thái vận hành hiện tại, không phải tuyên bố tuân thủ WCAG hoàn chỉnh. Hướng cải tiến là thêm tùy chọn motion ngay trong ứng dụng, cho phép giảm các hiệu ứng không thiết yếu nhưng vẫn giữ feedback, trạng thái và quan hệ không gian cần cho thao tác.
 
 ### 5.3. Quy Định Cho Screen Readers
 Mọi thẻ Skeleton trong quá trình nạp dữ liệu bắt buộc gắn thuộc tính `aria-hidden="true"` để phần mềm đọc màn hình không đọc các khối placeholder vô nghĩa. Bộ chứa danh sách đang tải phải có `aria-busy="true"`.

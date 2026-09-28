@@ -129,6 +129,11 @@ export interface CalendarItem {
 - Nguồn: Mảng `teamEvents` trong cấu hình `CalendarConfig`.
 - Trực quan: Thanh sự kiện dài màu theo phân loại (`categoryId`) hoặc xanh dương đậm.
 - Quản lý: Cho phép người dùng có quyền `manageEvents` tạo mới, cập nhật thời gian, link họp Teams, địa điểm và xóa sự kiện.
+- Designer Planner dùng luồng **Schedule meeting** theo pattern REUI Schedule 3: lịch tháng trực quan, time slot, thời lượng, chu kỳ lặp có ngày kết thúc, loại sự kiện, người tham gia, địa điểm/link họp và agenda.
+- Người tham gia chỉ được chọn từ danh sách Designer/Design Owner đồng bộ từ Admin (`mbbank_admin_team` / `fetchTeamMembersFromSheet`), không nhập email tự do.
+- Loại sự kiện đọc trực tiếp `calendar.eventCategories`, hiển thị đúng tên, mô tả và màu cấu hình trong Admin. Màu này tiếp tục được dùng trên event chip của lịch.
+- Event hỗ trợ một ảnh thumbnail tối đa 10 MB. Ảnh được tải qua gateway Google Drive hiện có, lưu URL trong `TeamEvent.attachments`, hiển thị chỉ báo trên ô lịch và trong chi tiết event.
+- Event lặp được mở rộng thành các occurrence hằng ngày/tuần/tháng đến hết `recurrenceEndDate`; mỗi occurrence giữ nguyên giờ bắt đầu, thời lượng và kiểm tra xung đột nghỉ phép.
 
 ---
 
@@ -201,3 +206,71 @@ Bộ kiểm thử được viết bằng **Vitest** tại `tests/test-calendar-p
 10. Xóa sự kiện team: Hàm `deleteTeamEvent` gỡ bỏ sự kiện khỏi cấu hình.
 11. Phân quyền RBAC dời hạn: Kiểm tra cấm Designer và PO dời deadline nếu chưa được cấp quyền trong Admin.
 12. Đồng bộ Lịch nghỉ: Bóc tách chính xác các trường dữ liệu từ Google Sheets.
+
+---
+
+## 8. DESIGNER PLANNER CÁ NHÂN — MVP ĐÃ TRIỂN KHAI (27/09/2026)
+
+### 8.1. Bố cục và trải nghiệm
+
+`src/pages/DesignerPlannerPage.tsx` là màn hình mặc định của route Lịch & Planner. Trang lấy lịch làm việc làm trung tâm và gồm:
+
+1. Ngày hiện tại, lời chào theo tên Designer và một câu cảm hứng chọn ngẫu nhiên mỗi lần mount trang.
+2. Khối “AI điểm nhanh hôm nay” có thời điểm cập nhật, thao tác tóm tắt lại, thu gọn và deep-link tới task liên quan.
+3. Ba KPI cá nhân: đang phụ trách, task overload và task go-live trong tuần; bên dưới là phân bố theo bốn khâu UX.
+4. Lịch tháng/tuần theo bố cục 70/30, điều hướng kỳ trước/sau/Hôm nay và bộ lọc từng loại nội dung.
+5. Panel ngày đang chọn, task Lv1/Lv2 trong tuần và danh sách task chưa xếp ngày.
+6. Feed cập nhật liên quan đến các task của Designer, có Chưa đọc/Tất cả và đánh dấu đã đọc.
+7. Responsive một cột trên viewport nhỏ; calendar giữ vùng cuộn ngang riêng để không làm vỡ toàn trang.
+
+### 8.2. Các lớp dữ liệu trên lịch
+
+| Lớp | Nguồn | Màu/ngữ nghĩa |
+| :--- | :--- | :--- |
+| Deadline cam kết | `expected_deadline` / `design_deadline` | Rose |
+| Ngày dự kiến làm | `planned_work_date` | Blue |
+| Lịch nghỉ cá nhân | `leaveService` lọc theo tên/email phiên | Amber |
+| Event team | `calendar.teamEvents` | Violet |
+| Event cá nhân | Event do chính Designer tạo và tham dự | Cyan |
+| Nghỉ lễ/ngày làm bù | `workSchedule.holidays` | Trạng thái nền ô lịch, không tạo event/task chip |
+
+Người dùng có thể bật/tắt độc lập các lớp task/event. Ô ngày hiển thị tối đa ba mục ở Month view và có nhãn `+N mục khác` khi vượt giới hạn. Ngày không làm việc được tô nền xám; ngày nghỉ lễ hiển thị watermark “Nghỉ lễ” cùng tên ngày lễ ở nền ô. Ngày làm bù dùng nền xanh rất nhẹ và watermark “Làm bù”.
+
+### 8.3. Rule-based briefing và số liệu cá nhân
+
+- “AI điểm nhanh” hiện là rule engine nội bộ, không gửi dữ liệu task ra nhà cung cấp AI bên ngoài.
+- Khối AI dùng surface trắng kiểu ClickUp, icon `/public/ai-default.png` và progressive typewriter cho từng nhận định. Bấm “Tóm tắt lại” chạy lại nội dung theo thứ tự; hover/focus một nhận định mở preview nổi có boundary detection, mô tả và metadata task liên quan.
+- Câu truyền cảm hứng được chọn ngẫu nhiên khi vào trang, gõ theo kiểu typewriter, giữ 20 giây rồi xóa để chuyển sang một câu ngẫu nhiên khác. Hiệu ứng đi theo chính sách motion runtime của ứng dụng (`MotionConfig reducedMotion="never"`) để không bị Windows vô hiệu hóa ngoài mong đợi.
+- Engine ưu tiên cảnh báo quá hạn/quá tải, deadline trong tuần, go-live trong tuần và task chưa xếp ngày.
+- Task cá nhân được lọc qua `isTaskAssignedToUser()` theo session, bao gồm assigned designer/UX owner và design owner khi phù hợp.
+- Phân bố khâu được chuẩn hóa về `Define đầu bài`, `Wireframe + UI`, `Ready to dev`, `Nghiệm thu UI`.
+- Logic thuần nằm trong `src/lib/designerPlanner.ts` để có thể kiểm thử độc lập và tái sử dụng.
+
+### 8.4. Sheet tương tác của Planner
+
+- Các luồng “Xếp ngày dự kiến”, “Schedule meeting” và “Chi tiết lịch & mốc cần nhớ” dùng chung `RightSheet` trượt từ phải, có backdrop, Escape/outside-click, sticky header/footer và responsive full-width trên mobile.
+- Việc mở task từ briefing, notification hoặc event vẫn chuyển sang Request Detail vốn đã là slide-over sheet, không tạo thêm modal chồng lớp.
+
+### 8.5. Ngày dự kiến làm và Cloud persistence
+
+- `UXRequest` có trường tùy chọn `planned_work_date`; đây là ngày kế hoạch cá nhân và **không thay đổi deadline cam kết**.
+- Thao tác “Xếp ngày/Đổi ngày” cập nhật cache tức thì, tạo activity note và gửi qua `update_task_progress`.
+- Frontend `googleSheetService.ts` đưa `planned_work_date` vào payload và normalize response.
+- Apps Script ghi trường này vào `RAW_TASKS.Payload_JSON`; cần deploy **New Version** để production lưu được qua nhiều thiết bị.
+
+### 8.6. Phạm vi chưa hoàn thiện
+
+- Event cá nhân đang tái sử dụng `calendar.teamEvents`; chưa có schema `ownerEmail/visibility` riêng và chưa đảm bảo đồng bộ đa thiết bị ngoài luồng SystemConfig hiện tại.
+- Trạng thái đã đọc notification vẫn là local browser.
+- Rule-based briefing chưa phải AI sinh nội dung. Chỉ tích hợp AI thật sau khi có quyết định về provider và chính sách dữ liệu.
+- Team Planner cũ vẫn được giữ tại `src/pages/CalendarPage.tsx` để đối chiếu, nhưng route mặc định đã chuyển sang Designer Planner.
+
+### 8.7. Kiểm thử
+
+- `tests/test-designer-planner.mjs`: week bounds, go-live, phase distribution, briefing, phân tách planned date/deadline và contract Apps Script.
+- `tests/test-calendar-planner.test.ts` + `tests/test-leave-sync.test.ts`: **12/12 PASS**.
+- `npm test`: toàn bộ regression suite PASS.
+- `npm run build`: PASS.
+
+**Last Updated:** 28/09/2026
+**Changelog:** Chuyển từ đề xuất sang MVP Designer Planner; bổ sung UI cá nhân, AI briefing nền trắng với typewriter/hover preview, calendar 70/30, right-sheet interaction, Schedule Meeting có ảnh đính kèm, Cloud persistence cho `planned_work_date` và nền ngày nghỉ/nghỉ lễ không dùng task chip.

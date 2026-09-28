@@ -1535,6 +1535,9 @@ function handleUpdateTaskProgress(data) {
           item.release_date = String(data.release_date).trim();
           item.expected_deadline = item.release_date;
         }
+        if (typeof data.planned_work_date !== "undefined") {
+          item.planned_work_date = String(data.planned_work_date || "").trim();
+        }
         if (data.is_po_edit) {
           if (typeof data.squad_name !== "undefined" || typeof data.preferred_squad !== "undefined") {
             const cleanSq = String(data.squad_name || data.preferred_squad || "").trim();

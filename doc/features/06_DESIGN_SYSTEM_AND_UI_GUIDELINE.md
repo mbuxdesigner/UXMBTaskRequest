@@ -166,3 +166,28 @@ Thay thế hoàn toàn các ô `<input type="time">` mặc định của trình 
 - [ ] **Staggered Waterfall Motion Test**: Chuyển đổi giữa Tạo task mới, My Task và Bảng Kanban -> Các phần tử trượt lên tuần tự với độ trễ 70ms, không giật trang, không bounce.
 - [ ] **Compile Test**: Chạy `npm run build` đạt 0 lỗi (Exit code 0).
 
+---
+
+## 10. SONNER STACK & CHÍNH SÁCH MOTION RUNTIME (26/09/2026)
+
+### 10.1. Quyền bố trí thuộc về Sonner
+
+- Không đặt CSS cưỡng chế `position`, `top`, `transform` hoặc thứ tự stack lên từng toast; Sonner phải tự quản lý hình học và animation của stack.
+- Chỉ toast phía trước (`[data-front="true"]`) được hiển thị nút đóng. Toast phía sau vẫn giữ nội dung nhưng không tạo nhiều nút `X` chồng lên nhau.
+- Tránh `transition-all` trên vỏ toast vì có thể xung đột transform nội bộ; chỉ transition các thuộc tính thị giác thực sự cần.
+
+### 10.2. Chính sách motion hiện tại
+
+- `App.tsx` dùng `MotionConfig reducedMotion="never"` để giữ animation chức năng của ứng dụng ngay cả khi hệ điều hành báo `prefers-reduced-motion: reduce`.
+- Media query giảm chuyển động trong `index.css` hiện chỉ chuyển `scroll-behavior` về `auto`; không vô hiệu hóa toàn bộ animation bằng duration `0.01ms`.
+- Đây là quyết định runtime hiện tại để tránh trạng thái “app không còn animation”. Về accessibility, nên bổ sung tùy chọn giảm hiệu ứng ngay trong ứng dụng thay vì phụ thuộc hoàn toàn vào hệ điều hành.
+
+### 10.3. Checklist hồi quy
+
+- [ ] Mở đồng thời từ 3 toast: stack giữ transform đúng, chỉ toast trước có nút đóng.
+- [ ] Bật/tắt `prefers-reduced-motion` trong OS/DevTools: chuyển trang và component motion vẫn hoạt động theo chính sách runtime.
+- [ ] Kiểm tra bàn phím, focus và screen reader cho nút đóng toast phía trước.
+
+**Last Updated:** 27/09/2026
+**Changelog:** Ghi nhận Sonner-owned stack layout và chính sách motion runtime sau bản sửa 26/09.
+

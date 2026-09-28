@@ -27,14 +27,18 @@ Deploy App/doc/
 │   ├── 📋 2026-09-16_UI_STANDARDIZATION_REUI_SONNER_AND_RESPONSIVE_REPORT.md  <-- Báo cáo: Chuẩn hóa 4 layout mẫu thực tế, Nút Dark Navy #0F172A, Status Pills dot đồng màu, ReUI Sonner Toast 3D Stacking, Fix Responsive 375-1440px
 │   ├── 📋 2026-09-16_DUAL_SESSION_POLICY_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo: Cơ chế Phiên song song (Fixed 8h & Sliding 24h khi thoát), W3C Page Lifecycle, Cấu hình Quản trị 2 tầng (RBAC & Nhân sự), Đồng bộ Backend GAS 14 cột
 │   ├── 📋 2026-09-17_DAILY_UPDATE_REPORT.md  <-- Báo cáo: Magnific UI IA Map (Middle-Click Pan, Tooltip ReUI, 4 Tầng Capping Lv4, Lateral Dock & Sheet), Modal Xem chi tiết node, Khôi phục Release dự kiến, Khử co giật Stepper, Polling 2 chiều OTP
-│   └── 📋 2026-09-22_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 22/09: Đạt 100/100 điểm Admin Settings, Động cơ cấu hình thống nhất (systemConfig.ts), 2 Tab mới (SystemParamsTab & NotificationTemplatesTab), Banner khẩn cấp toàn cầu, Đấu nối động PO Pending, KPI & SLA
+│   ├── 📋 2026-09-22_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 22/09: Admin Settings, System Config, Notification Templates, Banner khẩn cấp, KPI & SLA
+│   ├── 📋 2026-09-23_CALENDAR_PLANNER_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo Planner/Calendar 4 tầng dữ liệu và cấu hình lịch trong Admin
+│   ├── 📋 2026-09-26_DAILY_UPDATE_REPORT.md  <-- Báo cáo Motion runtime, Sonner stack, đồng bộ task và nickname persistence
+│   ├── 📋 2026-09-27_DAILY_UPDATE_REPORT.md  <-- Báo cáo Task ↔ IA, cloud merge, IA canvas refinements và nghiên cứu Designer Planner
+│   └── 📋 2026-09-28_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner, Schedule Meeting, AI briefing, right sheet và planned work date persistence
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
 │   │   └── Đọc khi: Sửa/Làm mới tính năng Đăng nhập, OTP Teams, Cơ chế Phiên song song (Dual Session: Cố định 8h & Trượt 24h khi thoát app), Cấu hình Quản trị phiên 2 tầng (Role & User Override), Tự động đồng bộ vai trò từ Sheet USERS (14 cột), Đặc quyền Admin xem trước vai trò (Role Preview), Token, Đăng xuất, Chính sách an toàn OTP.
 │   │
 │   ├── 📊 02_TASK_MANAGEMENT_AND_TRACKING.md
-│   │   └── Đọc khi: Sửa/Làm mới Bảng Kanban, Gantt Timeline (7 mốc gồm PO Pending, format DD/MM/YYYY), Bảng phân nhóm SolutionAgentsTable, Chuẩn 2 loại Pending (Amber PO Pending 24h & Slate Designer Pending với @pending:), Tự động hóa @SenToPO: kèm rich link click mở tab mới, Lưới thuộc tính 2x2 trong RequestDetail.
+│   │   └── Đọc khi: Sửa/Làm mới Kanban/Gantt, RequestDetail, nickname, phase/status, Viewers hoặc liên kết một-một giữa Task và node IA theo Product/Squad/Lv1-Lv5.
 │   │
 │   ├── 📝 03_REQUEST_CREATION_FLOW.md
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình tạo yêu cầu (RequestForm), Ràng buộc sản phẩm của PO, Đính kèm tài liệu Google Drive, Hiệu ứng Confetti (Matter.js).
@@ -43,10 +47,10 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới Màn hình Admin (QuanLyPage), Chuẩn ReUI Application Settings 2 cột (11 tabs), Status Automation Rules Tool (6 trạng thái tự động), Phân quyền 4 Role, Role Preview, Xuất CSV, Đồng bộ Google Sheet 2 chiều, Deep link Hash URL, Đồng bộ Sản phẩm sang IA.
 │   │
 │   ├── 💾 05_GOOGLE_SHEET_AND_GAS_BACKEND.md
-│   │   └── Đọc khi: Đụng tới backend Google Apps Script (`google-apps-script-backend.js`), Cấu trúc lưu trữ JSON Core (`RAW_REQUESTS`, `RAW_SETTINGS`), Nạp GViz CSV bảng USERS, API get_master_data & sync_master_data, Upload Avatar/Drive.
+│   │   └── Đọc khi: Đụng tới Google Apps Script, JSON Core, nickname read-after-write, empty-task-list guard, IA-only sync theo `cap-ia-edit`, GViz USERS hoặc Upload Drive.
 │   │
 │   ├── 🎨 06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md
-│   │   └── Đọc khi: Thiết kế giao diện mới, Tạo UI Component mới, Chuẩn hóa màu sắc (Zinc Monochrome, Color Tokens), Spacing, Border-radius (`rounded-xl`), Chuẩn ReUI Application Settings, Sidebar Desktop Offset (`md:ml-60`).
+│   │   └── Đọc khi: Thiết kế UI/component, token/spacing/radius, Sidebar offset, Sonner stack/close button hoặc chính sách MotionConfig và `prefers-reduced-motion`.
 │   │
 │   ├── 🎓 07_TEST_ASSESSMENT_MODULE.md
 │   │   └── Đọc khi: Sửa/Làm mới Phân hệ Khảo sát & Đánh giá Năng lực UX (Bộ câu hỏi, Làm bài trắc nghiệm, Import/Export Excel bằng XLSX, Chấm điểm).
@@ -58,7 +62,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới Master Data (UX Squads, Phân bổ PO/Business/Designers theo vai trò, Sản phẩm số MBBank), Đồng bộ 2 chiều (Push/Pull) với Google Sheets (`RAW_SETTINGS`), Khử trùng lặp Activity Comments (Deduplication Engine).
 │   │
 │   ├── 🗺️ 10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md
-│   │   └── Đọc khi: Sửa/Làm mới IA map v2 vượt chuẩn ReUI Flow: Đa nút gốc Tier 1 độc lập trên cùng sản phẩm, Chip chọn sản phẩm có màu quản trị + số đếm (X), QuickAdd Sidebar kiểu n8n (kéo thả node), Snap to Grid 20px, Căn chuẩn layout, Minimap bản đồ nhỏ, Thẻ node chỉ hiện action khi click chọn, Thanh công cụ nổi IANodeFloatingToolbar, Nhập/Xuất JSON siêu tốc, và Trải nghiệm tinh gọn Zero-Clutter cho quyền View (PO, Business, Viewer: Kéo xem, tích chọn xem chi tiết node, vew full, ẩn sạch 100% tính năng thừa).
+│   │   └── Đọc khi: Sửa IA map, Task ↔ IA, lọc Product/Squad, quyền `cap-ia-edit`, dirty-product cloud merge, màu node theo level, auto layout, bottom dock, import/export JSON hoặc chế độ view-only.
 │   │
 │   ├── 📈 11_DASHBOARD_AND_AIOPS_REUI.md
 │   │   └── Đọc khi: Sửa/Làm mới Dashboard điều hành AIOps, Biểu đồ Donut Backlog & Pending (@reui/c-chart-20), Biểu đồ Line Squad Trending (@reui/c-chart-17), NewsFeed Timeline ngược & auto-scroll (@reui/c-timeline-3), Thẻ task Ảnh 4 (Reviewing sources), Double Shell Cards, Lọc theo Tab sản phẩm Admin.
@@ -67,7 +71,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
 │   │
 │   └── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
-│       └── Đọc khi: Sửa/Làm mới Module Lịch Đôi UX Team Planner & Lịch làm việc tập trung (Dual-Calendar Architecture: Planner Sidebar trái + Month/Week/Day Grid lớn trung tâm + Floating Search Dock + ClickUp Command Palette), Tích hợp 4 Tầng dữ liệu (Deadline Đề bài UX kéo thả có ghi nhận Activity Log, Lịch Nghỉ phép Nhân sự tab "Đăng ký nghỉ" có cảnh báo xung đột, Lịch làm việc/nghỉ lễ ngân hàng, Sự kiện nội bộ UX Team), Cấu hình Quản trị Lịch trong Admin (CalendarConfigTab: Quy tắc hiển thị, Ma trận phân quyền Role RBAC, CRUD Danh mục sự kiện, Giám sát kết nối đồng bộ lịch nghỉ).
+│       └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, KPI, ngày dự kiến làm, event cá nhân, feed cập nhật, rule-based briefing hoặc cấu hình lịch Admin.
 ```
 
 ---
@@ -140,6 +144,8 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
 | `auth_session_changed` | `otpAuthService.ts`, `Sidebar.tsx` | `App.tsx`, `Sidebar.tsx`, `TrackRequestPage.tsx` | Cập nhật thông tin đăng nhập, avatar, hoặc reset giao diện khi đăng xuất |
 | `nav_visibility_changed`| `QuanLyPage.tsx` (Tab 1) | `Sidebar.tsx` | Cập nhật tức thì thứ tự hoặc trạng thái ẩn/hiện của các menu trên Sidebar |
 | `storage` | `QuanLyPage.tsx`, `googleSheetService.ts`| Các trang liên quan | Báo hiệu dữ liệu cấu hình trong `localStorage` đã thay đổi |
+| `ux_portal_tasks_changed` | `calendarService.ts`, `AppHeader.tsx`, `QuanLyPage.tsx` | `CalendarPage.tsx` và consumer task | Nạp lại task/lịch sau khi deadline hoặc dữ liệu task thay đổi |
+| `ia_trees_changed` | `TaskIALinkField.tsx`, IA state writers | `TaskIALinkField.tsx`, `useIATreeState.ts` | Đồng bộ cây và liên kết Task ↔ IA tức thời trong cùng tab |
 
 ---
 
@@ -156,6 +162,8 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
 | **Khảo sát Năng lực (Assessment)** | `TestAssessmentPage.tsx`<br>`test-assessment/` | - Định dạng file Excel Import/Export bằng thư viện XLSX.<br>- Trạng thái làm bài, bộ đếm giờ và kết quả bài thi. | `features/07_TEST_ASSESSMENT_MODULE.md` |
 | **Công cụ nén ảnh (Compressor)** | `ImageCompressorPage.tsx`<br>`ImageCompressorModal.tsx`<br>`package.json` | - Chạy 100% Client-side Canvas HTML5.<br>- Hỗ trợ định dạng WebP, PNG, JPEG.<br>- Đóng gói file ZIP hàng loạt qua thư viện `jszip`. | `features/08_BUILTIN_TOOLS_AND_UTILITIES.md` |
 | **Master Data & Đồng bộ 2 chiều** | `QuanLyPage.tsx`<br>`googleSheetService.ts`<br>`google-apps-script-backend.js` | - Phân bổ nhân sự Squad theo vai trò chuẩn (PO, Business, Designer).<br>- Đồng bộ 2 chiều (Push/Pull) với bảng `RAW_SETTINGS`.<br>- Khử trùng lặp Activity Comments. | `features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md` |
+| **Information Architecture & Task Linking** | `IAPage.tsx`<br>`useIATreeState.ts`<br>`TaskIALinkField.tsx`<br>`iaTaskLink.ts` | - Giữ quy tắc một task/một node.<br>- Lọc theo Product/Squad và chuỗi Lv1-Lv5.<br>- Không để cloud payload cũ ghi đè sản phẩm đang dirty.<br>- Kiểm tra `cap-ia-edit`. | `features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md` |
+| **Planner & Calendar** | `CalendarPage.tsx`<br>`calendarService.ts`<br>`CalendarConfigTab.tsx` | - Phân biệt deadline và ngày dự kiến làm.<br>- Lọc dữ liệu cá nhân theo assignee.<br>- Rà soát persistence event/unread trước khi hỗ trợ nhiều thiết bị. | `features/13_UX_TEAM_PLANNER_AND_CALENDAR.md` |
 
 ---
 
@@ -168,6 +176,7 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
    - Không được chỉ xóa `sessionStorage`. Phải gọi `logoutTeamsSession()` hoặc `clearSession()` để xóa đồng thời cả `sessionStorage` VÀ `localStorage` (`ux_portal_session_auth`, `ux_portal_session`).
 3. **Backend Google Apps Script là Cloud-hosted:**
    - Sửa code trong file `google-apps-script-backend.js` ở máy local **không** tự động đổi code trên Google Cloud! Phải copy code vào Trình chỉnh sửa Apps Script và chọn **Deploy -> New version**.
+   - Sau khi deploy thay đổi nickname, kiểm tra response có `nickname_persistence_version: 1`; sau khi deploy IA RBAC, thử riêng payload IA-only và payload master-data hỗn hợp.
 4. **Fallback cho Schema Dữ liệu cũ:**
    - Khi thêm trường mới vào `UXRequest` (ví dụ `doc_links`, `attachments`, `sent_to_po_at`), luôn luôn viết code phòng thủ: `request.attachments ?? []` để tránh crash app với các task cũ trên Google Sheet.
 5. **Kiểm tra Biên dịch TypeScript:**
@@ -176,3 +185,8 @@ Hệ thống sử dụng các sự kiện trình duyệt tiêu chuẩn (`window.
      npm run build
      ```
      Đảm bảo đạt 0 lỗi biên dịch!
+
+---
+
+**Last Updated:** 28/09/2026
+**Changelog:** Bổ sung báo cáo 28-09, Designer Planner cá nhân, Schedule Meeting, AI briefing, right sheet, hover preview và planned work date persistence.

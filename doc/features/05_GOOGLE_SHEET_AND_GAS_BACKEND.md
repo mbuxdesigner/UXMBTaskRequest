@@ -186,3 +186,40 @@ Hàm thống nhất `readMasterDataFromSettingsSheet(rawSettings)` được tíc
 2. **Lớp 2 (`TASK_UPDATES` & `Activity_Logs_View`):** Mỗi tin nhắn/cập nhật là **1 dòng riêng biệt (Row-by-Row)**, không bị giới hạn 50.000 ký tự của 1 ô ràng buộc.
 3. **Overflow Guard:** Tại `handleUpdateTaskProgress()`, nếu tổng chuỗi JSON của task vượt quá 45.000 ký tự, hệ thống tự động giữ lại 30 trao đổi mới nhất trong JSON của task để render tức thì, trong khi **100% toàn bộ lịch sử đầy đủ từ trước đến nay đều được bảo lưu vĩnh viễn không sót tin nào** tại sheet `TASK_UPDATES` và `Activity_Logs_View`.
 
+---
+
+## 8. ĐỘ TIN CẬY ĐỒNG BỘ, NICKNAME & IA-ONLY SYNC (26–27/09/2026)
+
+### 8.1. Hợp đồng lưu nickname
+
+Luồng cập nhật nickname áp dụng read-after-write: backend ghi dữ liệu, đọc lại bản vừa lưu rồi mới trả thành công. Response có:
+
+- `nickname_persisted`: xác nhận nickname đã tồn tại sau khi đọc lại.
+- `nickname_persistence_version: 1`: nhận diện deployment đã hỗ trợ hợp đồng mới.
+
+Frontend giữ nickname cache hiện tại nếu response thiếu nickname. Đây là quy tắc tương thích ngược với Apps Script cũ, không phải lý do để bỏ qua việc deploy bản backend mới.
+
+### 8.2. Bảo vệ cache task khi Sheet trả danh sách rỗng bất thường
+
+- Nếu remote bất ngờ trả mảng task rỗng trong khi cache hiện có dữ liệu, client giữ cache thay vì xóa danh sách task.
+- Cảnh báo chỉ phát một lần trong cùng chu kỳ thay vì lặp ở mỗi lần polling.
+- Đồng bộ nền dùng cơ chế single-flight để không tạo nhiều request trùng nhau.
+
+### 8.3. Ngoại lệ phân quyền cho payload chỉ chứa IA
+
+- Người có `cap-ia-edit` được phép gọi `sync_master_data` khi payload **chỉ** thay đổi `ia_trees`.
+- Payload trộn `ia_trees` với master data khác vẫn yêu cầu quyền Admin/Design Admin như trước.
+- Backend phải tiếp tục lọc khóa payload; không mở rộng ngoại lệ này cho USERS, workflow, notification template hoặc system config.
+
+### 8.4. Checklist triển khai
+
+- [ ] Deploy New Version của `google-apps-script-backend.js`.
+- [ ] Xác nhận response có `nickname_persistence_version: 1` và `nickname_persisted: true`.
+- [ ] Xếp ngày trong Designer Planner, tải lại dữ liệu từ Cloud và xác nhận `planned_work_date` còn nguyên; deadline cam kết không đổi.
+- [ ] Kiểm thử `tests/test-nickname-sync.mjs`, `tests/test-ia-map-magnific.mjs` và `tests/test-task-ia-linking.mjs`.
+- [ ] Thử tài khoản chỉ có `cap-ia-edit`: lưu IA thành công nhưng không thể ghi master data ngoài IA.
+- [ ] Mô phỏng response task rỗng: cache cũ còn nguyên và console không bị spam cảnh báo.
+
+**Last Updated:** 27/09/2026
+**Changelog:** Bổ sung read-after-write nickname, empty-list guard, single-flight sync, giới hạn IA-only và persistence `planned_work_date` cho Designer Planner.
+

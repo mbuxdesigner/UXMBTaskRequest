@@ -207,6 +207,19 @@ export interface TeamEvent {
   attendees?: string[]
   location?: string
   description?: string
+  durationMinutes?: number
+  recurrence?: "none" | "daily" | "weekly" | "monthly"
+  recurrenceEndDate?: string
+  meetingOptions?: {
+    waitingRoom?: boolean
+    autoRecord?: boolean
+  }
+  attachments?: Array<{
+    name: string
+    url: string
+    size?: number
+    type?: string
+  }>
   createdBy?: string
   createdAt?: string
 }

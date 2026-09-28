@@ -271,5 +271,41 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
   - Cột và thẻ công việc áp dụng `cascadeWaveContainerVariants` kết hợp `cascadeWaveItemVariants`.
   - Sử dụng `layout="position"` và `dataContinuityTransition` đảm bảo các thẻ trượt mượt mà về vị trí mới khi kéo thả hoặc khi thay đổi bộ lọc tìm kiếm mà không gây giật khung hình (Zero CLS).
 
+---
+
+## 8. CẬP NHẬT TASK DETAIL, NICKNAME & LIÊN KẾT IA (26–27/09/2026)
+
+### 8.1. Tên gợi nhớ (nickname) không bị dữ liệu thiếu ghi đè
+
+- `src/lib/nicknameSync.ts` chỉ nhận giá trị nickname từ response khi response thực sự chứa nickname hợp lệ.
+- Response cũ hoặc thiếu trường nickname không được phép ghi chuỗi rỗng đè lên nickname đang có trong cache.
+- Backend xác minh lại dữ liệu sau khi ghi và trả cờ `nickname_persisted` cùng phiên bản hợp đồng `nickname_persistence_version: 1`.
+- Khi chỉnh backend phải deploy **New Version** của Google Apps Script; sửa file trong repository không tự thay đổi deployment đang chạy.
+
+### 8.2. Gắn một task vào một node IA
+
+- Thuộc tính **IA map** nằm trong cụm metadata của Task Detail theo thứ tự: `Status – Priority`, `Date – IA map`, `Assignees – Viewers`.
+- Chỉ hiển thị cây thuộc **sản phẩm** và **squad** của task; người dùng chọn tuần tự từ Lv1 đến tối đa Lv5.
+- Mỗi task chỉ liên kết với **một node cuối cùng**. Khi đổi node, liên kết cũ được gỡ trước khi liên kết mới được ghi.
+- Tạo node mới chỉ bổ sung node vào cây và chuyển tiếp luồng chọn; task chỉ được gắn khi người dùng bấm **Hoàn tất**.
+- Quyền thao tác dùng capability `cap-ia-edit`, đồng nhất với quyền chỉnh sửa node IA trong Admin.
+
+### 8.3. Ổn định render và dữ liệu Task Detail
+
+- Danh sách phase được chuẩn hóa trước khi render; React key không còn phụ thuộc duy nhất vào tên phase rỗng hoặc trùng.
+- Popover Viewers được căn theo viewport và giữ footer thao tác trong vùng nhìn thấy.
+- Tên workspace trên Sidebar được chuẩn hóa tại `src/components/Sidebar.tsx`.
+
+### 8.4. Phạm vi ảnh hưởng và kiểm thử
+
+| Vùng | File chính | Kiểm thử hồi quy |
+| :--- | :--- | :--- |
+| Nickname | `src/lib/nicknameSync.ts`, `src/services/googleSheetService.ts`, `google-apps-script-backend.js` | `tests/test-nickname-sync.mjs` |
+| Task ↔ IA | `src/components/track/RequestDetail.tsx`, `src/components/track/TaskIALinkField.tsx`, `src/lib/iaTaskLink.ts` | `tests/test-task-ia-linking.mjs` |
+| Phase/Viewers | `src/components/track/RequestDetail.tsx` | Mở Task Detail, đổi phase, mở/đóng Viewers và kiểm tra console không còn duplicate key |
+
+**Last Updated:** 27/09/2026
+**Changelog:** Bổ sung nickname persistence, liên kết Task ↔ IA một-một, bố cục metadata và phòng vệ React key.
+
 
 
