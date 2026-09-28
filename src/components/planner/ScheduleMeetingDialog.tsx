@@ -1,15 +1,14 @@
 import React, { useEffect, useRef, useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
 import {
   CalendarDays,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
   ImagePlus,
   Loader2,
   MapPin,
-  Paperclip,
   Repeat2,
   Search,
   Users,
@@ -23,6 +22,8 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { CAvatar29 } from "@/components/reui/c-avatar-29"
+import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
+import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import type { EventCategoryConfig } from "@/config/systemConfig"
 import { cn } from "@/lib/utils"
 
@@ -133,50 +134,6 @@ function MiniDateCalendar({ value, onChange }: { value: string; onChange: (value
   )
 }
 
-function EventCategoryPicker({
-  categories,
-  value,
-  onChange,
-}: {
-  categories: EventCategoryConfig[]
-  value: string
-  onChange: (value: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const selected = categories.find((category) => category.id === value) || categories[0]
-
-  useEffect(() => {
-    if (!open) return
-    const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", close)
-    return () => document.removeEventListener("mousedown", close)
-  }, [open])
-
-  return (
-    <div ref={rootRef} className="relative mt-2">
-      <button type="button" onClick={() => setOpen((current) => !current)} className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 text-left transition-all hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected?.color || "#64748b" }} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{selected?.name || "Chọn loại sự kiện"}</span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-          {categories.map((category) => (
-            <button key={category.id} type="button" onClick={() => { onChange(category.id); setOpen(false) }} className={cn("flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left hover:bg-slate-50", category.id === value && "bg-slate-50")}>
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
-              <span className="min-w-0 flex-1"><span className="block text-xs font-semibold text-slate-800">{category.name}</span>{category.description && <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{category.description}</span>}</span>
-              {category.id === value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function DesignerPicker({
   designers,
   value,
@@ -188,9 +145,12 @@ function DesignerPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const [placement, setPlacement] = useState<"top" | "bottom">("bottom")
+  const [menuMaxHeight, setMenuMaxHeight] = useState(340)
   const rootRef = useRef<HTMLDivElement>(null)
   const selectedDesigners = designers.filter((designer) => value.includes(designer.email))
   const filtered = designers.filter((designer) => `${designer.name} ${designer.email}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const allSelected = designers.length > 0 && designers.every((designer) => value.includes(designer.email))
 
   useEffect(() => {
     if (!open) return
@@ -202,51 +162,95 @@ function DesignerPicker({
   }, [open])
 
   const toggle = (email: string) => onChange(value.includes(email) ? value.filter((item) => item !== email) : [...value, email])
+  const toggleAll = () => onChange(allSelected ? [] : designers.map((designer) => designer.email))
+  const toggleMenu = (trigger: HTMLElement) => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = trigger.getBoundingClientRect()
+    const scrollContainer = trigger.closest(".overflow-y-auto") as HTMLElement | null
+    const containerRect = scrollContainer?.getBoundingClientRect()
+    const topBoundary = containerRect?.top ?? 72
+    const bottomBoundary = containerRect?.bottom ?? window.innerHeight - 72
+    const spaceAbove = Math.max(0, rect.top - topBoundary - 12)
+    const spaceBelow = Math.max(0, bottomBoundary - rect.bottom - 12)
+    const nextPlacement = spaceBelow >= 280 || spaceBelow >= spaceAbove ? "bottom" : "top"
+    const available = nextPlacement === "bottom" ? spaceBelow : spaceAbove
+    setPlacement(nextPlacement)
+    setMenuMaxHeight(Math.min(360, Math.max(220, Math.floor(available))))
+    setQuery("")
+    setOpen(true)
+  }
 
   return (
-    <div ref={rootRef} className="relative mt-2 flex min-h-11 items-center">
+    <div ref={rootRef} className={cn("relative mt-2 flex min-h-11 items-center", open && "z-40")}>
       {selectedDesigners.length > 0 ? (
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center">
           <CAvatar29
             totalCount={selectedDesigners.length}
             showAddButton
             addTitle="Thêm người tham gia"
-            onClick={() => setOpen((current) => !current)}
+            onClick={(event) => toggleMenu(event.currentTarget as HTMLElement)}
             className="cursor-pointer rounded-lg focus-within:ring-4 focus-within:ring-blue-100"
             onAddClick={(event) => {
               event.stopPropagation()
-              setOpen((current) => !current)
+              toggleMenu(event.currentTarget as HTMLElement)
             }}
           >
             {selectedDesigners.slice(0, 3).map((designer) => (
               <UserAvatar key={designer.id || designer.email} name={designer.name} avatarUrl={designer.avatar} size="md" className="ring-2 ring-white" />
             ))}
           </CAvatar29>
-          <span className="min-w-0 truncate text-sm text-slate-600">{selectedDesigners.map((designer) => designer.name).join(", ")}</span>
         </div>
       ) : (
-        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200/80 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-[#1057FB] shadow-2xs transition-colors hover:bg-blue-100 hover:text-blue-700">
+        <button type="button" onClick={(event) => toggleMenu(event.currentTarget)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200/80 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-[#1057FB] shadow-2xs transition-colors hover:bg-blue-100 hover:text-blue-700">
           <Users className="h-3.5 w-3.5" />
           <span>Thêm</span>
         </button>
       )}
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2"><Search className="h-3.5 w-3.5 text-slate-400" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm Designer…" className="h-7 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400" /></div>
-          <div className="max-h-56 overflow-y-auto p-1.5">
-            {filtered.length === 0 ? <p className="px-3 py-6 text-center text-xs text-slate-400">Không tìm thấy Designer</p> : filtered.map((designer) => {
-              const checked = value.includes(designer.email)
-              return (
-                <button key={designer.id || designer.email} type="button" onClick={() => toggle(designer.email)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50", checked && "bg-blue-50/60")}>
-                  <UserAvatar name={designer.name} avatarUrl={designer.avatar} size="xs" />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-800">{designer.name}</span><span className="block truncate text-[10px] text-slate-400">{designer.email} · {designer.role || "Designer"}</span></span>
-                  <span className={cn("flex h-4 w-4 items-center justify-center rounded border", checked ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300")}>{checked && <Check className="h-3 w-3" />}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: placement === "top" ? -6 : 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: placement === "top" ? -4 : 4, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.75 }}
+            className={cn(
+              "absolute right-0 z-50 flex w-80 max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white text-xs shadow-2xl",
+              placement === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
+            )}
+            style={{ maxHeight: `${menuMaxHeight}px` }}
+          >
+            <div className="space-y-2 border-b border-slate-100 bg-slate-50/60 px-3 pb-2.5 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold uppercase tracking-wider text-slate-500">Người tham gia ({value.length})</span>
+                <button type="button" onClick={toggleAll} className="font-semibold text-[#1057FB] hover:text-blue-700">{allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}</button>
+              </div>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tên, email hoặc vai trò..." className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[#1057FB]" />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+              {filtered.length === 0 ? <p className="px-3 py-6 text-center text-xs text-slate-400">Không tìm thấy nhân sự</p> : filtered.map((designer) => {
+                const checked = value.includes(designer.email)
+                return (
+                  <button key={designer.id || designer.email} type="button" onClick={() => toggle(designer.email)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-slate-50", checked && "bg-blue-50/70")}>
+                    <UserAvatar name={designer.name} avatarUrl={designer.avatar} size="xs" />
+                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-800">{designer.name}</span><span className="block truncate text-[10px] text-slate-400">{designer.email} · {designer.role || "Thành viên"}</span></span>
+                    <span className={cn("flex h-4 w-4 items-center justify-center rounded border transition-colors", checked ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white")}>{checked && <Check className="h-3 w-3" />}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50/80 px-3 py-2">
+              <span className="text-[11px] text-slate-500">Đã chọn {value.length}/{designers.length}</span>
+              <Button type="button" size="sm" onClick={() => setOpen(false)} className="h-7 rounded-lg px-3 text-xs">Hoàn tất</Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -366,8 +370,7 @@ export function ScheduleMeetingDialog({
     >
         <div className="grid lg:grid-cols-[290px_minmax(0,1fr)]">
           <aside className="border-b border-slate-200 bg-slate-50/70 p-5 lg:border-b-0 lg:border-r">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Thời gian</p>
-            <div className="mt-3"><MiniDateCalendar value={date} onChange={setDate} /></div>
+            <MiniDateCalendar value={date} onChange={setDate} />
 
             <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Khung giờ bắt đầu</p>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -422,77 +425,92 @@ export function ScheduleMeetingDialog({
           </aside>
 
           <div className="space-y-5 p-5 sm:p-6">
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="flex items-center gap-2 text-sm font-medium text-slate-700"><Paperclip className="h-4 w-4 text-slate-400" />Ảnh thumbnail</p>
-                  <p className="mt-1 text-xs text-slate-400">Một ảnh đại diện, không quá 10 MB.</p>
-                </div>
-                <Button type="button" variant="outline" size="xs" onClick={() => inputRef.current?.click()} disabled={saving}>
-                  <ImagePlus className="h-3.5 w-3.5" />{images.length > 0 ? "Đổi ảnh" : "Chọn ảnh"}
-                </Button>
-                <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
+            <div className="grid items-stretch gap-5 sm:grid-cols-[200px_minmax(0,1fr)]">
+              <div className="flex min-w-0 flex-col">
+                <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" className="hidden" onChange={(event) => {
                   if (event.target.files) addImages(event.target.files)
                   event.target.value = ""
                 }} />
+
+                {images.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      addImages(event.dataTransfer.files)
+                    }}
+                    disabled={saving}
+                    className="group mx-auto flex aspect-[224/259] w-full max-w-[200px] select-none flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/90 bg-white px-4 py-5 text-center shadow-2xs transition-all duration-200 hover:border-blue-300 hover:bg-blue-50/30 disabled:cursor-not-allowed disabled:opacity-60 sm:h-full sm:max-w-none sm:aspect-auto"
+                  >
+                    <IconStackLarge
+                      className="pointer-events-none mb-0.5"
+                      stackClassName="h-14 w-12"
+                      icon={<ImagePlus className="size-4.5 text-slate-400 transition-colors duration-200 group-hover:text-[#1057FB]" />}
+                    />
+                    <span className="pointer-events-none text-xs font-semibold leading-[18px] text-slate-800">
+                      Kéo thả ảnh thumbnail,<br />hoặc <span className="text-[#1057FB] underline underline-offset-4">Chọn ảnh</span>
+                    </span>
+                    <span className="pointer-events-none mt-2 text-[10px] leading-4 text-slate-400">224 × 259 px · Tối đa 10 MB</span>
+                  </button>
+                ) : (
+                  <div className="mx-auto h-full w-full max-w-[200px] sm:max-w-none">
+                    {images.map((image) => (
+                      <div key={image.previewUrl} className="group relative aspect-[224/259] h-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm sm:aspect-auto">
+                        <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-contain" />
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1.5 bg-gradient-to-t from-slate-950/80 to-transparent px-2 pb-2 pt-8 text-white">
+                          <span className="min-w-0 truncate text-[9px] font-medium">{image.file.name}</span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button type="button" onClick={() => inputRef.current?.click()} className="rounded-md bg-white/15 px-1.5 py-1 text-[9px] font-semibold hover:bg-white/25">Đổi</button>
+                            <button type="button" onClick={() => removeImage(image.previewUrl)} className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`Bỏ ${image.file.name}`}><X className="h-3 w-3" /></button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {imageError && <p className="mt-2 text-[10px] font-medium leading-4 text-rose-600">{imageError}</p>}
               </div>
 
-              {images.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    addImages(event.dataTransfer.files)
-                  }}
-                  className="mt-3 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm"><ImagePlus className="h-4 w-4" /></span>
-                  <span className="mt-2 text-xs font-semibold text-slate-700">Kéo thả hoặc bấm để chọn ảnh</span>
-                  <span className="mt-1 text-[10px] text-slate-400">Ảnh agenda, wireframe hoặc tài liệu tham chiếu</span>
-                </button>
-              ) : (
-                <div className="mt-3">
-                  {images.map((image) => (
-                    <div key={image.previewUrl} className="group relative aspect-[16/7] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                      <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
-                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-slate-950/75 to-transparent px-3 pb-2 pt-8 text-white"><span className="truncate text-[10px] font-medium">{image.file.name}</span><button type="button" onClick={() => removeImage(image.previewUrl)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`Bỏ ${image.file.name}`}><X className="h-3 w-3" /></button></div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {imageError && <p className="mt-2 text-xs font-medium text-rose-600">{imageError}</p>}
-            </div>
-
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-slate-700">
-                Tên cuộc họp <span className="text-rose-500">*</span>
-                <Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Design review luồng vay" className="mt-2 h-12" />
-              </label>
-
-              <label className="block text-sm font-medium text-slate-700">
-                Loại sự kiện
-                <EventCategoryPicker categories={categories} value={categoryId} onChange={setCategoryId} />
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700">Người tham gia</p>
-                  <DesignerPicker designers={designers} value={attendees} onChange={setAttendees} />
-                  <p className="mt-1.5 text-xs text-slate-400">Danh sách nhân sự Designer.</p>
-                </div>
-                <label className="block min-w-0 text-sm font-medium text-slate-700">
-                  Địa điểm / Link họp
-                  <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Phòng họp hoặc Teams" startIcon={<MapPin className="h-4 w-4" />} className="mt-2" />
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-slate-700">
+                  Tên cuộc họp <span className="text-rose-500">*</span>
+                  <Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Design review luồng vay" className="mt-2 h-12" />
                 </label>
-              </div>
 
-              <label className="block text-sm font-medium text-slate-700">
-                Nội dung chuẩn bị
-                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Agenda, mục tiêu cuộc họp, link Figma hoặc nội dung cần chuẩn bị…" className="mt-2 min-h-24" />
-              </label>
+                <div className="block text-sm font-medium text-slate-700">
+                  Loại sự kiện
+                  <DropdownMenu
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    className="mt-2 w-full"
+                    buttonClassName="h-11 rounded-xl px-3.5 text-sm"
+                    options={categories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                      icon: <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />,
+                    }))}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Người tham gia</p>
+                    <DesignerPicker designers={designers} value={attendees} onChange={setAttendees} />
+                  </div>
+                  <label className="block min-w-0 text-sm font-medium text-slate-700">
+                    Địa điểm / Link họp
+                    <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Phòng họp hoặc Teams" startIcon={<MapPin className="h-4 w-4" />} className="mt-2" />
+                  </label>
+                </div>
+              </div>
             </div>
+
+            <label className="block text-sm font-medium text-slate-700">
+              Nội dung chuẩn bị
+              <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Agenda, mục tiêu cuộc họp, link Figma hoặc nội dung cần chuẩn bị…" className="mt-2 min-h-24" />
+            </label>
           </div>
         </div>
     </RightSheet>

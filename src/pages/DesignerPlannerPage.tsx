@@ -12,16 +12,15 @@ import {
   ChevronRight,
   Circle,
   Clock3,
+  ExternalLink,
   Flag,
+  ImageIcon,
   LayoutGrid,
   ListChecks,
   MapPin,
-  Paperclip,
   Plus,
   RefreshCw,
-  Repeat2,
   Rocket,
-  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge, PriorityBadge, StatusPill } from "@/components/ui/badge"
@@ -86,6 +85,52 @@ interface PlannerEntry {
   source?: CalendarItem
 }
 
+type EventAttachment = NonNullable<TeamEvent["attachments"]>[number]
+
+function getGoogleDriveFileId(url: string): string {
+  if (!url) return ""
+  const pathMatch = url.match(/\/file\/d\/([^/?#]+)/i)
+  if (pathMatch?.[1]) return pathMatch[1]
+  try {
+    const parsed = new URL(url)
+    return parsed.searchParams.get("id") || ""
+  } catch {
+    return ""
+  }
+}
+
+function getAttachmentImageCandidates(attachment: EventAttachment): string[] {
+  const fileId = attachment.fileId || getGoogleDriveFileId(attachment.thumbnailUrl || attachment.url)
+  const candidates = [
+    attachment.thumbnailUrl,
+    fileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1200` : "",
+    fileId ? `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}` : "",
+    attachment.url,
+  ].filter(Boolean) as string[]
+  return Array.from(new Set(candidates))
+}
+
+function EventThumbnailImage({ attachment, className }: { attachment: EventAttachment; className?: string }) {
+  const candidates = useMemo(() => getAttachmentImageCandidates(attachment), [attachment])
+  const [candidateIndex, setCandidateIndex] = useState(0)
+
+  useEffect(() => setCandidateIndex(0), [attachment.url, attachment.thumbnailUrl, attachment.fileId])
+
+  const src = candidates[candidateIndex]
+  if (!src) {
+    return <span className={cn("flex items-center justify-center bg-slate-100 text-slate-400", className)}><ImageIcon className="h-4 w-4" /></span>
+  }
+
+  return (
+    <img
+      src={src}
+      alt={attachment.name}
+      className={className}
+      onError={() => setCandidateIndex((current) => current + 1)}
+    />
+  )
+}
+
 const QUOTES = [
   "Thiết kế tốt bắt đầu từ việc nhìn đúng vấn đề.",
   "Mỗi chi tiết rõ ràng hôm nay sẽ giảm một lần bối rối ngày mai.",
@@ -132,6 +177,29 @@ function parseYMD(ymd: string): Date {
 
 function colorWithAlpha(color: string, alpha: string): string {
   return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color
+}
+
+function getMeetingLinkMeta(value: string): { href: string; label: string } | null {
+  const trimmed = value.trim()
+  const href = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : /^www\./i.test(trimmed)
+      ? `https://${trimmed}`
+      : ""
+  if (!href) return null
+
+  try {
+    const url = new URL(href)
+    const host = url.hostname.replace(/^www\./i, "")
+    const fullPath = `${host}${url.pathname}`.toLowerCase()
+    if (fullPath.includes("google.com/maps") || host === "maps.app.goo.gl") return { href, label: "Mở Google Maps" }
+    if (host.includes("teams.microsoft.com")) return { href, label: "Tham gia Microsoft Teams" }
+    if (host === "meet.google.com") return { href, label: "Tham gia Google Meet" }
+    if (host.includes("zoom.us")) return { href, label: "Tham gia Zoom" }
+    return { href, label: `Mở ${host}` }
+  } catch {
+    return null
+  }
 }
 
 function addMinutesToLocalDateTime(date: string, time: string, minutes: number): string {
@@ -182,8 +250,9 @@ function normalizeMeetingDesigners(members: unknown[]): ScheduleMeetingDesigner[
     const role = String(member.role || "Designer").trim()
     const roleLower = role.toLowerCase()
     const isDesigner = roleLower.includes("design") || roleLower.includes("ux") || roleLower.includes("ui")
+    const isAdmin = roleLower.includes("admin")
     const key = email.toLowerCase()
-    if (!name || !email || !isDesigner || seen.has(key)) return []
+    if (!name || !email || (!isDesigner && !isAdmin) || seen.has(key)) return []
     seen.add(key)
     return [{
       id: String(member.id || `designer-${index}`),
@@ -271,8 +340,8 @@ export default function DesignerPlannerPage() {
 
   const availableMeetingDesigners = useMemo(() => {
     const currentRole = String(session?.role || "").toLowerCase()
-    const currentIsDesigner = currentRole.includes("design") || currentRole.includes("ux") || currentRole.includes("ui")
-    if (!currentIsDesigner || !designerEmail || meetingDesigners.some((designer) => designer.email.toLowerCase() === designerEmail.toLowerCase())) return meetingDesigners
+    const currentCanBeInvited = currentRole.includes("design") || currentRole.includes("ux") || currentRole.includes("ui") || currentRole.includes("admin")
+    if (!currentCanBeInvited || !designerEmail || meetingDesigners.some((designer) => designer.email.toLowerCase() === designerEmail.toLowerCase())) return meetingDesigners
     return [{ id: "current-designer", name: designerName, email: designerEmail, role: session?.role || "Designer" }, ...meetingDesigners]
   }, [designerEmail, designerName, meetingDesigners, session?.role])
   const defaultMeetingAttendee = availableMeetingDesigners.find((designer) => designer.email.toLowerCase() === designerEmail.toLowerCase())?.email || availableMeetingDesigners[0]?.email || ""
@@ -600,11 +669,13 @@ export default function DesignerPlannerPage() {
     try {
       const uploadResults = await Promise.all(images.map((file) => uploadFileToDrive(file, "UX_Planner_Event_Attachments")))
       const attachments = uploadResults.flatMap((result, index) => {
-        const url = result.downloadUrl || result.fileUrl
+        const url = result.fileUrl || result.downloadUrl
         if (!result.success || !url) return []
         return [{
           name: result.fileName || images[index].name,
           url,
+          thumbnailUrl: result.thumbnailUrl,
+          fileId: result.fileId,
           size: result.fileSize || images[index].size,
           type: images[index].type,
         }]
@@ -911,9 +982,12 @@ export default function DesignerPlannerPage() {
                               style={entry.accentColor ? { borderColor: colorWithAlpha(entry.accentColor, "40"), backgroundColor: colorWithAlpha(entry.accentColor, "12"), color: entry.accentColor } : undefined}
                               title={`${entry.label}: ${entry.title}`}
                             >
-                              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", !entry.accentColor && entry.color)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                              {entry.attachments?.[0] ? (
+                                <EventThumbnailImage attachment={entry.attachments[0]} className="h-6 w-5 shrink-0 rounded object-cover ring-1 ring-black/5" />
+                              ) : (
+                                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", !entry.accentColor && entry.color)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                              )}
                               <span className="truncate">{entry.time && `${entry.time} · `}{entry.title}</span>
-                              {entry.attachments && entry.attachments.length > 0 && <Paperclip className="ml-auto h-2.5 w-2.5 shrink-0 opacity-70" />}
                             </div>
                           ))}
                           {dayEntries.length > maxVisible && (
@@ -947,11 +1021,15 @@ export default function DesignerPlannerPage() {
                       key={entry.id}
                       className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-slate-300 hover:shadow-xs"
                     >
-                      <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", !entry.accentColor && entry.color)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                      {entry.attachments?.[0] ? (
+                        <EventThumbnailImage attachment={entry.attachments[0]} className="h-14 w-12 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
+                      ) : (
+                        <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", !entry.accentColor && entry.color)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                      )}
                       <button onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)} className="min-w-0 flex-1 text-left">
                         <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{entry.label}{entry.time ? ` · ${entry.time}` : ""}</span>
                         <span className="mt-0.5 block text-xs font-semibold leading-5 text-slate-800">{entry.title}</span>
-                        {entry.location && <span className="mt-1 flex items-center gap-1 text-[10px] text-slate-500"><MapPin className="h-3 w-3" />{entry.location}</span>}
+                        {entry.location && <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-slate-500"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{getMeetingLinkMeta(entry.location)?.label || entry.location}</span></span>}
                       </button>
                       {entry.request && entry.type === "planned" && (
                         <button onClick={() => openSchedule(entry.request!, selectedDate)} className="text-[10px] font-semibold text-blue-600">Đổi ngày</button>
@@ -1081,36 +1159,95 @@ export default function DesignerPlannerPage() {
       <RightSheet
         open={Boolean(detailEntry)}
         onClose={() => setDetailEntry(null)}
-        size="md"
+        size="lg"
         title="Chi tiết lịch & mốc cần nhớ"
         description={detailEntry?.label}
         icon={<CalendarDays className="h-4 w-4" />}
-        footer={<div className="flex justify-end"><Button onClick={() => setDetailEntry(null)}>Đóng</Button></div>}
+        bodyClassName="overflow-x-hidden bg-slate-50/40"
       >
-        <div className="space-y-4 p-5 sm:p-6">
-          <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", !detailEntry?.accentColor && detailEntry?.color)} style={detailEntry?.accentColor ? { backgroundColor: detailEntry.accentColor } : undefined} />
-            <div><h4 className="text-sm font-bold text-slate-900">{detailEntry?.title}</h4><p className="mt-1 text-xs text-slate-500">{detailEntry?.date ? formatDateLong(parseYMD(detailEntry.date)) : ""}</p></div>
-          </div>
-          <div className="grid gap-2 text-xs text-slate-600">
-            {detailEntry?.time && <div className="flex items-center gap-2 rounded-xl border border-slate-200 p-3"><Clock3 className="h-4 w-4 text-slate-400" /><span>Thời gian</span><strong className="ml-auto text-slate-900">{detailEntry.time}{detailEntry.endTime ? ` – ${detailEntry.endTime}` : ""}</strong></div>}
-            {detailEntry?.location && <div className="flex items-center gap-2 rounded-xl border border-slate-200 p-3"><MapPin className="h-4 w-4 text-slate-400" /><span>Địa điểm</span><strong className="ml-auto text-right text-slate-900">{detailEntry.location}</strong></div>}
-            {detailEntry?.attendees && detailEntry.attendees.length > 0 && <div className="flex items-start gap-2 rounded-xl border border-slate-200 p-3"><Users className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><span>Người tham gia</span><strong className="ml-auto max-w-[65%] text-right text-slate-900">{detailEntry.attendees.join(", ")}</strong></div>}
-            {detailEntry?.recurrence && detailEntry.recurrence !== "none" && <div className="flex items-center gap-2 rounded-xl border border-slate-200 p-3"><Repeat2 className="h-4 w-4 text-slate-400" /><span>Lặp lại</span><strong className="ml-auto text-right text-slate-900">{detailEntry.recurrence === "daily" ? "Hàng ngày" : detailEntry.recurrence === "weekly" ? "Hàng tuần" : "Hàng tháng"}{detailEntry.recurrenceEndDate ? ` · đến ${formatShortDate(detailEntry.recurrenceEndDate)}` : ""}</strong></div>}
-            {detailEntry?.description && <div className="rounded-xl border border-slate-200 p-3"><p className="font-semibold text-slate-900">Nội dung chuẩn bị</p><p className="mt-1.5 whitespace-pre-wrap leading-5 text-slate-500">{detailEntry.description}</p></div>}
-            {detailEntry?.attachments && detailEntry.attachments.length > 0 && (
-              <div className="rounded-xl border border-slate-200 p-3">
-                <p className="flex items-center gap-2 font-semibold text-slate-900"><Paperclip className="h-3.5 w-3.5 text-slate-400" />Ảnh đính kèm ({detailEntry.attachments.length})</p>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {detailEntry.attachments.map((attachment) => (
-                    <a key={`${attachment.name}-${attachment.url}`} href={attachment.url} target="_blank" rel="noreferrer" className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100" title={attachment.name}>
-                      <img src={attachment.url} alt={attachment.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                    </a>
-                  ))}
+        <div className="min-w-0 p-4 sm:p-6">
+          <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(250px,0.94fr)_minmax(0,1.06fr)]">
+              <div className="relative min-h-[320px] overflow-hidden rounded-xl bg-slate-100 sm:min-h-[390px]">
+                {detailEntry?.attachments?.[0] ? (
+                  <a href={detailEntry.attachments[0].url} target="_blank" rel="noreferrer" className="group absolute inset-0" title={`Mở ảnh ${detailEntry.attachments[0].name}`}>
+                    <EventThumbnailImage attachment={detailEntry.attachments[0]} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                    <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-700 opacity-0 shadow-md backdrop-blur-sm transition-opacity group-hover:opacity-100"><ExternalLink className="h-3.5 w-3.5" /></span>
+                  </a>
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <ImageIcon className="h-7 w-7" />
+                    <span className="text-xs font-medium">Không có ảnh thumbnail</span>
+                  </div>
+                )}
+                <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-slate-700 shadow-sm backdrop-blur-sm">{detailEntry?.label || "Event của tôi"}</span>
+              </div>
+
+              <div className="flex min-w-0 flex-col px-1 py-1 sm:py-2">
+                <div className="flex min-w-0 items-center gap-2 text-[10px] font-semibold text-slate-500">
+                  <span
+                    className={cn("h-2 w-2 shrink-0 rounded-full", !detailEntry?.accentColor && detailEntry?.color)}
+                    style={detailEntry?.accentColor ? { backgroundColor: detailEntry.accentColor } : undefined}
+                  />
+                  <span className="truncate">{detailEntry?.date ? formatDateLong(parseYMD(detailEntry.date)) : ""}</span>
+                  {detailEntry?.recurrence && detailEntry.recurrence !== "none" && (
+                    <span className="ml-auto shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
+                      {detailEntry.recurrence === "daily" ? "Hàng ngày" : detailEntry.recurrence === "weekly" ? "Hàng tuần" : "Hàng tháng"}
+                    </span>
+                  )}
+                </div>
+
+                <h4 className="mt-2 break-words text-lg font-bold leading-6 text-slate-950">{detailEntry?.title}</h4>
+                {detailEntry?.description && <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-slate-500">{detailEntry.description}</p>}
+
+                {detailEntry?.time && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-slate-400" />
+                    <span className="text-xl font-bold tracking-tight text-slate-950">{detailEntry.time}</span>
+                    {detailEntry.endTime && <span className="text-sm font-medium text-slate-400">– {detailEntry.endTime}</span>}
+                  </div>
+                )}
+
+                <div className="mt-auto space-y-3 pt-5">
+                  {detailEntry?.attendees && detailEntry.attendees.length > 0 && (
+                    <div className="min-w-0">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-semibold text-slate-600">Người tham gia</span>
+                        <span className="text-[9px] text-slate-400">{detailEntry.attendees.length} người</span>
+                      </div>
+                      <div className="grid min-w-0 grid-cols-2 gap-1.5">
+                        {detailEntry.attendees.slice(0, 4).map((attendee) => (
+                          <span key={attendee} title={attendee} className="flex h-8 min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-700">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[8px] font-bold uppercase text-slate-500">{attendee.trim().charAt(0) || "?"}</span>
+                            <span className="truncate">{attendee}</span>
+                          </span>
+                        ))}
+                        {detailEntry.attendees.length > 4 && <span className="flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">+{detailEntry.attendees.length - 4} người</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {detailEntry?.location && (() => {
+                    const link = getMeetingLinkMeta(detailEntry.location)
+                    return (
+                      <div className="min-w-0">
+                        <p className="mb-2 text-[10px] font-semibold text-slate-600">Địa điểm / Link họp</p>
+                        {link ? (
+                          <a href={link.href} target="_blank" rel="noreferrer" title={detailEntry.location} className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800">
+                            <MapPin className="h-3.5 w-3.5" /><span className="truncate">{link.label}</span><ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <div className="flex min-h-9 min-w-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700"><MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="break-words">{detailEntry.location}</span></div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  <button type="button" onClick={() => setDetailEntry(null)} className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">Đóng</button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          </article>
         </div>
       </RightSheet>
     </div>

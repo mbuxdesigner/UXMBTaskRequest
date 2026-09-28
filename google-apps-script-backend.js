@@ -3493,7 +3493,7 @@ function handleUploadFile(data) {
     }
 
     // 2. Kiểm tra phần mở rộng tệp (Extension Whitelist)
-    const allowedExtensions = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "doc", "ppt", "xls"];
+    const allowedExtensions = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "webp", "gif", "doc", "ppt", "xls"];
     const extMatch = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
     const fileExt = extMatch ? extMatch[1] : "";
     if (!fileExt || !allowedExtensions.includes(fileExt)) {
@@ -3515,6 +3515,8 @@ function handleUploadFile(data) {
       "image/png",
       "image/jpeg",
       "image/jpg",
+      "image/webp",
+      "image/gif",
       "application/octet-stream"
     ];
     if (mimeType && !allowedMimeTypes.includes(mimeType)) {
@@ -3567,7 +3569,8 @@ function handleUploadFile(data) {
       file_size: file.getSize(),
       mime_type: mimeType,
       file_url: previewUrl,
-      download_url: downloadUrl
+      download_url: downloadUrl,
+      thumbnail_url: "https://drive.google.com/thumbnail?id=" + encodeURIComponent(fileId) + "&sz=w1200"
     });
   } catch (err) {
     return createJsonResponse({

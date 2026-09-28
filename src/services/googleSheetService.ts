@@ -548,10 +548,9 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
       try {
         const url = new URL(config.scriptUrl.trim())
         url.searchParams.set("action", "get_requests")
-        if (envConfig.appEnv !== "production") {
-          url.searchParams.set("client_environment", envConfig.appEnv)
-          url.searchParams.set("is_test", "true")
-        }
+        // Reads use the shared production task pool, matching the IA cloud pull.
+        // Development/preview isolation is still enforced for every mutation
+        // through client_environment and is_test in the POST payloads below.
         if (forceRefresh) {
           url.searchParams.set("_t", Date.now().toString())
         }
@@ -667,10 +666,8 @@ async function runBackgroundSyncRequests(): Promise<void> {
     const envConfig = getAppEnvironment()
     const url = new URL(config.scriptUrl.trim())
     url.searchParams.set("action", "get_requests")
-    if (envConfig.appEnv !== "production") {
-      url.searchParams.set("client_environment", envConfig.appEnv)
-      url.searchParams.set("is_test", "true")
-    }
+    // Keep background reads on the same shared task source as IA cloud data.
+    // Test-mode write routing remains unchanged.
     url.searchParams.set("_t", Date.now().toString())
 
     const controller = new AbortController()
@@ -1454,6 +1451,8 @@ export async function uploadFileToDrive(
   success: boolean
   fileUrl?: string
   downloadUrl?: string
+  thumbnailUrl?: string
+  fileId?: string
   fileName?: string
   fileSize?: number
   error?: string
@@ -1496,10 +1495,13 @@ export async function uploadFileToDrive(
 
     const data = await res.json()
     if (data.status === "success") {
+      const fileId = String(data.file_id || "").trim()
       return {
         success: true,
         fileUrl: data.file_url,
         downloadUrl: data.download_url,
+        thumbnailUrl: data.thumbnail_url || (fileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1200` : undefined),
+        fileId: fileId || undefined,
         fileName: data.file_name || file.name,
         fileSize: data.file_size || file.size,
       }

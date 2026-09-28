@@ -217,6 +217,8 @@ export interface TeamEvent {
   attachments?: Array<{
     name: string
     url: string
+    thumbnailUrl?: string
+    fileId?: string
     size?: number
     type?: string
   }>
