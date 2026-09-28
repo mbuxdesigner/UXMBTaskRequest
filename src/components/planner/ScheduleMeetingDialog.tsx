@@ -22,6 +22,7 @@ import { RightSheet } from "@/components/ui/right-sheet"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { CAvatar29 } from "@/components/reui/c-avatar-29"
 import type { EventCategoryConfig } from "@/config/systemConfig"
 import { cn } from "@/lib/utils"
 
@@ -64,18 +65,6 @@ interface ScheduleMeetingDialogProps {
 
 const TIME_SLOTS = ["08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"]
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
-
-function formatDateSummary(value: string): string {
-  if (!value) return "Chưa chọn ngày"
-  const [year, month, day] = value.split("-").map(Number)
-  if (!year || !month || !day) return value
-  return new Intl.DateTimeFormat("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(year, month - 1, day))
-}
 
 function toYMD(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0")
@@ -168,9 +157,9 @@ function EventCategoryPicker({
 
   return (
     <div ref={rootRef} className="relative mt-2">
-      <button type="button" onClick={() => setOpen((current) => !current)} className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-left transition-all hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
+      <button type="button" onClick={() => setOpen((current) => !current)} className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 text-left transition-all hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected?.color || "#64748b" }} />
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{selected?.name || "Chọn loại sự kiện"}</span>{selected?.description && <span className="mt-0.5 block truncate text-[10px] text-slate-400">{selected.description}</span>}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{selected?.name || "Chọn loại sự kiện"}</span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
@@ -215,13 +204,32 @@ function DesignerPicker({
   const toggle = (email: string) => onChange(value.includes(email) ? value.filter((item) => item !== email) : [...value, email])
 
   return (
-    <div ref={rootRef} className="relative mt-2">
-      <button type="button" onClick={() => setOpen((current) => !current)} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
-        <Users className="h-4 w-4 shrink-0 text-slate-400" />
-        <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{selectedDesigners.length > 0 ? selectedDesigners.map((designer) => designer.name).join(", ") : "Chọn Designer tham gia"}</span>
-        {selectedDesigners.length > 0 && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">{selectedDesigners.length}</span>}
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
-      </button>
+    <div ref={rootRef} className="relative mt-2 flex min-h-11 items-center">
+      {selectedDesigners.length > 0 ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <CAvatar29
+            totalCount={selectedDesigners.length}
+            showAddButton
+            addTitle="Thêm người tham gia"
+            onClick={() => setOpen((current) => !current)}
+            className="cursor-pointer rounded-lg focus-within:ring-4 focus-within:ring-blue-100"
+            onAddClick={(event) => {
+              event.stopPropagation()
+              setOpen((current) => !current)
+            }}
+          >
+            {selectedDesigners.slice(0, 3).map((designer) => (
+              <UserAvatar key={designer.id || designer.email} name={designer.name} avatarUrl={designer.avatar} size="md" className="ring-2 ring-white" />
+            ))}
+          </CAvatar29>
+          <span className="min-w-0 truncate text-sm text-slate-600">{selectedDesigners.map((designer) => designer.name).join(", ")}</span>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200/80 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-[#1057FB] shadow-2xs transition-colors hover:bg-blue-100 hover:text-blue-700">
+          <Users className="h-3.5 w-3.5" />
+          <span>Thêm</span>
+        </button>
+      )}
       {open && (
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2"><Search className="h-3.5 w-3.5 text-slate-400" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm Designer…" className="h-7 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400" /></div>
@@ -339,6 +347,7 @@ export function ScheduleMeetingDialog({
       title="Schedule meeting"
       description="Tạo lịch họp, mời người tham gia và chuẩn bị tài liệu trước buổi làm việc."
       icon={<Video className="h-4.5 w-4.5" />}
+      className="font-sans"
       closeDisabled={saving}
       footer={(
         <div className="flex items-center justify-between gap-3">
@@ -358,11 +367,7 @@ export function ScheduleMeetingDialog({
         <div className="grid lg:grid-cols-[290px_minmax(0,1fr)]">
           <aside className="border-b border-slate-200 bg-slate-50/70 p-5 lg:border-b-0 lg:border-r">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Thời gian</p>
-            <div className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><CalendarDays className="h-4 w-4" /></span>
-              <div className="min-w-0"><p className="text-[10px] font-semibold text-slate-400">Ngày đã chọn</p><p className="mt-0.5 text-xs font-bold capitalize text-slate-900">{formatDateSummary(date)}</p></div>
-            </div>
-            <div className="mt-2"><MiniDateCalendar value={date} onChange={setDate} /></div>
+            <div className="mt-3"><MiniDateCalendar value={date} onChange={setDate} /></div>
 
             <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Khung giờ bắt đầu</p>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -417,40 +422,11 @@ export function ScheduleMeetingDialog({
           </aside>
 
           <div className="space-y-5 p-5 sm:p-6">
-            <div className="space-y-4">
-              <label className="block text-xs font-semibold text-slate-700">
-                Tên cuộc họp <span className="text-rose-500">*</span>
-                <Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Design review luồng vay" className="mt-2" />
-              </label>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Loại sự kiện
-                  <EventCategoryPicker categories={categories} value={categoryId} onChange={setCategoryId} />
-                </label>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Địa điểm / Link họp
-                  <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Phòng họp hoặc Teams" startIcon={<MapPin className="h-4 w-4" />} className="mt-2" />
-                </label>
-              </div>
-
-              <label className="block text-xs font-semibold text-slate-700">
-                Người tham gia
-                <DesignerPicker designers={designers} value={attendees} onChange={setAttendees} />
-                <span className="mt-1.5 block text-[10px] font-normal text-slate-400">Danh sách lấy từ nhân sự Designer trong Admin Settings.</span>
-              </label>
-
-              <label className="block text-xs font-semibold text-slate-700">
-                Nội dung chuẩn bị
-                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Agenda, mục tiêu cuộc họp, link Figma hoặc nội dung cần chuẩn bị…" className="mt-2 min-h-24" />
-              </label>
-            </div>
-
             <div>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Paperclip className="h-3.5 w-3.5 text-slate-400" />Ảnh thumbnail</p>
-                  <p className="mt-1 text-[10px] text-slate-400">Một ảnh đại diện, không quá 10 MB.</p>
+                  <p className="flex items-center gap-2 text-sm font-medium text-slate-700"><Paperclip className="h-4 w-4 text-slate-400" />Ảnh thumbnail</p>
+                  <p className="mt-1 text-xs text-slate-400">Một ảnh đại diện, không quá 10 MB.</p>
                 </div>
                 <Button type="button" variant="outline" size="xs" onClick={() => inputRef.current?.click()} disabled={saving}>
                   <ImagePlus className="h-3.5 w-3.5" />{images.length > 0 ? "Đổi ảnh" : "Chọn ảnh"}
@@ -486,7 +462,36 @@ export function ScheduleMeetingDialog({
                   ))}
                 </div>
               )}
-              {imageError && <p className="mt-2 text-[10px] font-medium text-rose-600">{imageError}</p>}
+              {imageError && <p className="mt-2 text-xs font-medium text-rose-600">{imageError}</p>}
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Tên cuộc họp <span className="text-rose-500">*</span>
+                <Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Design review luồng vay" className="mt-2 h-12" />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Loại sự kiện
+                <EventCategoryPicker categories={categories} value={categoryId} onChange={setCategoryId} />
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-700">Người tham gia</p>
+                  <DesignerPicker designers={designers} value={attendees} onChange={setAttendees} />
+                  <p className="mt-1.5 text-xs text-slate-400">Danh sách nhân sự Designer.</p>
+                </div>
+                <label className="block min-w-0 text-sm font-medium text-slate-700">
+                  Địa điểm / Link họp
+                  <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Phòng họp hoặc Teams" startIcon={<MapPin className="h-4 w-4" />} className="mt-2" />
+                </label>
+              </div>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Nội dung chuẩn bị
+                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Agenda, mục tiêu cuộc họp, link Figma hoặc nội dung cần chuẩn bị…" className="mt-2 min-h-24" />
+              </label>
             </div>
           </div>
         </div>
