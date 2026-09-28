@@ -169,11 +169,18 @@ export function getGoogleSheetConfig(): GoogleSheetConfig {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       const parsed = JSON.parse(saved)
+      const isHostedRuntime = dynamicEnv.isProduction || dynamicEnv.isPreview
       return {
         ...baseConfig,
         ...parsed,
-        // If saved scriptUrl was empty, fallback to the preconfigured URL
-        scriptUrl: parsed.scriptUrl || baseConfig.scriptUrl,
+        // Production/preview must always use the deployed gateway. A stale
+        // per-device localStorage URL previously caused different machines on
+        // the same account to load different datasets.
+        scriptUrl: isHostedRuntime
+          ? baseConfig.scriptUrl
+          : parsed.scriptUrl || baseConfig.scriptUrl,
+        useGateway: isHostedRuntime ? baseConfig.useGateway : parsed.useGateway ?? baseConfig.useGateway,
+        gatewayUrl: isHostedRuntime ? baseConfig.gatewayUrl : parsed.gatewayUrl || baseConfig.gatewayUrl,
         sheetId:
           parsed.sheetId && parsed.sheetId.trim() ? parsed.sheetId : baseConfig.sheetId,
         fallbackScriptUrl: baseConfig.fallbackScriptUrl,

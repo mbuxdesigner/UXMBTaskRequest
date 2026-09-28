@@ -40,6 +40,7 @@ import {
   getUserInitials,
   UserSession,
   syncSessionRoleFromSheet,
+  refreshAllDataOnLogin,
 } from "./services/otpAuthService"
 
 import Sidebar from "./components/Sidebar"
@@ -109,6 +110,16 @@ function PageLoadingSkeleton({ page }: { page: Page }) {
 
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
+
+  // Rehydrate cloud-backed admin configuration on every browser/device.
+  // localStorage is origin- and device-specific, so it cannot be the source
+  // of truth for navigation visibility, ordering, members, or task data.
+  useEffect(() => {
+    if (!session?.sessionToken) return
+    refreshAllDataOnLogin().catch(() => {})
+    // Fresh logins already trigger the same bootstrap from LoginGate. This
+    // effect is intentionally mount-only for restored sessions after reload.
+  }, [])
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("app_sidebar_collapsed") === "true"

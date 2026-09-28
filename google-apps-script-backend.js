@@ -357,6 +357,7 @@ function doGet(e) {
         audit_logs: masterData["AUDIT_LOGS_CONFIG"] || null,
         rbac: masterData["RBAC_CONFIG"] || null,
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
+        nav_order: masterData["NAV_ORDER_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: members,
         team_leaves: leaves,
@@ -476,6 +477,7 @@ function doPost(e) {
         audit_logs: masterData["AUDIT_LOGS_CONFIG"] || null,
         rbac: masterData["RBAC_CONFIG"] || null,
         nav_items: masterData["NAV_ITEMS_CONFIG"] || null,
+        nav_order: masterData["NAV_ORDER_CONFIG"] || null,
         selections: masterData["SELECTIONS_CONFIG"] || null,
         team_members: members,
         team_leaves: leaves,
@@ -4094,7 +4096,7 @@ function handleSyncMasterData(data) {
   const hasIATrees = typeof data.ia_trees !== "undefined" || typeof data.iaTrees !== "undefined";
   const nonIAMasterKeys = [
     "squads", "products", "phases", "selections", "status_rules", "audit_logs",
-    "rbac", "nav_items", "team_members", "members", "form_config", "formConfig",
+    "rbac", "nav_items", "nav_order", "team_members", "members", "form_config", "formConfig",
     "session_policies", "sessionPolicies"
   ];
   const isIAOnlySync = hasIATrees && !nonIAMasterKeys.some(function(key) {
@@ -4159,6 +4161,7 @@ function handleSyncMasterData(data) {
   if (data.rbac) configsToSave["RBAC_CONFIG"] = data.rbac;
   if (data.session_policies || data.sessionPolicies) configsToSave["SESSION_POLICIES_CONFIG"] = data.session_policies || data.sessionPolicies;
   if (data.nav_items || data.navConfig) configsToSave["NAV_ITEMS_CONFIG"] = data.nav_items || data.navConfig;
+  if (data.nav_order || data.navOrder) configsToSave["NAV_ORDER_CONFIG"] = data.nav_order || data.navOrder;
   if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
   if (data.form_config || data.formConfig) configsToSave["FORM_CONFIG"] = data.form_config || data.formConfig;
   if (data.ia_trees || data.iaTrees) configsToSave["IA_TREES_DATA"] = data.ia_trees || data.iaTrees;

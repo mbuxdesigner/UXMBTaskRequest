@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { toast } from "@/components/ui/toast"
-import { syncTeamMembersToSheet } from "@/services/googleSheetService"
+import { fetchTeamMembersFromSheet, syncTeamMembersToSheet } from "@/services/googleSheetService"
 import { mockSquads } from "@/data/mockData"
 import type { TeamMember, SquadSetting, ProductSetting } from "@/pages/QuanLyPage"
 import { dialogOverlayVariants, dialogContentVariants, springs } from "@/lib/motion"
@@ -56,7 +56,8 @@ export default function AddMemberModal({
   initialRole = "Designer",
 }: AddMemberModalProps) {
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [teamsEmail, setTeamsEmail] = useState("")
+  const [personalEmail, setPersonalEmail] = useState("")
   const [role, setRole] = useState<TeamMember["role"]>((initialRole as any) || "Designer")
   const [status, setStatus] = useState<TeamMember["status"]>("Active")
   const [capacity, setCapacity] = useState<number>(5)
@@ -142,7 +143,8 @@ export default function AddMemberModal({
   useEffect(() => {
     if (open) {
       setName("")
-      setEmail("")
+      setTeamsEmail("")
+      setPersonalEmail("")
       setRole((initialRole as any) || "Designer")
       setStatus("Active")
       setCapacity(5)
@@ -235,7 +237,7 @@ export default function AddMemberModal({
       toast.error("Vui lòng nhập họ và tên nhân sự!")
       return
     }
-    if (!email.trim()) {
+    if (!teamsEmail.trim()) {
       toast.error("Vui lòng nhập email Teams của nhân sự!")
       return
     }
@@ -249,13 +251,14 @@ export default function AddMemberModal({
       const finalProducts = selectedProducts.length > 0 ? selectedProducts : [defaultPr]
       const finalSquads = selectedSquads.length > 0 ? selectedSquads : [defaultSq]
 
-      const cleanEmail = email.trim().toLowerCase()
+      const cleanTeamsEmail = teamsEmail.trim().toLowerCase()
+      const cleanPersonalEmail = personalEmail.trim().toLowerCase()
       const newMem: TeamMember = {
         id: `mem-${Date.now()}`,
         name: name.trim(),
-        email: cleanEmail,
-        teamsEmail: cleanEmail,
-        personalEmail: cleanEmail,
+        email: cleanTeamsEmail,
+        teamsEmail: cleanTeamsEmail,
+        personalEmail: cleanPersonalEmail || cleanTeamsEmail,
         role: role,
         sessionPolicy: sessionPolicy,
         squad: finalSquads[0] || defaultSq,
@@ -273,22 +276,45 @@ export default function AddMemberModal({
         },
       }
 
-      // Load existing members from localStorage and prepend new member
+      // Always prefer the latest Sheet snapshot so an Invite action cannot
+      // overwrite newer members with a stale browser cache.
       let currentMembers: TeamMember[] = []
       try {
-        const raw = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
-        if (raw) {
-          currentMembers = JSON.parse(raw)
+        const remoteMembers = await fetchTeamMembersFromSheet()
+        if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
+          currentMembers = remoteMembers as TeamMember[]
+        } else {
+          const raw = localStorage.getItem("mbbank_admin_team") || localStorage.getItem("mbbank_team_members")
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            currentMembers = Array.isArray(parsed) ? parsed : []
+          }
         }
       } catch {}
 
-      // Avoid duplicates by email
-      const filtered = currentMembers.filter(
-        (m) => m.email.toLowerCase() !== newMem.email.toLowerCase()
+      // Avoid duplicates across both supported account email identities.
+      const incomingEmails = new Set(
+        [newMem.email, newMem.teamsEmail, newMem.personalEmail]
+          .map((item) => String(item || "").trim().toLowerCase())
+          .filter(Boolean)
       )
+      const filtered = currentMembers.filter((member) => {
+        const memberEmails = [member.email, member.teamsEmail, member.personalEmail]
+          .map((item) => String(item || "").trim().toLowerCase())
+          .filter(Boolean)
+        return !memberEmails.some((item) => incomingEmails.has(item))
+      })
       const updatedList = [newMem, ...filtered]
 
-      // Save to localStorage
+      // Wait for the backend confirmation. Previously this ran in the
+      // background and swallowed every error, so the modal reported success
+      // even when Google Sheet rejected the request.
+      const syncResult = await syncTeamMembersToSheet(updatedList)
+      if (!syncResult.success) {
+        throw new Error(syncResult.message || "Không thể đồng bộ nhân sự lên Google Sheet.")
+      }
+
+      // Update the local cache only after the Sheet write succeeds.
       localStorage.setItem("mbbank_admin_team", JSON.stringify(updatedList))
       localStorage.setItem("mbbank_team_members", JSON.stringify(updatedList))
 
@@ -296,10 +322,7 @@ export default function AddMemberModal({
       window.dispatchEvent(new Event("storage"))
       window.dispatchEvent(new Event("auth_session_changed"))
 
-      // Sync to Google Sheet in background
-      syncTeamMembersToSheet(updatedList).catch(() => {})
-
-      toast.success(`Đã thêm nhân sự [${newMem.name}] thành công!`)
+      toast.success(`Đã thêm [${newMem.name}] và đồng bộ lên Google Sheet!`)
 
       if (onSuccess) {
         onSuccess(newMem)
@@ -365,8 +388,8 @@ export default function AddMemberModal({
 
           {/* Form Body - Scrollable */}
           <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-4 pr-1">
-            {/* Row 1: Name & Email */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Row 1: Name, Teams email & personal backup email */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-normal text-slate-700 block mb-1">
                   Họ và tên: <span className="text-rose-500">*</span>
@@ -381,14 +404,28 @@ export default function AddMemberModal({
               </div>
               <div>
                 <label className="text-xs font-normal text-slate-700 block mb-1">
-                  Email Teams: <span className="text-rose-500">*</span>
+                  Email Teams (Nhận OTP): <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   required
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={teamsEmail}
+                  onChange={(e) => setTeamsEmail(e.target.value)}
                   placeholder="trang.designer@mbbank.com.vn"
+                  autoComplete="email"
+                  className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 font-mono h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-normal text-slate-700 block mb-1">
+                  Email cá nhân (Dự phòng):
+                </label>
+                <Input
+                  type="email"
+                  value={personalEmail}
+                  onChange={(e) => setPersonalEmail(e.target.value)}
+                  placeholder="canhan@gmail.com"
+                  autoComplete="email"
                   className="text-xs rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 font-mono h-9"
                 />
               </div>

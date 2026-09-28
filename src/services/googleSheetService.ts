@@ -1626,8 +1626,8 @@ export async function syncTeamMembersToSheet(
 
   if (!scriptUrl || !scriptUrl.trim()) {
     return {
-      success: true,
-      message: "Đã lưu nhân sự nội bộ (Chế độ Local).",
+      success: false,
+      message: "Chưa cấu hình Google Sheet Web App URL nên không thể đồng bộ nhân sự.",
       membersCount: members.length,
     }
   }
@@ -1770,6 +1770,7 @@ export async function syncMasterDataToSheet(params: {
   audit_logs?: any[]
   rbac?: any
   nav_items?: any
+  nav_order?: any
   form_config?: any
   ia_trees?: any
   session_policies?: any
@@ -1844,6 +1845,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
     audit_logs?: any[]
     rbac?: any
     nav_items?: any
+    nav_order?: any
     selections?: any
     team_members?: any[]
     form_config?: any
@@ -1882,6 +1884,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
             audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
             rbac: json.rbac || json.master_data?.RBAC_CONFIG,
             nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
+            nav_order: json.nav_order || json.master_data?.NAV_ORDER_CONFIG,
             selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
             team_members: json.team_members || json.master_data?.USERS_LIST,
             form_config: json.form_config || json.master_data?.FORM_CONFIG,
@@ -1922,6 +1925,7 @@ export async function fetchMasterDataFromSheet(): Promise<{
           audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
           rbac: json.rbac || json.master_data?.RBAC_CONFIG,
           nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
+          nav_order: json.nav_order || json.master_data?.NAV_ORDER_CONFIG,
           selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
           team_members: json.team_members || json.master_data?.USERS_LIST,
           form_config: json.form_config || json.master_data?.FORM_CONFIG,

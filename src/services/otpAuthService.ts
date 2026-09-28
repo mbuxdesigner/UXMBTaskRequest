@@ -6,6 +6,7 @@ import {
   fetchTeamMembersFromSheet,
   fetchSelectionsFromSheet,
 } from "./googleSheetService"
+import { saveNavOrderConfig, saveRoleNavConfig } from "../config/navVisibilityConfig"
 
 export type SessionPolicyType = "fixed_8h" | "sliding_24h"
 export type UserSessionPolicyOverride = "inherit" | "fixed_8h" | "sliding_24h"
@@ -1368,6 +1369,15 @@ export async function refreshAllDataOnLogin(): Promise<void> {
             }
             if (res.data.rbac && typeof res.data.rbac === "object") {
               localStorage.setItem("mbbank_admin_rbac", JSON.stringify(res.data.rbac))
+            }
+            if (res.data.nav_items && typeof res.data.nav_items === "object") {
+              saveRoleNavConfig(res.data.nav_items)
+            }
+            if (res.data.nav_order && typeof res.data.nav_order === "object") {
+              saveNavOrderConfig(res.data.nav_order)
+            }
+            if (res.data.session_policies && typeof res.data.session_policies === "object") {
+              saveRoleSessionPolicies(res.data.session_policies)
             }
             if (Array.isArray(res.data.team_members) && res.data.team_members.length > 0) {
               localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))

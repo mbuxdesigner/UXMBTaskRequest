@@ -1962,6 +1962,16 @@ export default function QuanLyPage() {
           if (d.nav_items) {
             setNavConfig(d.nav_items)
             saveRoleNavConfig(d.nav_items)
+          } else {
+            syncMasterDataToSheet({ nav_items: navConfig })
+          }
+          if (d.nav_order) {
+            setNavOrder(d.nav_order)
+            saveNavOrderConfig(d.nav_order)
+          } else {
+            // One-time migration for installations where menu ordering only
+            // existed in this browser's localStorage.
+            syncMasterDataToSheet({ nav_order: navOrder })
           }
         }
 
@@ -2021,7 +2031,7 @@ export default function QuanLyPage() {
       `Trạng thái: ${nextVal ? "BẬT (Hiện)" : "TẮT (Ẩn)"}`,
       "security"
     )
-    syncMasterDataToSheet({ nav_items: updated })
+    syncMasterDataToSheet({ nav_items: updated, nav_order: navOrder })
   }
 
   const handleMovePlatformItem = (index: number, direction: "up" | "down") => {
@@ -2034,6 +2044,7 @@ export default function QuanLyPage() {
     const updated: NavOrderConfig = { ...navOrder, platform: newItems }
     setNavOrder(updated)
     saveNavOrderConfig(updated)
+    syncMasterDataToSheet({ nav_order: updated })
     toast.success("Đã thay đổi thứ tự Menu Platform!")
   }
 
@@ -2047,6 +2058,7 @@ export default function QuanLyPage() {
     const updated: NavOrderConfig = { ...navOrder, resources: newItems }
     setNavOrder(updated)
     saveNavOrderConfig(updated)
+    syncMasterDataToSheet({ nav_order: updated })
     toast.success("Đã thay đổi thứ tự Menu Resources!")
   }
 
@@ -2068,6 +2080,7 @@ export default function QuanLyPage() {
       const updated: NavOrderConfig = { ...navOrder, platform: newItems }
       setNavOrder(updated)
       saveNavOrderConfig(updated)
+      syncMasterDataToSheet({ nav_order: updated })
       toast.success("Đã sắp xếp lại thứ tự Menu Platform!")
     } else {
       const newItems = [...navOrder.resources]
@@ -2076,6 +2089,7 @@ export default function QuanLyPage() {
       const updated: NavOrderConfig = { ...navOrder, resources: newItems }
       setNavOrder(updated)
       saveNavOrderConfig(updated)
+      syncMasterDataToSheet({ nav_order: updated })
       toast.success("Đã sắp xếp lại thứ tự Menu Resources!")
     }
     setDraggedGroup(null)
@@ -2532,6 +2546,11 @@ export default function QuanLyPage() {
         if (res.data.nav_items && typeof res.data.nav_items === "object") {
           setNavConfig(res.data.nav_items)
           saveRoleNavConfig(res.data.nav_items)
+          updatedCount++
+        }
+        if (res.data.nav_order && typeof res.data.nav_order === "object") {
+          setNavOrder(res.data.nav_order)
+          saveNavOrderConfig(res.data.nav_order)
           updatedCount++
         }
         if (Array.isArray(res.data.audit_logs) && res.data.audit_logs.length > 0) {
@@ -4232,6 +4251,10 @@ export default function QuanLyPage() {
                       saveRoleNavConfig(DEFAULT_ROLE_NAV_CONFIG)
                       setNavOrder(DEFAULT_NAV_ORDER)
                       saveNavOrderConfig(DEFAULT_NAV_ORDER)
+                      syncMasterDataToSheet({
+                        nav_items: DEFAULT_ROLE_NAV_CONFIG,
+                        nav_order: DEFAULT_NAV_ORDER,
+                      })
                       toast.success("Đã khôi phục cài đặt & thứ tự Menu điều hướng mặc định!")
                     }}
                     className="h-8 text-xs gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50"
