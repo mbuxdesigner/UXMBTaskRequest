@@ -1,10 +1,8 @@
-import { getGoogleSheetConfig } from "../config/googleSheetConfig"
+import { getGoogleSheetConfig, resolveApiUrl } from "../config/googleSheetConfig"
 import { UserRole } from "../data/mockData"
 import {
   fetchRequestsFromSheet,
   fetchMasterDataFromSheet,
-  fetchTeamMembersFromSheet,
-  fetchSelectionsFromSheet,
 } from "./googleSheetService"
 import { saveNavOrderConfig, saveRoleNavConfig } from "../config/navVisibilityConfig"
 
@@ -964,7 +962,7 @@ export async function checkVerifiedStatusFromSheet(
   if (!scriptUrl || !sessionToken) return null
 
   try {
-    const url = new URL(scriptUrl)
+    const url = resolveApiUrl(scriptUrl)
     url.searchParams.set("action", "check_session")
     url.searchParams.set("session_token", sessionToken)
     url.searchParams.set("_t", String(Date.now()))
@@ -1272,7 +1270,7 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
 
   try {
     // Sử dụng endpoint xác thực check_session thay vì truy vấn công khai GViz Sheet USERS
-    const url = new URL(scriptUrl)
+    const url = resolveApiUrl(scriptUrl)
     url.searchParams.set("action", "check_session")
     url.searchParams.set("session_token", currentSession.sessionToken)
     url.searchParams.set("_t", String(Date.now()))
@@ -1339,14 +1337,9 @@ export async function refreshAllDataOnLogin(): Promise<void> {
       })
     )
 
-    // 2. Tải danh sách Selections mới nhất (force refresh)
-    promises.push(
-      fetchSelectionsFromSheet(true).catch((e) => {
-        console.warn("Could not force refresh selections on login:", e)
-      })
-    )
-
-    // 3. Tải Master Data (Squads, Products, Phases, Status Rules, RBAC, Team Members)
+    // 2. Tải Master Data (đã bao gồm Products, Squads, cấu hình nav và Team Members).
+    // Không gọi thêm get_selections/get_team_members ở bootstrap để tránh dồn
+    // nhiều request đồng thời khiến Apps Script/Gateway bị timeout trên máy mới.
     promises.push(
       (async () => {
         try {
@@ -1390,27 +1383,12 @@ export async function refreshAllDataOnLogin(): Promise<void> {
       })()
     )
 
-    // 4. Tải Team Members nếu chưa có
-    promises.push(
-      (async () => {
-        try {
-          const members = await fetchTeamMembersFromSheet()
-          if (members && Array.isArray(members) && members.length > 0) {
-            localStorage.setItem("mbbank_admin_team", JSON.stringify(members))
-            localStorage.setItem("mbbank_team_members", JSON.stringify(members))
-          }
-        } catch (e) {
-          console.warn("Could not fetch team members on login:", e)
-        }
-      })()
-    )
-
     await Promise.all(promises)
 
-    // 5. Cập nhật Session nếu thông tin nhân sự (vai trò, squad, sản phẩm) của người đang đăng nhập có thay đổi trên Sheet
+    // 3. Cập nhật Session nếu thông tin nhân sự (vai trò, squad, sản phẩm) của người đang đăng nhập có thay đổi trên Sheet
     await syncSessionRoleFromSheet()
 
-    // 6. Phát event để toàn bộ giao diện đang mở cập nhật dữ liệu mới tức thì
+    // 4. Phát event để toàn bộ giao diện đang mở cập nhật dữ liệu mới tức thì
     window.dispatchEvent(new CustomEvent("ux_data_refreshed"))
     window.dispatchEvent(new Event("storage"))
   } catch (err) {

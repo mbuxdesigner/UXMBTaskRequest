@@ -141,6 +141,21 @@ export function getFallbackScriptUrl(): string {
   )
 }
 
+/**
+ * Resolve both absolute Apps Script URLs and same-origin gateway paths.
+ * `new URL("/api/gateway")` throws without a base URL, which made a fresh
+ * browser silently fall back to an empty cache while older devices kept
+ * showing previously cached data.
+ */
+export function resolveApiUrl(rawUrl: string): URL {
+  const value = String(rawUrl || "").trim()
+  const base =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost"
+  return new URL(value, base)
+}
+
 export const DEFAULT_CONFIG: GoogleSheetConfig = {
   scriptUrl:
     (typeof import.meta !== "undefined" && import.meta.env?.VITE_APPS_SCRIPT_URL) ||

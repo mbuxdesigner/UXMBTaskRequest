@@ -17,6 +17,7 @@ import {
   saveGoogleSheetConfig,
   getAppEnvironment,
   isTestEnvironment,
+  resolveApiUrl,
 } from "../config/googleSheetConfig"
 import { getStoredSession } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
@@ -87,6 +88,69 @@ let inflightBackgroundSyncPromise: Promise<void> | null = null
 let inflightSelectionsPromise: Promise<SelectionsData> | null = null
 let lastRemoteFetchSucceeded: boolean | null = null
 let didWarnAboutEmptyRemoteList = false
+
+type RequestReadConfig = {
+  scriptUrl?: string
+  fallbackScriptUrl?: string
+}
+
+function getRequestReadEndpoints(config: RequestReadConfig): string[] {
+  const candidates = [config.scriptUrl, config.fallbackScriptUrl]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+  return candidates.filter((value, index) => candidates.indexOf(value) === index)
+}
+
+async function fetchRemoteRequestRows(
+  config: RequestReadConfig,
+  cacheBust: boolean,
+): Promise<any[]> {
+  const endpoints = getRequestReadEndpoints(config)
+  let lastError: unknown = new Error("No request endpoint configured")
+
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const url = resolveApiUrl(endpoints[index])
+    url.searchParams.set("action", "get_requests")
+    if (cacheBust || index > 0) url.searchParams.set("_t", Date.now().toString())
+
+    const controller = new AbortController()
+    const isSameOriginGateway =
+      typeof window !== "undefined" && url.origin === window.location.origin
+    const timeoutId = setTimeout(() => controller.abort(), isSameOriginGateway ? 12000 : 25000)
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal,
+      })
+      const responseText = await response.text()
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 160)}`)
+      }
+
+      let data: any
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        throw new Error(`Invalid JSON response: ${responseText.slice(0, 160)}`)
+      }
+
+      if (data.status === "success" && Array.isArray(data.requests)) {
+        return data.requests
+      }
+      throw new Error(data?.message || "Request endpoint returned an invalid payload")
+    } catch (error) {
+      lastError = error
+      console.warn(`Could not load requests from ${url.origin}; trying the next endpoint.`, error)
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  throw lastError
+}
 
 function warnAboutEmptyRemoteListOnce(message: string): void {
   if (didWarnAboutEmptyRemoteList) return
@@ -536,8 +600,9 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
     }
   }
 
-  // 3. Deduplicate concurrent requests (unless forceRefresh is explicitly requested)
-  if (inflightRequestsPromise && !forceRefresh) {
+  // 3. Always deduplicate concurrent reads. A force refresh bypasses stored
+  // cache, but must not create several simultaneous GAS calls on login.
+  if (inflightRequestsPromise) {
     return inflightRequestsPromise
   }
 
@@ -546,69 +611,41 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
 
     if (config.scriptUrl && config.scriptUrl.trim()) {
       try {
-        const url = new URL(config.scriptUrl.trim())
-        url.searchParams.set("action", "get_requests")
-        // Reads use the shared production task pool, matching the IA cloud pull.
-        // Development/preview isolation is still enforced for every mutation
-        // through client_environment and is_test in the POST payloads below.
-        if (forceRefresh) {
-          url.searchParams.set("_t", Date.now().toString())
-        }
+        const remoteRows = await fetchRemoteRequestRows(config, forceRefresh)
+        const envFiltered = envConfig.isProduction
+          ? filterProductionTasks(remoteRows)
+          : remoteRows
+        const cleanRemote = envFiltered.filter((r: any) => !isDemoRequest(r))
+        const normalized = deduplicateTaskIds(
+          normalizeRemoteRequestsPreservingNicknames(cleanRemote)
+        )
 
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 12000)
-
-        try {
-          const res = await fetch(url.toString(), {
-            method: "GET",
-            headers: { Accept: "application/json" },
-            signal: controller.signal,
-          })
-
-          if (res.ok) {
-            const data = await res.json()
-            if (data.status === "success" && Array.isArray(data.requests)) {
-              const envFiltered = envConfig.isProduction
-                ? filterProductionTasks(data.requests)
-                : data.requests
-              const cleanRemote = envFiltered.filter((r: any) => !isDemoRequest(r))
-              const normalized = deduplicateTaskIds(
-                normalizeRemoteRequestsPreservingNicknames(cleanRemote)
-              )
-
-              // Phòng vệ mất danh sách: một deployment GAS lỗi hoặc trỏ nhầm
-              // RAW_TASKS_TEST có thể trả success nhưng mảng rỗng. Không được dùng
-              // phản hồi bất thường đó để xoá cache task hợp lệ đang có.
-              if (normalized.length === 0) {
-                try {
-                  const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
-                  const localList = localCached ? JSON.parse(localCached) : []
-                  if (Array.isArray(localList) && localList.length > 0) {
-                    lastRemoteFetchSucceeded = false
-                    const preserved = deduplicateTaskIds(localList.map(normalizeSheetRequest))
-                    cachedRequestsMemory = preserved
-                    warnAboutEmptyRemoteListOnce("Google Sheet returned an unexpected empty task list; preserved the existing cache.")
-                    return preserved
-                  }
-                } catch {}
-              }
-
-              lastRemoteFetchSucceeded = true
-              markRemoteListHealthy()
-              cachedRequestsMemory = normalized
-              try {
-                localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
-                saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
-              } catch (e) {
-                console.warn("Could not save requests to localStorage:", e)
-              }
-              return normalized
+        // Preserve a valid device cache if the backend unexpectedly responds
+        // with an empty list.
+        if (normalized.length === 0) {
+          try {
+            const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
+            const localList = localCached ? JSON.parse(localCached) : []
+            if (Array.isArray(localList) && localList.length > 0) {
+              lastRemoteFetchSucceeded = false
+              const preserved = deduplicateTaskIds(localList.map(normalizeSheetRequest))
+              cachedRequestsMemory = preserved
+              warnAboutEmptyRemoteListOnce("Google Sheet returned an unexpected empty task list; preserved the existing cache.")
+              return preserved
             }
-          }
-          lastRemoteFetchSucceeded = false
-        } finally {
-          clearTimeout(timeoutId)
+          } catch {}
         }
+
+        lastRemoteFetchSucceeded = true
+        markRemoteListHealthy()
+        cachedRequestsMemory = normalized
+        try {
+          localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+          saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
+        } catch (e) {
+          console.warn("Could not save requests to localStorage:", e)
+        }
+        return normalized
       } catch (err) {
         lastRemoteFetchSucceeded = false
         console.warn("Could not fetch requests from Google Sheet, falling back to cache:", err)
@@ -664,46 +701,23 @@ async function runBackgroundSyncRequests(): Promise<void> {
     if (!config.scriptUrl || !config.scriptUrl.trim()) return
 
     const envConfig = getAppEnvironment()
-    const url = new URL(config.scriptUrl.trim())
-    url.searchParams.set("action", "get_requests")
-    // Keep background reads on the same shared task source as IA cloud data.
-    // Test-mode write routing remains unchanged.
-    url.searchParams.set("_t", Date.now().toString())
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12000)
-
-    try {
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        if (data.status === "success" && Array.isArray(data.requests)) {
-          const envFiltered = envConfig.isProduction
-            ? filterProductionTasks(data.requests)
-            : data.requests
-          const normalized = deduplicateTaskIds(
-            normalizeRemoteRequestsPreservingNicknames(envFiltered)
-          )
-          if (normalized.length === 0 && cachedRequestsMemory && cachedRequestsMemory.length > 0) {
-            lastRemoteFetchSucceeded = false
-            warnAboutEmptyRemoteListOnce("Background sync returned an unexpected empty task list; preserved the existing cache.")
-            return
-          }
-          lastRemoteFetchSucceeded = true
-          markRemoteListHealthy()
-          cachedRequestsMemory = normalized
-          localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
-          broadcastTaskEvent("GLOBAL_REFRESH")
-        }
-      }
-    } finally {
-      clearTimeout(timeoutId)
+    const remoteRows = await fetchRemoteRequestRows(config, true)
+    const envFiltered = envConfig.isProduction
+      ? filterProductionTasks(remoteRows)
+      : remoteRows
+    const normalized = deduplicateTaskIds(
+      normalizeRemoteRequestsPreservingNicknames(envFiltered)
+    )
+    if (normalized.length === 0 && cachedRequestsMemory && cachedRequestsMemory.length > 0) {
+      lastRemoteFetchSucceeded = false
+      warnAboutEmptyRemoteListOnce("Background sync returned an unexpected empty task list; preserved the existing cache.")
+      return
     }
+    lastRemoteFetchSucceeded = true
+    markRemoteListHealthy()
+    cachedRequestsMemory = normalized
+    localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+    broadcastTaskEvent("GLOBAL_REFRESH")
   } catch {
     // Silently ignore background sync errors
   }
@@ -748,7 +762,7 @@ export async function fetchSelectionsFromSheet(forceRefresh = false): Promise<Se
     }
 
     try {
-      const url = new URL(config.scriptUrl)
+      const url = resolveApiUrl(config.scriptUrl)
       url.searchParams.set("action", "get_selections")
 
       const controller = new AbortController()
@@ -1277,7 +1291,7 @@ export async function fetchSingleTaskUpdate(requestId: string): Promise<UXReques
     const timeoutId = setTimeout(() => controller.abort(), 10000)
 
     try {
-      const url = new URL(config.scriptUrl.trim())
+      const url = resolveApiUrl(config.scriptUrl.trim())
       url.searchParams.set("action", "get_requests")
       url.searchParams.set("_t", Date.now().toString())
 
@@ -1331,7 +1345,7 @@ export async function testGoogleSheetConnection(scriptUrl: string): Promise<{
   }
 
   try {
-    const url = new URL(scriptUrl.trim())
+    const url = resolveApiUrl(scriptUrl.trim())
     url.searchParams.set("action", "ping")
 
     const res = await fetch(url.toString(), {
@@ -1865,11 +1879,14 @@ export async function fetchMasterDataFromSheet(): Promise<{
   }
 
   // 1. Ưu tiên gửi qua POST (text/plain) để tránh caching và URL query length limits
+  const postController = new AbortController()
+  const postTimeoutId = setTimeout(() => postController.abort(), 12000)
   try {
     const postRes = await fetch(scriptUrl.trim(), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: "get_master_data" }),
+      signal: postController.signal,
     })
 
     if (postRes.ok) {
@@ -1898,55 +1915,69 @@ export async function fetchMasterDataFromSheet(): Promise<{
     }
   } catch (err) {
     console.warn("Could not fetch master data via POST, trying GET...", err)
+  } finally {
+    clearTimeout(postTimeoutId)
   }
 
-  // 2. Dự phòng qua GET URL
-  try {
-    const url = new URL(scriptUrl.trim())
+  // 2. Dự phòng qua GET. Nếu gateway cùng origin bị 504, tự chuyển sang
+  // Apps Script trực tiếp để máy mới vẫn nhận cấu hình Admin.
+  let lastGetError: unknown = new Error("Không thể tải Master Data từ Google Sheet.")
+  const masterReadEndpoints =
+    config.fallbackScriptUrl && config.fallbackScriptUrl !== scriptUrl
+      ? [config.fallbackScriptUrl]
+      : getRequestReadEndpoints(config)
+  for (const endpoint of masterReadEndpoints) {
+    const url = resolveApiUrl(endpoint)
     url.searchParams.set("action", "get_master_data")
     url.searchParams.set("t", String(Date.now()))
+    const controller = new AbortController()
+    const isSameOriginGateway =
+      typeof window !== "undefined" && url.origin === window.location.origin
+    const timeoutId = setTimeout(() => controller.abort(), isSameOriginGateway ? 12000 : 25000)
 
-    const res = await fetch(url.toString(), {
-      method: "GET",
-    })
-
-    if (!res.ok) {
-      throw new Error(`Máy chủ trả về HTTP ${res.status}`)
-    }
-
-    const json = await res.json()
-    if (json.status === "success") {
-      return {
-        success: true,
-        message: "Tải Master Data từ Google Sheet thành công!",
-        data: {
-          squads: json.squads || json.master_data?.SQUADS_CONFIG,
-          products: json.products || json.master_data?.PRODUCTS_CONFIG,
-          phases: json.phases || json.master_data?.PHASES_CONFIG,
-          status_rules: json.status_rules || json.master_data?.STATUS_RULES_CONFIG,
-          audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
-          rbac: json.rbac || json.master_data?.RBAC_CONFIG,
-          nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
-          nav_order: json.nav_order || json.master_data?.NAV_ORDER_CONFIG,
-          selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
-          team_members: json.team_members || json.master_data?.USERS_LIST,
-          form_config: json.form_config || json.master_data?.FORM_CONFIG,
-          ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
-          session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
-        },
+    try {
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal,
+      })
+      const responseText = await res.text()
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${responseText.slice(0, 160)}`)
+      const json = JSON.parse(responseText)
+      if (json.status === "success") {
+        return {
+          success: true,
+          message: "Tải Master Data từ Google Sheet thành công!",
+          data: {
+            squads: json.squads || json.master_data?.SQUADS_CONFIG,
+            products: json.products || json.master_data?.PRODUCTS_CONFIG,
+            phases: json.phases || json.master_data?.PHASES_CONFIG,
+            status_rules: json.status_rules || json.master_data?.STATUS_RULES_CONFIG,
+            audit_logs: json.audit_logs || json.master_data?.AUDIT_LOGS_CONFIG,
+            rbac: json.rbac || json.master_data?.RBAC_CONFIG,
+            nav_items: json.nav_items || json.master_data?.NAV_ITEMS_CONFIG,
+            nav_order: json.nav_order || json.master_data?.NAV_ORDER_CONFIG,
+            selections: json.selections || json.master_data?.SELECTIONS_CONFIG,
+            team_members: json.team_members || json.master_data?.USERS_LIST,
+            form_config: json.form_config || json.master_data?.FORM_CONFIG,
+            ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
+            session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
+          },
+        }
       }
+      lastGetError = new Error(json.message || "Không thể tải Master Data từ Google Sheet.")
+    } catch (error) {
+      lastGetError = error
+    } finally {
+      clearTimeout(timeoutId)
     }
+  }
 
-    return {
-      success: false,
-      message: json.message || "Không thể tải Master Data từ Google Sheet.",
-    }
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
-    return {
-      success: false,
-      message: `Lỗi kết nối Google Sheet: ${errorMsg}`,
-    }
+  const errorMsg = lastGetError instanceof Error ? lastGetError.message : String(lastGetError)
+  return {
+    success: false,
+    message: `Lỗi kết nối Google Sheet: ${errorMsg}`,
   }
 }
 
@@ -2046,7 +2077,7 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
 
     // 2. Thử qua GET URL Query Params
     try {
-      const url = new URL(scriptUrl.trim())
+      const url = resolveApiUrl(scriptUrl.trim())
       url.searchParams.set("action", "get_team_members")
       url.searchParams.set("_t", Date.now().toString())
 
