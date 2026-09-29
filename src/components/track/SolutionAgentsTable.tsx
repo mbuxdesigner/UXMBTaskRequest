@@ -475,15 +475,40 @@ export default function SolutionAgentsTable({
   const formatDisplayDate = (dateStr?: string) => {
     if (!dateStr) return "Chưa set"
     try {
-      const d = new Date(dateStr)
+      const clean = dateStr.trim()
+      if (clean.includes(" ")) {
+        const datePart = clean.split(" ")[0]
+        if (datePart.includes("/")) return datePart
+        if (datePart.includes("-")) {
+          const [y, m, d] = datePart.split("-")
+          if (y && m && d && y.length === 4) return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`
+          return datePart
+        }
+      }
+      if (clean.includes("T")) {
+        const d = new Date(clean)
+        if (!isNaN(d.getTime())) {
+          const dd = String(d.getDate()).padStart(2, "0")
+          const mm = String(d.getMonth() + 1).padStart(2, "0")
+          const yyyy = d.getFullYear()
+          return `${dd}/${mm}/${yyyy}`
+        }
+      }
+      if (clean.includes("/")) {
+        return clean.split(" ")[0]
+      }
+      if (clean.includes("-")) {
+        const [y, m, d] = clean.split("-")
+        if (y && m && d && y.length === 4) {
+          return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`
+        }
+      }
+      const d = new Date(clean)
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2, "0")
         const mm = String(d.getMonth() + 1).padStart(2, "0")
         const yyyy = d.getFullYear()
         return `${dd}/${mm}/${yyyy}`
-      }
-      if (dateStr.includes("/")) {
-        return dateStr
       }
     } catch {}
     return dateStr || "Chưa set"
@@ -492,13 +517,42 @@ export default function SolutionAgentsTable({
   const formatDateLabel = (isoDate?: string) => {
     if (!isoDate) return "Gần đây"
     try {
-      const d = new Date(isoDate)
+      const clean = isoDate.trim()
+      // Cắt bỏ phần thời gian nếu có (vd: "28/09/2026 14:22:35" -> "28/09/2026")
+      if (clean.includes(" ")) {
+        const datePart = clean.split(" ")[0]
+        if (datePart.includes("/")) return datePart
+        if (datePart.includes("-")) {
+          const [y, m, d] = datePart.split("-")
+          if (y && m && d && y.length === 4) return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`
+          return datePart
+        }
+      }
+      if (clean.includes("T")) {
+        const d = new Date(clean)
+        if (!isNaN(d.getTime())) {
+          const dd = String(d.getDate()).padStart(2, "0")
+          const mm = String(d.getMonth() + 1).padStart(2, "0")
+          const yyyy = d.getFullYear()
+          return `${dd}/${mm}/${yyyy}`
+        }
+      }
+      if (clean.includes("/")) {
+        return clean.split(" ")[0]
+      }
+      if (clean.includes("-")) {
+        const [y, m, d] = clean.split("-")
+        if (y && m && d && y.length === 4) {
+          return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`
+        }
+      }
+      const d = new Date(clean)
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2, "0")
         const mm = String(d.getMonth() + 1).padStart(2, "0")
-        return `${dd}/${mm}`
+        const yyyy = d.getFullYear()
+        return `${dd}/${mm}/${yyyy}`
       }
-      if (isoDate.includes("/")) return isoDate
     } catch {}
     return "Gần đây"
   }

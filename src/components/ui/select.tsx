@@ -18,7 +18,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         )}
         <select
           className={cn(
-            "flex h-11 w-full appearance-none rounded-xl border bg-white/90 px-3.5 py-2.5 pr-10 text-sm text-slate-800 transition-all duration-150 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60",
+            "flex h-11 w-full appearance-none rounded-xl border bg-white/90 px-3.5 py-2.5 pr-10 text-sm font-normal normal-case text-slate-800 transition-all duration-150 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60",
             startIcon && "pl-10.5",
             error
               ? "border-red-300 focus-visible:ring-4 focus-visible:ring-red-500/10 focus-visible:border-red-500"

@@ -272,5 +272,40 @@ Người dùng có thể bật/tắt độc lập các lớp task/event. Ô ngà
 - `npm test`: toàn bộ regression suite PASS.
 - `npm run build`: PASS.
 
-**Last Updated:** 28/09/2026
-**Changelog:** Chuyển từ đề xuất sang MVP Designer Planner; bổ sung UI cá nhân, AI briefing nền trắng với typewriter/hover preview, calendar 70/30, right-sheet interaction, Schedule Meeting có ảnh đính kèm, Cloud persistence cho `planned_work_date` và nền ngày nghỉ/nghỉ lễ không dùng task chip.
+---
+
+## 9. NÂNG CẤP VÀ HOÀN THIỆN ĐIỀU HÀNH PLANNER (29/09/2026)
+
+### 9.1. Luồng Agent Activity Trace (4/4 Bước Tuần Tự)
+- **Vấn đề trước đây:** Quá trình đọc/tổng hợp dữ liệu thường bị hủy ngang hoặc reset về bước 1/4 khi các hook/state ở component cha re-render dữ liệu ngầm, hoặc hiển thị kết quả quá sớm khi chưa đọc đủ 4 bước.
+- **Giải pháp chuẩn hóa:** Component `AgentActivityTrace.tsx` được cô lập với `useRef` lưu giữ callback `onComplete` và chuỗi `setTimeout` độc lập. Quá trình trace chạy chính xác 4 bước tuần tự (`1/4`, `2/4`, `3/4`, `4/4`) kèm thanh tiến độ mượt mà (`h-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full`).
+- **Bàn giao tức thì (Immediate Handover):** Khi kết thúc bước 4/4, component kích hoạt handover sang phần hiển thị nội dung ngay lập tức mà không cần chờ các skeleton hay query nền khác của trang kết thúc.
+
+### 9.2. Executive Summary Typewriter Streaming & Clickable Hyperlinks
+- **Hiệu ứng Gõ chữ Tự nhiên (Typewriter):** Component `ExecutiveSummaryTypewriter.tsx` nhận văn bản markdown thô từ AI Engine và phát luồng (stream) từng ký tự với tốc độ mượt mà (~14ms/ký tự) kèm con trỏ nhấp nháy `|` chuẩn AI Assistant. Người dùng có thể nhấn phím tắt hoặc nút "Bỏ qua hiệu ứng gõ" để hiển thị ngay toàn bộ nội dung.
+- **Định dạng Text thuần khiết & Liên kết Trực quan:** Văn bản không chia thành các khối card màu sắc phức tạp mà hiển thị như một lời phản hồi tinh tế của AI Chatbot.
+- **Hyperlink nhận diện Task & Event:** Các mã Task (`[TASK-1234: Tiêu đề]`) và Event (`[EVENT: Tên sự kiện]`) tự động được biên dịch thành liên kết:
+  - Task link: Màu xanh `text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer`, click mở thẳng Slide-Over Sheet chi tiết task.
+  - Event link: Màu tím `text-purple-600 hover:text-purple-800 underline font-medium cursor-pointer`, click mở Right Sheet chi tiết/chỉnh sửa sự kiện.
+
+### 9.3. Kiến trúc Thẻ Đứng Im (Stationary Card Layout - CLS = 0)
+- Thẻ Executive Summary được cấu hình đứng im cố định (`no entrance animation`), loại bỏ hoàn toàn hiện tượng nhấp nháy chuyển giao (layout shift) giữa skeleton/trace và khối văn bản hoàn thiện.
+- Các thẻ bên dưới (KPI Cards, Weekly Calendar, Right Detail Panel) áp dụng hiệu ứng xuất hiện xếp tầng mềm mại (staggered cascade animation) với độ trễ tiến triển (`120ms` per card), tạo cảm giác nhịp nhàng, có chiều sâu cho toàn trang.
+
+### 9.4. Phạm vi Scoping Cá nhân Tuyệt đối (Strict Personal Scoping)
+- **Quy tắc cốt lõi:** Designer Planner là không gian cá nhân của từng chuyên viên thiết kế. Toàn bộ thông tin hiển thị (Task, Event, Thống kê KPI, AI Briefing) phải xoay quanh chính cá nhân đó:
+  - Task: Thuộc quyền sở hữu, được giao phân công (assignee), hoặc được thêm vào danh sách theo dõi (viewer).
+  - Event: Do người đó tạo hoặc nằm trong danh sách người tham gia (attendees).
+- **Áp dụng cho mọi vai trò (Kể cả Admin):** Khi tài khoản Admin vào trang Designer Planner, hệ thống chỉ lọc các bài toán và sự kiện mà Admin đó trực tiếp tham gia phụ trách hoặc theo dõi, không hiển thị tràn lan toàn bộ dữ liệu của cả team. Muốn xem toàn cảnh, Admin truy cập module **Lịch Team MBBank** (Team Planner).
+
+### 9.5. Quản lý Sự kiện: Phân quyền Chỉnh sửa & Avatar Danh sách Tham gia
+- **Phân quyền chỉnh sửa (Edit Event RBAC):** Chỉ Quản trị viên (Admin) hoặc chính người tạo sự kiện (Creator) mới có quyền mở form `ScheduleMeetingDialog` để chỉnh sửa/xóa sự kiện.
+- **Avatar Stack Người tham gia:** Khung chi tiết sự kiện hiển thị danh sách người tham gia theo chuẩn `CAvatar29` xếp chồng `-space-x-1.5` kèm viền trắng `ring-2 ring-white`, hỗ trợ Dark Hover Tooltip liệt kê đầy đủ họ tên/email như danh sách Viewers trong chi tiết Task.
+
+---
+
+**Last Updated:** 29/09/2026
+**Changelog:**
+- 29/09/2026: Chuẩn hóa Agent Activity Trace 4/4 bước không reset, ExecutiveSummaryTypewriter gõ chữ từng ký tự kèm clickable link mở task/event, thẻ Executive Summary đứng im chống giật CLS=0, cascade animation 120ms cho các card còn lại, personal scoping tuyệt đối cho mọi role (kể cả Admin), cho phép Creator/Admin sửa event và avatar stack người tham gia.
+- 28/09/2026: Chuyển từ đề xuất sang MVP Designer Planner; bổ sung UI cá nhân, AI briefing nền trắng với typewriter/hover preview, calendar 70/30, right-sheet interaction, Schedule Meeting có ảnh đính kèm, Cloud persistence cho `planned_work_date` và nền ngày nghỉ/nghỉ lễ không dùng task chip.
+

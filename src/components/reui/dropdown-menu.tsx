@@ -100,7 +100,7 @@ export function DropdownMenu({
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={() => setIsOpen(!isOpen)}
-          className={`h-9 px-3.5 w-full bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-semibold text-slate-800 flex items-center justify-between gap-2.5 transition-all shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#1057FB]/15 cursor-pointer ${
+          className={`h-9 px-3.5 w-full bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-normal text-slate-800 flex items-center justify-between gap-2.5 transition-all shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#1057FB]/15 cursor-pointer ${
             isOpen ? "border-[#1057FB] ring-2 ring-[#1057FB]/10" : ""
           } ${buttonClassName}`}
         >
@@ -108,7 +108,7 @@ export function DropdownMenu({
             {(icon || selectedOption?.icon) && (
               <span className="text-slate-400 flex-shrink-0">{icon || selectedOption?.icon}</span>
             )}
-            <span className="truncate font-semibold text-slate-800">
+            <span className="truncate font-normal text-slate-800">
               {selectedOption && selectedOption.value ? selectedOption.label : placeholder}
             </span>
           </div>

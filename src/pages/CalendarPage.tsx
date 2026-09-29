@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
 import { Frame } from "@/components/reui/frame"
 import { Badge, PriorityBadge, StatusPill } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -93,7 +94,11 @@ import {
   Flame,
   Inbox,
   Briefcase,
+  Trash2,
+  Download,
+  ArrowUpDown,
 } from "lucide-react"
+import * as XLSX from "xlsx"
 
 const VIEW_MODES = [
   { id: "month", label: "Tháng", icon: LayoutGrid },
@@ -179,8 +184,8 @@ export default function CalendarPage() {
   const [holidays, setHolidays] = useState<HolidayException[]>([])
 
   // Tải dữ liệu lịch
-  const reloadData = async () => {
-    setLoading(true)
+  const reloadData = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const data = await loadAllCalendarItems()
       setItems(data.items)
@@ -192,9 +197,9 @@ export default function CalendarPage() {
       setFreshnessInfo(getLeavesFreshnessInfo())
     } catch (err) {
       console.error("[CalendarPage] Load items error:", err)
-      toast.error("Không thể tải toàn bộ dữ liệu lịch!")
+      if (!silent) toast.error("Không thể tải toàn bộ dữ liệu lịch!")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -204,7 +209,7 @@ export default function CalendarPage() {
     try {
       await fetchTeamLeaves(true)
       toast.success("Đã đồng bộ lại dữ liệu Lịch nghỉ phép từ Google Sheets!")
-      await reloadData()
+      await reloadData(true)
       setFreshnessInfo(getLeavesFreshnessInfo())
     } catch (err) {
       toast.error("Lỗi đồng bộ lịch nghỉ phép")
@@ -214,16 +219,16 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
-    reloadData()
+    reloadData(false)
 
-    const handleTaskChange = () => reloadData()
+    const handleTaskChange = () => reloadData(true)
     const handleConfigChange = () => {
       const cfg = getSystemConfig().calendar || DEFAULT_CALENDAR_CONFIG
       setCalendarConfig(cfg)
       if (typeof cfg.showWeekends === "boolean") {
         setShowWeekends(cfg.showWeekends)
       }
-      reloadData()
+      reloadData(true)
     }
 
     window.addEventListener("ux_portal_tasks_changed", handleTaskChange)
@@ -483,7 +488,7 @@ export default function CalendarPage() {
           targetDesigner ? ` (Gán cho ${targetDesigner})` : ""
         }`
       )
-      reloadData()
+      reloadData(true)
     } else {
       toast.error(res.error || "Không thể xếp lịch làm việc")
     }
@@ -551,7 +556,7 @@ export default function CalendarPage() {
       if (ok) {
         toast.success("Đã cập nhật sự kiện team!")
         setShowEventModal(false)
-        reloadData()
+        reloadData(true)
       } else {
         toast.error("Không thể cập nhật sự kiện!")
       }
@@ -571,7 +576,7 @@ export default function CalendarPage() {
       )
       toast.success("Đã tạo sự kiện team mới!")
       setShowEventModal(false)
-      reloadData()
+      reloadData(true)
     }
   }
 
@@ -580,8 +585,69 @@ export default function CalendarPage() {
       deleteTeamEvent(id)
       toast.success("Đã xóa sự kiện team!")
       setShowEventModal(false)
-      reloadData()
+      reloadData(true)
     }
+  }
+
+  const handleAddTask = (dateYMD?: string) => {
+    handleOpenAddEvent(dateYMD)
+  }
+
+  const handleDelete = (id: string) => {
+    handleDeleteEvent(id)
+  }
+
+  // State và hàm xử lý cho Data Grid ReUI
+  const [gridSortField, setGridSortField] = useState<"date" | "title" | "category" | "deadline" | "assignee">("date")
+  const [gridSortOrder, setGridSortOrder] = useState<"asc" | "desc">("asc")
+  const [gridPage, setGridPage] = useState<number>(1)
+  const [gridPageSize, setGridPageSize] = useState<number>(10)
+  const [gridSelectedIds, setGridSelectedIds] = useState<Set<string>>(new Set())
+
+  const handleToggleGridSort = (field: "date" | "title" | "category" | "deadline" | "assignee") => {
+    if (gridSortField === field) {
+      setGridSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setGridSortField(field)
+      setGridSortOrder("asc")
+    }
+  }
+
+  const sortedGridItems = useMemo(() => {
+    const list = [...filteredItems]
+    list.sort((a, b) => {
+      let cmp = 0
+      if (gridSortField === "date") cmp = (a.date || "").localeCompare(b.date || "")
+      else if (gridSortField === "title") cmp = (a.title || "").localeCompare(b.title || "")
+      else if (gridSortField === "category") cmp = (a.categoryLabel || "").localeCompare(b.categoryLabel || "")
+      else if (gridSortField === "deadline") cmp = (a.committedDeadline || "").localeCompare(b.committedDeadline || "")
+      else if (gridSortField === "assignee") cmp = (a.assigneeName || "").localeCompare(b.assigneeName || "")
+      return gridSortOrder === "asc" ? cmp : -cmp
+    })
+    return list
+  }, [filteredItems, gridSortField, gridSortOrder])
+
+  const totalGridPages = Math.max(1, Math.ceil(sortedGridItems.length / gridPageSize))
+  const paginatedGridItems = useMemo(() => {
+    const start = (gridPage - 1) * gridPageSize
+    return sortedGridItems.slice(start, start + gridPageSize)
+  }, [sortedGridItems, gridPage, gridPageSize])
+
+  const handleExportCalendar = () => {
+    const dataToExport = sortedGridItems.map((item) => ({
+      "Tiêu đề": item.title,
+      "Phân loại": item.categoryLabel,
+      "Ngày kế hoạch": item.date,
+      "Hạn cam kết": item.committedDeadline || "—",
+      "Người phụ trách": item.assigneeName || "—",
+      "Thời lượng (h)": item.estimatedHours || 0,
+      "Cảnh báo rủi ro": item.riskReason || (item.riskLevel === "at_risk" ? "Có rủi ro" : item.riskLevel === "overdue" ? "Quá hạn" : "Bình thường"),
+    }))
+    const ws = XLSX.utils.json_to_sheet(dataToExport)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Lich_CongViec")
+    XLSX.writeFile(wb, `Lich_UX_Team_${normalizeDateToYMD(currentDate)}.xlsx`)
+    toast.success("Đã xuất file Excel lịch làm việc thành công!")
   }
 
   // Mở modal thay đổi hạn cam kết (Committed Deadline)
@@ -628,7 +694,7 @@ export default function CalendarPage() {
         `Đã dời hạn cam kết sang ngày ${newDeadlineVal}! Đã tự động lưu vào Activity Log.`
       )
       setDeadlineModalTask(null)
-      reloadData()
+      reloadData(true)
     } else {
       toast.error(res.error || "Lỗi cập nhật deadline")
     }
@@ -1376,90 +1442,313 @@ export default function CalendarPage() {
 
           {/* CHẾ ĐỘ TUẦN / NGÀY / LỊCH TRÌNH (DELIVERY VIEW) */}
           {activeWorkspaceView === "delivery" && viewMode !== "month" && (
-            <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-50/50">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  {viewMode === "week"
-                    ? "Chế độ xem tuần (Week View)"
-                    : viewMode === "day"
-                    ? "Chế độ xem ngày (Day View)"
-                    : "Lịch trình công việc tập trung (Agenda)"}
+            <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 bg-slate-50/50">
+              {/* Toolbar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    {viewMode === "week"
+                      ? "Chế độ xem tuần (Week Data Grid)"
+                      : viewMode === "day"
+                      ? "Chế độ xem ngày (Day Data Grid)"
+                      : "Lịch trình công việc tập trung (Agenda Data Grid)"}
+                  </div>
+                  <Badge variant="secondary" size="sm">
+                    {sortedGridItems.length} mục
+                  </Badge>
                 </div>
-                <Badge variant="secondary" size="sm">
-                  {filteredItems.length} mục
-                </Badge>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  {gridSelectedIds.size > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (window.confirm(`Bạn có chắc muốn xóa ${gridSelectedIds.size} mục đã chọn?`)) {
+                          gridSelectedIds.forEach((id) => deleteTeamEvent(id))
+                          setGridSelectedIds(new Set())
+                          toast.success("Đã xóa các sự kiện đã chọn!")
+                          reloadData(true)
+                        }
+                      }}
+                      className="h-8 rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 gap-1.5 text-xs font-semibold"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Xóa ({gridSelectedIds.size})</span>
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCalendar}
+                    className="h-8 rounded-xl border-slate-200/90 text-slate-700 hover:bg-slate-50 gap-1.5 text-xs font-semibold"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Export</span>
+                  </Button>
+
+                  {canManageEvents && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleAddTask()}
+                      className="h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-xs gap-1.5 text-xs font-semibold"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Thêm mới</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              <motion.div
-                variants={cascadeWaveContainerVariants}
-                initial="hidden"
-                animate="visible"
-                className="space-y-2.5 max-w-4xl"
-              >
-                {filteredItems.map((item, itIdx) => (
-                  <motion.div
-                    key={`other-mode-${item.id || item.title}-${item.date}-${itIdx}`}
-                    variants={cascadeWaveItemVariants}
-                    onClick={() => {
-                      if (item.layer === 1) handleOpenDeadlineModal(item.rawItem as UXRequest)
-                      else setDetailItem(item)
-                    }}
-                    className="p-3.5 rounded-2xl border border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-xs transition-all flex items-center justify-between gap-4 cursor-pointer"
-                    style={{ borderLeftColor: item.color || "#0F172A", borderLeftWidth: "4px" }}
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="font-bold text-sm text-slate-900 flex items-center gap-2 flex-wrap">
-                        <span>{item.title}</span>
-                        {item.riskLevel === "at_risk" && (
-                          <Badge variant="warning" size="xs">
-                            ⚠️ {item.riskReason || "Có rủi ro"}
-                          </Badge>
+              {/* Data Grid Chuẩn ReUI */}
+              <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
+                <div data-slot="data-grid" className="w-full select-none">
+                  <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[340px] pb-1">
+                    <table data-slot="data-grid-table" className="text-slate-900 text-left text-xs sm:text-sm w-full min-w-[900px] border-separate border-spacing-0">
+                      <thead className="bg-slate-50/80 text-[11px] font-medium text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                        <tr className="h-10">
+                          <th className="py-2.5 px-3 text-center w-10 border-b border-slate-200/70">
+                            <input
+                              type="checkbox"
+                              checked={paginatedGridItems.length > 0 && paginatedGridItems.every((it) => gridSelectedIds.has(it.id))}
+                              onChange={(e) => {
+                                if (e.target.checked) setGridSelectedIds(new Set(paginatedGridItems.map((it) => it.id)))
+                                else setGridSelectedIds(new Set())
+                              }}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </th>
+                          <th
+                            className="py-2.5 px-4 text-left font-medium border-b border-slate-200/70 cursor-pointer select-none hover:text-slate-900"
+                            onClick={() => handleToggleGridSort("title")}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Công việc / Sự kiện</span>
+                              <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </th>
+                          <th
+                            className="py-2.5 px-3 text-left font-medium border-b border-slate-200/70 cursor-pointer select-none hover:text-slate-900"
+                            onClick={() => handleToggleGridSort("category")}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Phân loại</span>
+                              <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </th>
+                          <th
+                            className="py-2.5 px-3 text-left font-medium border-b border-slate-200/70 cursor-pointer select-none hover:text-slate-900"
+                            onClick={() => handleToggleGridSort("date")}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Kế hoạch</span>
+                              <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </th>
+                          <th
+                            className="py-2.5 px-3 text-left font-medium border-b border-slate-200/70 cursor-pointer select-none hover:text-slate-900"
+                            onClick={() => handleToggleGridSort("deadline")}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Hạn cam kết</span>
+                              <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </th>
+                          <th
+                            className="py-2.5 px-3 text-left font-medium border-b border-slate-200/70 cursor-pointer select-none hover:text-slate-900"
+                            onClick={() => handleToggleGridSort("assignee")}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Phụ trách</span>
+                              <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 text-left font-medium border-b border-slate-200/70">
+                            <span>Định mức</span>
+                          </th>
+                          <th className="py-2.5 px-3 text-right font-medium w-[120px] min-w-[120px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">
+                            Thao tác
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody data-slot="data-grid-table-body" className="text-slate-700">
+                        {paginatedGridItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="py-12 text-center text-slate-400 text-xs italic">
+                              Không có dữ liệu trong chế độ xem này
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedGridItems.map((item, itIdx) => {
+                            const isChecked = gridSelectedIds.has(item.id)
+                            return (
+                              <tr
+                                key={`grid-row-${item.id || item.title}-${item.date}-${itIdx}`}
+                                className={cn(
+                                  "transition-colors hover:bg-slate-50/80 even:bg-slate-50/40 group",
+                                  isChecked && "bg-blue-50/40",
+                                )}
+                              >
+                                <td className="py-3 px-3 text-center align-middle border-b border-slate-200/70">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const next = new Set(gridSelectedIds)
+                                      if (e.target.checked) next.add(item.id)
+                                      else next.delete(item.id)
+                                      setGridSelectedIds(next)
+                                    }}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                </td>
+                                <td className="py-3 px-4 align-middle border-b border-slate-200/70">
+                                  <div className="space-y-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (item.layer === 1) handleOpenDeadlineModal(item.rawItem as UXRequest)
+                                        else setDetailItem(item)
+                                      }}
+                                      className="font-semibold text-slate-900 text-left hover:text-blue-600 transition-colors line-clamp-1 block text-xs sm:text-sm"
+                                    >
+                                      {item.title}
+                                    </button>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {item.riskLevel === "at_risk" && (
+                                        <Badge variant="warning" size="xs">
+                                          ⚠️ {item.riskReason || "Có rủi ro"}
+                                        </Badge>
+                                      )}
+                                      {item.riskLevel === "overdue" && (
+                                        <Badge variant="destructive" size="xs">
+                                          🔴 Quá hạn
+                                        </Badge>
+                                      )}
+                                      {item.hasConflict && item.riskLevel !== "at_risk" && (
+                                        <Badge variant="destructive" size="xs">
+                                          ⚠️ Xung đột nghỉ
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 align-middle border-b border-slate-200/70">
+                                  <Badge variant="secondary" size="xs">
+                                    {item.categoryLabel}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 px-3 align-middle border-b border-slate-200/70 text-slate-700 font-medium">
+                                  {item.date}
+                                </td>
+                                <td className="py-3 px-3 align-middle border-b border-slate-200/70">
+                                  {item.committedDeadline ? (
+                                    <span className="font-medium text-red-600">{item.committedDeadline}</span>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 align-middle border-b border-slate-200/70">
+                                  {item.assigneeName ? (
+                                    <span className="font-medium text-slate-800">{item.assigneeName}</span>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 align-middle border-b border-slate-200/70">
+                                  {item.estimatedHours ? (
+                                    <span className="font-mono text-purple-700 font-semibold">{item.estimatedHours}h</span>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right align-middle w-[120px] min-w-[120px] sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 group-even:bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {item.layer === 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenDeadlineModal(item.rawItem as UXRequest)}
+                                        className="px-2 py-1 rounded-md text-[11px] font-semibold text-blue-600 hover:bg-blue-50 transition-colors"
+                                      >
+                                        Đổi Deadline
+                                      </button>
+                                    )}
+                                    {item.layer === 4 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDelete(item.id)}
+                                        className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                        title="Xóa sự kiện"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
                         )}
-                        {item.riskLevel === "overdue" && (
-                          <Badge variant="destructive" size="xs">
-                            🔴 Quá hạn
-                          </Badge>
-                        )}
-                        {item.hasConflict && item.riskLevel !== "at_risk" && (
-                          <Badge variant="destructive" size="xs">
-                            ⚠️ Xung đột nghỉ phép
-                          </Badge>
-                        )}
-                        <Badge variant="secondary" size="xs">
-                          {item.categoryLabel}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-slate-500 flex items-center gap-2">
-                        <span>Kế hoạch: <strong className="text-slate-700">{item.date}</strong></span>
-                        {item.committedDeadline && (
-                          <>
-                            <span>•</span>
-                            <span>Hạn cam kết: <strong className="text-red-600">{item.committedDeadline}</strong></span>
-                          </>
-                        )}
-                        {item.assigneeName && (
-                          <>
-                            <span>•</span>
-                            <span>Phụ trách: <strong className="text-slate-700">{item.assigneeName}</strong></span>
-                          </>
-                        )}
-                        {item.estimatedHours && (
-                          <>
-                            <span>•</span>
-                            <span>Định mức: <strong className="text-purple-700 font-mono">{item.estimatedHours}h</strong></span>
-                          </>
-                        )}
-                      </div>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination Footer */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200/80 bg-slate-50/50 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <span>Hiển thị</span>
+                      <select
+                        value={gridPageSize}
+                        onChange={(e) => {
+                          setGridPageSize(Number(e.target.value))
+                          setGridPage(1)
+                        }}
+                        className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
+                      <span>trong số <strong>{sortedGridItems.length}</strong> mục</span>
                     </div>
 
-                    {item.layer === 1 && (
-                      <Button type="button" variant="outline" size="sm" className="h-8 shrink-0">
-                        Đổi Deadline
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setGridPage((p) => Math.max(1, p - 1))}
+                        disabled={gridPage <= 1}
+                        className="h-8 px-2.5 rounded-lg border-slate-200 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                        <span>Trước</span>
                       </Button>
-                    )}
-                  </motion.div>
-                ))}
-              </motion.div>
+
+                      <span className="px-2 font-medium text-slate-700">
+                        Trang {gridPage} / {totalGridPages}
+                      </span>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setGridPage((p) => Math.min(totalGridPages, p + 1))}
+                        disabled={gridPage >= totalGridPages}
+                        className="h-8 px-2.5 rounded-lg border-slate-200 disabled:opacity-40"
+                      >
+                        <span>Sau</span>
+                        <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

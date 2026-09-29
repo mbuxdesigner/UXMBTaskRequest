@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { getUserInitials } from "../../services/otpAuthService"
+import { getUserInitials, DEMO_ACCOUNTS } from "../../services/otpAuthService"
 
 export const AVATAR_COLOR_PALETTES = [
   "bg-blue-100 text-blue-700 border-blue-200",
@@ -28,7 +28,7 @@ export function getAvatarColorClass(name?: string): string {
 }
 
 /**
- * Tra cứu ảnh đại diện Designer / Thành viên từ localStorage hoặc danh bạ fallback
+ * Tra cứu ảnh đại diện Designer / Thành viên từ localStorage, session hoặc danh bạ fallback
  */
 export function getDesignerAvatar(name?: string, email?: string): string {
   if (!name || name === "Chưa phân công" || name === "unassigned" || name === "Chưa gán") return ""
@@ -76,6 +76,42 @@ export function getDesignerAvatar(name?: string, email?: string): string {
         }
       }
     }
+  } catch {}
+
+  // Kiểm tra phiên đăng nhập hiện tại nếu có ảnh avatar đã upload
+  try {
+    const sessRaw =
+      sessionStorage.getItem("ux_portal_session_auth") ||
+      localStorage.getItem("ux_portal_session_auth") ||
+      sessionStorage.getItem("ux_portal_session") ||
+      localStorage.getItem("ux_portal_session")
+    if (sessRaw) {
+      const sess = JSON.parse(sessRaw)
+      const sessName = String(sess.displayName || sess.name || "").trim().normalize("NFC").toLowerCase()
+      const sessEmail = String(sess.teamsEmail || sess.personalEmail || "").trim().toLowerCase()
+      if (
+        (sessName && (sessName === cleanLower || cleanLower.includes(sessName) || sessName.includes(cleanLower))) ||
+        (sessEmail && (sessEmail === cleanLower || cleanLower.includes(sessEmail) || sessEmail.split("@")[0].includes(cleanLower))) ||
+        (emailLower && sessEmail && (sessEmail === emailLower || sessEmail.includes(emailLower)))
+      ) {
+        if (sess.avatarUrl) return sess.avatarUrl
+      }
+    }
+  } catch {}
+
+  // Kiểm tra tài khoản mẫu chuẩn (Demo Accounts)
+  try {
+    const demo = DEMO_ACCOUNTS.find((acc) => {
+      const accName = acc.name.toLowerCase()
+      const accEmail = acc.teamsEmail.toLowerCase()
+      return (
+        accName === cleanLower ||
+        cleanLower.includes(accName) ||
+        accName.includes(cleanLower) ||
+        (emailLower && (accEmail === emailLower || accEmail.includes(emailLower)))
+      )
+    })
+    if (demo?.avatarUrl) return demo.avatarUrl
   } catch {}
 
   // Người dùng chưa up avatar: Trả về "" để giữ nguyên Ava text (Initials) + Màu nền thương hiệu

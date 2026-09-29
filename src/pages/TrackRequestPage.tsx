@@ -682,10 +682,27 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   }
 
   const formatLastUpdated = (req: UXRequest) => {
-    if (req.latest_update?.date) return req.latest_update.date
-    if (req.last_updated) return req.last_updated
-    if (req.submitted_at) return req.submitted_at
-    return "Gần đây"
+    const raw = req.latest_update?.date || req.last_updated || req.submitted_at
+    if (!raw) return "Gần đây"
+    const clean = raw.trim()
+    if (clean.includes(" ")) {
+      const datePart = clean.split(" ")[0]
+      if (datePart.includes("/")) return datePart
+      if (datePart.includes("-")) {
+        const [y, m, d] = datePart.split("-")
+        if (y && m && d && y.length === 4) return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`
+        return datePart
+      }
+    }
+    if (clean.includes("T")) {
+      try {
+        const d = new Date(clean)
+        if (!isNaN(d.getTime())) {
+          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+        }
+      } catch {}
+    }
+    return clean
   }
 
   const activeCount = filteredRequests.filter((r) => r.status === "Đang thực hiện" || r.status === "Đã gửi PO").length

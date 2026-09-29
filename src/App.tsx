@@ -219,7 +219,7 @@ export default function App() {
 
       ia: "Information Architecture — MB UX Request Portal",
 
-      calendar: "Lịch & Planner cá nhân — MB UX Request Portal",
+      calendar: "Planner cá nhân — MB UX Request Portal",
     }
 
     document.title =
@@ -431,12 +431,12 @@ export default function App() {
             }
           />
 
-          {/* Main Content View: Tách biệt IA Canvas & Calendar Planner toàn màn hình và các trang cuộn tiêu chuẩn để loại bỏ hoàn toàn hiện tượng nháy layout */}
+          {/* Main Content View: Tách biệt IA Canvas toàn màn hình và các trang cuộn tiêu chuẩn */}
           <Suspense fallback={<PageLoadingSkeleton page={page} />}>
-            {page === "ia" || page === "calendar" ? (
+            {page === "ia" ? (
               <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] overflow-hidden">
                 <ErrorBoundary>
-                  {page === "ia" ? <IAPage /> : <CalendarPage />}
+                  <IAPage />
                 </ErrorBoundary>
               </div>
             ) : (
@@ -453,6 +453,7 @@ export default function App() {
                         style={{ willChange: "opacity, transform, filter" }}
                         className="w-full flex-1"
                       >
+                        {page === "calendar" && <CalendarPage />}
                         {page === "overview" && <TongQuanPage />}
                         {page === "create" && (
                           <CreateRequestPage onBack={() => handleNavigate("track")} />

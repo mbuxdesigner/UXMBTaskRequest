@@ -636,6 +636,17 @@ select:focus-visible,
   outline-offset: 0 !important;
 }
 
+/* Standardize normal font weight on form controls and placeholders */
+input:not([class*="font-semibold"]):not([class*="font-bold"]),
+textarea:not([class*="font-semibold"]):not([class*="font-bold"]),
+select:not([class*="font-semibold"]):not([class*="font-bold"]) {
+  font-weight: 400;
+}
+input::placeholder,
+textarea::placeholder {
+  font-weight: 400;
+}
+
 /* View Transitions delegated cleanly to Framer Motion page choreography */
 
 /* Keep essential application motion enabled. Only native smooth scrolling is

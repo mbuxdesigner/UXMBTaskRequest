@@ -69,6 +69,7 @@ interface AppHeaderProps {
 const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   overview: { title: "Overview", section: "Dashboards" },
   track: { title: "My task", section: "Dashboards" },
+  calendar: { title: "Planner", section: "Dashboards" },
   create: { title: "Tạo task mới", section: "Workspace" },
   manage: { title: "Quản trị hệ thống", section: "Workspace" },
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },

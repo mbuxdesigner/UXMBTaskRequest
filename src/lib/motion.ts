@@ -184,14 +184,14 @@ export const cascadeWaveContainerVariants: Variants = {
   animate: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.07, // 70ms giữa các card liên tiếp theo Technical Spec (60ms - 80ms)
+      staggerChildren: 0.12, // 120ms giữa các card liên tiếp tạo hiệu ứng thác nước rõ nét
       delayChildren: 0.05,   // T_start = 50ms
     },
   },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.07, // 70ms
+      staggerChildren: 0.12, // 120ms
       delayChildren: 0.05,
     },
   },
@@ -226,7 +226,7 @@ export const cascadeWaveItemVariants: Variants = {
     transition: {
       duration: 0.72, // 720ms theo Technical Spec (650ms - 750ms)
       ease: easings.easeOutExpo, // [0.16, 1, 0.3, 1] hãm phanh mượt mà
-      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.12 : undefined,
     },
   }),
   visible: (custom?: number) => ({
@@ -237,7 +237,7 @@ export const cascadeWaveItemVariants: Variants = {
     transition: {
       duration: 0.72,
       ease: easings.easeOutExpo,
-      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.07 : undefined,
+      delay: typeof custom === "number" ? 0.05 + Math.min(custom, 20) * 0.12 : undefined,
     },
   }),
   exit: {

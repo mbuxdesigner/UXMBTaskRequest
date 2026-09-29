@@ -45,6 +45,42 @@ interface SidebarProps {
   onToggleCollapse?: () => void
 }
 
+export function DynamicCalendarIcon({ className, day }: { className?: string; day?: number }) {
+  const currentDay = day ?? new Date().getDate()
+  const isDoubleDigit = currentDay > 9
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="3.5" width="19" height="18" rx="4" />
+      <line x1="16" y1="1.5" x2="16" y2="4.5" />
+      <line x1="8" y1="1.5" x2="8" y2="4.5" />
+      <text
+        x="12"
+        y="13.0"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="currentColor"
+        stroke="none"
+        fontSize={isDoubleDigit ? "13.2" : "14.8"}
+        fontWeight="800"
+        fontFamily="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        letterSpacing={isDoubleDigit ? "-0.8px" : "-0.2px"}
+      >
+        {currentDay}
+      </text>
+    </svg>
+  )
+}
+
 export default function Sidebar({ 
   currentPage, 
   onNavigate 
@@ -287,7 +323,7 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <Home className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <Home className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.overview.title}</span>
                     </button>
                   )
@@ -327,7 +363,7 @@ export default function Sidebar({
                         />
                       )}
                       <div className="flex items-center gap-3 min-w-0 relative z-10">
-                        <CheckSquare className={`w-4 h-4 shrink-0 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                        <CheckSquare className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                         <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>
                       </div>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0 relative z-10">
@@ -370,8 +406,8 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <Calendar className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">Lịch & Planner</span>
+                      <DynamicCalendarIcon className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <span className="truncate relative z-10">Planner</span>
                     </button>
                   )
                 }
@@ -409,7 +445,7 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <PlusCircle className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <PlusCircle className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.create.title}</span>
                     </button>
                   )
@@ -448,7 +484,7 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <Network className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <Network className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10" title="IA Map">IA Map</span>
                     </button>
                   )
@@ -601,7 +637,7 @@ export default function Sidebar({
                         transition={springs.snappy}
                       />
                     )}
-                    <ShieldCheck className={`w-4 h-4 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                    <ShieldCheck className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                     <span className="truncate relative z-10">Admin setting</span>
                   </button>
                 )
@@ -627,7 +663,7 @@ export default function Sidebar({
                         transition={springs.snappy}
                       />
                     )}
-                    <UserPlus className="w-4 h-4 shrink-0 text-slate-500 relative z-10" />
+                    <UserPlus className="w-5 h-5 shrink-0 text-slate-500 relative z-10" />
                     <span className="truncate relative z-10">Invite Team</span>
                   </button>
                 )

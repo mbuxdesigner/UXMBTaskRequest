@@ -1,6 +1,7 @@
 import React from "react"
 import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
+import { BorderBeam } from "@/components/jolyui/border-beam"
 import { cn } from "@/lib/utils"
 
 /**
@@ -701,4 +702,268 @@ export function TableRowSkeletonPlaceholder({ className }: { className?: string 
     </motion.tr>
   )
 }
+
+// ─── 8. Designer Planner Skeleton (DesignerPlannerPage) ────────────────────────
+export interface DesignerPlannerSkeletonProps {
+  executiveSummaryContent?: React.ReactNode
+}
+
+export function DesignerPlannerWeeklyCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs">
+      <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
+        <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
+        <Skeleton className="h-6 w-24 rounded-md bg-white" />
+      </div>
+      <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5 sm:p-4 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Skeleton className="h-8 w-20 rounded-lg bg-neutral-200/90" />
+          <Skeleton className="h-5 w-24 rounded-md bg-emerald-100" />
+          <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/60" />
+        </div>
+        <div className="flex h-7 w-full items-center justify-around overflow-hidden my-2">
+          {Array.from({ length: 56 }).map((_, i) => (
+            <Skeleton key={i} className="h-full w-[2.5px] sm:w-[3px] shrink-0 rounded-full bg-neutral-200/70" />
+          ))}
+        </div>
+        <div className="flex items-center gap-4 pt-1 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-2 w-2 rounded-full bg-purple-300" />
+            <Skeleton className="h-3 w-16 rounded" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-2 w-2 rounded-full bg-blue-300" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-2 w-2 rounded-full bg-teal-300" />
+            <Skeleton className="h-3 w-18 rounded" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-2 w-2 rounded-full bg-pink-300" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DesignerPlannerCalendarSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 px-4 sm:px-6 py-3.5 bg-white">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-18 rounded-lg" />
+            <Skeleton className="h-8 w-24 rounded-lg" />
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <Skeleton className="h-8 w-8 rounded-lg" />
+            </div>
+            <Skeleton className="h-6 w-36 rounded-md ml-2" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-20 rounded-lg" />
+            <Skeleton className="h-8 w-24 rounded-lg" />
+          </div>
+        </div>
+
+        {/* Calendar Grid + Right Sidebar */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] items-stretch min-w-0">
+          {/* Left Calendar Grid Skeleton */}
+          <div className="min-w-0 overflow-x-auto">
+            <div className="min-w-[760px] w-full">
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b border-slate-200/80 bg-white">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                  <div key={day} className="px-3 py-2.5 flex justify-center">
+                    <Skeleton className="h-3 w-8 rounded" />
+                  </div>
+                ))}
+              </div>
+              {/* 5 Weeks of Cells */}
+              <div className="grid grid-cols-7 auto-rows-[minmax(128px,1fr)]">
+                {Array.from({ length: 35 }).map((_, idx) => (
+                  <div key={idx} className="border-b border-r border-slate-200/80 p-2 flex flex-col justify-between min-h-[128px] bg-white">
+                    <div className="space-y-1.5">
+                      {idx % 3 === 0 && (
+                        <Skeleton className="h-5 w-4/5 rounded-md bg-rose-50 border border-rose-100" />
+                      )}
+                      {idx % 4 === 1 && (
+                        <Skeleton className="h-5 w-3/4 rounded-md bg-blue-50 border border-blue-100" />
+                      )}
+                      {idx % 5 === 2 && (
+                        <Skeleton className="h-5 w-2/3 rounded-md bg-emerald-50 border border-emerald-100" />
+                      )}
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <Skeleton className="h-4 w-4 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar Skeleton */}
+          <div className="border-t xl:border-t-0 xl:border-l border-slate-200/80 bg-slate-50/40 p-4 sm:p-5 space-y-5">
+            {/* Section 1 */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-32 rounded-md" />
+                <Skeleton className="h-3 w-16 rounded" />
+              </div>
+              <Skeleton className="h-16 w-full rounded-xl border border-slate-200/80 bg-white" />
+            </div>
+
+            {/* Section 2 */}
+            <div className="space-y-2.5 pt-3 border-t border-slate-200/80">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Skeleton className="h-2.5 w-16 rounded" />
+                  <Skeleton className="h-4 w-24 rounded-md" />
+                </div>
+                <Skeleton className="h-6 w-18 rounded-md" />
+              </div>
+              <Skeleton className="h-14 w-full rounded-xl border border-slate-200/80 bg-white" />
+            </div>
+
+            {/* Section 3 */}
+            <div className="space-y-2.5 pt-3 border-t border-slate-200/80">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24 rounded-md" />
+                <Skeleton className="h-5 w-8 rounded-full" />
+              </div>
+              <Skeleton className="h-14 w-full rounded-xl border border-slate-200/80 bg-white" />
+              <Skeleton className="h-14 w-full rounded-xl border border-slate-200/80 bg-white" />
+              <Skeleton className="h-14 w-full rounded-xl border border-slate-200/80 bg-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 3: Notifications Skeleton */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs p-5 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="space-y-1">
+            <Skeleton className="h-4 w-44 rounded-md" />
+            <Skeleton className="h-3 w-56 rounded" />
+          </div>
+          <Skeleton className="h-7 w-32 rounded-xl" />
+        </div>
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 py-1">
+              <Skeleton className="h-8 w-8 rounded-xl shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <Skeleton className="h-3.5 w-48 rounded" />
+                <Skeleton className="h-3 w-72 rounded" />
+              </div>
+              <Skeleton className="h-3 w-16 rounded shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DesignerPlannerSkeleton({ executiveSummaryContent }: DesignerPlannerSkeletonProps = {}) {
+  return (
+    <div data-testid="designer-planner-skeleton" className="w-full space-y-5">
+      {/* ROW 1: 2 Bento Cards */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.12fr)_minmax(520px,0.88fr)] gap-5 items-stretch">
+        {/* Card 1: Executive Summary */}
+        <div className="relative rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs overflow-hidden">
+          {executiveSummaryContent ? (
+            <BorderBeam
+              colorFrom="#1057FB"
+              colorTo="#0D9B97"
+              colorVia="#4079fc"
+              duration={4.5}
+              iterations={2}
+              borderRadius="1rem"
+            />
+          ) : null}
+          <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
+            {executiveSummaryContent ? (
+              <>
+                <div className="flex items-center gap-2 min-w-0">
+                  <img src="/ai-default.png" alt="AI" className="h-4 w-4 object-contain shrink-0" />
+                  <h3 className="text-sm font-semibold text-neutral-900 truncate">Executive Summary</h3>
+                  <span className="hidden sm:inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200/60 shrink-0">
+                    UXTeamMB
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="inline-flex items-center gap-1 rounded-md border border-neutral-200/60 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-400 shadow-2xs opacity-60">
+                    <span className="hidden sm:inline">Sao chép</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-md border border-neutral-200/60 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-400 shadow-2xs opacity-60">
+                    <span className="hidden sm:inline">Mở rộng</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4 rounded-full bg-purple-200" />
+                  <Skeleton className="h-4 w-32 rounded-md bg-neutral-200/80" />
+                  <Skeleton className="h-4 w-16 rounded-full bg-neutral-200/60" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Skeleton className="h-6 w-16 rounded-md bg-white" />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5 sm:p-4 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
+            {executiveSummaryContent ? (
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                {executiveSummaryContent}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-40 rounded-md bg-neutral-200/80" />
+                    <Skeleton className="h-5 w-32 rounded-lg bg-neutral-200/90" />
+                    <Skeleton className="h-4 w-24 rounded-md bg-neutral-200/70 hidden sm:block" />
+                  </div>
+                  <Skeleton className="h-4 w-full rounded-md bg-neutral-200/70" />
+                  <Skeleton className="h-4 w-4/5 rounded-md bg-neutral-200/60" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
+                    <Skeleton className="h-5 w-36 rounded-lg bg-neutral-200/90" />
+                  </div>
+                  <Skeleton className="h-4 w-11/12 rounded-md bg-neutral-200/70" />
+                </div>
+                <div className="flex items-center gap-2 pt-1 border-l-2 border-purple-200 pl-2.5">
+                  <Skeleton className="h-3 w-3 rounded-full bg-purple-200 shrink-0" />
+                  <Skeleton className="h-3 w-3/4 rounded-md bg-purple-100" />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Skeleton className="h-3 w-20 rounded-md" />
+                  <Skeleton className="h-6 w-24 rounded-full bg-neutral-100" />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2: Thông tin tuần */}
+        <DesignerPlannerWeeklyCardSkeleton />
+      </div>
+
+      {/* ROW 2: Calendar & Task Sidebar Section */}
+      <DesignerPlannerCalendarSkeleton />
+    </div>
+  )
+}
+
+
 

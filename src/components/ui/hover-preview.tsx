@@ -57,7 +57,7 @@ export function HoverPreview({
 
   return (
     <span
-      className={cn("block", className)}
+      className={cn("inline-flex items-center align-middle", className)}
       onMouseEnter={(event) => {
         updatePosition(event.clientX, event.clientY)
         setVisible(true)

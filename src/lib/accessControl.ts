@@ -348,6 +348,8 @@ export function isTaskAssignedToUser(
 
   const rawCandidates = [
     r.assigned_designer,
+    (r as any).assigned_designer_name,
+    (r as any).assignee,
     r.ux_owner,
     includeDesignOwner ? r.design_owner : undefined,
   ].filter(Boolean) as string[]
@@ -417,6 +419,100 @@ export function isTaskAssignedToUser(
     return false
   })
 }
+
+/**
+ * Kiểm tra xem người dùng hiện tại có phải là người tạo / yêu cầu đề bài này không
+ */
+export function isTaskCreatedByUser(
+  r: UXRequest | null | undefined,
+  session: UserSession | null
+): boolean {
+  if (!r || !session) return false
+  const identities = getUserIdentities(session)
+
+  const rawCreators = [
+    r.requester_email,
+    r.requester_name,
+    (r as any).created_by,
+    (r as any).created_by_email,
+    (r as any).author,
+    (r as any).creator,
+  ].filter(Boolean) as string[]
+
+  if (rawCreators.length === 0) return false
+
+  return rawCreators.some((candidate) => {
+    const low = candidate.toLowerCase().trim()
+    if (!low) return false
+    const norm = normalizeVietnameseString(low)
+
+    // Khớp email chính xác hoặc prefix
+    if (identities.emails.some((em) => low.includes(em))) return true
+    for (const pref of identities.emailPrefixes) {
+      if (low === pref) return true
+      const prefixRegex = new RegExp("(^|[\\s,;:/])" + pref + "($|[\\s,;:/@])", "i")
+      if (prefixRegex.test(low)) return true
+      const normPref = normalizeVietnameseString(pref)
+      if (norm.length >= 3 && normPref.startsWith(norm)) return true
+    }
+
+    // Khớp tên hiển thị hoặc shortName
+    if (identities.names.some((nm) => normalizeVietnameseString(nm) === norm)) return true
+    const words = candidate.split(/\s+/).filter(Boolean)
+    const lastWord = words[words.length - 1]
+    const normLastWord = normalizeVietnameseString(lastWord)
+    if (identities.shortNames.some((sn) => normalizeVietnameseString(sn) === norm || normalizeVietnameseString(sn) === normLastWord)) {
+      return true
+    }
+    for (const nm of identities.names) {
+      const normNm = normalizeVietnameseString(nm)
+      const nmWords = nm.split(/\s+/).filter(Boolean)
+      if (nmWords.length >= 2 && words.length >= 2) {
+        if (normNm.includes(norm) || norm.includes(normNm)) return true
+      }
+    }
+    return false
+  })
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có nằm trong danh sách Viewer của bài toán này hay không
+ */
+export function isUserTaskViewer(
+  r: UXRequest | null | undefined,
+  session: UserSession | null
+): boolean {
+  if (!r || !session) return false
+  const reqId = r.request_id || r.id
+  let combinedViewers = Array.isArray(r.viewers) && r.viewers.length > 0 ? r.viewers : []
+  if (reqId) {
+    const stored = getStoredTaskViewers(reqId)
+    if (stored.length > 0) {
+      combinedViewers = Array.from(new Set([...combinedViewers, ...stored]))
+    }
+  }
+  return isUserInViewers(combinedViewers, session)
+}
+
+/**
+ * Kiểm tra xem bài toán có liên quan trực tiếp đến cá nhân người dùng không:
+ * 1. Được gán: assigned_designer, ux_owner, design_owner, assignee
+ * 2. Họ tạo: requester_email, requester_name, created_by
+ * 3. Làm viewer: task viewers / followers
+ * Áp dụng cho trang cá nhân Designer Planner cho MỌI role kể cả Admin.
+ */
+export function isTaskRelatedToUser(
+  r: UXRequest | null | undefined,
+  session: UserSession | null
+): boolean {
+  if (!r || !session) return false
+  return (
+    isTaskAssignedToUser(r, session, true) ||
+    isTaskCreatedByUser(r, session) ||
+    isUserTaskViewer(r, session)
+  )
+}
+
 
 /**
  * Kiểm tra xem người dùng hiện tại có quyền xem bài toán (UXRequest) này hay không

@@ -20,7 +20,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           type={type}
           className={cn(
-            "flex h-11 w-full rounded-xl border bg-white/90 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-all duration-150 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60",
+            "flex h-11 w-full rounded-xl border bg-white/90 px-3.5 py-2.5 text-sm font-normal normal-case text-slate-800 placeholder:font-normal placeholder:normal-case placeholder:text-slate-400 transition-all duration-150 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60",
             startIcon && "pl-10.5",
             endIcon && "pr-10.5",
             error
