@@ -2646,9 +2646,9 @@ export default function DesignerPlannerPage() {
                       <div className="rounded-xl bg-white p-3.5 text-xs text-slate-500 text-center border border-slate-200/60">
                         Không có task Lv1/Lv2 trong tuần.
                       </div>
-                    ) : priorityThisWeek.map((task) => (
+                    ) : priorityThisWeek.map((task, idx) => (
                       <button
-                        key={task.request_id}
+                        key={task.request_id || `priority-${idx}`}
                         onClick={() => openTask(task.request_id)}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-slate-300 hover:shadow-xs transition-all"
                       >
@@ -2684,9 +2684,9 @@ export default function DesignerPlannerPage() {
                         <CalendarDays className="h-5 w-5 text-slate-300" />
                         <p className="mt-1.5 text-xs font-medium text-slate-500">Chưa có lịch trong ngày này</p>
                       </div>
-                    ) : selectedEntries.map((entry) => (
+                    ) : selectedEntries.map((entry, idx) => (
                       <div
-                        key={entry.id}
+                        key={entry.id || `selected-entry-${entry.date || selectedDate}-${idx}`}
                         className="flex w-full items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-slate-300 hover:shadow-xs"
                       >
                         {entry.attachments?.[0] ? (
@@ -2729,8 +2729,8 @@ export default function DesignerPlannerPage() {
                         <Check className="h-3.5 w-3.5 shrink-0" />
                         Tất cả công việc đã có kế hoạch.
                       </div>
-                    ) : unscheduledTasks.map((task) => (
-                      <div key={task.request_id} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300 transition-colors shadow-2xs">
+                    ) : unscheduledTasks.map((task, idx) => (
+                      <div key={task.request_id || `unscheduled-${idx}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300 transition-colors shadow-2xs">
                         <button onClick={() => openTask(task.request_id)} className="line-clamp-2 w-full text-left text-xs font-semibold leading-5 text-slate-800 hover:text-blue-600 transition-colors">
                           {getRequestDisplayTitle(task)}
                         </button>
@@ -2776,11 +2776,11 @@ export default function DesignerPlannerPage() {
                 <p className="mt-2 text-sm font-semibold text-slate-700">Bạn đã xem hết cập nhật</p>
                 <p className="mt-1 text-xs text-slate-400">Thông báo mới liên quan đến task của bạn sẽ xuất hiện tại đây.</p>
               </div>
-            ) : shownNotifications.slice(0, 10).map((notification) => (
+            ) : shownNotifications.slice(0, 10).map((notification, idx) => (
               <motion.button
                 variants={cascadeWaveItemVariants}
                 custom={3}
-                key={notification.id}
+                key={notification.id || `notif-${idx}`}
                 onClick={() => {
                   markAsRead(notification.id)
                   if (notification.requestId) openTask(notification.requestId)
