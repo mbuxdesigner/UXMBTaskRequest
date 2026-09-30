@@ -13,6 +13,8 @@ import {
   DEMO_ACCOUNTS,
   saveSession,
   SESSION_DURATION_SECONDS,
+  LAST_USER_EMAIL_KEY,
+  SESSION_EXPIRED_REASON_KEY,
 } from "../../services/otpAuthService"
 import {
   ShieldCheck,
@@ -65,7 +67,29 @@ const DOMAIN_SUFFIX = "@mbbank.com.vn"
 export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   // Luồng chuẩn: "email" -> "otp"
   const [step, setStep] = useState<"email" | "otp">("email")
-  const [emailPrefix, setEmailPrefix] = useState("")
+
+  const [expiredNotice] = useState<string | null>(() => {
+    try {
+      const reason = sessionStorage.getItem(SESSION_EXPIRED_REASON_KEY)
+      if (reason) {
+        sessionStorage.removeItem(SESSION_EXPIRED_REASON_KEY)
+        return reason
+      }
+    } catch {}
+    return null
+  })
+
+  const [emailPrefix, setEmailPrefix] = useState(() => {
+    try {
+      const savedEmail = localStorage.getItem(LAST_USER_EMAIL_KEY) || ""
+      if (savedEmail.endsWith(DOMAIN_SUFFIX)) {
+        return savedEmail.replace(DOMAIN_SUFFIX, "")
+      }
+      return savedEmail
+    } catch {
+      return ""
+    }
+  })
   const [email, setEmail] = useState("")
   const [quoteIndex, setQuoteIndex] = useState(0)
 
@@ -339,6 +363,17 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
                 }}
                 className="mt-6 space-y-4"
               >
+                {/* Thông báo phiên hết hạn */}
+                {expiredNotice && (
+                  <div className="flex items-start gap-2.5 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 leading-relaxed shadow-2xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-950">Phiên làm việc đã hết hạn</p>
+                      <p className="text-amber-800 text-[11px] mt-0.5">{expiredNotice}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Global Error Messages */}
                 {errorMsg && (
                   <div className="flex items-center gap-2.5 p-3 bg-rose-50 border border-rose-200/80 rounded-xl text-xs text-rose-700">

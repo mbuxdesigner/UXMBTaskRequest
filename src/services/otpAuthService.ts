@@ -658,10 +658,43 @@ export function saveSession(
     }
     window.dispatchEvent(new Event("auth_session_changed"))
     window.dispatchEvent(new Event("storage"))
+    const effectiveEmail = teamsEmail || personalEmail || ""
+    if (effectiveEmail) {
+      try {
+        localStorage.setItem(LAST_USER_EMAIL_KEY, effectiveEmail)
+      } catch {}
+    }
   } catch (err) {
     console.warn("Could not serialize session:", err)
   }
   return session
+}
+
+export const LAST_USER_EMAIL_KEY = "ux_last_login_email"
+export const SESSION_EXPIRED_REASON_KEY = "ux_session_expired_reason"
+
+/**
+ * Xử lý khi backend trả về session không hợp lệ hoặc đã hết hạn
+ */
+export function handleSessionExpired(reason?: string) {
+  const current = getStoredSession()
+  const email = current?.teamsEmail || current?.personalEmail || ""
+  if (email) {
+    try {
+      localStorage.setItem(LAST_USER_EMAIL_KEY, email)
+    } catch {}
+  }
+  const message = reason || "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng xác thực lại qua Teams."
+  try {
+    sessionStorage.setItem(SESSION_EXPIRED_REASON_KEY, message)
+  } catch {}
+
+  // Đánh dấu cờ phiên hết hạn và phát sự kiện session_expired để hiển thị Popup kèm hiệu ứng blur nền
+  // KHÔNG gọi clearSession() tại đây để tránh đẩy người dùng ra login đột ngột làm giật mình.
+  // Khi người dùng bấm "Đăng nhập lại" trên Popup, clearSession() mới được gọi để chuyển về LoginGate.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("session_expired", { detail: { message } }))
+  }
 }
 
 /**
@@ -1193,20 +1226,12 @@ export async function searchProtectedData(query: string): Promise<{
 
     const result = await res.json()
     if (result.status === "unauthorized") {
-      // Chỉ hủy session nếu thời gian expiresAt thực sự đã trôi qua
-      if (Date.now() > session.expiresAt) {
-        clearSession()
-        return {
-          success: false,
-          data: [],
-          message: result.message || "Phiên đăng nhập đã hết hạn.",
-          unauthorized: true,
-        }
-      }
+      handleSessionExpired(result.message)
       return {
         success: false,
         data: [],
-        message: result.message || "Không thể truy cập dữ liệu trực tiếp.",
+        message: result.message || "Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại qua Teams.",
+        unauthorized: true,
       }
     }
 
@@ -1281,6 +1306,13 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
     })
     if (!res.ok) return currentSession
     const data = await res.json()
+
+    if (data.status === "expired" || data.status === "unauthorized" || data.valid === false) {
+      console.warn("Phiên làm việc đã hết hạn trên Google Sheet:", data.message)
+      handleSessionExpired(data.message || "Phiên đăng nhập đã hết hạn trên hệ thống. Vui lòng xác thực lại qua Teams.")
+      return null
+    }
+
     if (data.status === "success" && data.valid && data.user) {
       const u = data.user
       const newRole: UserRole = data.role || u.role || currentSession.role

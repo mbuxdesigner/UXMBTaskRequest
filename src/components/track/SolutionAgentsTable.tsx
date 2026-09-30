@@ -72,36 +72,104 @@ interface StatusGroupDef {
   match: (r: UXRequest) => boolean
 }
 
+function parseEndOfDayMs(dateStr?: string): number {
+  if (!dateStr || !dateStr.trim()) return 0
+  const trimmed = dateStr.trim()
+
+  // 1. DD/MM/YYYY hoặc DD/MM/YYYY HH:mm:ss
+  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10)
+    const month = parseInt(dmyMatch[2], 10) - 1
+    const year = parseInt(dmyMatch[3], 10)
+    const hasTime = Boolean(dmyMatch[4])
+    const hour = hasTime ? parseInt(dmyMatch[4], 10) : 23
+    const minute = hasTime ? parseInt(dmyMatch[5], 10) : 59
+    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : (hasTime ? 0 : 59)
+    return new Date(year, month, day, hour, minute, second, hasTime ? 0 : 999).getTime()
+  }
+
+  // 2. YYYY-MM-DD hoặc ISO
+  const ymdMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10)
+    const month = parseInt(ymdMatch[2], 10) - 1
+    const day = parseInt(ymdMatch[3], 10)
+    const hasTime = Boolean(ymdMatch[4])
+    const hour = hasTime ? parseInt(ymdMatch[4], 10) : 23
+    const minute = hasTime ? parseInt(ymdMatch[5], 10) : 59
+    const second = ymdMatch[6] ? parseInt(ymdMatch[6], 10) : (hasTime ? 0 : 59)
+    return new Date(year, month, day, hour, minute, second, hasTime ? 0 : 999).getTime()
+  }
+
+  const parsed = new Date(trimmed).getTime()
+  return isNaN(parsed) ? 0 : parsed
+}
+
 export type TaskGroupId = "overload" | "unassigned" | "running" | "pending" | "completed"
 
 export function getTaskGroup(r: UXRequest): TaskGroupId {
   const status = (r.status || "").toLowerCase().trim()
   const progress = typeof r.progress === "number" ? r.progress : 0
+  const phaseLower = (r.current_phase || "").toLowerCase().trim()
 
   // 1. Hoàn thành
   if (status === "hoàn thành" || status === "done" || progress >= 100) {
     return "completed"
   }
 
-  // 2. Pending (Chờ PO duyệt nghiệm thu / phản hồi)
-  if (
+  // 2. Pending (Chờ PO duyệt nghiệm thu / phản hồi / tạm dừng):
+  // User: "chỗ danh sách task pending thì vẫn ở cụm pending"
+  // Ưu tiên cao hơn Overload: các bài toán đang Pending luôn nằm ở cụm Pending
+  const pendingInfo = getRequestPendingClassification(r)
+  const isPendingTask =
+    pendingInfo.isPending ||
     status === "pending" ||
     status === "po pending" ||
     status === "đã gửi po" ||
     status === "chờ duyệt" ||
-    status === "chờ phản hồi"
-  ) {
+    status === "chờ phản hồi" ||
+    Boolean(r.pending_reason && r.pending_reason.trim())
+
+  if (isPendingTask) {
     return "pending"
   }
 
-  // 3. Overload (Bị chặn, Quá tải hoặc trễ hạn deadline)
-  const isBlocked = status === "bị chặn" || status === "blocked" || status.includes("overload") || status.includes("quá tải")
-  const isOverdue = Boolean(r.expected_deadline && new Date(r.expected_deadline).getTime() < Date.now() && status !== "hoàn thành")
-  if (isBlocked || isOverdue) {
+  // 3. Overload (Theo quy tắc mới):
+  // Loại 1: Thuộc trạng thái/khâu "Chờ xác nhận" và ngày hiện tại > ngày release
+  const isChoXacNhan =
+    phaseLower.includes("chờ xác nhận") ||
+    phaseLower.startsWith("1.") ||
+    status === "chờ xác nhận" ||
+    status === "1. chờ xác nhận"
+  const releaseDateStr = r.release_date || r.expected_deadline
+  const releaseMs = parseEndOfDayMs(releaseDateStr)
+  const isReleaseOverdue = isChoXacNhan && releaseMs > 0 && Date.now() > releaseMs
+
+  // Loại 2: Thuộc các trạng thái/khâu "Wireframe" hoặc "UI Design" và ngày hiện tại > ngày designer chọn ngày gửi
+  const isNghiemThuUI = phaseLower.includes("nghiệm thu") || phaseLower.startsWith("6.")
+  const isWireframeOrUI =
+    !isNghiemThuUI &&
+    (
+      phaseLower.includes("wireframe") ||
+      phaseLower.startsWith("3.") ||
+      phaseLower.includes("ui design") ||
+      phaseLower === "ui" ||
+      phaseLower.startsWith("4.") ||
+      status.includes("wireframe") ||
+      status.includes("ui design")
+    )
+  const designerDateStr = r.design_deadline
+  const designerDateMs = parseEndOfDayMs(designerDateStr)
+  const isDesignerDateOverdue = isWireframeOrUI && designerDateMs > 0 && Date.now() > designerDateMs
+
+  const isExplicitBlocked = status === "bị chặn" || status === "blocked" || status.includes("overload") || status.includes("quá tải")
+
+  if (isReleaseOverdue || isDesignerDateOverdue || isExplicitBlocked) {
     return "overload"
   }
 
-  // 4. Chờ phân bổ (Chưa có Designer hoặc khâu tiếp nhận/phân loại)
+  // 4. Chờ phân bổ (Chưa có Designer hoặc khâu tiếp nhận/phân loại/chờ xác nhận)
   const isUnassigned =
     !r.assigned_designer ||
     r.assigned_designer === "Chưa phân công" ||
@@ -116,10 +184,10 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
     status === "chờ xác nhận" ||
     status === "1. chờ xác nhận" ||
     status === "mới tạo" ||
-    r.current_phase === "Phân loại" ||
-    r.current_phase === "Chờ tiếp nhận" ||
-    r.current_phase === "Chờ xác nhận" ||
-    r.current_phase === "1. Chờ xác nhận"
+    phaseLower === "phân loại" ||
+    phaseLower === "chờ tiếp nhận" ||
+    phaseLower === "chờ xác nhận" ||
+    phaseLower === "1. chờ xác nhận"
   if (isUnassigned || isTriage) {
     return "unassigned"
   }
@@ -132,7 +200,7 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "overload",
     label: "Overload",
-    summary: "Các bài toán quá tải, chậm tiến độ hoặc gặp trở ngại cần xử lý gấp",
+    summary: "Gồm bài toán Chờ xác nhận đã quá ngày Release, hoặc bài toán Wireframe/UI Design đã quá hạn gửi của Designer",
     focus: "Cảnh báo",
     order: 1,
     dotClass: "bg-rose-500",

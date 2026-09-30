@@ -1,8 +1,9 @@
-import { useState, lazy, Suspense, useEffect } from "react"
+import { useState, lazy, Suspense, useEffect, useRef } from "react"
 
 import type { Page } from "./components/Sidebar"
 
 import LoginGate from "./components/auth/LoginGate"
+import SessionExpiredModal from "./components/auth/SessionExpiredModal"
 
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -28,7 +29,7 @@ import { Plus, ArrowLeft, LogOut } from "lucide-react"
 
 import BrandLogo from "@/components/common/BrandLogo"
 
-import { Toaster } from "@/components/ui/toast"
+import { Toaster, toast } from "@/components/ui/toast"
 
 import AppHeader from "@/components/common/AppHeader"
 import GlobalAnnouncementBanner from "@/components/common/GlobalAnnouncementBanner"
@@ -37,6 +38,7 @@ import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import {
   getStoredSession,
   logoutTeamsSession,
+  clearSession,
   getUserInitials,
   UserSession,
   syncSessionRoleFromSheet,
@@ -226,10 +228,32 @@ export default function App() {
       pageTitles[page] || "MB UX Request Portal - MB Bank UX Team"
   }, [page])
 
-  // Lắng nghe sự kiện thay đổi phiên (Đăng nhập / Đăng xuất)
+  // Quản lý Modal thông báo hết hạn phiên làm việc kèm hiệu ứng blur UI nền
+  const [sessionExpiredState, setSessionExpiredState] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: "",
+  })
+  const isSessionExpiredModalOpenRef = useRef(false)
 
+  // Cung cấp hàm testSessionExpired trên window để người dùng/tester có thể kích hoạt thử nghiệm nhanh
+  useEffect(() => {
+    ;(window as any).testSessionExpired = (msg?: string) => {
+      window.dispatchEvent(
+        new CustomEvent("session_expired", {
+          detail: {
+            message:
+              msg ||
+              "Phiên làm việc đã hết hạn để đảm bảo an toàn dữ liệu. Vui lòng bấm đăng nhập lại để tiếp tục làm việc.",
+          },
+        })
+      )
+    }
+  }, [])
+
+  // Lắng nghe sự kiện thay đổi phiên (Đăng nhập / Đăng xuất)
   useEffect(() => {
     const handleAuthChange = () => {
+      if (isSessionExpiredModalOpenRef.current) return
       const current = getStoredSession()
       setSession(current)
       if (current?.role && !isPageAllowedForRole(page, current.role)) {
@@ -239,10 +263,32 @@ export default function App() {
       }
     }
 
+    const handleSessionExpired = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message?: string }>
+      const message = customEvent.detail?.message || "Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại qua Teams."
+      isSessionExpiredModalOpenRef.current = true
+      setSessionExpiredState({
+        open: true,
+        message,
+      })
+      // Không văng ra màn hình đăng nhập đột ngột; giữ UI nền và hiển thị popup kèm blur
+    }
+
+    const handleWindowFocus = () => {
+      if (isSessionExpiredModalOpenRef.current) return
+      const current = getStoredSession()
+      if (current && !current.isImpersonating) {
+        syncSessionRoleFromSheet().catch(() => {})
+      }
+    }
+
     window.addEventListener("auth_session_changed", handleAuthChange)
     window.addEventListener("storage", handleAuthChange)
+    window.addEventListener("session_expired", handleSessionExpired)
+    window.addEventListener("focus", handleWindowFocus)
 
     const interval = setInterval(() => {
+      if (isSessionExpiredModalOpenRef.current) return
       const current = getStoredSession()
 
       if (!current && session) {
@@ -253,22 +299,25 @@ export default function App() {
     return () => {
       window.removeEventListener("auth_session_changed", handleAuthChange)
       window.removeEventListener("storage", handleAuthChange)
+      window.removeEventListener("session_expired", handleSessionExpired)
+      window.removeEventListener("focus", handleWindowFocus)
 
       clearInterval(interval)
     }
   }, [session])
 
   // Tự động kiểm tra và đồng bộ vai trò mới nhất từ Google Sheet USERS khi có phiên đăng nhập
-
   useEffect(() => {
-    if (session && !session.isImpersonating) {
+    if (session && !session.isImpersonating && !isSessionExpiredModalOpenRef.current) {
       syncSessionRoleFromSheet().then((synced) => {
-        if (synced && synced.role !== session.role) {
+        if (!synced) {
+          // Do not kick out directly; if expired, handleSessionExpired already handles modal
+        } else if (synced.role !== session.role) {
           setSession(synced)
         }
-      })
+      }).catch(() => {})
     }
-  }, [session?.personalEmail, session?.teamsEmail])
+  }, [session?.sessionToken])
 
   // Lắng nghe và đồng bộ URL Hash (#track, #overview, #create, #admin) và Custom Navigation Event
 
@@ -403,9 +452,21 @@ export default function App() {
     )
   }
 
+  const handleLoginAgain = () => {
+    isSessionExpiredModalOpenRef.current = false
+    setSessionExpiredState({ open: false, message: "" })
+    clearSession()
+    setSession(null)
+  }
+
   return (
     <MotionConfig reducedMotion="never">
-      <div className="min-h-screen bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative">
+      <div
+        className={cn(
+          "min-h-screen bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative transition-all duration-300",
+          sessionExpiredState.open && "filter blur-[2px] pointer-events-none select-none"
+        )}
+      >
         {/* Role Impersonation / Preview Floating Controller */}
         <RolePreviewBanner session={session} />
 
@@ -483,6 +544,16 @@ export default function App() {
         {/* Global Toast Provider */}
         <Toaster />
       </div>
+
+      {/* Modal thông báo hết hạn phiên làm việc kèm hiệu ứng blur UI nền */}
+      <AnimatePresence>
+        {sessionExpiredState.open && (
+          <SessionExpiredModal
+            message={sessionExpiredState.message}
+            onLoginAgain={handleLoginAgain}
+          />
+        )}
+      </AnimatePresence>
     </MotionConfig>
   )
 }

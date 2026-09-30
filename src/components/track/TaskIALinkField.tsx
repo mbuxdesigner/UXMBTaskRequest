@@ -390,7 +390,7 @@ export default function TaskIALinkField({
       className={`flex items-center relative ${className}`}
       onClick={(event) => event.stopPropagation()}
     >
-      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+      <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0">
         <Layers3 className="w-4 h-4 text-slate-400" />
         <span>IA map</span>
       </div>

@@ -230,8 +230,11 @@ export default function ReleaseNewsfeedTimeline({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const activeNodeRef = useRef<HTMLDivElement | null>(null)
 
-  // Ngày tham chiếu hiện tại của hệ thống: 16/09/2026
-  const CURRENT_SYSTEM_DATE = useMemo(() => new Date(2026, 8, 16).getTime(), [])
+  // Ngày tham chiếu hiện tại của hệ thống (lấy ngày hôm nay thực tế, đầu ngày 00:00:00)
+  const CURRENT_SYSTEM_DATE = useMemo(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  }, [])
 
   // Nhóm các bài toán theo ngày release dự kiến
   const timelineGroups = useMemo<TimelineDateGroup[]>(() => {
@@ -463,7 +466,7 @@ export default function ReleaseNewsfeedTimeline({
                     {isCurrent && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.2 rounded-full">
                         <span className="size-1.5 rounded-full bg-blue-600 animate-pulse" />
-                        Sắp release
+                        {group.parsedTimestamp === CURRENT_SYSTEM_DATE ? "Hôm nay release" : "Sắp release"}
                       </span>
                     )}
                   </div>

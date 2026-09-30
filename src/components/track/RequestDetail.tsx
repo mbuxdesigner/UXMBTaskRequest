@@ -139,57 +139,74 @@ export interface ActivityEvent {
   phase?: string
 }
 
-// Helper xác định tên gọi hạn thiết kế theo từng khâu (Wireframe -> Gửi Wireframe, UI Design -> Gửi UI, Ready to dev -> Hand off)
+// Helper xác định tên gọi và phân loại hiển thị thời gian theo 7 khâu:
+// 1. Chờ xác nhận -> Đã gửi [ngày]
+// 2. Define đầu bài -> Start [ngày]
+// 3. Wireframe -> Gửi wireframe [ngày (chọn được)]
+// 4. UI Design -> Gửi UI [ngày (chọn được)]
+// 5. Ready to dev -> Design done (ngày chuyển từ UI design sang ready to dev)
+// 6. Nghiệm thu UI -> Design done (ngày chuyển từ UI design sang ready to dev)
+// 7. Hoàn thành -> Design done (ngày chuyển từ UI design sang ready to dev)
 export const getPhaseDeadlineInfo = (phase?: string) => {
   const rawPhaseKey = (phase || "").trim()
   const pLower = rawPhaseKey.toLowerCase()
-  const isEarlyPhase =
-    pLower.includes("chờ xác nhận") ||
-    pLower.includes("define đầu bài") ||
-    pLower.startsWith("1.") ||
-    pLower.startsWith("2.")
-  const isDonePhase =
-    pLower.includes("nghiệm thu") ||
-    pLower.includes("hoàn thành") ||
-    pLower.startsWith("6.") ||
-    pLower.startsWith("7.")
+
+  const isPendingConfirmation = pLower.includes("chờ xác nhận") || pLower.startsWith("1.")
+  const isDefine = pLower.includes("define đầu bài") || pLower.includes("define") || pLower.startsWith("2.")
+  const isEarlyPhase = isPendingConfirmation || isDefine
+
   const isWireframe = pLower.includes("wireframe") || pLower.startsWith("3.")
+  const isUIDesign =
+    !isEarlyPhase &&
+    !pLower.includes("ready") &&
+    !pLower.includes("nghiệm thu") &&
+    !pLower.includes("hoàn thành") &&
+    (pLower.includes("ui design") || pLower.includes("ui") || pLower.startsWith("4."))
+
   const isReadyToDev = pLower.includes("ready to dev") || pLower.includes("ready") || pLower.startsWith("5.")
-  const isUIDesign = (!isEarlyPhase && !isDonePhase && !isWireframe && !isReadyToDev) || pLower.includes("ui design") || pLower.includes("ui") || pLower.startsWith("4.")
-  const isPickable = isWireframe || isUIDesign || isReadyToDev
+  const isNghiemThu = pLower.includes("nghiệm thu") || pLower.startsWith("6.")
+  const isHoanThanh = pLower.includes("hoàn thành") || pLower.startsWith("7.")
+  const isDonePhase = isReadyToDev || isNghiemThu || isHoanThanh
+
+  // Chỉ khâu Wireframe (3) và UI Design (4) là cho phép Designer bấm chọn hạn hoàn thành (pickable date)
+  const isPickable = isWireframe || isUIDesign
 
   let dateLabel = "Gửi UI"
   let calendarTitle = "Hạn gửi UI Design"
   let actionText = "ngày gửi UI"
 
-  if (isEarlyPhase) {
+  if (isPendingConfirmation) {
+    dateLabel = "Đã gửi"
+    calendarTitle = "Ngày gửi yêu cầu"
+    actionText = "ngày gửi"
+  } else if (isDefine) {
     dateLabel = "Start"
-    calendarTitle = "Ngày tiếp nhận yêu cầu"
+    calendarTitle = "Ngày tiếp nhận đầu bài"
     actionText = "ngày bắt đầu"
   } else if (isWireframe) {
     dateLabel = "Gửi wireframe"
     calendarTitle = "Hạn gửi Wireframe"
     actionText = "ngày gửi Wireframe"
-  } else if (isReadyToDev) {
-    dateLabel = "Hand off"
-    calendarTitle = "Ngày Hand off"
-    actionText = "ngày Hand off"
-  } else if (isDonePhase) {
-    dateLabel = "Design done"
-    calendarTitle = "Ngày hoàn thành thiết kế"
-    actionText = "ngày hoàn thành"
-  } else {
+  } else if (isUIDesign) {
     dateLabel = "Gửi UI"
     calendarTitle = "Hạn gửi UI Design"
     actionText = "ngày gửi UI"
+  } else if (isDonePhase) {
+    dateLabel = "Design done"
+    calendarTitle = "Ngày hoàn thành thiết kế"
+    actionText = "ngày hoàn thành thiết kế"
   }
 
   return {
+    isPendingConfirmation,
+    isDefine,
     isEarlyPhase,
     isDonePhase,
     isWireframe,
     isUIDesign,
     isReadyToDev,
+    isNghiemThu,
+    isHoanThanh,
     isPickable,
     dateLabel,
     calendarTitle,
@@ -1085,7 +1102,7 @@ export default function RequestDetail({
   const [isTrackingTime, setIsTrackingTime] = useState<boolean>(false)
   const [trackedSeconds, setTrackedSeconds] = useState<number>(0)
   const [activeTags, setActiveTags] = useState<string[]>(["Lending", "UX Research"])
-  const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || request?.expected_deadline || "")
+  const [customDeadline, setCustomDeadline] = useState<string>(request?.design_deadline || "")
   const [copiedTaskId, setCopiedTaskId] = useState(false)
 
   const handleCopyTaskId = async (e?: React.MouseEvent) => {
@@ -1111,8 +1128,8 @@ export default function RequestDetail({
   }
 
   useEffect(() => {
-    setCustomDeadline(request?.design_deadline || request?.expected_deadline || "")
-  }, [request?.request_id, request?.design_deadline, request?.expected_deadline])
+    setCustomDeadline(request?.design_deadline || "")
+  }, [request?.request_id, request?.design_deadline])
 
   const getSanitizedDeliverables = useCallback((req?: UXRequest | null) => {
     const d = { ...(req?.deliverables || {}) }
@@ -2257,7 +2274,7 @@ export default function RequestDetail({
     if (request) {
       setTitleValue(getRequestDisplayTitle(request))
       setDescValue(request.description || "")
-      setCustomDeadline(request.design_deadline || request.expected_deadline || "")
+      setCustomDeadline(request.design_deadline || "")
       setCustomDeliverables(request.deliverables || {})
       setPoFormTitle(request.title || "")
       setPoFormProduct(request.product || "")
@@ -2273,6 +2290,42 @@ export default function RequestDetail({
       setPoFormDocLinks(request.doc_links || [])
     }
   }, [request])
+
+  // Ngày chuyển từ trạng thái UI design sang ready to dev (dành cho khâu Ready to dev, Nghiệm thu UI, Hoàn thành)
+  const readyToDevDate = useMemo(() => {
+    if (!request) return ""
+    const allUpdates = request.task_updates || []
+
+    // 1. Tìm bản ghi cập nhật chuyển sang Ready to dev
+    const readyUpdate = allUpdates.find((u) => {
+      const np = (u.new_phase || "").toLowerCase().trim()
+      const nt = (u.note || "").toLowerCase().trim()
+      return (
+        np.includes("ready to dev") ||
+        np.includes("ready") ||
+        nt.includes("sang khâu [ready to dev]") ||
+        nt.includes("sang khâu ready to dev") ||
+        (nt.includes("sang khâu") && nt.includes("ready"))
+      )
+    })
+    if (readyUpdate && readyUpdate.timestamp) {
+      return readyUpdate.timestamp.split(" ")[0].split("T")[0]
+    }
+
+    // 2. Tìm trong request.phases (nếu có completionDate của khâu Ready to dev hoặc UI Design)
+    if (Array.isArray(request.phases)) {
+      const readyPhase = request.phases.find((p) => p.name?.toLowerCase().includes("ready"))
+      if (readyPhase?.completionDate) return readyPhase.completionDate.split(" ")[0].split("T")[0]
+      const uiPhase = request.phases.find((p) => p.name?.toLowerCase().includes("ui design"))
+      if (uiPhase?.completionDate) return uiPhase.completionDate.split(" ")[0].split("T")[0]
+    }
+
+    // 3. Fallback: customDeadline, design_deadline hoặc last_updated
+    if (customDeadline) return customDeadline.split(" ")[0].split("T")[0]
+    if (request.design_deadline) return request.design_deadline.split(" ")[0].split("T")[0]
+    if (request.last_updated) return request.last_updated.split(" ")[0].split("T")[0]
+    return ""
+  }, [request?.task_updates, request?.phases, request?.current_phase, request?.last_updated, request?.design_deadline, customDeadline])
 
   // ReUI Calendar State for Estimate End Date
   const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date())
@@ -2704,6 +2757,22 @@ export default function RequestDetail({
   const handleUpdatePhase = async (newPhase: string, progressVal: number) => {
     if (!request) return
     setOpenDropdown(null)
+
+    const pLower = (newPhase || "").toLowerCase().trim()
+    const isWireframeOrUI =
+      pLower.includes("wireframe") ||
+      pLower.startsWith("3.") ||
+      pLower.includes("ui design") ||
+      pLower.startsWith("4.") ||
+      pLower === "ui"
+
+    // Khi chuyển sang 3. Wireframe hoặc 4. UI Design: designer / design owner phải chọn ngày gửi tiếp theo, hệ thống không tự đặt ngày
+    const nextDesignDeadline = isWireframeOrUI ? "" : (request.design_deadline || "")
+    if (isWireframeOrUI) {
+      request.design_deadline = ""
+      setCustomDeadline("")
+    }
+
     const toastId = toast.loading(`Đang chuyển sang khâu [${newPhase}]...`)
     try {
       const nextStatus = progressVal >= 100
@@ -2715,6 +2784,7 @@ export default function RequestDetail({
         new_progress: progressVal,
         note: `Chuyển tiến độ sang khâu [${newPhase}] - Tự động gỡ trạng thái chờ PO`,
         assigned_designer: request.assigned_designer,
+        design_deadline: nextDesignDeadline,
         sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO khi chuyển khâu UX
         is_comment: false,
       })
@@ -2723,8 +2793,24 @@ export default function RequestDetail({
         request.current_phase = newPhase
         request.status = nextStatus
         request.progress = progressVal
+        if (isWireframeOrUI) {
+          request.design_deadline = ""
+          setCustomDeadline("")
+        }
         setRequirementUpdateTick((c) => c + 1)
         toast.success(`Đã chuyển sang khâu [${newPhase}]!`, "Hệ thống đã tự động gỡ trạng thái chờ PO.", { id: toastId })
+
+        // Nhắc và mở popover chọn ngày gửi tiếp theo cho Designer / Design Owner
+        if (isWireframeOrUI) {
+          setTimeout(() => {
+            setOpenDropdown("date")
+          }, 300)
+          toast.info(
+            `Vui lòng chọn ngày gửi cho khâu [${newPhase}]`,
+            "Designer / Design Owner vui lòng chọn ngày gửi tiếp theo. Hệ thống không tự đặt ngày."
+          )
+        }
+
         dispatchNotification({
           type: "phase_changed",
           title: `Chuyển khâu: ${request.request_id}`,
@@ -2988,12 +3074,26 @@ export default function RequestDetail({
       request.status = nextStatus
       request.progress = nextProgress
 
+      const nextPhaseLower = (nextPhaseName || "").toLowerCase().trim()
+      const nextIsWireframeOrUI =
+        nextPhaseLower.includes("wireframe") ||
+        nextPhaseLower.startsWith("3.") ||
+        nextPhaseLower.includes("ui design") ||
+        nextPhaseLower.startsWith("4.") ||
+        nextPhaseLower === "ui"
+
+      if (nextIsWireframeOrUI) {
+        request.design_deadline = ""
+        setCustomDeadline("")
+      }
+
       const res = await updateTaskProgress(request.request_id, {
         new_phase: nextPhaseName,
         new_status: nextStatus,
         new_progress: nextProgress,
         note,
         assigned_designer: request.assigned_designer,
+        design_deadline: nextIsWireframeOrUI ? "" : (request.design_deadline || ""),
         sent_to_po_at: "", // Gỡ bỏ trạng thái chờ PO
         is_comment: false,
       })
@@ -4122,7 +4222,7 @@ export default function RequestDetail({
                     
                     {/* 1. Status (Chính là Khâu UX: Phân loại, Discovery, User Flow, UI Design, Prototype, Bàn giao) */}
                     <div className="order-1 flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+                      <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Target className="w-4 h-4 text-slate-400" />
                         <span>Status</span>
                       </div>
@@ -4219,7 +4319,7 @@ export default function RequestDetail({
 
                     {/* 2. Assignees (Click to select - Support Multi-Assignees) */}
                     <div className="order-5 flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+                      <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <UserCheck className="w-4 h-4 text-slate-400" />
                         <span>Assignees</span>
                       </div>
@@ -4238,7 +4338,7 @@ export default function RequestDetail({
                             setAssigneeMaxHeight(maxHeight)
                             setOpenDropdown("assignee")
                           }}
-                          className="flex items-center gap-2 min-w-0 p-1 -ml-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer max-w-full"
+                          className="flex items-center gap-2 min-w-0 py-1 px-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer max-w-full"
                         >
                           {isAssigned ? (
                             <div className="flex items-center gap-2 min-w-0 max-w-full">
@@ -4489,10 +4589,11 @@ export default function RequestDetail({
                       </div>
                     </div>
 
-                    {/* 3. Dates – Phase-aware date field (Start / Gửi wireframe / Gửi UI / Hand off / Design done) */}
+                    {/* 3. Dates – Phase-aware date field (Đã gửi / Start / Gửi wireframe / Gửi UI / Design done) */}
                     {(() => {
                       const {
-                        isEarlyPhase,
+                        isPendingConfirmation,
+                        isDefine,
                         isDonePhase,
                         isPickable,
                         dateLabel,
@@ -4500,22 +4601,29 @@ export default function RequestDetail({
                       } = getPhaseDeadlineInfo(request.current_phase)
 
                       return (
-                        <div className="order-3 flex items-center gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
+                        <div className="order-3 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                           {/* Label cột trái: 1 dòng duy nhất, không xuống dòng */}
-                          <div className="flex items-center gap-2 text-slate-500 font-normal shrink-0 whitespace-nowrap" title="Lịch trình thiết kế UX của Designer">
+                          <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0 whitespace-nowrap" title="Lịch trình thiết kế UX của Designer">
                             <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
                             <span className="whitespace-nowrap">{dateLabel}</span>
                           </div>
 
-                          <div className="relative flex items-center gap-2 font-normal text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
-                            {/* === Khâu đầu (Chờ xác nhận / Define): chỉ hiển thị 1 ngày Start === */}
-                            {isEarlyPhase && (
-                              <span className="text-slate-500 font-normal" title="Thời gian Designer bắt đầu nhận task">
+                          <div className="flex-1 relative flex items-center gap-2 font-normal text-slate-700 text-xs whitespace-nowrap flex-nowrap min-w-0">
+                            {/* === 1. Chờ xác nhận: Đã gửi [ngày] === */}
+                            {isPendingConfirmation && (
+                              <span className="text-slate-500 font-normal" title="Thời gian gửi yêu cầu">
                                 {request.submitted_at || "—"}
                               </span>
                             )}
 
-                            {/* === Khâu giữa (Wireframe / UI Design / Ready to dev): datepicker với c-calendar-15 === */}
+                            {/* === 2. Define đầu bài: Start [ngày] === */}
+                            {isDefine && (
+                              <span className="text-slate-500 font-normal" title="Thời gian tiếp nhận và xử lý đầu bài">
+                                {request.submitted_at || "—"}
+                              </span>
+                            )}
+
+                            {/* === 3 & 4. Wireframe / UI Design: datepicker với c-calendar-15 === */}
                             {isPickable && (
                               <>
                                 <button
@@ -4525,7 +4633,7 @@ export default function RequestDetail({
                                   title={`${calendarTitle} (Bấm để chọn ngày)`}
                                 >
                                   <Calendar className="w-3.5 h-3.5 text-[#1057FB] shrink-0" />
-                                  <span>{customDeadline || "Chọn ngày"}</span>
+                                  <span>{customDeadline || "Chọn ngày gửi"}</span>
                                 </button>
 
                                 {/* ReUI c-calendar-15 Popover (Presets + Month Grid) */}
@@ -4549,13 +4657,13 @@ export default function RequestDetail({
                               </>
                             )}
 
-                            {/* === Khâu cuối (Nghiệm thu UI / Hoàn thành): read-only Design done === */}
+                            {/* === 5, 6, 7. Ready to dev / Nghiệm thu UI / Hoàn thành: read-only Design done === */}
                             {isDonePhase && (
                               <span
-                                className={`font-medium tabular-nums ${customDeadline ? "text-emerald-700" : "text-slate-400 italic"}`}
-                                title={customDeadline ? `Ngày Design hoàn thành: ${customDeadline}` : "Chưa có ngày hand off"}
+                                className={`font-medium tabular-nums ${readyToDevDate ? "text-emerald-700" : "text-slate-400 italic"}`}
+                                title={readyToDevDate ? `Ngày Design hoàn thành (chuyển sang Ready to dev): ${readyToDevDate}` : "Chưa có ngày chuyển sang Ready to dev"}
                               >
-                                {customDeadline || "—"}
+                                {readyToDevDate || "—"}
                               </span>
                             )}
                           </div>
@@ -4565,7 +4673,7 @@ export default function RequestDetail({
 
                     {/* 4. Priority (Click to select) */}
                     <div className="order-2 flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+                      <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Flag className="w-4 h-4 text-amber-500" />
                         <span>Priority</span>
                       </div>
@@ -4625,7 +4733,7 @@ export default function RequestDetail({
                     />
 
                     <div className="order-6 flex items-center relative" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-20 sm:w-24 flex items-center gap-2 text-slate-500 font-normal shrink-0">
+                      <div className="w-28 sm:w-32 flex items-center gap-2 text-slate-500 font-normal shrink-0">
                         <Users className="w-4 h-4 text-slate-400" />
                         <span>Viewers</span>
                       </div>

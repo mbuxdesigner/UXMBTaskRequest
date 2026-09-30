@@ -19,7 +19,7 @@ import {
   isTestEnvironment,
   resolveApiUrl,
 } from "../config/googleSheetConfig"
-import { getStoredSession } from "./otpAuthService"
+import { getStoredSession, handleSessionExpired } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
 import { getMemberDisplayName } from "../components/common/UserAvatar"
 import {
@@ -359,7 +359,7 @@ export function normalizeSheetRequest(data: any): UXRequest {
       : ["User Flow", "UI Design"],
     expected_deadline: String(data.release_date || data.expected_deadline || ""),
     release_date: String(data.release_date || data.expected_deadline || ""),
-    design_deadline: String(data.design_deadline || data.ux_deadline || data.expected_deadline || ""),
+    design_deadline: String(data.design_deadline || data.ux_deadline || ""),
     planned_work_date: String(data.planned_work_date || ""),
     deadline_reason: String(data.deadline_reason || "Ra mắt sản phẩm"),
     preferred_squad: cleanSquad,
@@ -976,6 +976,14 @@ export async function logRequestToGoogleSheet(
           requestId: data.request_id || finalRequestId,
         }
       }
+      if (data.status === "unauthorized") {
+        handleSessionExpired(data.message)
+        return {
+          success: false,
+          message: data.message || "Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại qua Teams.",
+          requestId: finalRequestId,
+        }
+      }
     } catch {
       // Fallback
     }
@@ -1061,6 +1069,13 @@ export async function updateTaskProgressInSheet(
     if (targetIdx !== -1) {
       const oldReq = existingList[targetIdx]
       const rawDocLink = (params.doc_links && params.doc_links.length > 0) ? params.doc_links.join("\n") : oldReq.doc_link
+      const isEnteringDesignPhase = (
+        (params.new_phase === "Wireframe" || params.new_phase === "UI Design" ||
+         params.new_phase?.toLowerCase().includes("wireframe") || params.new_phase?.toLowerCase().includes("ui design") ||
+         params.new_phase?.startsWith("3.") || params.new_phase?.startsWith("4.")) &&
+        params.new_phase !== oldReq.current_phase
+      )
+
       updatedReq = {
         ...oldReq,
         current_phase: params.new_phase,
@@ -1080,7 +1095,9 @@ export async function updateTaskProgressInSheet(
         deadline_reason: params.deadline_reason !== undefined ? params.deadline_reason : oldReq.deadline_reason,
         doc_links: params.doc_links !== undefined ? params.doc_links : oldReq.doc_links,
         doc_link: rawDocLink,
-        design_deadline: params.design_deadline !== undefined ? params.design_deadline : (oldReq.design_deadline || oldReq.expected_deadline),
+        design_deadline: params.design_deadline !== undefined
+          ? params.design_deadline
+          : (isEnteringDesignPhase ? "" : (oldReq.design_deadline || "")),
         release_date: params.release_date !== undefined ? params.release_date : (oldReq.release_date || oldReq.expected_deadline),
         planned_work_date: params.planned_work_date !== undefined ? params.planned_work_date : oldReq.planned_work_date,
         expected_deadline: params.release_date || oldReq.expected_deadline,
@@ -1145,6 +1162,13 @@ export async function updateTaskProgressInSheet(
         }
       }
 
+      const isEnteringDesignPhaseSync = (
+        (params.new_phase === "Wireframe" || params.new_phase === "UI Design" ||
+         params.new_phase?.toLowerCase().includes("wireframe") || params.new_phase?.toLowerCase().includes("ui design") ||
+         params.new_phase?.startsWith("3.") || params.new_phase?.startsWith("4.")) &&
+        params.new_phase !== currentReq?.current_phase
+      )
+
       const payload = {
         action: "update_task_progress",
         session_token: session?.sessionToken || "DEMO_TOKEN",
@@ -1176,7 +1200,9 @@ export async function updateTaskProgressInSheet(
         deadline_reason: params.deadline_reason !== undefined ? params.deadline_reason : (currentReq?.deadline_reason || ""),
         doc_links: params.doc_links !== undefined ? params.doc_links : (currentReq?.doc_links || []),
         is_po_edit: params.is_po_edit || false,
-        design_deadline: params.design_deadline !== undefined ? params.design_deadline : (currentReq?.design_deadline || currentReq?.expected_deadline || ""),
+        design_deadline: params.design_deadline !== undefined
+          ? params.design_deadline
+          : (isEnteringDesignPhaseSync ? "" : (currentReq?.design_deadline || "")),
         release_date: params.release_date !== undefined ? params.release_date : (currentReq?.release_date || currentReq?.expected_deadline || ""),
         planned_work_date: params.planned_work_date !== undefined ? params.planned_work_date : (currentReq?.planned_work_date || ""),
         note: params.note || `Cập nhật tiến độ sang khâu [${params.new_phase}]`,
@@ -1244,6 +1270,9 @@ export async function updateTaskProgressInSheet(
           message: "Đã cập nhật tiến độ vào bộ nhớ nội bộ (Chế độ Local Dev)!",
           updatedRequest: updatedReq,
         }
+      }
+      if (data.status === "unauthorized") {
+        handleSessionExpired(data.message)
       }
       return { success: false, message: data.message || "Không thể cập nhật trên Google Sheet." }
     } catch (err: unknown) {
@@ -1715,6 +1744,10 @@ export async function syncTeamMembersToSheet(
       }
     }
 
+    if (data.status === "unauthorized") {
+      handleSessionExpired(data.message)
+    }
+
     return {
       success: false,
       message: data.message || "Không thể đồng bộ nhân sự lên Google Sheet.",
@@ -1885,6 +1918,10 @@ export async function syncMasterDataToSheet(params: {
         success: true,
         message: "Đã đồng bộ Master Data vào bộ nhớ nội bộ (Chế độ Local Dev)!",
       }
+    }
+
+    if (data.status === "unauthorized") {
+      handleSessionExpired(data.message)
     }
 
     return {

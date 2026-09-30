@@ -372,6 +372,13 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       note: `Chuyển sang khâu [${newPhase}] qua Kanban Board.`,
     }
 
+    const isEnteringDesignPhase = (
+      (newPhase === "Wireframe" || newPhase === "UI Design" ||
+       newPhase.toLowerCase().includes("wireframe") || newPhase.toLowerCase().includes("ui design") ||
+       newPhase.startsWith("3.") || newPhase.startsWith("4.")) &&
+      newPhase !== targetReq?.current_phase
+    )
+
     // Optimistic UI update
     setAllRequests((prev) =>
       prev.map((r) => {
@@ -381,6 +388,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             status: newStatus as any,
             progress: newProgress,
             current_phase: newPhase,
+            design_deadline: isEnteringDesignPhase ? "" : r.design_deadline,
             last_updated: formattedDate,
             latest_update: {
               date: formattedDate,
@@ -406,6 +414,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         new_progress: newProgress,
         note: `Chuyển sang khâu [${newPhase}] qua Kanban Board.`,
         assigned_designer: target?.assigned_designer,
+        design_deadline: isEnteringDesignPhase ? "" : target?.design_deadline,
       })
 
       if (res.success) {
@@ -415,6 +424,9 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
           `Yêu cầu ${requestId} đã chuyển sang khâu [${newPhase}].`,
           { id: toastId }
         )
+        if (isEnteringDesignPhase) {
+          toast.info("Vui lòng mở chi tiết bài toán để chọn ngày gửi tiếp theo.")
+        }
         dispatchNotification({
           type: "phase_changed",
           requestId,
