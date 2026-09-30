@@ -1,87 +1,126 @@
 # BÁO CÁO CẬP NHẬT HỆ THỐNG NGÀY 30/09/2026
 
-> **Phạm vi:** Chuẩn hóa ReUI Empty State (Empty State 1 & Empty State 10), Tinh gọn UI khu vực Priority (Icon kéo thả chuẩn mực, bỏ tag Lv1 thừa), Tổng hợp Executive Summary All-in-One 1 lần xuất toàn bộ (loại bỏ 4 tab & nhãn trợ lý đồng hành), Sửa triệt để lỗi đơ luồng tóm tắt AI (Freeze on 4/4 Activity Trace).
+> **Phạm vi:** 
+> 1. Chuẩn hóa ReUI Empty State (Empty State 1 & Empty State 10), Executive Summary All-in-One, Khắc phục triệt để lỗi đơ luồng tóm tắt AI (Freeze on 4/4 Activity Trace).
+> 2. Phân quyền chuyển hướng thông minh sau đăng nhập (Role-Based Auto Redirect).
+> 3. Tinh chỉnh Layout Card 2 "Thông tin tuần" (Font số lớn, giới hạn max-width 560px).
+> 4. Chuẩn hóa ReUI Session Expired Modal (Nút đen sang trọng `bg-slate-900`, IconTile hổ phách).
+> 5. Thiết kế lại toàn bộ 3 khối Sidebar Planner chuẩn ReUI Design System (Viền nhấn màu sắc, phân vùng họp/nhiệm vụ, nút xếp lịch 1-click).
+> 6. Tối ưu View Tuần: Ẩn 2 ngày nghỉ cuối tuần, hiển thị lưới 5 ngày làm việc (Mon-Fri) rộng rãi 20%/ngày, tiêu đề tuần chuẩn xác.
+> 7. Bổ sung hệ thống Tooltip chuẩn ReUI cho View Tuần (Full title không cắt chữ, chi tiết task/meeting, avatar người tham dự).
 > **Nhánh thực hiện:** `develop` -> đẩy `main` (`live`)
-> **Trạng thái:** Hoàn tất triển khai, 100% Tests PASS, Production Build PASS.
+> **Trạng thái:** Hoàn tất 100% triển khai, 20/20 Test Planner PASS, 100% Hệ thống Tests PASS, Production Build PASS.
 
 ---
 
 ## 1. Tóm tắt điều hành
 
-Ngày 30/09/2026 tập trung giải quyết dứt điểm các phản hồi trải nghiệm thực tế từ người dùng, chuẩn hóa thiết kế theo thư viện ReUI, tinh giản tối đa các chi tiết UI thừa và khắc phục triệt để lỗi giao diện bị đơ khi bấm nút làm mới tóm tắt AI:
+Ngày 30/09/2026 đánh dấu bước hoàn thiện toàn diện về mặt thẩm mỹ, trải nghiệm thị giác và quy chuẩn kiến trúc ReUI Design System trên hệ thống quản lý công việc Task UX Team MBBank:
 
-1. **Chuẩn hóa ReUI Empty State chính xác theo thiết kế:**
-   - Áp dụng ReUI `empty-state-10` (`EmptyState10`) cho khu vực danh sách công việc của ngày được chọn khi không có lịch trình.
-   - Áp dụng ReUI `empty-state-1` (`EmptyState1`) cho dropdown thông báo khi không có thông báo mới hoặc đã đọc hết.
-2. **Tinh giản khu vực Priority & Kéo thả (Drag & Drop UI):**
-   - Thay thế toàn bộ cụm chữ "Kéo thả" dài dòng bằng icon kéo (`GripVertical`) tinh tế đặt ngay phía trước tiêu đề task.
-   - Loại bỏ tag "Lv1" thừa bên trong thẻ task khi đã nằm trong khu vực "Ưu tiên tuần này (Priority)" vì các task tại đây đã được sắp xếp chuẩn theo thứ tự level.
-3. **Executive Summary All-in-One (Tổng hợp toàn diện 1 lần):**
-   - Loại bỏ thanh 4 tab phân mảnh (`Tổng quan`, `Ủy quyền`, `Thảo luận`, `Năng suất`) và text "Trợ lý đồng hành" kèm chấm xanh ở phần đầu card theo yêu cầu.
-   - Nâng cấp `executiveIntelligence.ts` với chế độ `angle === "all"`, xuất toàn bộ thông tin quan trọng trong một lần đọc duy nhất: Khối lượng công việc & trọng tâm giai đoạn -> Radar các task đang ủy quyền cho đồng đội -> Điểm nóng thảo luận & trao đổi sôi nổi -> Dung lượng Deep Work -> Lời khuyên hành động cụ thể.
-4. **Khắc phục triệt để lỗi đơ luồng Tóm tắt lại (Fix Trace Freeze 4/4):**
-   - Sửa lỗi state `isAiRefreshing` không được giải phóng sau khi `AgentActivityTrace` hoàn thành bước `4/4`.
-   - Bổ sung cơ chế bảo hiểm tự giải phóng (Safety Timeout Guard 2200ms) chống treo giao diện trong mọi tình huống trình duyệt throttle ngầm.
-   - Rút ngắn chu kỳ quét từ 1.7s xuống 1.2s và bổ sung tính năng click-to-skip nhấp chuột vào trace để hiện ngay nội dung tóm tắt.
+1. **Phân quyền chuyển hướng thông minh (Role-Based Auto-Redirect):**
+   - Tài khoản vai trò **Designer**, **Design Owner**, **Admin** sau khi đăng nhập thành công sẽ tự động điều hướng trực tiếp vào màn hình **Planner** (`#calendar` / `#planner`).
+   - Các vai trò kinh doanh & phát triển khác (**PO**, **Business**, **Developer**, **Requester**...) tự động điều hướng vào màn hình **Tổng quan** (`#overview`).
+2. **Chuẩn hóa Modal Hết hạn Phiên làm việc (Session Expired ReUI Dialog):**
+   - Tái cấu trúc thành ReUI Alert Dialog với `IconTile variant="amber" size="xl"`, thẻ thông tin bảo toàn dữ liệu `ShieldCheck`, và nút bấm màu đen sang trọng (`bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950`).
+3. **Cân đối Layout Card 2 "Thông tin tuần":**
+   - Tăng font số liệu thống kê (Weekly tasks, Go-live tasks) để giao diện cân xứng và giảm khoảng trống thừa.
+   - Khống chế chiều ngang tối đa `max-w-[560px]`, nhường không gian cho thẻ Executive Summary tự fill rộng ra bên cạnh.
+4. **Thiết kế lại 3 khối Thanh bên Planner (Sidebar ReUI Overhaul):**
+   - **Khối 1 (Ưu tiên cao trong tuần):** Header có IconTile `Flag` kèm badge `rose`; khi rỗng hiển thị inline banner `CheckCircle2` nhỏ gọn giải phóng tối đa chiều cao; khi có bài toán sử dụng card ReUI viền nhấn đỏ hồng `border-l-[3.5px] border-l-rose-500`, countdown deadline, squad tag và avatar designer.
+   - **Khối 2 (Task & Lịch hôm nay / Ngày đang chọn):** Phân vùng trực quan thành 2 nhóm con riêng biệt: *Họp & Sự kiện* (viền nhấn tím `border-l-purple-500`, badge giờ tím, link Teams/vị trí) và *Nhiệm vụ & Deadline* (viền vàng `border-l-amber-500` hoặc xanh `border-l-blue-500`, nút đổi ngày). Trạng thái trống sử dụng `EmptyState10` chuẩn ReUI với 2 nút hành động trực tiếp.
+   - **Khối 3 (Chưa xếp lịch / Backlog):** Tay nắm kéo thả `GripVertical`, viền nhấn hổ phách `border-l-[3.5px] border-l-amber-400`, nút tương tác nhanh **"+ Lên lịch"** xuất hiện khi hover cho phép xếp ngay vào ngày đang chọn chỉ với 1 click.
+5. **View Tuần tối ưu 5 ngày làm việc (Workweek Grid 5D):**
+   - Ẩn hoàn toàn Thứ 7 và Chủ Nhật ở chế độ Tuần, lưới chia thành 5 cột (`grid-cols-5`) giúp mỗi ngày làm việc có độ rộng tăng lên 20% (thay vì 14.28%), hiển thị thông tin bài toán thoáng đãng, không bị chật chội.
+   - Tiêu đề header tự động hiển thị chính xác theo 5 ngày làm việc (ví dụ: `28 Thg 9 – 2 Thg 10, 2026`).
+6. **Bổ sung hệ thống Tooltip chuẩn ReUI cho View Tuần:**
+   - Component `PlannerEntryTooltip`: Hiển thị chi tiết toàn diện khi rê chuột vào bất kỳ chip nào bị cắt chữ (`truncate`), bao gồm tên đầy đủ 100%, phân loại việc, thời gian, dự án/squad, avatar designer và trạng thái đồng bộ ngầm.
+   - Bổ sung Tooltip cho tiêu đề cột ngày hiển thị ngày thứ đầy đủ tiếng Việt và số lượng sự kiện trong ngày.
+7. **Executive Summary All-in-One & Sửa lỗi đơ luồng tóm tắt AI:**
+   - Xuất toàn bộ 5 chiều thông tin quan trọng trong một lần đọc duy nhất (loại bỏ 4 tab nhỏ và nhãn trợ lý đồng hành thừa).
+   - Khắc phục triệt để lỗi đơ luồng khi bấm "Tóm tắt lại" bằng cơ chế giải phóng đồng thời `setLoading(false)` + `setIsAiRefreshing(false)` kèm Safety Timeout Guard 2200ms.
 
 ---
 
-## 2. Chi tiết các hạng mục nâng cấp & sửa lỗi
+## 2. Chi tiết các hạng mục triển khai
 
-### 2.1. Chuẩn hóa ReUI Empty State (`src/components/reui/empty-state.tsx`)
-- Tích hợp và chuẩn hóa 2 biến thể component Empty State từ tài liệu ReUI:
-  - **`EmptyState10`**: Sử dụng cho màn hình Planner khi chọn một ngày trống không có task hay sự kiện. Bao gồm hình minh họa hộp lưu trữ ReUI nét mảnh, tiêu đề rõ ràng, mô tả hướng dẫn và nút tạo nhanh sự kiện/xếp việc.
-  - **`EmptyState1`**: Sử dụng cho `NotificationDropdown.tsx` khi danh sách thông báo trống (`empty-state-1` với icon Bell và nút bấm "Tải lại").
-- Loại bỏ hoàn toàn các empty state dựng tay cũ, đảm bảo tính đồng bộ thị giác và độ hoàn thiện cao nhất của hệ thống Design System.
+### 2.1. Phân quyền chuyển hướng Đăng nhập (`src/App.tsx`)
+- Bổ sung logic nhận diện vai trò người dùng ngay khi xác thực thành công trong hook điều hướng:
+  ```typescript
+  const targetHash = ["designer", "design owner", "admin"].includes(userRoleLower)
+    ? "#calendar"
+    : "#overview"
+  ```
+- Hỗ trợ bí danh `#planner` trỏ tương đương `#calendar`, bảo đảm trải nghiệm đăng nhập mượt mà, đúng ngữ cảnh làm việc của từng bộ phận.
 
-### 2.2. Tinh gọn khu vực Priority & Kéo thả Task (`src/pages/DesignerPlannerPage.tsx`)
-- **Trước nâng cấp:** Có nút/chữ "Kéo thả" gây rối mắt, thẻ task bên trong khu vực Priority vẫn gắn cờ "Lv1" dù cả khu vực đã là vùng ưu tiên cao nhất.
-- **Sau nâng cấp:**
-  - Đặt icon `GripVertical` mờ nhẹ ở đầu mỗi task, rê chuột hiển thị rõ nét hơn (`opacity-40 group-hover:opacity-100`), tạo cảm giác kéo thả tự nhiên chuẩn Notion/Linear.
-  - Ẩn badge `Lv1` trong danh sách nhiệm vụ ưu tiên tuần, tự động sắp xếp theo đúng thứ tự level giảm dần một cách thanh thoát.
+### 2.2. Chuẩn hóa ReUI Session Expired Modal (`src/components/auth/SessionExpiredModal.tsx`)
+- Áp dụng cấu trúc ReUI Alert Dialog:
+  - Surface: Nền trắng sạch, bo góc `rounded-2xl`, viền `border-slate-200/90`, đổ bóng sâu `shadow-2xl`.
+  - Icon: ReUI `IconTile` màu hổ phách `variant="amber" size="xl" rounded-2xl` với icon `Clock`.
+  - Callout: Thẻ thông báo an toàn `ShieldCheck` màu ngọc bích bảo đảm dữ liệu luôn được an toàn.
+  - Action Button: Nút bấm màu đen sang trọng chuẩn ReUI (`bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950`), chiều cao `h-10.5` bo góc `rounded-xl` với hiệu ứng xúc giác spring tactile.
 
-### 2.3. Executive Summary All-in-One (`src/lib/executiveIntelligence.ts` & `src/components/planner/ExecutiveSummaryTypewriter.tsx`)
-- Đáp ứng yêu cầu: *"ko có 4 tab tổng quan ủy quyền năng suất Executive Summary, trả ra toàn bộ thông tin trong 1 lần, bỏ text trợ lý đồng hành"*.
-- **Cập nhật giao diện:**
-  - Gỡ bỏ hoàn toàn thanh 4 tab nhỏ ở góc trên thẻ Executive Summary.
-  - Gỡ bỏ chữ "Trợ lý đồng hành" và chấm tròn pulse xanh, chỉ giữ lại icon AI chuẩn MB cùng tiêu đề "Executive Summary" và các nút thao tác nhanh (Làm mới, Sao chép, Mở rộng).
-- **Bộ máy tạo văn bản All-in-One:**
-  - Chế độ `"all"` liên kết mượt mà 5 chiều thông tin thành một bài tường trình duy nhất:
-    1. Chào hỏi theo thời điểm trong ngày & tổng kết nhiệm vụ cá nhân (trực tiếp phụ trách, tiến độ, trọng tâm).
-    2. Radar bài toán ủy quyền: Liệt kê chi tiết các bài toán mình tạo giao cho đồng đội (tiến độ %, deadline, người thực hiện kèm link click nhanh).
-    3. Điểm nóng thảo luận: Liệt kê các bài toán đang có nhiều phản hồi sôi nổi nhất kèm badge `[💬 X trao đổi]`.
-    4. Phân tích Deep Work & Lịch trình: Thời lượng tập trung không bị gián đoạn và cuộc họp trong ngày.
-    5. Đề xuất hành động chiến lược: Lời khuyên chốt chặn công việc cho ngày/tuần.
+### 2.3. Cân đối Layout Card 2 "Thông tin tuần" (`src/pages/DesignerPlannerPage.tsx`, `ReuiSkeletons.tsx`)
+- Tăng font chữ các số liệu thống kê (Số task trong tuần, Số task go-live) từ cỡ chữ nhỏ lên `text-2xl sm:text-3xl font-extrabold tracking-tight`, tạo điểm nhấn thị giác mạnh mẽ.
+- Khống chế chiều ngang tối đa của card `max-w-[560px]`, giúp Card 3 (Executive Summary) tự động co giãn lấp đầy không gian còn lại một cách tự nhiên và cân đối.
 
-### 2.4. Sửa triệt để lỗi đơ luồng Tóm tắt lại (`src/pages/DesignerPlannerPage.tsx` & `src/components/planner/AgentActivityTrace.tsx`)
-- **Nguyên nhân cốt lõi:** Khi người dùng bấm nút "Tóm tắt lại" (`handleRefreshBriefing`), state `isAiRefreshing` được bật thành `true`. Khi `AgentActivityTrace` chạy tới bước 4/4 và gọi callback `onComplete()` -> `handleTraceComplete`, hàm này chỉ gọi `setLoading(false)` mà không gọi `setIsAiRefreshing(false)`. Kết quả là điều kiện `loading || isAiRefreshing` luôn là `true`, khiến giao diện bị đơ cứng ở màn hình `4/4` mãi mãi.
-- **Biện pháp xử lý đa tầng:**
-  - **Tầng 1 (Direct Reset):** `handleTraceComplete` gọi đồng thời `setLoading(false)` và `setIsAiRefreshing(false)` ngay khi animation trace kết thúc.
-  - **Tầng 2 (Safety Guard):** Bổ sung hook `useEffect` dự phòng tự động tắt `isAiRefreshing` sau 2200ms để chống treo trong trường hợp người dùng chuyển tab làm chậm `setTimeout`.
-  - **Tầng 3 (Click-to-skip):** Người dùng có thể nhấp trực tiếp vào thanh trace bất kỳ lúc nào để chuyển ngay sang màn hình nội dung tóm tắt mà không cần đợi chạy hết hiệu ứng.
+### 2.4. Thiết kế lại 3 khối Thanh bên Planner (`src/pages/DesignerPlannerPage.tsx`)
+- **Khối 1 (Ưu tiên cao trong tuần):**
+  - Khi không có bài toán khẩn cấp: Chuyển sang dạng banner inline mảnh (`CheckCircle2` màu ngọc bích + *"Không có bài toán khẩn cấp trong tuần"*), tiết kiệm tối đa chiều cao cho khu vực lịch bên dưới.
+  - Khi có bài toán: Thẻ ReUI viền nhấn đỏ hồng `border-l-[3.5px] border-l-rose-500`, StatusPill, squad tag, countdown deadline màu đỏ nhạt, avatar designer stack.
+- **Khối 2 (Task & Lịch hôm nay / Ngày đang chọn):**
+  - Tiêu đề ngày đi kèm dot trạng thái xanh dương `bg-blue-500` nổi bật và nút bấm ReUI `+ Thêm việc`.
+  - Tách bạch 2 nhóm con trực quan:
+    - *Họp & Sự kiện*: Viền nhấn tím `border-l-[3.5px] border-l-purple-500`, badge thời gian tím, liên kết họp Teams/vị trí và avatar stack người tham gia.
+    - *Nhiệm vụ & Deadline*: Phân biệt viền vàng `border-l-amber-500` (hạn chót) hoặc viền xanh `border-l-blue-500` (task kế hoạch), kèm nút bấm nhanh "Đổi ngày".
+  - Trạng thái trống sử dụng `EmptyState10` của ReUI với 2 nút CTA ("Thêm việc" và "Xếp 1 task").
+- **Khối 3 (Chưa xếp lịch / Backlog):**
+  - Viền nhấn vàng hổ phách `border-l-[3.5px] border-l-amber-400`.
+  - Tay nắm kéo thả `GripVertical` mượt mà (giữ nguyên 100% tính năng drag-and-drop vào lịch).
+  - Nút bấm nhanh **"+ Lên lịch"** xuất hiện khi hover cho phép xếp ngay vào ngày đang chọn chỉ với 1 click.
+
+### 2.5. View Tuần 5 ngày làm việc & Hệ thống Tooltip ReUI (`src/pages/DesignerPlannerPage.tsx`)
+- **Lưới 5 ngày làm việc:**
+  - `weekDays` tính toán từ Thứ 2 đến Thứ 6 (`length: 5`), ẩn Thứ 7 và Chủ Nhật.
+  - Lưới đổi từ `grid-cols-7` sang `grid-cols-5` ở cả Day Header, All-day Section và Timed Section.
+  - Tiêu đề khoảng thời gian hiển thị chính xác theo 5 ngày làm việc (ví dụ: `28 Thg 9 – 2 Thg 10, 2026`).
+- **Hệ thống Tooltip ReUI:**
+  - Xây dựng component `PlannerEntryTooltip` bọc lấy các thẻ sự kiện cả ngày và thẻ cuộc họp theo giờ.
+  - Khi rê chuột vào các thẻ bị cắt chữ (như `"Test t... M"`, `"Tích h... P"`), popup tooltip ReUI kính mờ hiển thị toàn bộ thông tin chi tiết: Tên đầy đủ, phân loại, giờ giấc, dự án/squad và avatar designer.
+  - Gắn Tooltip cho tiêu đề các ngày trong tuần hiển thị thứ ngày đầy đủ tiếng Việt và tổng số sự kiện trong ngày.
 
 ---
 
 ## 3. Kết quả Kiểm thử & Đóng gói (Testing & Build Verification)
 
 ### 3.1. Automated Test Suite
-Toàn bộ các test suite của hệ thống chạy đạt kết quả **100% PASS**:
-- `tests/test-designer-planner.mjs`: PASS (Xác thực scoping, drag & drop, ReUI empty state, trace handover, typewriter streaming, và cơ chế reset `isAiRefreshing`).
-- `tests/test-executive-intelligence.mjs`: PASS (Xác thực bộ máy tổng hợp All-in-One, radar ủy quyền, trích xuất trao đổi chat, tính toán Deep Work).
-- Toàn bộ 17 bộ test hồi quy nền tảng (`npm test`): PASS 100%.
+- `tests/test-designer-planner.mjs`: **20/20 tests PASS**
+  - Quản lý khoảng thời gian tuần và bài toán go-live.
+  - Phân bổ 4 khâu UX.
+  - Briefing tự động theo rule.
+  - Đổi ngày kế hoạch không làm thay đổi hạn cam kết.
+  - Hợp đồng đồng bộ ngầm Google Sheets.
+  - Màu nền ngày nghỉ / ngày lễ.
+  - Form đặt lịch họp / Designer picker / recurrence.
+  - Typewriter cycle cho inspiration quote.
+  - Tooltip vùng phase bar và legend.
+  - Cascade wave animation 120ms.
+  - Scoping bảo mật cá nhân cho từng Designer.
+  - ExecutiveSummaryTypewriter streaming mượt mà.
+  - Reset an toàn `isAiRefreshing` với safety fallback.
+- Toàn bộ test suite hệ thống (`npm test`): **PASS 100%** (Vercel pipeline, Git workflow, Security hardening, IA Map dock, Silky smooth motion, Rate limit, Formula sanitization).
 
 ### 3.2. Production Build Verification
 - Lệnh: `npm run build`
-- Thời gian build: **758ms**
-- Kết quả: **0 lỗi, 0 cảnh báo TypeScript**, bundle tối ưu hóa dung lượng production.
+- Trạng thái: **Thành công (Code 0)**
+- Thời gian build: **1.28s - 1.54s**
+- Kết quả: **0 lỗi TypeScript, 0 lỗi cú pháp**, tối ưu bundle production hoàn chỉnh.
 
 ---
 
 ## 4. Kế hoạch Triển khai (Deployment Plan)
 
-1. **Commit code chuẩn hóa:**
-   `feat(planner): standardize reui empty states, streamline priority drag UI, all-in-one executive summary and fix trace refresh freeze`
-2. **Đẩy mã nguồn lên nhánh `develop`:**
-   Đồng bộ toàn bộ thay đổi lên `origin/develop`.
-3. **Đẩy mã nguồn lên nhánh `main` (`live`):**
-   Hợp nhất và đẩy trực tiếp lên `origin/main` để kích hoạt triển khai production tự động.
+1. **Cam kết mã nguồn (Commit):**
+   `feat(planner): reui sidebar overhaul, 5-day workweek view, rich reui tooltips, session modal black button and role auto-redirect`
+2. **Đồng bộ nhánh `develop`:** Đẩy toàn bộ thay đổi lên `origin/develop`.
+3. **Phát hành nhánh `main` (`live`):** Hợp nhất và đẩy lên `origin/main` kích hoạt CI/CD Vercel tự động triển khai production.
+

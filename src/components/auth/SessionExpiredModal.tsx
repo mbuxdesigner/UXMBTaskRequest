@@ -1,21 +1,34 @@
 import React from "react"
 import { motion } from "framer-motion"
-import { Clock, LogIn, ShieldAlert } from "lucide-react"
+import { Clock, LogIn, ShieldCheck } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { IconTile } from "@/components/reui/icon-tile"
 
 interface SessionExpiredModalProps {
   message?: string
   onLoginAgain: () => void
 }
 
+/**
+ * SessionExpiredModal
+ * Chuẩn hóa 100% theo ReUI Alert Dialog System (https://reui.io/components/alert-dialog):
+ * - Surface: Clean solid white bg, rounded-2xl, border-slate-200/90, shadow-2xl
+ * - Icon: ReUI IconTile variant="amber" size="xl" rounded-2xl
+ * - Typography: ReUI DialogTitle (text-lg font-bold) + DialogDescription (text-sm text-slate-500)
+ * - Information: ReUI subtle callout card with ShieldCheck
+ * - Action: ReUI Button variant="default" (màu đen sang trọng bg-slate-900) h-10.5 rounded-xl with spring tactile micro-interactions
+ * - Backdrop: Clean dark frosted glass blur (bg-slate-950/40 backdrop-blur-sm)
+ */
 export default function SessionExpiredModal({
   message,
   onLoginAgain,
 }: SessionExpiredModalProps) {
   return (
     <div
-      role="dialog"
+      role="alertdialog"
       aria-modal="true"
       aria-labelledby="session-expired-title"
+      aria-describedby="session-expired-desc"
       className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none"
     >
       {/* Backdrop overlay làm mờ toàn bộ giao diện phía sau (frosted glass blur) */}
@@ -23,61 +36,61 @@ export default function SessionExpiredModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.25 }}
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-md"
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm"
       />
 
-      {/* Card Popup trung tâm */}
+      {/* Card Popup trung tâm chuẩn ReUI Alert Dialog */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 14 }}
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 14 }}
-        transition={{ type: "spring", damping: 26, stiffness: 320 }}
-        className="relative z-10 w-full max-w-[420px] rounded-3xl bg-white/95 backdrop-blur-xl border border-white/60 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] p-6 sm:p-8 text-center flex flex-col items-center"
+        exit={{ opacity: 0, scale: 0.96, y: 6 }}
+        transition={{ type: "spring", stiffness: 450, damping: 30 }}
+        className="relative z-10 w-full max-w-[400px] rounded-2xl bg-white border border-slate-200/90 shadow-2xl p-6 text-center flex flex-col items-center"
       >
-        {/* Icon cảnh báo an toàn phiên làm việc */}
-        <div className="relative mb-4">
-          <div className="size-16 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center shadow-xs">
-            <Clock className="size-8 stroke-[2.2]" />
-          </div>
-          <span className="absolute -top-1 -right-1 flex size-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex rounded-full size-4 bg-amber-500 items-center justify-center">
-              <ShieldAlert className="size-2.5 text-white" />
-            </span>
-          </span>
+        {/* ReUI IconTile Visual */}
+        <div className="mb-4">
+          <IconTile size="xl" variant="amber" className="rounded-2xl shadow-xs">
+            <Clock className="size-7 text-amber-600 stroke-[2.2]" />
+          </IconTile>
         </div>
 
-        {/* Tiêu đề */}
+        {/* Tiêu đề chuẩn ReUI DialogTitle */}
         <h3
           id="session-expired-title"
-          className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight"
+          className="text-lg font-bold text-slate-900 tracking-tight"
         >
           Phiên làm việc đã hết hạn
         </h3>
 
-        {/* Nội dung thông báo */}
-        <p className="text-xs sm:text-sm text-slate-600 mt-2.5 leading-relaxed font-normal">
+        {/* Nội dung thông báo chuẩn ReUI DialogDescription */}
+        <p
+          id="session-expired-desc"
+          className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed font-normal"
+        >
           {message ||
-            "Phiên đăng nhập của bạn đã hết hạn để đảm bảo an toàn dữ liệu. Vui lòng bấm đăng nhập lại để tiếp tục làm việc."}
+            "Phiên làm việc đã hết hạn để đảm bảo an toàn dữ liệu. Vui lòng bấm đăng nhập lại để tiếp tục làm việc."}
         </p>
 
-        {/* Gợi ý bảo mật */}
-        <div className="mt-4 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/70 text-[11.5px] text-slate-500 flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
-          <span>Hệ thống bảo toàn dữ liệu bài toán và tiến độ của bạn.</span>
+        {/* Thông tin an toàn dữ liệu chuẩn ReUI Callout */}
+        <div className="mt-4 w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 flex items-center gap-2.5 text-left">
+          <ShieldCheck className="size-4 text-emerald-600 shrink-0" />
+          <span className="leading-snug">Hệ thống bảo toàn dữ liệu bài toán và tiến độ của bạn.</span>
         </div>
 
-        {/* Nút Đăng nhập lại */}
-        <button
-          type="button"
-          onClick={onLoginAgain}
-          autoFocus
-          className="w-full mt-6 py-3 px-5 rounded-2xl bg-[#1057FB] hover:bg-[#0043CE] active:scale-[0.99] text-white font-semibold text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-        >
-          <LogIn className="size-4.5 transition-transform group-hover:translate-x-0.5" />
-          <span>Đăng nhập lại</span>
-        </button>
+        {/* Nút Đăng nhập lại chuẩn ReUI Button (màu đen sang trọng) */}
+        <div className="w-full mt-6">
+          <Button
+            type="button"
+            variant="default"
+            onClick={onLoginAgain}
+            autoFocus
+            className="w-full h-10.5 rounded-xl font-semibold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950"
+          >
+            <LogIn className="size-4" />
+            <span>Đăng nhập lại</span>
+          </Button>
+        </div>
       </motion.div>
     </div>
   )

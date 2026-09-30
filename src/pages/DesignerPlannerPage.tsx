@@ -8,6 +8,7 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -557,6 +558,71 @@ function CalendarEventChip({
   )
 }
 
+function PlannerEntryTooltip({
+  entry,
+  isSyncing,
+  children,
+}: {
+  entry: PlannerEntry
+  isSyncing?: boolean
+  children: React.ReactNode
+}) {
+  const meta = ENTRY_META[entry.type]
+  const avatarInfo = getEntryAvatarInfo(entry)
+  const productOrSquad = entry.request?.product_name || entry.request?.squad_name || entry.location
+
+  return (
+    <Tooltip
+      delayDuration={100}
+      side="top"
+      className="block p-2.5 text-left max-w-[280px] shadow-2xl"
+      content={
+        <div className="space-y-1.5 pointer-events-none select-none">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn("h-2 w-2 rounded-full shrink-0", !entry.accentColor && meta.dot)}
+              style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined}
+            />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+              {entry.label || meta.label}
+            </span>
+            {entry.time && (
+              <span className="text-[10px] text-slate-400 font-mono ml-auto">
+                {entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}
+              </span>
+            )}
+          </div>
+          <p className="text-xs font-semibold text-white leading-snug break-words">
+            {entry.title}
+          </p>
+          {isSyncing && (
+            <div className="flex items-center gap-1 text-[10px] text-blue-300 font-medium">
+              <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+              <span>Đang đồng bộ ngầm...</span>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800 text-[10.5px]">
+            {productOrSquad && (
+              <div className="flex items-center gap-1 text-slate-300 truncate max-w-[140px]" title={productOrSquad}>
+                <MapPin className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                <span className="truncate">{productOrSquad}</span>
+              </div>
+            )}
+            {avatarInfo.name && avatarInfo.name !== "MB" && (
+              <div className="ml-auto flex items-center gap-1 text-slate-300">
+                <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3.5 w-3.5 text-[7px]" />
+                <span className="truncate max-w-[90px]">{avatarInfo.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      }
+    >
+      {children}
+    </Tooltip>
+  )
+}
+
 function normalizeMeetingDesigners(members: unknown[]): ScheduleMeetingDesigner[] {
   const seen = new Set<string>()
   return members.flatMap((raw, index) => {
@@ -753,6 +819,7 @@ export default function DesignerPlannerPage() {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false)
   const [streamsDropdownOpen, setStreamsDropdownOpen] = useState(false)
   const [hoveredPhaseKey, setHoveredPhaseKey] = useState<string | null>(null)
+  const [hoveredCellDate, setHoveredCellDate] = useState<string | null>(null)
   const viewDropdownRef = useRef<HTMLDivElement>(null)
   const streamsDropdownRef = useRef<HTMLDivElement>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
@@ -763,7 +830,7 @@ export default function DesignerPlannerPage() {
     if (!node) return
 
     const updateHeight = () => {
-      if (window.innerWidth >= 1280) {
+      if (window.innerWidth >= 1024) {
         const height = node.getBoundingClientRect().height
         if (height > 0) {
           setCalendarHeight(Math.round(height))
@@ -1187,12 +1254,12 @@ export default function DesignerPlannerPage() {
   const weekDays = useMemo(() => {
     const { start } = getWeekBounds(anchorDate)
     const monday = parseYMD(start)
-    return Array.from({ length: 7 }, (_, index) => {
+    return Array.from({ length: 5 }, (_, index) => {
       const date = new Date(monday)
       date.setDate(monday.getDate() + index)
       const dateYMD = normalizeDateToYMD(date)
-      const enDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-      const viDays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"]
+      const enDays = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      const viDays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6"]
       return {
         date,
         dateYMD,
@@ -1236,6 +1303,18 @@ export default function DesignerPlannerPage() {
   }, [view, anchorDate, entriesByDate])
 
   const selectedEntries = useMemo(() => entriesByDate.get(selectedDate) || [], [entriesByDate, selectedDate])
+  const { meetingEntries, taskEntries } = useMemo(() => {
+    const meetings: PlannerEntry[] = []
+    const tasks: PlannerEntry[] = []
+    selectedEntries.forEach((entry) => {
+      if (entry.type === "meeting" || entry.type === "leave" || Boolean(entry.location)) {
+        meetings.push(entry)
+      } else {
+        tasks.push(entry)
+      }
+    })
+    return { meetingEntries: meetings, taskEntries: tasks }
+  }, [selectedEntries])
   const { start: weekStart, end: weekEnd } = useMemo(() => getWeekBounds(parseYMD(selectedDate)), [selectedDate])
   const priorityThisWeek = useMemo(() => {
     const priorityOrder: Record<string, number> = {
@@ -1861,10 +1940,11 @@ export default function DesignerPlannerPage() {
       return new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(anchorDate)
     }
     if (view === "week") {
-      const { start, end } = getWeekBounds(anchorDate)
+      const { start } = getWeekBounds(anchorDate)
       const startDate = parseYMD(start)
-      const endDate = parseYMD(end)
-      return `${startDate.getDate()} thg ${startDate.getMonth() + 1} – ${endDate.getDate()} thg ${endDate.getMonth() + 1}, ${endDate.getFullYear()}`
+      const fridayDate = new Date(startDate)
+      fridayDate.setDate(startDate.getDate() + 4)
+      return `${startDate.getDate()} thg ${startDate.getMonth() + 1} – ${fridayDate.getDate()} thg ${fridayDate.getMonth() + 1}, ${fridayDate.getFullYear()}`
     }
     // agenda view: 30 days
     const startDate = anchorDate
@@ -1904,8 +1984,8 @@ export default function DesignerPlannerPage() {
         />
 
         <div className="w-full min-w-0 space-y-5">
-          {/* ROW 1: 2 Bento Cards */}
-          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(520px,0.88fr)]">
+          {/* ROW 1: 2 Bento Cards (Executive Summary tự fill rộng ra, Thông tin tuần tối đa 520px) */}
+          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_520px]">
             {/* Card 1: Executive Summary - ĐỨNG IM, KHÔNG ANIMATION XUẤT HIỆN */}
             <div className="relative rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs overflow-hidden">
               <BorderBeam
@@ -2079,7 +2159,7 @@ export default function DesignerPlannerPage() {
               </div>
             </div>
 
-            {/* Card 2: Thông tin tuần */}
+            {/* Card 2: Thông tin tuần (Tối đa 520px, font số lớn cân đối) */}
             <AnimatePresence mode="wait">
               {loading ? (
                 <DesignerPlannerWeeklyCardSkeleton key="card2-skel" />
@@ -2089,7 +2169,7 @@ export default function DesignerPlannerPage() {
                   variants={cascadeWaveItemVariants}
                   custom={0}
                   layout="position"
-                  className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs"
+                  className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] max-w-[560px] w-full min-w-0 shadow-2xs"
                 >
             {/* Header on gray background */}
             <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
@@ -2108,13 +2188,13 @@ export default function DesignerPlannerPage() {
             </div>
 
             {/* Inner White Card */}
-            <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5 sm:p-4 shadow-2xs flex-1 flex flex-col justify-between min-w-0">
+            <div className="rounded-xl border border-neutral-200/70 bg-white p-4 sm:p-5 shadow-2xs flex-1 flex flex-col justify-between min-w-0">
               {/* Main Highlight: Big Metric + Delta / Status + Context */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-[28px] font-bold tracking-tight text-neutral-900 leading-none shrink-0">
+              <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5">
+                <span className="text-[34px] sm:text-[40px] font-extrabold tracking-tight text-neutral-950 leading-none shrink-0">
                   {activeTasks.length > 0 ? `${activeTasks.length} task` : "0 task"}
                 </span>
-                <div className="flex items-center gap-2 text-xs font-semibold">
+                <div className="flex items-center gap-2 text-xs sm:text-[13px] font-semibold">
                   {overloadedTasks.length > 0 ? (
                     <span className="inline-flex items-center gap-1 text-amber-600">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -2142,7 +2222,7 @@ export default function DesignerPlannerPage() {
               <div
                 aria-label={`Phân bố công việc tuần này: ${activeTasks.length} task`}
                 role="img"
-                className="flex h-5 w-full items-center gap-[1.5px] sm:gap-[2px] overflow-hidden my-2.5"
+                className="flex h-6 sm:h-7 w-full items-center gap-[1.5px] sm:gap-[2px] overflow-hidden my-2 sm:my-2.5"
               >
                 {phaseBarGroups.map((group) => {
                   const isDimmed = Boolean(hoveredPhaseKey && hoveredPhaseKey !== group.key)
@@ -2454,10 +2534,10 @@ export default function DesignerPlannerPage() {
             </div>
           </div>
 
-          {/* Calendar Views & Task Sidebar Grid (Tỷ lệ 3:2 - Lịch chiếm 3 phần, Task chiếm 2 phần) */}
-          <div className="grid grid-cols-1 xl:grid-cols-5 items-stretch min-w-0">
-            {/* Left Column: Calendar Views (Chiếm 3 phần = 60%) */}
-            <div ref={calendarRef} className="xl:col-span-3 min-w-0 overflow-x-auto flex flex-col h-full">
+          {/* Calendar Views & Task Sidebar Grid (Tỷ lệ 2:1 - Lịch chiếm 2 phần = 66.67%, Task & Thông tin chiếm 1 phần = 33.33%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 items-stretch min-w-0">
+            {/* Left Column: Calendar Views (Chiếm 2 phần = 66.67%) */}
+            <div ref={calendarRef} className="lg:col-span-2 min-w-0 overflow-x-auto flex flex-col h-full">
               <div className="min-w-[620px] w-full flex-1 flex flex-col">
               {/* VIEW 1: MONTH VIEW */}
               {view === "month" && (
@@ -2479,10 +2559,10 @@ export default function DesignerPlannerPage() {
                     ))}
                   </div>
 
-                  {/* Calendar Cells Grid */}
+                  {/* Calendar Cells Grid (Chiều cao tối thiểu mỗi ô 154px để chứa đủ 4 event) */}
                   <div
                     className="grid grid-cols-7 flex-1"
-                    style={{ gridTemplateRows: `repeat(${calendarWeeks.length}, minmax(120px, 1fr))` }}
+                    style={{ gridTemplateRows: `repeat(${calendarWeeks.length}, minmax(154px, 1fr))` }}
                   >
                     {visibleDays.map((day, dayIdx) => {
                       const isLastRow = dayIdx >= (calendarWeeks.length - 1) * 7
@@ -2494,15 +2574,24 @@ export default function DesignerPlannerPage() {
                       const isRegularDayOff = !workSchedule.workweek.includes(dayKey)
                       const isPublicDayOff = Boolean(holiday && !isCompensatoryWorkday)
                       const isNonWorkingDay = isPublicDayOff || (isRegularDayOff && !isCompensatoryWorkday)
-                      const maxVisible = 3
-                      const shown = dayEntries.slice(0, maxVisible)
+                      
+                      // Quy tắc: Ô đủ chỗ cho 4 event; ngày có nhiều hơn 3 event thì hiển thị 3 event gần nhất + "+N event"
+                      const hasOverflow = dayEntries.length > 3
+                      const shown = hasOverflow ? dayEntries.slice(0, 3) : dayEntries.slice(0, 4)
+                      const overflowCount = dayEntries.length - 3
                       const isSelected = selectedDate === day.dateYMD
+                      const isTopHalf = dayIdx < 14
+                      const isRightSide = day.dayOfWeekIndex >= 4
+                      const viDayNames = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
+                      const dayNameVi = viDayNames[day.dayOfWeekIndex] || ""
 
                       return (
                         <div
                           key={day.dateYMD}
                           onClick={() => setSelectedDate(day.dateYMD)}
                           onDoubleClick={() => openAddEvent(day.dateYMD)}
+                          onMouseEnter={() => setHoveredCellDate(day.dateYMD)}
+                          onMouseLeave={() => setHoveredCellDate(null)}
                           onDragOver={(e) => {
                             e.preventDefault()
                             e.dataTransfer.dropEffect = "move"
@@ -2533,9 +2622,9 @@ export default function DesignerPlannerPage() {
                             }
                           }}
                           className={cn(
-                            "group relative min-w-0 p-2 text-left align-top transition-colors bg-white flex flex-col justify-between cursor-pointer hover:bg-slate-50/40",
+                            "group relative min-w-0 p-2 text-left align-top transition-colors bg-white flex flex-col justify-start cursor-pointer hover:bg-slate-50/60",
                             !isLastRow && "border-b border-slate-200/80",
-                            !isLastCol ? "border-r border-slate-200/80" : "xl:border-r-0 border-r border-slate-200/80",
+                            !isLastCol ? "border-r border-slate-200/80" : "lg:border-r-0 border-r border-slate-200/80",
                             !day.isCurrentMonth && "bg-slate-50/50 text-slate-300",
                             isNonWorkingDay && "bg-slate-100/75 hover:bg-slate-100",
                             isCompensatoryWorkday && "bg-emerald-50/35",
@@ -2563,7 +2652,46 @@ export default function DesignerPlannerPage() {
                             </div>
                           )}
 
-                          {/* Top: Event Pills */}
+                          {/* 1. Header ô ngày: Số ngày ở trên bên trái, Nút thêm lịch bên phải khi hover */}
+                          <div className="relative z-10 flex items-center justify-between mb-1.5 shrink-0">
+                            <div className="flex items-center gap-1.5">
+                              {day.isToday ? (
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white shadow-xs">
+                                  {day.dayNumber}
+                                </span>
+                              ) : isSelected ? (
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white shadow-xs">
+                                  {day.dayNumber}
+                                </span>
+                              ) : (
+                                <span className={cn(
+                                  "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold select-none",
+                                  day.isCurrentMonth ? "text-slate-800" : "text-slate-300 font-normal"
+                                )}>
+                                  {day.dayNumber}
+                                </span>
+                              )}
+                              {day.isFirstOfMonth && (
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {day.monthShort || `Thg ${day.date.getMonth() + 1}`}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openAddEvent(day.dateYMD)
+                              }}
+                              className="h-5 w-5 rounded text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-700 flex items-center justify-center cursor-pointer"
+                              title="Thêm lịch vào ngày này"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          {/* 2. Danh sách sự kiện: tối đa 4 hàng (3 sự kiện gần nhất + 1 hàng "+N event") */}
                           <div className="relative z-10 space-y-1 w-full min-w-0">
                             {shown.map((entry, idx) => {
                               const avatarInfo = getEntryAvatarInfo(entry)
@@ -2599,7 +2727,7 @@ export default function DesignerPlannerPage() {
                                   style={entry.accentColor ? { borderColor: colorWithAlpha(entry.accentColor, "40"), backgroundColor: colorWithAlpha(entry.accentColor, "12"), color: entry.accentColor } : undefined}
                                   title={`${entry.label}: ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
                                 >
-                                  <div className="flex min-w-0 items-center gap-1.5">
+                                  <div className="flex min-w-0 items-center gap-1.5 flex-1">
                                     {isSyncing ? (
                                       <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
                                     ) : entry.attachments?.[0] ? (
@@ -2607,65 +2735,108 @@ export default function DesignerPlannerPage() {
                                     ) : (
                                       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
                                     )}
-                                    <span className={cn("truncate", isSyncing && "text-blue-800 font-semibold")}>
-                                      {entry.time && `${entry.time} · `}{entry.title}
+                                    {entry.time && entry.time !== "Cả ngày" && (
+                                      <span className="text-[10px] font-semibold text-slate-500 shrink-0 font-mono">
+                                        {entry.time.slice(0, 5)}
+                                      </span>
+                                    )}
+                                    <span className={cn("truncate flex-1 min-w-0", isSyncing && "text-blue-800 font-semibold")}>
+                                      {entry.title}
                                     </span>
                                   </div>
-                                  <UserAvatar
-                                    name={avatarInfo.name}
-                                    avatarUrl={avatarInfo.avatarUrl}
-                                    size="xs"
-                                    className="h-3.5 w-3.5 text-[7px] shrink-0 rounded-full ring-1 ring-black/5"
-                                  />
+                                  {avatarInfo.name && (
+                                    <UserAvatar
+                                      name={avatarInfo.name}
+                                      avatarUrl={avatarInfo.avatarUrl}
+                                      size="xs"
+                                      className="h-3.5 w-3.5 text-[7px] shrink-0 rounded-full ring-1 ring-black/5"
+                                    />
+                                  )}
                                 </div>
                               )
                             })}
-                          </div>
 
-                          {/* Bottom: Overflow on Left, Day Number on Right (Roster HR style) */}
-                          <div className="relative z-10 mt-2 flex items-center justify-between pt-1">
-                            {dayEntries.length > maxVisible ? (
+                            {/* +N event khi vượt quá 3 sự kiện */}
+                            {hasOverflow && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   setSelectedDate(day.dateYMD)
                                 }}
-                                className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+                                className="w-full text-left text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 px-2 py-0.5 rounded transition-colors flex items-center justify-between cursor-pointer"
+                                title="Bấm để xem danh sách chi tiết ngày này"
                               >
-                                +{dayEntries.length - maxVisible} more
+                                <span>+{overflowCount} event</span>
+                                <span className="text-[10px] text-slate-400 font-normal">Xem thêm</span>
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openAddEvent(day.dateYMD)
-                                }}
-                                className="h-5 w-5 rounded text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center"
-                                title="Thêm lịch vào ngày này"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-
-                            {day.isToday ? (
-                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white shadow-xs">
-                                {day.dayNumber}
-                              </span>
-                            ) : isSelected ? (
-                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white shadow-xs">
-                                {day.dayNumber}
-                              </span>
-                            ) : (
-                              <span className={cn(
-                                "text-xs font-semibold select-none pr-1",
-                                day.isCurrentMonth ? "text-slate-700" : "text-slate-300 font-normal"
-                              )}>
-                                {day.dayNumber}
-                              </span>
                             )}
                           </div>
+
+                          {/* 3. Tooltip hiển thị đầy đủ danh sách sự kiện khi di chuột vào ô */}
+                          <AnimatePresence>
+                            {hoveredCellDate === day.dateYMD && dayEntries.length > 0 && !draggedTask && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: isTopHalf ? -4 : 4 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.12 }}
+                                className={cn(
+                                  "absolute z-50 w-72 max-w-[90vw] p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md text-white shadow-2xl border border-slate-700/80 pointer-events-none select-none",
+                                  isTopHalf ? "top-full mt-1.5" : "bottom-full mb-1.5",
+                                  isRightSide ? "right-0" : "left-0"
+                                )}
+                              >
+                                {/* Header Tooltip */}
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                                  <div>
+                                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                      <span>{dayNameVi || formatShortDate(day.dateYMD)}</span>
+                                      {day.isToday && (
+                                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-500 text-white">
+                                          Hôm nay
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">{formatShortDate(day.dateYMD)}</div>
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                                    {dayEntries.length} sự kiện
+                                  </span>
+                                </div>
+
+                                {/* Danh sách toàn bộ event trong ngày (không bị cắt chữ) */}
+                                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                                  {dayEntries.map((entry, eIdx) => {
+                                    const meta = ENTRY_META[entry.type]
+                                    const avatarInfo = getEntryAvatarInfo(entry)
+                                    return (
+                                      <div
+                                        key={entry.id || `tip-${eIdx}`}
+                                        className="flex items-start gap-2 p-1.5 rounded-lg bg-slate-800/70 border border-slate-700/50 text-[11px]"
+                                      >
+                                        <span className={cn("h-2 w-2 rounded-full shrink-0 mt-1", meta.dot)} />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-semibold text-slate-100 leading-snug break-words">
+                                            {entry.title}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                                            <span className="text-slate-300 font-medium">{meta.label}</span>
+                                            {entry.time && <span>• {entry.time}</span>}
+                                            {avatarInfo.name && (
+                                              <span className="text-slate-400 ml-auto truncate max-w-[90px]">
+                                                {avatarInfo.name}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       )
                     })}
@@ -2679,29 +2850,43 @@ export default function DesignerPlannerPage() {
                   {/* Day Header Row */}
                   <div className="flex border-b border-slate-200/80 bg-white">
                     <div className="w-14 sm:w-16 shrink-0 border-r border-slate-200/80" />
-                    <div className="grid grid-cols-7 flex-1">
+                    <div className="grid grid-cols-5 flex-1">
                       {weekDays.map((day) => {
                         const isToday = day.dateYMD === todayYMD
                         const isSelected = selectedDate === day.dateYMD
+                        const dayEntries = entriesByDate.get(day.dateYMD) || []
                         return (
-                          <div
+                          <Tooltip
                             key={day.dateYMD}
-                            onClick={() => setSelectedDate(day.dateYMD)}
-                            className={cn(
-                              "py-2.5 px-2 text-center border-r border-slate-200/80 cursor-pointer transition-colors hover:bg-slate-50/80",
-                              isSelected && "bg-blue-50/40"
-                            )}
+                            delayDuration={150}
+                            side="bottom"
+                            content={
+                              <div className="text-center py-0.5">
+                                <div className="font-semibold text-white text-xs">{day.dayNameVi}, {formatShortDate(day.dateYMD)}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  {dayEntries.length > 0 ? `${dayEntries.length} sự kiện trong ngày` : "Chưa có sự kiện"}
+                                </div>
+                              </div>
+                            }
                           >
-                            <span className="text-xs font-medium text-slate-500">{day.dayNameEn}</span>
-                            <div className="mt-0.5 flex items-center justify-center">
-                              <span className={cn(
-                                "text-xs font-semibold h-6 w-6 flex items-center justify-center rounded-full transition-colors",
-                                isToday ? "bg-slate-950 text-white shadow-xs" : isSelected ? "bg-blue-600 text-white" : "text-slate-800"
-                              )}>
-                                {day.dayNumber}
-                              </span>
+                            <div
+                              onClick={() => setSelectedDate(day.dateYMD)}
+                              className={cn(
+                                "py-2.5 px-2 text-center border-r border-slate-200/80 cursor-pointer transition-colors hover:bg-slate-50/80",
+                                isSelected && "bg-blue-50/40"
+                              )}
+                            >
+                              <span className="text-xs font-medium text-slate-500">{day.dayNameEn}</span>
+                              <div className="mt-0.5 flex items-center justify-center">
+                                <span className={cn(
+                                  "text-xs font-semibold h-6 w-6 flex items-center justify-center rounded-full transition-colors",
+                                  isToday ? "bg-slate-950 text-white shadow-xs" : isSelected ? "bg-blue-600 text-white" : "text-slate-800"
+                                )}>
+                                  {day.dayNumber}
+                                </span>
+                              </div>
                             </div>
-                          </div>
+                          </Tooltip>
                         )
                       })}
                     </div>
@@ -2712,7 +2897,7 @@ export default function DesignerPlannerPage() {
                     <div className="w-14 sm:w-16 shrink-0 border-r border-slate-200/80 px-2 py-2 text-right text-[11px] font-medium text-slate-400 select-none flex items-center justify-end">
                       All day
                     </div>
-                    <div className="grid grid-cols-7 flex-1 divide-x divide-slate-200/80 p-1">
+                    <div className="grid grid-cols-5 flex-1 divide-x divide-slate-200/80 p-1">
                       {weekDays.map((day) => {
                         const dayEntries = entriesByDate.get(day.dateYMD) || []
                         const allDayList = dayEntries.filter((e) => e.type === "leave" || e.type === "deadline" || !e.time || e.time.toLowerCase().includes("cả ngày"))
@@ -2758,43 +2943,43 @@ export default function DesignerPlannerPage() {
                               const avatarInfo = getEntryAvatarInfo(entry)
                               const isSyncing = Boolean(entry.request && pendingSyncTaskIds.has(entry.request.request_id))
                               return (
-                                <div
-                                  key={entry.id || `allday-${entry.date}-${idx}`}
-                                  draggable={Boolean(entry.request)}
-                                  onDragStart={(e) => {
-                                    if (entry.request) {
-                                      e.stopPropagation()
-                                      e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
-                                      e.dataTransfer.effectAllowed = "move"
-                                      setDraggedTask(entry.request)
-                                    }
-                                  }}
-                                  onDragEnd={() => {
-                                    setDraggedTask(null)
-                                    setDragOverDate(null)
-                                  }}
-                                  onClick={() => {
-                                    if (entry.request) openTask(entry.request.request_id)
-                                    else setDetailEntry(entry)
-                                  }}
-                                  className={cn(
-                                    "flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium shadow-2xs hover:shadow-xs transition-all cursor-pointer",
-                                    ENTRY_META[entry.type].color,
-                                    entry.request && "cursor-grab active:cursor-grabbing",
-                                    isSyncing && "border-blue-400 bg-blue-50/70"
-                                  )}
-                                  title={`${entry.label}: ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
-                                >
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    {isSyncing ? (
-                                      <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
-                                    ) : (
-                                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} />
+                                <PlannerEntryTooltip key={entry.id || `allday-${entry.date}-${idx}`} entry={entry} isSyncing={isSyncing}>
+                                  <div
+                                    draggable={Boolean(entry.request)}
+                                    onDragStart={(e) => {
+                                      if (entry.request) {
+                                        e.stopPropagation()
+                                        e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
+                                        e.dataTransfer.effectAllowed = "move"
+                                        setDraggedTask(entry.request)
+                                      }
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggedTask(null)
+                                      setDragOverDate(null)
+                                    }}
+                                    onClick={() => {
+                                      if (entry.request) openTask(entry.request.request_id)
+                                      else setDetailEntry(entry)
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium shadow-2xs hover:shadow-xs transition-all cursor-pointer w-full",
+                                      ENTRY_META[entry.type].color,
+                                      entry.request && "cursor-grab active:cursor-grabbing",
+                                      isSyncing && "border-blue-400 bg-blue-50/70"
                                     )}
-                                    <span className={cn("truncate", isSyncing && "text-blue-800 font-semibold")}>{entry.title}</span>
+                                  >
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      {isSyncing ? (
+                                        <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
+                                      ) : (
+                                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} />
+                                      )}
+                                      <span className={cn("truncate", isSyncing && "text-blue-800 font-semibold")}>{entry.title}</span>
+                                    </div>
+                                    <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3 w-3 text-[6px] shrink-0 rounded-full" />
                                   </div>
-                                  <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3 w-3 text-[6px] shrink-0 rounded-full" />
-                                </div>
+                                </PlannerEntryTooltip>
                               )
                             })}
                           </div>
@@ -2814,8 +2999,8 @@ export default function DesignerPlannerPage() {
                       ))}
                     </div>
 
-                    {/* 7 Columns */}
-                    <div className="grid grid-cols-7 flex-1 relative divide-x divide-slate-200/80 bg-white">
+                    {/* 5 Workday Columns */}
+                    <div className="grid grid-cols-5 flex-1 relative divide-x divide-slate-200/80 bg-white">
                       {/* Background horizontal hour lines */}
                       <div className="absolute inset-0 pointer-events-none">
                         {WEEK_HOURS.map((hour) => (
@@ -2890,53 +3075,53 @@ export default function DesignerPlannerPage() {
                               const isSyncing = Boolean(entry.request && pendingSyncTaskIds.has(entry.request.request_id))
 
                               return (
-                                <div
-                                  key={entry.id || `timed-${entry.date}-${idx}`}
-                                  draggable={Boolean(entry.request)}
-                                  onDragStart={(e) => {
-                                    if (entry.request) {
+                                <PlannerEntryTooltip key={entry.id || `timed-${entry.date}-${idx}`} entry={entry} isSyncing={isSyncing}>
+                                  <div
+                                    draggable={Boolean(entry.request)}
+                                    onDragStart={(e) => {
+                                      if (entry.request) {
+                                        e.stopPropagation()
+                                        e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
+                                        e.dataTransfer.effectAllowed = "move"
+                                        setDraggedTask(entry.request)
+                                      }
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggedTask(null)
+                                      setDragOverDate(null)
+                                    }}
+                                    onClick={(e) => {
                                       e.stopPropagation()
-                                      e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
-                                      e.dataTransfer.effectAllowed = "move"
-                                      setDraggedTask(entry.request)
-                                    }
-                                  }}
-                                  onDragEnd={() => {
-                                    setDraggedTask(null)
-                                    setDragOverDate(null)
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (entry.request) openTask(entry.request.request_id)
-                                    else setDetailEntry(entry)
-                                  }}
-                                  style={{
-                                    top: `${topPixels}px`,
-                                    height: `${heightPixels}px`,
-                                    ...(entry.accentColor ? { borderColor: colorWithAlpha(entry.accentColor, "50"), backgroundColor: colorWithAlpha(entry.accentColor, "18"), color: entry.accentColor } : {}),
-                                  }}
-                                  className={cn(
-                                    "absolute left-1 right-1 z-10 rounded-md border p-1 sm:p-1.5 text-left text-xs shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between cursor-pointer",
-                                    !entry.accentColor && ENTRY_META[entry.type].color,
-                                    entry.request && "cursor-grab active:cursor-grabbing",
-                                    isSyncing && "border-blue-400 bg-blue-50/70"
-                                  )}
-                                  title={`${entry.time} · ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <div className="flex items-center gap-1 min-w-0">
-                                      {isSyncing ? (
-                                        <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
-                                      ) : (
-                                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
-                                      )}
-                                      <span className={cn("text-[10px] font-semibold text-slate-500 truncate", isSyncing && "text-blue-800")}>{entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}</span>
+                                      if (entry.request) openTask(entry.request.request_id)
+                                      else setDetailEntry(entry)
+                                    }}
+                                    style={{
+                                      top: `${topPixels}px`,
+                                      height: `${heightPixels}px`,
+                                      ...(entry.accentColor ? { borderColor: colorWithAlpha(entry.accentColor, "50"), backgroundColor: colorWithAlpha(entry.accentColor, "18"), color: entry.accentColor } : {}),
+                                    }}
+                                    className={cn(
+                                      "absolute left-1 right-1 z-10 rounded-md border p-1 sm:p-1.5 text-left text-xs shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between cursor-pointer",
+                                      !entry.accentColor && ENTRY_META[entry.type].color,
+                                      entry.request && "cursor-grab active:cursor-grabbing",
+                                      isSyncing && "border-blue-400 bg-blue-50/70"
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        {isSyncing ? (
+                                          <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
+                                        ) : (
+                                          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                                        )}
+                                        <span className={cn("text-[10px] font-semibold text-slate-500 truncate", isSyncing && "text-blue-800")}>{entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}</span>
+                                      </div>
+                                      <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3.5 w-3.5 text-[7px] shrink-0" />
                                     </div>
-                                    <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3.5 w-3.5 text-[7px] shrink-0" />
+                                    <p className={cn("font-semibold text-[11px] leading-tight truncate text-slate-900 mt-0.5", isSyncing && "text-blue-900")}>{entry.title}</p>
+                                    {entry.location && <p className="text-[9px] text-slate-500 truncate mt-auto">{entry.location}</p>}
                                   </div>
-                                  <p className={cn("font-semibold text-[11px] leading-tight truncate text-slate-900 mt-0.5", isSyncing && "text-blue-900")}>{entry.title}</p>
-                                  {entry.location && <p className="text-[9px] text-slate-500 truncate mt-auto">{entry.location}</p>}
-                                </div>
+                                </PlannerEntryTooltip>
                               )
                             })}
                           </div>
@@ -3008,25 +3193,32 @@ export default function DesignerPlannerPage() {
               </div>
             </div>
 
-            {/* Right Column: Task Sidebar (Chiếm 2 phần = 40%) */}
+            {/* Right Column: Task Sidebar (Chiếm 1 phần = 33.33%) */}
             <aside
               style={calendarHeight ? { maxHeight: `${calendarHeight}px`, height: `${calendarHeight}px` } : undefined}
-              className="xl:col-span-2 relative min-w-0 border-t xl:border-t-0 xl:border-l border-slate-200/80 bg-slate-50/40 flex flex-col"
+              className="lg:col-span-1 relative min-w-0 border-t lg:border-t-0 lg:border-l border-slate-200/80 bg-slate-50/40 flex flex-col"
             >
-              <div className="xl:absolute xl:inset-0 xl:overflow-y-auto divide-y divide-slate-200/80 flex flex-col">
+              <div className="lg:absolute lg:inset-0 lg:overflow-y-auto divide-y divide-slate-200/80 flex flex-col">
                 {/* 1. Ưu tiên cao trong tuần */}
                 <div className="p-4 sm:p-5 flex flex-col">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                      <Flag className="h-3.5 w-3.5 text-rose-500" />
-                      Ưu tiên cao trong tuần
-                    </h3>
-                    <Badge variant="rose" size="xs">{priorityThisWeek.length}</Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-rose-50 text-rose-600 ring-1 ring-rose-200/60">
+                        <Flag className="h-3 w-3 fill-rose-500/20" />
+                      </span>
+                      <h3 className="text-xs font-bold text-slate-900">
+                        Ưu tiên cao trong tuần
+                      </h3>
+                    </div>
+                    <Badge variant={priorityThisWeek.length > 0 ? "rose" : "slate"} size="xs">
+                      {priorityThisWeek.length}
+                    </Badge>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {priorityThisWeek.length === 0 ? (
-                      <div className="rounded-xl bg-white p-3.5 text-xs text-slate-500 text-center border border-slate-200/60 shadow-2xs">
-                        Không có task Lv1/Lv2 trong tuần.
+                      <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-slate-200/80 bg-slate-50/50 px-3.5 py-3 text-xs text-slate-500">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span className="text-[12px] font-medium text-slate-600">Không có bài toán khẩn cấp trong tuần</span>
                       </div>
                     ) : priorityThisWeek.map((task, idx) => {
                       const taskDate = formatShortDate(getTaskDateForWeek(task))
@@ -3052,8 +3244,8 @@ export default function DesignerPlannerPage() {
                           }}
                           onClick={() => openTask(task.request_id)}
                           className={cn(
-                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
-                            isDragging && "opacity-40 scale-95 border-dashed border-blue-400 bg-blue-50/50",
+                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 border-l-[3.5px] border-l-rose-500 bg-white p-3 text-left shadow-2xs hover:border-slate-300 hover:border-l-rose-600 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
+                            isDragging && "opacity-40 scale-95 border-dashed border-rose-400 bg-rose-50/40",
                             isSyncing && "border-blue-400 bg-blue-50/70"
                           )}
                         >
@@ -3061,35 +3253,39 @@ export default function DesignerPlannerPage() {
                             <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
                               {getRequestDisplayTitle(task)}
                             </h4>
-                            {isSyncing ? (
+                            {isSyncing && (
                               <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-600 shrink-0 mt-0.5" />
-                            ) : null}
+                            )}
                           </div>
-                          <div className="flex items-center gap-2.5 text-xs text-slate-500 pt-0.5 overflow-hidden">
-                            <StatusPill status={task.status} size="xs" />
-                            {designers.length > 0 && (
-                              <div className="flex -space-x-1.5 overflow-hidden shrink-0">
-                                {designers.map((d) => (
-                                  <Tooltip key={d} content={d} side="top">
-                                    <div className="relative inline-block ring-2 ring-white rounded-full">
-                                      <UserAvatar name={d} size="xs" />
-                                    </div>
-                                  </Tooltip>
-                                ))}
-                              </div>
-                            )}
-                            {taskDate && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500 shrink-0">
-                                <Clock3 className="h-3 w-3 text-slate-400" />
-                                {taskDate}
-                              </span>
-                            )}
-                            {task.squad_name && (
-                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[120px]" title={task.squad_name}>
-                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{task.squad_name}</span>
-                              </span>
-                            )}
+                          <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-slate-500">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusPill status={task.status} size="xs" />
+                              {task.squad_name && (
+                                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[110px]" title={task.squad_name}>
+                                  <MapPin className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{task.squad_name}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {taskDate && (
+                                <span className="flex items-center gap-1 text-[11px] font-medium text-rose-600 bg-rose-50/80 px-1.5 py-0.5 rounded-md border border-rose-200/50">
+                                  <Clock3 className="h-3 w-3 text-rose-500" />
+                                  <span>{taskDate}</span>
+                                </span>
+                              )}
+                              {designers.length > 0 && (
+                                <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                  {designers.map((d) => (
+                                    <Tooltip key={d} content={d} side="top">
+                                      <div className="relative inline-block ring-2 ring-white rounded-full">
+                                        <UserAvatar name={d} size="xs" />
+                                      </div>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )
@@ -3104,14 +3300,17 @@ export default function DesignerPlannerPage() {
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         {selectedDate === todayYMD ? "Task hôm nay" : "Ngày đang chọn"}
                       </p>
-                      <h3 className="mt-0.5 text-sm font-bold capitalize text-slate-950">{selectedDateLabel}</h3>
+                      <h3 className="mt-0.5 text-sm font-bold capitalize text-slate-900 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-blue-500 inline-block"></span>
+                        {selectedDateLabel}
+                      </h3>
                     </div>
-                    <Button variant="outline" size="xs" onClick={() => openAddEvent(selectedDate)}>
+                    <Button variant="outline" size="xs" onClick={() => openAddEvent(selectedDate)} className="rounded-lg shadow-2xs gap-1">
                       <Plus className="h-3 w-3" />
                       Thêm việc
                     </Button>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {selectedEntries.length === 0 ? (
                       <EmptyState10
                         title="Chưa có lịch trong ngày này"
@@ -3132,124 +3331,230 @@ export default function DesignerPlannerPage() {
                             : undefined
                         }
                       />
-                    ) : selectedEntries.map((entry, idx) => {
-                      const linkMeta = entry.location ? getMeetingLinkMeta(entry.location) : null
-                      const isMeet = Boolean(linkMeta)
-                      const attendees = entry.attendees || []
-
-                      return (
-                        <div
-                          key={entry.id || `selected-entry-${entry.date || selectedDate}-${idx}`}
-                          onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)}
-                          className="group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-pointer"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
-                              {entry.title}
-                            </h4>
-                            {entry.request && entry.type === "planned" && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openSchedule(entry.request!, selectedDate)
-                                }}
-                                className="text-[10.5px] font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0"
-                              >
-                                Đổi ngày
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-0.5">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold border",
-                                  entry.accentColor
-                                    ? ""
-                                    : entry.type === "meeting"
-                                      ? "bg-purple-50 text-purple-700 border-purple-200/60"
-                                      : entry.type === "leave"
-                                        ? "bg-rose-50 text-rose-700 border-rose-200/60"
-                                        : entry.type === "deadline"
-                                          ? "bg-amber-50 text-amber-700 border-amber-200/60"
-                                          : "bg-blue-50 text-blue-700 border-blue-200/60"
-                                )}
-                                style={entry.accentColor ? { backgroundColor: colorWithAlpha(entry.accentColor, "15"), color: entry.accentColor, borderColor: colorWithAlpha(entry.accentColor, "40") } : undefined}
-                              >
-                                {entry.label}
+                    ) : (
+                      <>
+                        {/* Subgroup: Lịch họp & Sự kiện */}
+                        {meetingEntries.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between pt-0.5 pb-0.5">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <Video className="h-3 w-3 text-purple-600" />
+                                Họp & Sự kiện
                               </span>
+                              <Badge variant="purple" size="xs">{meetingEntries.length}</Badge>
+                            </div>
+                            {meetingEntries.map((entry, idx) => {
+                              const linkMeta = entry.location ? getMeetingLinkMeta(entry.location) : null
+                              const isMeet = Boolean(linkMeta)
+                              const attendees = entry.attendees || []
 
-                              {/* Attendees / Designer Avatar stack */}
-                              {attendees.length > 0 ? (
-                                <div className="flex -space-x-1.5 overflow-hidden">
-                                  {attendees.slice(0, 3).map((att, aIdx) => {
-                                    const user = getAttendeeDisplay(att, availableMeetingDesigners)
-                                    return (
-                                      <Tooltip key={`${att}-${aIdx}`} content={user.name} side="top">
-                                        <div className="relative inline-block ring-2 ring-white rounded-full">
-                                          <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
-                                        </div>
-                                      </Tooltip>
-                                    )
-                                  })}
-                                  {attendees.length > 3 && (
-                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-bold text-slate-600 ring-2 ring-white">
-                                      +{attendees.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : entry.designer ? (
-                                <div className="flex -space-x-1.5 overflow-hidden">
-                                  <Tooltip content={entry.designer} side="top">
-                                    <div className="relative inline-block ring-2 ring-white rounded-full">
-                                      <UserAvatar name={entry.designer} size="xs" />
+                              return (
+                                <div
+                                  key={entry.id || `meeting-entry-${entry.date || selectedDate}-${idx}`}
+                                  onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)}
+                                  className="group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 border-l-[3.5px] border-l-purple-500 bg-white p-3 text-left shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-purple-600 transition-colors">
+                                      {entry.title}
+                                    </h4>
+                                    {entry.time && (
+                                      <span className="flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 shrink-0">
+                                        <Clock3 className="h-3 w-3 text-purple-500 shrink-0" />
+                                        <span>{entry.time}</span>
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-slate-500">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className={cn(
+                                          "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold border",
+                                          entry.accentColor
+                                            ? ""
+                                            : entry.type === "meeting"
+                                              ? "bg-purple-50 text-purple-700 border-purple-200/60"
+                                              : "bg-rose-50 text-rose-700 border-rose-200/60"
+                                        )}
+                                        style={entry.accentColor ? { backgroundColor: colorWithAlpha(entry.accentColor, "15"), color: entry.accentColor, borderColor: colorWithAlpha(entry.accentColor, "40") } : undefined}
+                                      >
+                                        {entry.label}
+                                      </span>
+                                      {entry.location && (
+                                        <span className="flex items-center gap-1 text-[11px] text-slate-500 truncate max-w-[120px]">
+                                          {isMeet ? (
+                                            <Video className="h-3 w-3 text-blue-500 shrink-0" />
+                                          ) : (
+                                            <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                          )}
+                                          <span className="truncate">{linkMeta?.label || entry.location}</span>
+                                        </span>
+                                      )}
                                     </div>
-                                  </Tooltip>
-                                </div>
-                              ) : null}
-                            </div>
 
-                            <div className="flex items-center gap-2.5 text-xs text-slate-500">
-                              {entry.time && (
-                                <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                                  <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <span>{entry.time}</span>
-                                </span>
-                              )}
-                              {entry.location && (
-                                <span className="flex items-center gap-1 text-[11px] text-slate-500 truncate max-w-[120px]">
-                                  {isMeet ? (
-                                    <Video className="h-3 w-3 text-blue-500 shrink-0" />
-                                  ) : (
-                                    <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                                  )}
-                                  <span className="truncate">{linkMeta?.label || entry.location}</span>
-                                </span>
-                              )}
-                            </div>
+                                    {attendees.length > 0 ? (
+                                      <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                        {attendees.slice(0, 3).map((att, aIdx) => {
+                                          const user = getAttendeeDisplay(att, availableMeetingDesigners)
+                                          return (
+                                            <Tooltip key={`${att}-${aIdx}`} content={user.name} side="top">
+                                              <div className="relative inline-block ring-2 ring-white rounded-full">
+                                                <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
+                                              </div>
+                                            </Tooltip>
+                                          )
+                                        })}
+                                        {attendees.length > 3 && (
+                                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-bold text-slate-600 ring-2 ring-white">
+                                            +{attendees.length - 3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : entry.designer ? (
+                                      <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                        <Tooltip content={entry.designer} side="top">
+                                          <div className="relative inline-block ring-2 ring-white rounded-full">
+                                            <UserAvatar name={entry.designer} size="xs" />
+                                          </div>
+                                        </Tooltip>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
-                        </div>
-                      )
-                    })}
+                        )}
+
+                        {/* Subgroup: Nhiệm vụ & Deadline */}
+                        {taskEntries.length > 0 && (
+                          <div className="space-y-2">
+                            {meetingEntries.length > 0 && (
+                              <div className="flex items-center justify-between pt-2 pb-0.5">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                  <CalendarDays className="h-3 w-3 text-blue-600" />
+                                  Nhiệm vụ & Deadline
+                                </span>
+                                <Badge variant="blue" size="xs">{taskEntries.length}</Badge>
+                              </div>
+                            )}
+                            {taskEntries.map((entry, idx) => {
+                              const isDeadline = entry.type === "deadline"
+                              const borderAccentClass = isDeadline ? "border-l-amber-500" : "border-l-blue-500"
+                              const attendees = entry.attendees || []
+
+                              return (
+                                <div
+                                  key={entry.id || `task-entry-${entry.date || selectedDate}-${idx}`}
+                                  onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)}
+                                  className={cn(
+                                    "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 border-l-[3.5px] bg-white p-3 text-left shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all cursor-pointer",
+                                    borderAccentClass
+                                  )}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                      {entry.title}
+                                    </h4>
+                                    {entry.request && entry.type === "planned" && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          openSchedule(entry.request!, selectedDate)
+                                        }}
+                                        className="text-[10.5px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200/60 shrink-0 transition-colors"
+                                      >
+                                        Đổi ngày
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-slate-500">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className={cn(
+                                          "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold border",
+                                          entry.accentColor
+                                            ? ""
+                                            : isDeadline
+                                              ? "bg-amber-50 text-amber-700 border-amber-200/60"
+                                              : "bg-blue-50 text-blue-700 border-blue-200/60"
+                                        )}
+                                        style={entry.accentColor ? { backgroundColor: colorWithAlpha(entry.accentColor, "15"), color: entry.accentColor, borderColor: colorWithAlpha(entry.accentColor, "40") } : undefined}
+                                      >
+                                        {entry.label}
+                                      </span>
+                                      {entry.request?.product_name && (
+                                        <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[110px]" title={entry.request.product_name}>
+                                          <MapPin className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                                          <span className="truncate">{entry.request.product_name}</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {entry.time && (
+                                        <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                                          <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
+                                          <span>{entry.time}</span>
+                                        </span>
+                                      )}
+                                      {attendees.length > 0 ? (
+                                        <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                          {attendees.slice(0, 3).map((att, aIdx) => {
+                                            const user = getAttendeeDisplay(att, availableMeetingDesigners)
+                                            return (
+                                              <Tooltip key={`${att}-${aIdx}`} content={user.name} side="top">
+                                                <div className="relative inline-block ring-2 ring-white rounded-full">
+                                                  <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
+                                                </div>
+                                              </Tooltip>
+                                            )
+                                          })}
+                                        </div>
+                                      ) : entry.designer ? (
+                                        <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                          <Tooltip content={entry.designer} side="top">
+                                            <div className="relative inline-block ring-2 ring-white rounded-full">
+                                              <UserAvatar name={entry.designer} size="xs" />
+                                            </div>
+                                          </Tooltip>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* 3. Chưa xếp lịch */}
                 <div className="p-4 sm:p-5 flex flex-col">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                      <Clock3 className="h-3.5 w-3.5 text-amber-500" />
-                      Chưa xếp lịch
-                    </h3>
-                    <Badge variant="warning" size="xs">{unscheduledTasks.length}</Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-200/60">
+                        <Clock3 className="h-3 w-3" />
+                      </span>
+                      <h3 className="text-xs font-bold text-slate-900">
+                        Chưa xếp lịch
+                      </h3>
+                    </div>
+                    <Badge variant={unscheduledTasks.length > 0 ? "warning" : "slate"} size="xs">
+                      {unscheduledTasks.length}
+                    </Badge>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {unscheduledTasks.length === 0 ? (
-                      <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3.5 text-xs font-medium text-emerald-700">
-                        <Check className="h-3.5 w-3.5 shrink-0" />
-                        Tất cả công việc đã có kế hoạch.
+                      <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-slate-200/80 bg-slate-50/50 px-3.5 py-3 text-xs text-slate-500">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span className="text-[12px] font-medium text-slate-600">Tất cả công việc đã có kế hoạch xếp lịch</span>
                       </div>
                     ) : unscheduledTasks.map((task, idx) => {
                       const designers = Array.from(new Set([task.assigned_designer, task.ux_owner].filter(Boolean) as string[])).filter(
@@ -3273,57 +3578,72 @@ export default function DesignerPlannerPage() {
                             setDragOverDate(null)
                           }}
                           className={cn(
-                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
-                            isDragging && "opacity-40 scale-95 border-dashed border-blue-400 bg-blue-50/50",
+                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 border-l-[3.5px] border-l-amber-400 bg-white p-3 text-left shadow-2xs hover:border-slate-300 hover:border-l-amber-500 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
+                            isDragging && "opacity-40 scale-95 border-dashed border-amber-400 bg-amber-50/40",
                             isSyncing && "border-blue-400 bg-blue-50/70"
                           )}
                         >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <GripVertical className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
-                            <h4
-                              onClick={() => openTask(task.request_id)}
-                              className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-1 hover:text-blue-600 transition-colors cursor-pointer truncate"
-                              title={task.title}
+                          <div className="flex items-center justify-between gap-1.5 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <GripVertical className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
+                              <h4
+                                onClick={() => openTask(task.request_id)}
+                                className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug truncate hover:text-blue-600 transition-colors cursor-pointer"
+                                title={task.title}
+                              >
+                                {getRequestDisplayTitle(task)}
+                              </h4>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleInitiateSchedule(task, selectedDate)
+                              }}
+                              title={`Xếp lịch vào ngày ${selectedDate}`}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200/60 shrink-0"
                             >
-                              {getRequestDisplayTitle(task)}
-                            </h4>
+                              <Plus className="h-3 w-3" />
+                              <span>Lên lịch</span>
+                            </button>
                             {isSyncing && (
-                              <RefreshCw className="h-3 w-3 animate-spin text-blue-600 shrink-0 ml-auto" />
+                              <RefreshCw className="h-3 w-3 animate-spin text-blue-600 shrink-0 ml-1" />
                             )}
                           </div>
-                          <div className="flex items-center gap-2.5 text-xs text-slate-500 pt-0.5 overflow-hidden">
-                            <StatusPill status={task.status} size="xs" />
-
-                            {designers.length > 0 && (
-                              <div className="flex -space-x-1.5 overflow-hidden shrink-0">
-                                {designers.map((d) => (
-                                  <Tooltip key={d} content={d} side="top">
-                                    <div className="relative inline-block ring-2 ring-white rounded-full">
-                                      <UserAvatar name={d} size="xs" />
-                                    </div>
-                                  </Tooltip>
-                                ))}
-                              </div>
-                            )}
-
-                            {task.submitted_at ? (
-                              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Thời gian tiếp nhận yêu cầu (Start)">
-                                <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span>{formatShortDate(task.submitted_at)}</span>
-                              </span>
-                            ) : task.expected_deadline ? (
-                              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Hạn chót cam kết">
-                                <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span>{formatShortDate(task.expected_deadline)}</span>
-                              </span>
-                            ) : null}
-
-                            {task.squad_name && (
-                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[120px]" title={task.squad_name}>
-                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{task.squad_name}</span>
-                              </span>
-                            )}
+                          <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-slate-500">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusPill status={task.status} size="xs" />
+                              {task.squad_name && (
+                                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[110px]" title={task.squad_name}>
+                                  <MapPin className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{task.squad_name}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {task.submitted_at ? (
+                                <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Thời gian tiếp nhận">
+                                  <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span>{formatShortDate(task.submitted_at)}</span>
+                                </span>
+                              ) : task.expected_deadline ? (
+                                <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Hạn chót cam kết">
+                                  <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span>{formatShortDate(task.expected_deadline)}</span>
+                                </span>
+                              ) : null}
+                              {designers.length > 0 && (
+                                <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                  {designers.map((d) => (
+                                    <Tooltip key={d} content={d} side="top">
+                                      <div className="relative inline-block ring-2 ring-white rounded-full">
+                                        <UserAvatar name={d} size="xs" />
+                                      </div>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )

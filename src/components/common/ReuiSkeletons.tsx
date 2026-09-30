@@ -710,18 +710,18 @@ export interface DesignerPlannerSkeletonProps {
 
 export function DesignerPlannerWeeklyCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs">
+    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] max-w-[640px] w-full min-w-0 shadow-2xs">
       <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
         <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
         <Skeleton className="h-6 w-24 rounded-md bg-white" />
       </div>
-      <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5 sm:p-4 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
+      <div className="rounded-xl border border-neutral-200/70 bg-white p-4 sm:p-5 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
         <div className="flex items-center gap-4 flex-wrap">
-          <Skeleton className="h-8 w-20 rounded-lg bg-neutral-200/90" />
+          <Skeleton className="h-10 w-24 rounded-lg bg-neutral-200/90" />
           <Skeleton className="h-5 w-24 rounded-md bg-emerald-100" />
           <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/60" />
         </div>
-        <div className="flex h-5 w-full items-center justify-between overflow-hidden my-2.5">
+        <div className="flex h-6 sm:h-7 w-full items-center justify-between overflow-hidden my-2 sm:my-2.5">
           {Array.from({ length: 100 }).map((_, i) => (
             <Skeleton key={i} className="h-full w-[1.5px] sm:w-[2px] shrink-0 rounded-full bg-neutral-200/70" />
           ))}
@@ -874,7 +874,7 @@ export function DesignerPlannerSkeleton({ executiveSummaryContent }: DesignerPla
   return (
     <div data-testid="designer-planner-skeleton" className="w-full space-y-5">
       {/* ROW 1: 2 Bento Cards */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.12fr)_minmax(520px,0.88fr)] gap-5 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_520px] gap-5 items-stretch">
         {/* Card 1: Executive Summary */}
         <div className="relative rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs overflow-hidden">
           {executiveSummaryContent ? (

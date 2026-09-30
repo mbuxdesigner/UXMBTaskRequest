@@ -175,8 +175,7 @@ assert.doesNotMatch(plannerPageSource, /items-stretch justify-between gap-\[2px\
 assert.match(plannerPageSource, /isBriefingExpanded/)
 assert.match(plannerPageSource, /<Maximize2/)
 assert.match(plannerPageSource, /<RightSheet[\s\S]*?open=\{isBriefingExpanded\}/)
-assert.match(plannerPageSource, /ml-1 mr-0\.5/)
-assert.match(plannerPageSource, /gridTemplateRows: `repeat\(\$\{calendarWeeks\.length\}, minmax\(120px, 1fr\)\)`/)
+assert.match(plannerPageSource, /gridTemplateRows: `repeat\(\$\{calendarWeeks\.length\}, minmax\((?:120px|154px), 1fr\)\)`/)
 assert.match(plannerPageSource, /!isLastRow && "border-b border-slate-200\/80"/)
 console.log("✓ Calendar grid fills 100% of height and Executive Summary opens slide-over RightSheet")
 

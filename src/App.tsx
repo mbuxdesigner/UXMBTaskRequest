@@ -144,13 +144,22 @@ export default function App() {
 
   const [page, setPage] = useState<Page>(() => {
     const s = getStoredSession()
-    const rawHash = window.location.hash.replace(/^#/, "").split("?")[0] as Page
+    const rawHashStr = window.location.hash.replace(/^#/, "").split("?")[0]
+    const rawHash = (rawHashStr === "planner" ? "calendar" : rawHashStr) as Page
     const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia", "calendar"]
-    const targetPage = validPages.includes(rawHash)
-      ? rawHash
-      : (s?.role === "PO" || s?.role === "Business"
-          ? (isPageAllowedForRole("overview", s.role) ? "overview" : "track")
-          : "overview")
+
+    const role = (s?.role || "").toLowerCase().trim()
+    const isPlannerRole =
+      role === "designer" ||
+      role === "design owner" ||
+      role === "designer owner" ||
+      role === "admin"
+
+    const defaultPage: Page = isPlannerRole
+      ? (s?.role && isPageAllowedForRole("calendar", s.role) ? "calendar" : "overview")
+      : (s?.role && isPageAllowedForRole("overview", s.role) ? "overview" : "track")
+
+    const targetPage = validPages.includes(rawHash) ? rawHash : defaultPage
 
     if (s?.role && !isPageAllowedForRole(targetPage, s.role)) {
       return isPageAllowedForRole("track", s.role) ? "track" : "create"
@@ -323,7 +332,8 @@ export default function App() {
 
   useEffect(() => {
     const syncFromHash = () => {
-      const hash = window.location.hash.replace(/^#/, "").split("?")[0]
+      let hash = window.location.hash.replace(/^#/, "").split("?")[0]
+      if (hash === "planner") hash = "calendar"
 
       const current = getStoredSession()
 
@@ -434,14 +444,19 @@ export default function App() {
           onAuthSuccess={(newSession) => {
             setSession(newSession)
 
-            // Mặc định đăng nhập: PO/Business về My task (#track), Designer/Admin/Khác về Tổng quan Dashboard (#overview)
+            // Điều hướng tự động sau đăng nhập:
+            // Designer / Design Owner / Admin đăng nhập xong auto vào Planner (#calendar)
+            // Các role khác (PO, Business, ...) auto vào Overview (#overview)
+            const role = (newSession.role || "").toLowerCase().trim()
+            const isPlannerRole =
+              role === "designer" ||
+              role === "design owner" ||
+              role === "designer owner" ||
+              role === "admin"
 
-            // Tuyệt đối không giữ URL cũ #manage từ phiên trước
-
-            const defaultPage: Page =
-              newSession.role === "PO" || newSession.role === "Business"
-                ? (isPageAllowedForRole("overview", newSession.role) ? "overview" : "track")
-                : "overview"
+            const defaultPage: Page = isPlannerRole
+              ? (isPageAllowedForRole("calendar", newSession.role) ? "calendar" : "overview")
+              : (isPageAllowedForRole("overview", newSession.role) ? "overview" : "track")
 
             setPage(defaultPage)
 

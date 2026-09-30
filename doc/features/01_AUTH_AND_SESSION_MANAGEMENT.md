@@ -249,3 +249,18 @@ export interface UserSession {
 ### 7.3. Tối Giản Màn Hình Đăng Nhập (`LoginGate.tsx`)
 - Ẩn hoàn toàn khối tài khoản demo 1-click để đáp ứng tiêu chuẩn an toàn bảo mật thông tin.
 - Gỡ bỏ toàn bộ các dòng chữ gợi ý (hint) mật khẩu kiểm thử dưới ô nhập liệu.
+
+### 7.4. Chuẩn Hóa ReUI Session Expired Modal (`SessionExpiredModal.tsx` - 30/09/2026)
+- **Tái cấu trúc 100% theo ReUI Alert Dialog:**
+  - Nền Modal trắng sạch `bg-white`, bo góc `rounded-2xl`, viền `border-slate-200/90`, đổ bóng sâu `shadow-2xl`.
+  - Icon trung tâm sử dụng ReUI `IconTile` màu hổ phách `variant="amber" size="xl" rounded-2xl` với icon đồng hồ `Clock` viền nét `stroke-[2.2]`.
+  - Khối thông báo an toàn dữ liệu ReUI Callout với icon `ShieldCheck` màu ngọc bích khẳng định toàn bộ bài toán và tiến độ của người dùng được bảo toàn nguyên vẹn.
+  - **Nút hành động "Đăng nhập lại" màu đen sang trọng:** Sử dụng `Button variant="default"` (`bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950`) với chiều cao chuẩn `h-10.5 rounded-xl`, hiệu ứng tactile spring đàn hồi cao cấp.
+
+### 7.5. Phân Quyền Điều Hướng Thông Minh Sau Đăng Nhập (`App.tsx` - 30/09/2026)
+- **Cơ chế nhận diện vai trò tự động:**
+  - Ngay sau khi người dùng xác thực OTP thành công và phiên được cấp, hệ thống tự động kiểm tra vai trò:
+    - Nếu là **`Designer`**, **`Design Owner`**, hoặc **`Admin`**: Tự động chuyển hướng vào màn hình làm việc cá nhân **Planner** (`#calendar` / `#planner`).
+    - Nếu là **`PO`**, **`Business`**, **`Developer`**, hoặc **`Requester`**: Tự động chuyển hướng vào màn hình **Tổng quan** (`#overview`).
+  - Hỗ trợ bí danh URL hash `#planner` tương đương `#calendar`.
+
