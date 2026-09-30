@@ -90,6 +90,34 @@ export interface CalendarItem {
   rawItem: UXRequest | TeamLeaveRecord | HolidayException | TeamEvent
 }
 
+export type PlannerEntryType = "deadline" | "planned" | "leave" | "team" | "personal"
+
+export interface PlannerEntry {
+  id: string
+  date: string
+  type: PlannerEntryType
+  title: string
+  label: string
+  color: string
+  accentColor?: string
+  time?: string
+  location?: string
+  description?: string
+  attendees?: string[]
+  endTime?: string
+  recurrence?: TeamEvent["recurrence"]
+  recurrenceEndDate?: string
+  meetingOptions?: TeamEvent["meetingOptions"]
+  attachments?: TeamEvent["attachments"]
+  categoryId?: string
+  durationMinutes?: number
+  createdBy?: string
+  createdAt?: string
+  request?: UXRequest
+  rawItem?: any
+  source?: CalendarItem
+}
+
 /**
  * Chuẩn hóa chuỗi ngày thành "YYYY-MM-DD"
  */
@@ -693,8 +721,8 @@ export async function loadAllCalendarItems(): Promise<{
   let leaves: TeamLeaveRecord[] = []
   try {
     const leaveRes = await fetchTeamLeaves(false)
-    if (leaveRes && Array.isArray(leaveRes.leaves)) {
-      leaves = leaveRes.leaves
+    if (Array.isArray(leaveRes)) {
+      leaves = leaveRes
     }
   } catch (err) {
     console.error("[CalendarService] Error loading leaves:", err)

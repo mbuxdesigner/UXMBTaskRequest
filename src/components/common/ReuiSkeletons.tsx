@@ -710,7 +710,7 @@ export interface DesignerPlannerSkeletonProps {
 
 export function DesignerPlannerWeeklyCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs">
+    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs">
       <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
         <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
         <Skeleton className="h-6 w-24 rounded-md bg-white" />
@@ -721,9 +721,9 @@ export function DesignerPlannerWeeklyCardSkeleton() {
           <Skeleton className="h-5 w-24 rounded-md bg-emerald-100" />
           <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/60" />
         </div>
-        <div className="flex h-7 w-full items-center justify-around overflow-hidden my-2">
-          {Array.from({ length: 56 }).map((_, i) => (
-            <Skeleton key={i} className="h-full w-[2.5px] sm:w-[3px] shrink-0 rounded-full bg-neutral-200/70" />
+        <div className="flex h-5 w-full items-center justify-between overflow-hidden my-2.5">
+          {Array.from({ length: 100 }).map((_, i) => (
+            <Skeleton key={i} className="h-full w-[1.5px] sm:w-[2px] shrink-0 rounded-full bg-neutral-200/70" />
           ))}
         </div>
         <div className="flex items-center gap-4 pt-1 flex-wrap">
@@ -893,9 +893,6 @@ export function DesignerPlannerSkeleton({ executiveSummaryContent }: DesignerPla
                 <div className="flex items-center gap-2 min-w-0">
                   <img src="/ai-default.png" alt="AI" className="h-4 w-4 object-contain shrink-0" />
                   <h3 className="text-sm font-semibold text-neutral-900 truncate">Executive Summary</h3>
-                  <span className="hidden sm:inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200/60 shrink-0">
-                    UXTeamMB
-                  </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="inline-flex items-center gap-1 rounded-md border border-neutral-200/60 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-400 shadow-2xs opacity-60">

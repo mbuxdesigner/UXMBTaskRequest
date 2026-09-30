@@ -1,6 +1,8 @@
 import type { UserLeaveRecord, UnifiedOperationalData } from "../types/leave.ts";
 import { getGoogleSheetConfig } from "../config/googleSheetConfig.ts";
 
+export type { UserLeaveRecord, UserLeaveRecord as TeamLeaveRecord, UnifiedOperationalData } from "../types/leave.ts";
+
 const LEAVE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1oeDjaIMIuDsG2bDG2HT8euLICVXxQvWpf-2jfDr3Vlg/gviz/tq?tqx=out:csv&gid=917777763";
 const LEAVES_CACHE_KEY = "uxmb_cached_team_leaves";
 const LEAVES_CACHE_TIME_KEY = "uxmb_cached_team_leaves_time";
@@ -125,11 +127,12 @@ export async function fetchTeamLeaves(forceRefresh = false): Promise<UserLeaveRe
     }
 
     const config = getGoogleSheetConfig();
+    const endpointUrl = config?.scriptUrl || (config as any)?.webAppUrl;
 
     // 2. Thử gọi qua Google Apps Script Web App URL nếu đã cấu hình
-    if (config?.webAppUrl && config.webAppUrl.startsWith("http")) {
+    if (endpointUrl && endpointUrl.startsWith("http")) {
       try {
-        const url = `${config.webAppUrl}?action=get_team_leaves${forceRefresh ? "&refresh=true" : ""}`;
+        const url = `${endpointUrl}?action=get_team_leaves${forceRefresh ? "&refresh=true" : ""}`;
         const res = await fetch(url, { method: "GET" });
         if (res.ok) {
           const json = await res.json();
@@ -171,12 +174,13 @@ export async function fetchTeamLeaves(forceRefresh = false): Promise<UserLeaveRe
  */
 export async function fetchAllOperationalData(): Promise<UnifiedOperationalData | null> {
   const config = getGoogleSheetConfig();
-  if (!config?.webAppUrl || !config.webAppUrl.startsWith("http")) {
+  const endpointUrl = config?.scriptUrl || (config as any)?.webAppUrl;
+  if (!endpointUrl || !endpointUrl.startsWith("http")) {
     return null;
   }
 
   try {
-    const url = `${config.webAppUrl}?action=get_all_operational_data`;
+    const url = `${endpointUrl}?action=get_all_operational_data`;
     const res = await fetch(url, { method: "GET" });
     if (res.ok) {
       const data: UnifiedOperationalData = await res.json();

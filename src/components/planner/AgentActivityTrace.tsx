@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
@@ -78,43 +78,43 @@ export function AgentActivityTrace({
 
     // Timeline progressive sequence
     // t=0ms: Step 1 (Searching - 1/4)
-    // t=350ms: Step 2 starts (Reading sources - 2/4)
+    // t=200ms: Step 2 starts (Reading sources - 2/4)
     const t1 = setTimeout(() => {
       setCurrentStep(2)
       setSourcesRevealed(1)
-    }, 350)
+    }, 200)
 
-    // t=600ms: Step 2 reveal 2nd source
+    // t=400ms: Step 2 reveal 2nd source
     const t2 = setTimeout(() => {
       setSourcesRevealed(2)
-    }, 600)
+    }, 400)
 
-    // t=850ms: Step 2 reveal 3rd source
+    // t=600ms: Step 2 reveal 3rd source
     const t3 = setTimeout(() => {
       setSourcesRevealed(3)
-    }, 850)
+    }, 600)
 
-    // t=1100ms: Step 3 (Checking risk & milestones - 3/4)
+    // t=750ms: Step 3 (Checking risk & milestones - 3/4)
     const t4 = setTimeout(() => {
       setCurrentStep(3)
       setChecksRevealed(1)
-    }, 1100)
+    }, 750)
 
-    // t=1300ms: Step 3 second check
+    // t=900ms: Step 3 second check
     const t5 = setTimeout(() => {
       setChecksRevealed(2)
-    }, 1300)
+    }, 900)
 
-    // t=1500ms: Step 4 (Synthesizing answer & marked finished - 4/4)
+    // t=1050ms: Step 4 (Synthesizing answer & marked finished - 4/4)
     const t6 = setTimeout(() => {
       setCurrentStep(4)
       setIsFinished(true)
-    }, 1500)
+    }, 1050)
 
-    // t=1700ms: Complete and hand over to full summary (đọc đủ 4/4 rồi hiển thị luôn!)
+    // t=1200ms: Complete and hand over to full summary
     const t7 = setTimeout(() => {
       onCompleteRef.current?.()
-    }, 1700)
+    }, 1200)
 
     return () => {
       clearTimeout(t1)
@@ -128,7 +128,11 @@ export function AgentActivityTrace({
   }, [isRefreshing, isInspector])
 
   return (
-    <div className="flex w-full flex-col gap-2.5 py-0.5 font-sans select-none">
+    <div
+      onClick={!isInspector ? () => onCompleteRef.current?.() : undefined}
+      className={cn("flex w-full flex-col gap-2.5 py-0.5 font-sans select-none", !isInspector && "cursor-pointer")}
+      title={!isInspector ? "Nhấn để xem tóm tắt ngay" : undefined}
+    >
       {/* Top Status Pill (ReUI Marker Style) */}
       <div className="flex items-center justify-between border-b border-neutral-100 pb-2 text-xs">
         <div className="flex items-center gap-2 min-w-0">

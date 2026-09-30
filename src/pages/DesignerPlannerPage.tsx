@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bell,
   BriefcaseBusiness,
+  Calendar,
   CalendarDays,
   Check,
   ChevronDown,
@@ -19,6 +20,7 @@ import {
   ExternalLink,
   FileText,
   Flag,
+  GripVertical,
   ImageIcon,
   LayoutGrid,
   ListChecks,
@@ -33,9 +35,11 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  User,
   Users,
   Video,
   X,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge, PriorityBadge, StatusPill } from "@/components/ui/badge"
@@ -46,11 +50,15 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { BorderBeam } from "@/components/jolyui/border-beam"
 import { AgentActivityTrace } from "@/components/planner/AgentActivityTrace"
 import { ExecutiveSummaryTypewriter } from "@/components/planner/ExecutiveSummaryTypewriter"
+import { extractExecutiveIntelligence, type PerspectiveAngle } from "@/lib/executiveIntelligence"
 import PageHeader from "@/components/common/PageHeader"
 import { UserAvatar, getDesignerAvatar, getAvatarColorClass } from "@/components/common/UserAvatar"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
 import { fetchRequests } from "@/api/api"
+import { EmptyState1, EmptyState10 } from "@/components/reui/empty-state"
+import { getRequestDisplayTitle, type UXRequest } from "@/data/mockData"
 import { isTaskAssignedToUser, isTaskRelatedToUser } from "@/lib/accessControl"
+import { getPhaseDeadlineInfo } from "@/components/track/RequestDetail"
 import {
   buildRuleBasedBriefing,
   getDesignerPhaseDistribution,
@@ -59,6 +67,7 @@ import {
   getTaskPlannedDate,
   getWeekBounds,
   isTaskCompleted,
+  isTaskUnscheduled,
   type PlannerBriefingItem,
 } from "@/lib/designerPlanner"
 import { cascadeWaveContainerVariants, cascadeWaveItemVariants, durations } from "@/lib/motion"
@@ -261,6 +270,27 @@ function formatShortDate(ymd?: string): string {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(
     new Date(year, month - 1, day),
   )
+}
+
+function formatYMDToDDMMYYYY(ymd?: string): string {
+  if (!ymd) return ""
+  const parts = ymd.split("-")
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`
+  }
+  return ymd
+}
+
+function formatFullVietnameseDate(ymd?: string): string {
+  if (!ymd) return ""
+  try {
+    const d = parseYMD(ymd)
+    const dayNames = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
+    const dayName = dayNames[d.getDay()]
+    return `${dayName}, ${formatYMDToDDMMYYYY(ymd)}`
+  } catch {
+    return ymd
+  }
 }
 
 function parseYMD(ymd: string): Date {
@@ -694,6 +724,9 @@ export default function DesignerPlannerPage() {
   const [isAiRefreshing, setIsAiRefreshing] = useState(false)
   const [isViewingAiTrace, setIsViewingAiTrace] = useState(false)
   const [isBriefingExpanded, setIsBriefingExpanded] = useState(false)
+  const [perspectiveAngle, setPerspectiveAngle] = useState<PerspectiveAngle>("overview")
+  const [briefingSeed, setBriefingSeed] = useState(0)
+  const [briefingExpandedTab, setBriefingExpandedTab] = useState<"summary" | "delegated" | "discussions">("summary")
   const [notificationFilter, setNotificationFilter] = useState<"unread" | "all">("unread")
   const [visibleTypes, setVisibleTypes] = useState<Record<PlannerEntryType, boolean>>({
     deadline: true,
@@ -702,10 +735,16 @@ export default function DesignerPlannerPage() {
     team: true,
     personal: true,
   })
-  const [scheduleTask, setScheduleTask] = useState<UXRequest | null>(null)
+  const [draggedTask, setDraggedTask] = useState<UXRequest | null>(null)
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null)
+  const [confirmDropModal, setConfirmDropModal] = useState<{
+    task: UXRequest
+    targetDate: string
+    noteText: string
+  } | null>(null)
+  const [pendingSyncTaskIds, setPendingSyncTaskIds] = useState<Set<string>>(new Set())
   const [detailEntry, setDetailEntry] = useState<PlannerEntry | null>(null)
   const [activeDetailTask, setActiveDetailTask] = useState<UXRequest | null>(null)
-  const [scheduleDate, setScheduleDate] = useState(todayYMD)
   const [eventModalOpen, setEventModalOpen] = useState(false)
   const [eventDate, setEventDate] = useState(todayYMD)
   const [editingEntry, setEditingEntry] = useState<PlannerEntry | null>(null)
@@ -873,6 +912,8 @@ export default function DesignerPlannerPage() {
 
   const handleTraceComplete = useCallback(() => {
     setLoading(false)
+    setIsAiRefreshing(false)
+    setBriefingUpdatedAt(new Date())
   }, [])
 
   useEffect(() => {
@@ -882,6 +923,14 @@ export default function DesignerPlannerPage() {
     }, 6000)
     return () => window.clearTimeout(safety)
   }, [loading])
+
+  useEffect(() => {
+    if (!isAiRefreshing) return
+    const safety = window.setTimeout(() => {
+      setIsAiRefreshing(false)
+    }, 2200)
+    return () => window.clearTimeout(safety)
+  }, [isAiRefreshing])
 
   const debouncedSilentReload = useCallback(() => {
     if (reloadTimeoutRef.current) window.clearTimeout(reloadTimeoutRef.current)
@@ -923,7 +972,7 @@ export default function DesignerPlannerPage() {
   )
   const goLiveTasks = useMemo(() => getGoLiveTasksInWeek(activeTasks, today), [activeTasks, today])
   const phaseDistribution = useMemo(() => getDesignerPhaseDistribution(activeTasks), [activeTasks])
-  const TOTAL_BARS = 56
+  const TOTAL_BARS = 100
   const phaseBarGroups = useMemo(() => {
     if (activeTasks.length === 0) {
       return [
@@ -1189,17 +1238,28 @@ export default function DesignerPlannerPage() {
   const selectedEntries = useMemo(() => entriesByDate.get(selectedDate) || [], [entriesByDate, selectedDate])
   const { start: weekStart, end: weekEnd } = useMemo(() => getWeekBounds(parseYMD(selectedDate)), [selectedDate])
   const priorityThisWeek = useMemo(() => {
+    const priorityOrder: Record<string, number> = {
+      lv1: 1,
+      lv2: 2,
+      lv3: 3,
+      lv4: 4,
+    }
     return activeTasks
       .filter((task) => {
         const priority = (task.priority || "").toLowerCase()
         const date = getTaskDateForWeek(task)
         return (priority === "lv1" || priority === "lv2") && Boolean(date && date >= weekStart && date <= weekEnd)
       })
-      .sort((a, b) => getTaskDateForWeek(a).localeCompare(getTaskDateForWeek(b)))
+      .sort((a, b) => {
+        const pA = priorityOrder[(a.priority || "").toLowerCase()] ?? 99
+        const pB = priorityOrder[(b.priority || "").toLowerCase()] ?? 99
+        if (pA !== pB) return pA - pB
+        return getTaskDateForWeek(a).localeCompare(getTaskDateForWeek(b))
+      })
   }, [activeTasks, weekStart, weekEnd])
 
   const unscheduledTasks = useMemo(
-    () => activeTasks.filter((task) => !getTaskPlannedDate(task)),
+    () => activeTasks.filter(isTaskUnscheduled),
     [activeTasks],
   )
 
@@ -1242,34 +1302,115 @@ export default function DesignerPlannerPage() {
     }
   }, [rawRequests])
 
-  const openSchedule = (task: UXRequest, fallbackDate?: string) => {
-    setScheduleTask(task)
-    setScheduleDate(getTaskPlannedDate(task) || fallbackDate || selectedDate || todayYMD)
-  }
+  const handleInitiateSchedule = useCallback(
+    (task: UXRequest, fallbackDate?: string) => {
+      const targetDate = fallbackDate || getTaskPlannedDate(task) || selectedDate || todayYMD
+      const deadlineInfo = getPhaseDeadlineInfo(task.current_phase)
+      const formattedDate = formatYMDToDDMMYYYY(targetDate)
+      const defaultNote = `Cập nhật ${deadlineInfo.actionText} sang: ${formattedDate}`
 
-  const saveSchedule = async () => {
-    if (!scheduleTask || !scheduleDate) return
-    const localResult = updateTaskPlannedDate(scheduleTask.request_id, scheduleDate)
-    if (!localResult.success) {
-      toast.error(localResult.error || "Không thể xếp ngày dự kiến")
-      return
+      setConfirmDropModal({
+        task,
+        targetDate,
+        noteText: defaultNote,
+      })
+    },
+    [selectedDate, todayYMD]
+  )
+
+  const openSchedule = useCallback(
+    (task: UXRequest, fallbackDate?: string) => {
+      handleInitiateSchedule(task, fallbackDate)
+    },
+    [handleInitiateSchedule]
+  )
+
+  const handleConfirmSchedule = useCallback(async () => {
+    if (!confirmDropModal) return
+    const { task, targetDate, noteText } = confirmDropModal
+    const taskId = task.request_id
+
+    // 1. Close modal immediately (0ms user perception)
+    setConfirmDropModal(null)
+    setSelectedDate(targetDate)
+
+    // 2. OPTIMISTIC UI: Instantly place the task in the target date cell
+    setRawRequests((prev) =>
+      prev.map((r) =>
+        r.request_id === taskId
+          ? {
+              ...r,
+              planned_work_date: targetDate,
+              last_updated: new Date().toISOString(),
+            }
+          : r
+      )
+    )
+
+    // Persist immediately in localStorage
+    try {
+      const cached = localStorage.getItem("ux_portal_real_requests")
+      if (cached) {
+        const list: UXRequest[] = JSON.parse(cached)
+        const updated = list.map((r) =>
+          r.request_id === taskId
+            ? {
+                ...r,
+                planned_work_date: targetDate,
+                last_updated: new Date().toISOString(),
+              }
+            : r
+        )
+        localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+      }
+    } catch (e) {
+      console.warn("Could not cache updated planned date in localStorage", e)
     }
-    const result = await updateTaskProgressInSheet(scheduleTask.request_id, {
-      new_phase: scheduleTask.current_phase,
-      new_status: scheduleTask.status,
-      new_progress: scheduleTask.progress,
-      planned_work_date: scheduleDate,
-      note: `Xếp ngày dự kiến làm vào [${scheduleDate}] trên Designer Planner`,
-    })
-    if (result.success) {
-      toast.success("Đã xếp ngày dự kiến", `${getRequestDisplayTitle(scheduleTask)} · ${formatShortDate(scheduleDate)}`)
-    } else {
-      toast.warning("Đã lưu trên thiết bị", result.message || "Chưa thể đồng bộ ngày dự kiến lên Cloud")
-    }
-    setScheduleTask(null)
-    setSelectedDate(scheduleDate)
-    debouncedSilentReload()
-  }
+
+    // 3. Mark as pending sync (shows optimistic spinning indicator)
+    setPendingSyncTaskIds((prev) => new Set(prev).add(taskId))
+    toast.success(
+      "Đã xếp ngày vào lịch",
+      `${getRequestDisplayTitle(task)} → ${formatShortDate(targetDate)} (Đang lưu ngầm...)`
+    )
+
+    // 4. Background asynchronous sync
+    ;(async () => {
+      try {
+        updateTaskPlannedDate(taskId, targetDate)
+
+        const res = await updateTaskProgressInSheet(taskId, {
+          new_phase: task.current_phase,
+          new_status: task.status,
+          new_progress: task.progress,
+          planned_work_date: targetDate,
+          note: noteText,
+        })
+
+        if (res.success) {
+          toast.success(
+            "Đồng bộ thành công",
+            `Đã lưu ngày gửi cho task [${task.request_id}] lên Cloud!`
+          )
+        } else {
+          toast.warning(
+            "Đã lưu trên thiết bị",
+            res.message || "Chưa thể đồng bộ ngày dự kiến lên Google Sheet"
+          )
+        }
+      } catch (err: any) {
+        console.error("[Planner] Background sync error:", err)
+        toast.error("Lỗi đồng bộ ngầm", err?.message || "Vui lòng thử lại sau")
+      } finally {
+        setPendingSyncTaskIds((prev) => {
+          const next = new Set(prev)
+          next.delete(taskId)
+          return next
+        })
+        debouncedSilentReload()
+      }
+    })()
+  }, [confirmDropModal, debouncedSilentReload])
 
   const isAdmin = useMemo(() => {
     const roleLower = String(session?.role || "").toLowerCase()
@@ -1672,11 +1813,40 @@ export default function DesignerPlannerPage() {
     recommendationText,
   ])
 
+  const executiveIntelligence = useMemo(() => {
+    return extractExecutiveIntelligence({
+      session,
+      rawRequests,
+      myTasks,
+      today,
+      todayYMD,
+      entries,
+      dominantPhaseText: dominantPhaseText || "UI Design",
+    })
+  }, [session, rawRequests, myTasks, today, todayYMD, entries, dominantPhaseText])
+
+  const handleCycleAngle = useCallback(() => {
+    const angles: PerspectiveAngle[] = ["overview", "delegated", "collaboration", "productivity"]
+    const nextIdx = (angles.indexOf(perspectiveAngle) + 1) % angles.length
+    const nextAngle = angles[nextIdx]
+    setPerspectiveAngle(nextAngle)
+    setBriefingSeed((s) => s + 1)
+    setBriefingPulse((v) => v + 1)
+    const angleNames: Record<PerspectiveAngle, string> = {
+      overview: "Tổng quan điều hành",
+      delegated: "Task bạn ủy quyền cho đồng đội",
+      collaboration: "Điểm nóng thảo luận & chat",
+      productivity: "Năng suất & Deep Work",
+    }
+    toast.success("Đổi góc nhìn trợ lý", angleNames[nextAngle])
+  }, [perspectiveAngle])
+
   const handleRefreshBriefing = useCallback(() => {
     if (isAiRefreshing) return
     setIsViewingAiTrace(false)
     setIsAiRefreshing(true)
     setBriefingPulse((v) => v + 1)
+    setBriefingSeed((s) => s + 1)
   }, [isAiRefreshing])
 
   const handleFinishAiRefresh = useCallback(() => {
@@ -1737,7 +1907,7 @@ export default function DesignerPlannerPage() {
           {/* ROW 1: 2 Bento Cards */}
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(520px,0.88fr)]">
             {/* Card 1: Executive Summary - ĐỨNG IM, KHÔNG ANIMATION XUẤT HIỆN */}
-            <div className="relative rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs overflow-hidden">
+            <div className="relative rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs overflow-hidden">
               <BorderBeam
                 colorFrom="#1057FB"
                 colorTo="#0D9B97"
@@ -1749,14 +1919,23 @@ export default function DesignerPlannerPage() {
               />
               {/* Header on gray background */}
               <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <img src="/ai-default.png" alt="AI" className="h-4 w-4 object-contain shrink-0" />
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <img src="/ai-default.png" alt="AI" className="h-4 w-4 object-contain shrink-0 mt-0.5" />
                   <h3 className="text-sm font-semibold text-neutral-900 truncate">Executive Summary</h3>
-                  <span className="hidden sm:inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200/60 shrink-0">
-                    UXTeamMB
-                  </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBriefingSeed((s) => s + 1)
+                      setBriefingPulse((v) => v + 1)
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-neutral-200/60 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-600 shadow-2xs hover:bg-white hover:text-purple-700 transition-colors cursor-pointer"
+                    title="Tạo lại bản tóm tắt mới"
+                  >
+                    <RefreshCw className="h-3 w-3 text-purple-500" />
+                    <span className="hidden sm:inline">Làm mới</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleCopyExecutiveSummary}
@@ -1768,7 +1947,10 @@ export default function DesignerPlannerPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsBriefingExpanded(true)}
+                    onClick={() => {
+                      setBriefingExpandedTab("summary")
+                      setIsBriefingExpanded(true)
+                    }}
                     className="inline-flex items-center gap-1 rounded-md border border-neutral-200/60 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-neutral-600 shadow-2xs hover:bg-white hover:text-neutral-900 transition-colors cursor-pointer"
                     title="Mở sheet đọc đầy đủ thông tin"
                   >
@@ -1779,9 +1961,9 @@ export default function DesignerPlannerPage() {
               </div>
 
               {/* Inner White Card */}
-              <div className="rounded-xl border border-neutral-200/70 bg-white p-3.5 sm:p-4 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
+              <div className="rounded-xl border border-neutral-200/70 bg-white p-3 shadow-2xs flex-1 flex flex-col justify-between overflow-hidden min-w-0">
                 {/* Scrollable Summary Body */}
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2.5 text-sm leading-relaxed text-neutral-700">
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2 text-sm leading-relaxed text-neutral-700 pt-0.5">
                   {loading || isAiRefreshing ? (
                     <AgentActivityTrace
                       activeTasks={activeTasks.length > 0 ? activeTasks : FALLBACK_TRACE_TASKS}
@@ -1808,8 +1990,19 @@ export default function DesignerPlannerPage() {
                       />
                     </div>
                   ) : (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                       <ExecutiveSummaryTypewriter
+                        intelligence={executiveIntelligence}
+                        perspectiveAngle="all"
+                        seed={briefingSeed}
+                        triggerKey={briefingPulse}
+                        onOpenTask={openTask}
+                        onOpenEvent={(ev) => setDetailEntry(ev)}
+                        onOpenChat={(task) => {
+                          setBriefingExpandedTab("discussions")
+                          setIsBriefingExpanded(true)
+                          openTask(task)
+                        }}
                         todayYMD={todayYMD}
                         newAssignedTasks={newAssignedTasks}
                         overdueTasks={overdueTasks}
@@ -1829,35 +2022,54 @@ export default function DesignerPlannerPage() {
                         nextWeekEvents={nextWeekEvents}
                         unscheduledTasks={unscheduledTasks}
                         recommendationText={recommendationText}
-                        triggerKey={briefingPulse}
-                        onOpenTask={openTask}
-                        onOpenEvent={(ev) => setDetailEntry(ev)}
                       />
 
                       {/* Gợi ý thao tác nhanh - đặt ở cuối đoạn chat */}
-                      <div className="pt-2 flex flex-wrap items-center gap-1.5">
+                      <div className="pt-2 flex flex-wrap items-center gap-1.5 border-t border-neutral-100/80">
                         <span className="text-[10px] font-semibold text-neutral-400">Gợi ý thao tác:</span>
                         <button
                           type="button"
                           onClick={handleRefreshBriefing}
                           disabled={isAiRefreshing}
-                          className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600 shadow-2xs hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 px-2 py-0.5 text-[10px] font-medium text-neutral-600 shadow-2xs hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          <Sparkles className={cn("h-3 w-3 text-purple-500", isAiRefreshing && "animate-spin")} />
+                          <Sparkles className={cn("h-2.5 w-2.5 text-purple-500", isAiRefreshing && "animate-spin")} />
                           <span>{isAiRefreshing ? "Đang đọc & tóm tắt..." : "Tóm tắt lại"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBriefingExpandedTab("delegated")
+                            setIsBriefingExpanded(true)
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 px-2 py-0.5 text-[10px] font-medium text-neutral-600 shadow-2xs hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+                        >
+                          <Users className="h-2.5 w-2.5 text-blue-500" />
+                          <span>Radar ủy quyền ({executiveIntelligence.totalDelegatedCount})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBriefingExpandedTab("discussions")
+                            setIsBriefingExpanded(true)
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 px-2 py-0.5 text-[10px] font-medium text-neutral-600 shadow-2xs hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
+                        >
+                          <MessageSquare className="h-2.5 w-2.5 text-emerald-500" />
+                          <span>Điểm nóng thảo luận ({executiveIntelligence.totalChatCount})</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setIsViewingAiTrace((v) => !v)}
                           className={cn(
-                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium shadow-2xs transition-colors",
+                            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium shadow-2xs transition-colors cursor-pointer",
                             isViewingAiTrace
                               ? "border-purple-400 bg-purple-50 text-purple-700 font-semibold"
                               : "border-neutral-200/80 bg-neutral-50/70 text-neutral-600 hover:border-neutral-300 hover:bg-neutral-100/70"
                           )}
                           title="Xem lại chi tiết các nguồn dự án và tiêu chí AI đã quét"
                         >
-                          <ListChecks className="h-3 w-3 text-neutral-500" />
+                          <ListChecks className="h-2.5 w-2.5 text-neutral-500" />
                           <span>{isViewingAiTrace ? "Ẩn nhật ký đọc" : "Nhật ký AI đã đọc"}</span>
                         </button>
                       </div>
@@ -1877,7 +2089,7 @@ export default function DesignerPlannerPage() {
                   variants={cascadeWaveItemVariants}
                   custom={0}
                   layout="position"
-                  className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[240px] min-w-0 shadow-2xs"
+                  className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] min-w-0 shadow-2xs"
                 >
             {/* Header on gray background */}
             <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
@@ -1926,11 +2138,11 @@ export default function DesignerPlannerPage() {
                 </div>
               </div>
 
-              {/* 56 Segmented Vertical-Bar Meter (Signature ReUI chart-14) */}
+              {/* 100 Segmented Vertical-Bar Meter (Signature ReUI chart-14) */}
               <div
                 aria-label={`Phân bố công việc tuần này: ${activeTasks.length} task`}
                 role="img"
-                className="flex h-7 w-full items-center overflow-hidden my-2"
+                className="flex h-5 w-full items-center gap-[1.5px] sm:gap-[2px] overflow-hidden my-2.5"
               >
                 {phaseBarGroups.map((group) => {
                   const isDimmed = Boolean(hoveredPhaseKey && hoveredPhaseKey !== group.key)
@@ -1961,16 +2173,16 @@ export default function DesignerPlannerPage() {
                         onMouseEnter={() => setHoveredPhaseKey(group.key)}
                         onMouseLeave={() => setHoveredPhaseKey(null)}
                         style={{ flex: `${group.barsCount} ${group.barsCount} 0%` }}
-                        className="flex items-center justify-around h-full cursor-pointer"
+                        className="flex items-center gap-[1.5px] sm:gap-[2px] h-full cursor-pointer"
                       >
                         {Array.from({ length: group.barsCount }).map((_, barIdx) => (
                           <span
                             key={barIdx}
                             className={cn(
-                              "h-full w-[2.5px] sm:w-[3px] shrink-0 rounded-full transition-all duration-200",
+                              "h-full flex-1 max-w-[5px] min-w-0 rounded-full transition-all duration-200",
                               group.barClass,
                               isDimmed ? "opacity-30" : "opacity-100",
-                              isHovered ? "scale-y-115 brightness-110 shadow-xs" : ""
+                              isHovered ? "scale-y-110 brightness-110 shadow-xs" : ""
                             )}
                           />
                         ))}
@@ -2242,11 +2454,11 @@ export default function DesignerPlannerPage() {
             </div>
           </div>
 
-          {/* Calendar Views & Task Sidebar Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_440px] items-stretch min-w-0">
-            {/* Left Column: Calendar Views */}
-            <div ref={calendarRef} className="min-w-0 overflow-x-auto flex flex-col h-full">
-              <div className="min-w-[760px] w-full flex-1 flex flex-col">
+          {/* Calendar Views & Task Sidebar Grid (Tỷ lệ 3:2 - Lịch chiếm 3 phần, Task chiếm 2 phần) */}
+          <div className="grid grid-cols-1 xl:grid-cols-5 items-stretch min-w-0">
+            {/* Left Column: Calendar Views (Chiếm 3 phần = 60%) */}
+            <div ref={calendarRef} className="xl:col-span-3 min-w-0 overflow-x-auto flex flex-col h-full">
+              <div className="min-w-[620px] w-full flex-1 flex flex-col">
               {/* VIEW 1: MONTH VIEW */}
               {view === "month" && (
                 <div className="flex-1 flex flex-col h-full">
@@ -2291,6 +2503,35 @@ export default function DesignerPlannerPage() {
                           key={day.dateYMD}
                           onClick={() => setSelectedDate(day.dateYMD)}
                           onDoubleClick={() => openAddEvent(day.dateYMD)}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = "move"
+                            if (dragOverDate !== day.dateYMD) {
+                              setDragOverDate(day.dateYMD)
+                            }
+                          }}
+                          onDragLeave={(e) => {
+                            if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                            if (dragOverDate === day.dateYMD) {
+                              setDragOverDate(null)
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            setDragOverDate(null)
+                            let taskToSchedule = draggedTask
+                            if (!taskToSchedule) {
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData("application/json"))
+                                if (data?.requestId) {
+                                  taskToSchedule = rawRequests.find((r) => r.request_id === data.requestId) || null
+                                }
+                              } catch {}
+                            }
+                            if (taskToSchedule) {
+                              handleInitiateSchedule(taskToSchedule, day.dateYMD)
+                            }
+                          }}
                           className={cn(
                             "group relative min-w-0 p-2 text-left align-top transition-colors bg-white flex flex-col justify-between cursor-pointer hover:bg-slate-50/40",
                             !isLastRow && "border-b border-slate-200/80",
@@ -2299,6 +2540,7 @@ export default function DesignerPlannerPage() {
                             isNonWorkingDay && "bg-slate-100/75 hover:bg-slate-100",
                             isCompensatoryWorkday && "bg-emerald-50/35",
                             isSelected && "bg-blue-50/40 ring-1 ring-inset ring-blue-300",
+                            dragOverDate === day.dateYMD && "ring-2 ring-inset ring-blue-500 bg-blue-50/90 shadow-md z-20 scale-[1.01]",
                           )}
                         >
                           {holiday && (
@@ -2314,14 +2556,35 @@ export default function DesignerPlannerPage() {
                             </div>
                           )}
 
+                          {dragOverDate === day.dateYMD && (
+                            <div className="pointer-events-none absolute inset-x-1.5 bottom-1.5 z-30 flex items-center justify-center gap-1 rounded-lg border border-dashed border-blue-400 bg-blue-100/95 py-1 text-[10.5px] font-bold text-blue-700 shadow-xs animate-pulse">
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              <span>Thả để xếp vào {formatShortDate(day.dateYMD)}</span>
+                            </div>
+                          )}
+
                           {/* Top: Event Pills */}
                           <div className="relative z-10 space-y-1 w-full min-w-0">
                             {shown.map((entry, idx) => {
                               const avatarInfo = getEntryAvatarInfo(entry)
+                              const isSyncing = Boolean(entry.request && pendingSyncTaskIds.has(entry.request.request_id))
 
                               return (
                                 <div
                                   key={entry.id || `shown-${entry.date}-${idx}`}
+                                  draggable={Boolean(entry.request)}
+                                  onDragStart={(e) => {
+                                    if (entry.request) {
+                                      e.stopPropagation()
+                                      e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
+                                      e.dataTransfer.effectAllowed = "move"
+                                      setDraggedTask(entry.request)
+                                    }
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedTask(null)
+                                    setDragOverDate(null)
+                                  }}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     if (entry.request) openTask(entry.request.request_id)
@@ -2329,18 +2592,24 @@ export default function DesignerPlannerPage() {
                                   }}
                                   className={cn(
                                     "flex min-w-0 items-center justify-between gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-all shadow-2xs hover:shadow-xs",
-                                    ENTRY_META[entry.type].color
+                                    ENTRY_META[entry.type].color,
+                                    entry.request && "cursor-grab active:cursor-grabbing",
+                                    isSyncing && "border-blue-400 bg-blue-50/70"
                                   )}
                                   style={entry.accentColor ? { borderColor: colorWithAlpha(entry.accentColor, "40"), backgroundColor: colorWithAlpha(entry.accentColor, "12"), color: entry.accentColor } : undefined}
-                                  title={`${entry.label}: ${entry.title}`}
+                                  title={`${entry.label}: ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
                                 >
                                   <div className="flex min-w-0 items-center gap-1.5">
-                                    {entry.attachments?.[0] ? (
+                                    {isSyncing ? (
+                                      <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
+                                    ) : entry.attachments?.[0] ? (
                                       <EventThumbnailImage attachment={entry.attachments[0]} className="h-4 w-4 shrink-0 rounded object-cover ring-1 ring-black/5" />
                                     ) : (
                                       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
                                     )}
-                                    <span className="truncate">{entry.time && `${entry.time} · `}{entry.title}</span>
+                                    <span className={cn("truncate", isSyncing && "text-blue-800 font-semibold")}>
+                                      {entry.time && `${entry.time} · `}{entry.title}
+                                    </span>
                                   </div>
                                   <UserAvatar
                                     name={avatarInfo.name}
@@ -2447,27 +2716,82 @@ export default function DesignerPlannerPage() {
                       {weekDays.map((day) => {
                         const dayEntries = entriesByDate.get(day.dateYMD) || []
                         const allDayList = dayEntries.filter((e) => e.type === "leave" || e.type === "deadline" || !e.time || e.time.toLowerCase().includes("cả ngày"))
+                        const isDragOver = dragOverDate === day.dateYMD
 
                         return (
-                          <div key={day.dateYMD} className="px-1 py-0.5 space-y-1 min-h-[36px]">
+                          <div
+                            key={day.dateYMD}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.dataTransfer.dropEffect = "move"
+                              if (dragOverDate !== day.dateYMD) setDragOverDate(day.dateYMD)
+                            }}
+                            onDragLeave={(e) => {
+                              if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                              if (dragOverDate === day.dateYMD) setDragOverDate(null)
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              setDragOverDate(null)
+                              let taskToSchedule = draggedTask
+                              if (!taskToSchedule) {
+                                try {
+                                  const dataStr = e.dataTransfer.getData("application/json")
+                                  if (dataStr) {
+                                    const parsed = JSON.parse(dataStr)
+                                    taskToSchedule = rawRequests.find((r) => r.request_id === parsed.requestId) || null
+                                  }
+                                } catch (err) {
+                                  console.error("Drop parse error:", err)
+                                }
+                              }
+                              if (taskToSchedule) {
+                                handleInitiateSchedule(taskToSchedule, day.dateYMD)
+                              }
+                            }}
+                            className={cn(
+                              "px-1 py-0.5 space-y-1 min-h-[36px] transition-colors rounded-sm",
+                              isDragOver && "bg-blue-100/70 ring-2 ring-inset ring-blue-400"
+                            )}
+                          >
                             {allDayList.map((entry, idx) => {
                               const avatarInfo = getEntryAvatarInfo(entry)
+                              const isSyncing = Boolean(entry.request && pendingSyncTaskIds.has(entry.request.request_id))
                               return (
                                 <div
                                   key={entry.id || `allday-${entry.date}-${idx}`}
+                                  draggable={Boolean(entry.request)}
+                                  onDragStart={(e) => {
+                                    if (entry.request) {
+                                      e.stopPropagation()
+                                      e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
+                                      e.dataTransfer.effectAllowed = "move"
+                                      setDraggedTask(entry.request)
+                                    }
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedTask(null)
+                                    setDragOverDate(null)
+                                  }}
                                   onClick={() => {
                                     if (entry.request) openTask(entry.request.request_id)
                                     else setDetailEntry(entry)
                                   }}
                                   className={cn(
                                     "flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium shadow-2xs hover:shadow-xs transition-all cursor-pointer",
-                                    ENTRY_META[entry.type].color
+                                    ENTRY_META[entry.type].color,
+                                    entry.request && "cursor-grab active:cursor-grabbing",
+                                    isSyncing && "border-blue-400 bg-blue-50/70"
                                   )}
-                                  title={`${entry.label}: ${entry.title}`}
+                                  title={`${entry.label}: ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
                                 >
                                   <div className="flex items-center gap-1 min-w-0">
-                                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} />
-                                    <span className="truncate">{entry.title}</span>
+                                    {isSyncing ? (
+                                      <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
+                                    ) : (
+                                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} />
+                                    )}
+                                    <span className={cn("truncate", isSyncing && "text-blue-800 font-semibold")}>{entry.title}</span>
                                   </div>
                                   <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3 w-3 text-[6px] shrink-0 rounded-full" />
                                 </div>
@@ -2503,14 +2827,52 @@ export default function DesignerPlannerPage() {
                       {weekDays.map((day) => {
                         const dayEntries = entriesByDate.get(day.dateYMD) || []
                         const timedList = dayEntries.filter((e) => !(e.type === "leave" || e.type === "deadline" || !e.time || e.time.toLowerCase().includes("cả ngày")))
+                        const isDragOver = dragOverDate === day.dateYMD
 
                         return (
                           <div
                             key={day.dateYMD}
                             onDoubleClick={() => openAddEvent(day.dateYMD)}
-                            className="relative"
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.dataTransfer.dropEffect = "move"
+                              if (dragOverDate !== day.dateYMD) setDragOverDate(day.dateYMD)
+                            }}
+                            onDragLeave={(e) => {
+                              if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                              if (dragOverDate === day.dateYMD) setDragOverDate(null)
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              setDragOverDate(null)
+                              let taskToSchedule = draggedTask
+                              if (!taskToSchedule) {
+                                try {
+                                  const dataStr = e.dataTransfer.getData("application/json")
+                                  if (dataStr) {
+                                    const parsed = JSON.parse(dataStr)
+                                    taskToSchedule = rawRequests.find((r) => r.request_id === parsed.requestId) || null
+                                  }
+                                } catch (err) {
+                                  console.error("Drop parse error:", err)
+                                }
+                              }
+                              if (taskToSchedule) {
+                                handleInitiateSchedule(taskToSchedule, day.dateYMD)
+                              }
+                            }}
+                            className={cn(
+                              "relative transition-colors",
+                              isDragOver && "bg-blue-50/60 ring-2 ring-inset ring-blue-400"
+                            )}
                             style={{ height: `${WEEK_HOURS.length * 64}px` }}
                           >
+                            {isDragOver && (
+                              <div className="pointer-events-none sticky top-2 left-1 right-1 z-30 flex items-center justify-center gap-1 rounded-md border border-dashed border-blue-400 bg-blue-100/95 py-1 text-[10px] font-bold text-blue-700 shadow-xs animate-pulse">
+                                <CalendarDays className="h-3 w-3" />
+                                <span>Thả vào {formatShortDate(day.dateYMD)}</span>
+                              </div>
+                            )}
                             {timedList.map((entry, idx) => {
                               const timeMatch = entry.time?.match(/(\d{1,2}):(\d{2})/)
                               const startHour = timeMatch ? parseInt(timeMatch[1], 10) : 9
@@ -2525,10 +2887,24 @@ export default function DesignerPlannerPage() {
                               const topPixels = Math.max(0, ((startHour - WEEK_START_HOUR) * 60 + startMinute) * (64 / 60))
                               const heightPixels = Math.max(40, (durationMinutes / 60) * 64)
                               const avatarInfo = getEntryAvatarInfo(entry)
+                              const isSyncing = Boolean(entry.request && pendingSyncTaskIds.has(entry.request.request_id))
 
                               return (
                                 <div
                                   key={entry.id || `timed-${entry.date}-${idx}`}
+                                  draggable={Boolean(entry.request)}
+                                  onDragStart={(e) => {
+                                    if (entry.request) {
+                                      e.stopPropagation()
+                                      e.dataTransfer.setData("application/json", JSON.stringify({ requestId: entry.request.request_id }))
+                                      e.dataTransfer.effectAllowed = "move"
+                                      setDraggedTask(entry.request)
+                                    }
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedTask(null)
+                                    setDragOverDate(null)
+                                  }}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     if (entry.request) openTask(entry.request.request_id)
@@ -2541,18 +2917,24 @@ export default function DesignerPlannerPage() {
                                   }}
                                   className={cn(
                                     "absolute left-1 right-1 z-10 rounded-md border p-1 sm:p-1.5 text-left text-xs shadow-2xs hover:shadow-xs transition-all overflow-hidden flex flex-col justify-between cursor-pointer",
-                                    !entry.accentColor && ENTRY_META[entry.type].color
+                                    !entry.accentColor && ENTRY_META[entry.type].color,
+                                    entry.request && "cursor-grab active:cursor-grabbing",
+                                    isSyncing && "border-blue-400 bg-blue-50/70"
                                   )}
-                                  title={`${entry.time} · ${entry.title}`}
+                                  title={`${entry.time} · ${entry.title}${isSyncing ? " (Đang đồng bộ ngầm...)" : ""}`}
                                 >
                                   <div className="flex items-center justify-between gap-1">
                                     <div className="flex items-center gap-1 min-w-0">
-                                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
-                                      <span className="text-[10px] font-semibold text-slate-500 truncate">{entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}</span>
+                                      {isSyncing ? (
+                                        <RefreshCw className="h-2.5 w-2.5 shrink-0 animate-spin text-blue-600" />
+                                      ) : (
+                                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", !entry.accentColor && ENTRY_META[entry.type].dot)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
+                                      )}
+                                      <span className={cn("text-[10px] font-semibold text-slate-500 truncate", isSyncing && "text-blue-800")}>{entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}</span>
                                     </div>
                                     <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3.5 w-3.5 text-[7px] shrink-0" />
                                   </div>
-                                  <p className="font-semibold text-[11px] leading-tight truncate text-slate-900 mt-0.5">{entry.title}</p>
+                                  <p className={cn("font-semibold text-[11px] leading-tight truncate text-slate-900 mt-0.5", isSyncing && "text-blue-900")}>{entry.title}</p>
                                   {entry.location && <p className="text-[9px] text-slate-500 truncate mt-auto">{entry.location}</p>}
                                 </div>
                               )
@@ -2626,10 +3008,10 @@ export default function DesignerPlannerPage() {
               </div>
             </div>
 
-            {/* Right Column: Task Sidebar (Height matches left calendar, scrolls internally on overflow) */}
+            {/* Right Column: Task Sidebar (Chiếm 2 phần = 40%) */}
             <aside
               style={calendarHeight ? { maxHeight: `${calendarHeight}px`, height: `${calendarHeight}px` } : undefined}
-              className="relative min-w-0 border-t xl:border-t-0 xl:border-l border-slate-200/80 bg-slate-50/40 flex flex-col"
+              className="xl:col-span-2 relative min-w-0 border-t xl:border-t-0 xl:border-l border-slate-200/80 bg-slate-50/40 flex flex-col"
             >
               <div className="xl:absolute xl:inset-0 xl:overflow-y-auto divide-y divide-slate-200/80 flex flex-col">
                 {/* 1. Ưu tiên cao trong tuần */}
@@ -2639,28 +3021,79 @@ export default function DesignerPlannerPage() {
                       <Flag className="h-3.5 w-3.5 text-rose-500" />
                       Ưu tiên cao trong tuần
                     </h3>
-                    <span className="text-[10px] text-slate-400">{formatShortDate(weekStart)}–{formatShortDate(weekEnd)}</span>
+                    <Badge variant="rose" size="xs">{priorityThisWeek.length}</Badge>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {priorityThisWeek.length === 0 ? (
-                      <div className="rounded-xl bg-white p-3.5 text-xs text-slate-500 text-center border border-slate-200/60">
+                      <div className="rounded-xl bg-white p-3.5 text-xs text-slate-500 text-center border border-slate-200/60 shadow-2xs">
                         Không có task Lv1/Lv2 trong tuần.
                       </div>
-                    ) : priorityThisWeek.map((task, idx) => (
-                      <button
-                        key={task.request_id || `priority-${idx}`}
-                        onClick={() => openTask(task.request_id)}
-                        className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-slate-300 hover:shadow-xs transition-all"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <PriorityBadge priority={task.priority} size="xs" />
-                          <span className="text-[10px] text-slate-400">{formatShortDate(getTaskDateForWeek(task))}</span>
+                    ) : priorityThisWeek.map((task, idx) => {
+                      const taskDate = formatShortDate(getTaskDateForWeek(task))
+                      const designers = Array.from(new Set([task.assigned_designer, task.ux_owner].filter(Boolean) as string[])).filter(
+                        (d) => d && d !== "Chưa phân công" && d !== "unassigned"
+                      )
+
+                      const isDragging = draggedTask?.request_id === task.request_id
+                      const isSyncing = pendingSyncTaskIds.has(task.request_id)
+
+                      return (
+                        <div
+                          key={task.request_id || `priority-${idx}`}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("application/json", JSON.stringify({ requestId: task.request_id }))
+                            e.dataTransfer.effectAllowed = "move"
+                            setDraggedTask(task)
+                          }}
+                          onDragEnd={() => {
+                            setDraggedTask(null)
+                            setDragOverDate(null)
+                          }}
+                          onClick={() => openTask(task.request_id)}
+                          className={cn(
+                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
+                            isDragging && "opacity-40 scale-95 border-dashed border-blue-400 bg-blue-50/50",
+                            isSyncing && "border-blue-400 bg-blue-50/70"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-1.5">
+                            <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+                              {getRequestDisplayTitle(task)}
+                            </h4>
+                            {isSyncing ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-600 shrink-0 mt-0.5" />
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2.5 text-xs text-slate-500 pt-0.5 overflow-hidden">
+                            <StatusPill status={task.status} size="xs" />
+                            {designers.length > 0 && (
+                              <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                {designers.map((d) => (
+                                  <Tooltip key={d} content={d} side="top">
+                                    <div className="relative inline-block ring-2 ring-white rounded-full">
+                                      <UserAvatar name={d} size="xs" />
+                                    </div>
+                                  </Tooltip>
+                                ))}
+                              </div>
+                            )}
+                            {taskDate && (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500 shrink-0">
+                                <Clock3 className="h-3 w-3 text-slate-400" />
+                                {taskDate}
+                              </span>
+                            )}
+                            {task.squad_name && (
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[120px]" title={task.squad_name}>
+                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="truncate">{task.squad_name}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-800">
-                          {getRequestDisplayTitle(task)}
-                        </p>
-                      </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -2678,39 +3111,128 @@ export default function DesignerPlannerPage() {
                       Thêm việc
                     </Button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {selectedEntries.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center flex flex-col items-center justify-center">
-                        <CalendarDays className="h-5 w-5 text-slate-300" />
-                        <p className="mt-1.5 text-xs font-medium text-slate-500">Chưa có lịch trong ngày này</p>
-                      </div>
-                    ) : selectedEntries.map((entry, idx) => (
-                      <div
-                        key={entry.id || `selected-entry-${entry.date || selectedDate}-${idx}`}
-                        className="flex w-full items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-slate-300 hover:shadow-xs"
-                      >
-                        {entry.attachments?.[0] ? (
-                          <EventThumbnailImage attachment={entry.attachments[0]} className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
-                        ) : (
-                          <span className={cn("mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", !entry.accentColor && entry.color)} style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined} />
-                        )}
-                        <button onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)} className="min-w-0 flex-1 text-left">
-                          <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">{entry.label}{entry.time ? ` · ${entry.time}` : ""}</span>
-                          <span className="mt-0.5 block text-xs font-semibold leading-5 text-slate-800 line-clamp-2">{entry.title}</span>
-                          {entry.location && (
-                            <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-slate-500">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{getMeetingLinkMeta(entry.location)?.label || entry.location}</span>
-                            </span>
-                          )}
-                        </button>
-                        {entry.request && entry.type === "planned" && (
-                          <button onClick={() => openSchedule(entry.request!, selectedDate)} className="text-[10px] font-semibold text-blue-600 hover:underline shrink-0">
-                            Đổi ngày
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      <EmptyState10
+                        title="Chưa có lịch trong ngày này"
+                        description="Thêm việc mới hoặc kéo thả task từ danh sách chưa xếp lịch vào ngày này."
+                        icon={<CalendarDays className="h-6 w-6 text-slate-700" />}
+                        primaryAction={{
+                          label: "Thêm việc",
+                          icon: <Plus className="h-3.5 w-3.5" />,
+                          onClick: () => openAddEvent(selectedDate),
+                        }}
+                        secondaryAction={
+                          unscheduledTasks.length > 0
+                            ? {
+                                label: "Xếp 1 task",
+                                icon: <Rocket className="h-3.5 w-3.5 text-blue-600" />,
+                                onClick: () => handleInitiateSchedule(unscheduledTasks[0], selectedDate),
+                              }
+                            : undefined
+                        }
+                      />
+                    ) : selectedEntries.map((entry, idx) => {
+                      const linkMeta = entry.location ? getMeetingLinkMeta(entry.location) : null
+                      const isMeet = Boolean(linkMeta)
+                      const attendees = entry.attendees || []
+
+                      return (
+                        <div
+                          key={entry.id || `selected-entry-${entry.date || selectedDate}-${idx}`}
+                          onClick={() => entry.request ? openTask(entry.request.request_id) : setDetailEntry(entry)}
+                          className="group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-pointer"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+                              {entry.title}
+                            </h4>
+                            {entry.request && entry.type === "planned" && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openSchedule(entry.request!, selectedDate)
+                                }}
+                                className="text-[10.5px] font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0"
+                              >
+                                Đổi ngày
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-0.5">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold border",
+                                  entry.accentColor
+                                    ? ""
+                                    : entry.type === "meeting"
+                                      ? "bg-purple-50 text-purple-700 border-purple-200/60"
+                                      : entry.type === "leave"
+                                        ? "bg-rose-50 text-rose-700 border-rose-200/60"
+                                        : entry.type === "deadline"
+                                          ? "bg-amber-50 text-amber-700 border-amber-200/60"
+                                          : "bg-blue-50 text-blue-700 border-blue-200/60"
+                                )}
+                                style={entry.accentColor ? { backgroundColor: colorWithAlpha(entry.accentColor, "15"), color: entry.accentColor, borderColor: colorWithAlpha(entry.accentColor, "40") } : undefined}
+                              >
+                                {entry.label}
+                              </span>
+
+                              {/* Attendees / Designer Avatar stack */}
+                              {attendees.length > 0 ? (
+                                <div className="flex -space-x-1.5 overflow-hidden">
+                                  {attendees.slice(0, 3).map((att, aIdx) => {
+                                    const user = getAttendeeDisplay(att, availableMeetingDesigners)
+                                    return (
+                                      <Tooltip key={`${att}-${aIdx}`} content={user.name} side="top">
+                                        <div className="relative inline-block ring-2 ring-white rounded-full">
+                                          <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
+                                        </div>
+                                      </Tooltip>
+                                    )
+                                  })}
+                                  {attendees.length > 3 && (
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-bold text-slate-600 ring-2 ring-white">
+                                      +{attendees.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : entry.designer ? (
+                                <div className="flex -space-x-1.5 overflow-hidden">
+                                  <Tooltip content={entry.designer} side="top">
+                                    <div className="relative inline-block ring-2 ring-white rounded-full">
+                                      <UserAvatar name={entry.designer} size="xs" />
+                                    </div>
+                                  </Tooltip>
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="flex items-center gap-2.5 text-xs text-slate-500">
+                              {entry.time && (
+                                <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                                  <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span>{entry.time}</span>
+                                </span>
+                              )}
+                              {entry.location && (
+                                <span className="flex items-center gap-1 text-[11px] text-slate-500 truncate max-w-[120px]">
+                                  {isMeet ? (
+                                    <Video className="h-3 w-3 text-blue-500 shrink-0" />
+                                  ) : (
+                                    <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                  )}
+                                  <span className="truncate">{linkMeta?.label || entry.location}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -2723,25 +3245,89 @@ export default function DesignerPlannerPage() {
                     </h3>
                     <Badge variant="warning" size="xs">{unscheduledTasks.length}</Badge>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {unscheduledTasks.length === 0 ? (
                       <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3.5 text-xs font-medium text-emerald-700">
                         <Check className="h-3.5 w-3.5 shrink-0" />
                         Tất cả công việc đã có kế hoạch.
                       </div>
-                    ) : unscheduledTasks.map((task, idx) => (
-                      <div key={task.request_id || `unscheduled-${idx}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300 transition-colors shadow-2xs">
-                        <button onClick={() => openTask(task.request_id)} className="line-clamp-2 w-full text-left text-xs font-semibold leading-5 text-slate-800 hover:text-blue-600 transition-colors">
-                          {getRequestDisplayTitle(task)}
-                        </button>
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <StatusPill status={task.status} size="xs" />
-                          <button onClick={() => openSchedule(task)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700">
-                            + Xếp ngày
-                          </button>
+                    ) : unscheduledTasks.map((task, idx) => {
+                      const designers = Array.from(new Set([task.assigned_designer, task.ux_owner].filter(Boolean) as string[])).filter(
+                        (d) => d && d !== "Chưa phân công" && d !== "unassigned"
+                      )
+
+                      const isDragging = draggedTask?.request_id === task.request_id
+                      const isSyncing = pendingSyncTaskIds.has(task.request_id)
+
+                      return (
+                        <div
+                          key={task.request_id || `unscheduled-${idx}`}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("application/json", JSON.stringify({ requestId: task.request_id }))
+                            e.dataTransfer.effectAllowed = "move"
+                            setDraggedTask(task)
+                          }}
+                          onDragEnd={() => {
+                            setDraggedTask(null)
+                            setDragOverDate(null)
+                          }}
+                          className={cn(
+                            "group relative flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 sm:p-3.5 text-left shadow-2xs hover:border-blue-400 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing select-none",
+                            isDragging && "opacity-40 scale-95 border-dashed border-blue-400 bg-blue-50/50",
+                            isSyncing && "border-blue-400 bg-blue-50/70"
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <GripVertical className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
+                            <h4
+                              onClick={() => openTask(task.request_id)}
+                              className="text-xs sm:text-[13px] font-semibold text-slate-900 tracking-tight leading-snug line-clamp-1 hover:text-blue-600 transition-colors cursor-pointer truncate"
+                              title={task.title}
+                            >
+                              {getRequestDisplayTitle(task)}
+                            </h4>
+                            {isSyncing && (
+                              <RefreshCw className="h-3 w-3 animate-spin text-blue-600 shrink-0 ml-auto" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2.5 text-xs text-slate-500 pt-0.5 overflow-hidden">
+                            <StatusPill status={task.status} size="xs" />
+
+                            {designers.length > 0 && (
+                              <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                {designers.map((d) => (
+                                  <Tooltip key={d} content={d} side="top">
+                                    <div className="relative inline-block ring-2 ring-white rounded-full">
+                                      <UserAvatar name={d} size="xs" />
+                                    </div>
+                                  </Tooltip>
+                                ))}
+                              </div>
+                            )}
+
+                            {task.submitted_at ? (
+                              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Thời gian tiếp nhận yêu cầu (Start)">
+                                <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span>{formatShortDate(task.submitted_at)}</span>
+                              </span>
+                            ) : task.expected_deadline ? (
+                              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium shrink-0" title="Hạn chót cam kết">
+                                <Clock3 className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span>{formatShortDate(task.expected_deadline)}</span>
+                              </span>
+                            ) : null}
+
+                            {task.squad_name && (
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate max-w-[120px]" title={task.squad_name}>
+                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span className="truncate">{task.squad_name}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -2771,11 +3357,11 @@ export default function DesignerPlannerPage() {
           </div>
           <motion.div variants={cascadeWaveContainerVariants} initial="hidden" animate="visible" className="divide-y divide-slate-100">
             {shownNotifications.length === 0 ? (
-              <div className="px-5 py-10 text-center">
-                <Check className="mx-auto h-5 w-5 text-emerald-500" />
-                <p className="mt-2 text-sm font-semibold text-slate-700">Bạn đã xem hết cập nhật</p>
-                <p className="mt-1 text-xs text-slate-400">Thông báo mới liên quan đến task của bạn sẽ xuất hiện tại đây.</p>
-              </div>
+              <EmptyState1
+                title="Bạn đã xem hết cập nhật"
+                description="Thông báo mới liên quan đến task của bạn sẽ xuất hiện tại đây."
+                icon={<Bell className="h-3 w-3 text-blue-600" />}
+              />
             ) : shownNotifications.slice(0, 10).map((notification, idx) => (
               <motion.button
                 variants={cascadeWaveItemVariants}
@@ -2802,35 +3388,162 @@ export default function DesignerPlannerPage() {
   </AnimatePresence>
 </div>
 
-      <RightSheet
-        open={Boolean(scheduleTask)}
-        onClose={() => setScheduleTask(null)}
-        size="sm"
-        title="Xếp ngày dự kiến làm"
-        description="Deadline cam kết không thay đổi."
-        icon={<CalendarDays className="h-4 w-4" />}
-        footer={(
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setScheduleTask(null)}>Hủy</Button>
-            <Button onClick={saveSchedule} disabled={!scheduleDate}>Hoàn tất</Button>
+      {/* Popup xác nhận ngày gửi & Lịch làm việc */}
+      <AnimatePresence>
+        {confirmDropModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmDropModal(null)}
+              className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs"
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative z-10 w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 shadow-2xs">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Xác nhận ngày gửi & Lịch thực hiện</h3>
+                    <p className="text-xs text-slate-500">
+                      Ghim task vào lịch và tự động ghi chú tiến độ gửi đi
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDropModal(null)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="space-y-4 overflow-y-auto p-5 sm:p-6">
+                {/* Task Info Banner */}
+                <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/70 to-indigo-50/40 p-3.5 space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-[11px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded-md border border-blue-200/80 shadow-2xs">
+                      #{confirmDropModal.task.request_id}
+                    </span>
+                    <PriorityBadge priority={confirmDropModal.task.priority} size="xs" />
+                    {confirmDropModal.task.current_phase && (
+                      <span className="text-[11px] font-semibold text-slate-700 bg-white/95 px-2 py-0.5 rounded-md border border-slate-200">
+                        {confirmDropModal.task.current_phase}
+                      </span>
+                    )}
+                    {confirmDropModal.task.squad_name && (
+                      <span className="text-[11px] text-slate-600 font-medium truncate max-w-[150px]">
+                        {confirmDropModal.task.squad_name}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-[13px] font-bold text-slate-900 leading-snug">
+                    {getRequestDisplayTitle(confirmDropModal.task)}
+                  </h4>
+                  {confirmDropModal.task.expected_deadline && (
+                    <div className="flex items-center justify-between pt-1 border-t border-blue-100/80 text-xs">
+                      <span className="text-slate-500 font-medium">Deadline cam kết ban đầu:</span>
+                      <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                        {formatShortDate(confirmDropModal.task.expected_deadline)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Target Date Picker */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                    <span>Ngày gửi / Ngày xếp lịch:</span>
+                    <span className="text-blue-600 font-medium text-[11px]">
+                      {formatFullVietnameseDate(confirmDropModal.targetDate)}
+                    </span>
+                  </label>
+                  <input
+                    type="date"
+                    value={confirmDropModal.targetDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      if (!newDate) return
+                      const deadlineInfo = getPhaseDeadlineInfo(confirmDropModal.task.current_phase)
+                      const formatted = formatYMDToDDMMYYYY(newDate)
+                      setConfirmDropModal({
+                        ...confirmDropModal,
+                        targetDate: newDate,
+                        noteText: `Cập nhật ${deadlineInfo.actionText} sang: ${formatted}`,
+                      })
+                    }}
+                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                </div>
+
+                {/* Note Textarea */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                    <span>Nội dung gửi đi theo quy định ngày gửi:</span>
+                    <span className="text-emerald-700 font-medium text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                      {getPhaseDeadlineInfo(confirmDropModal.task.current_phase).actionText}
+                    </span>
+                  </label>
+                  <textarea
+                    value={confirmDropModal.noteText}
+                    onChange={(e) =>
+                      setConfirmDropModal((prev) =>
+                        prev ? { ...prev, noteText: e.target.value } : null
+                      )
+                    }
+                    rows={3}
+                    placeholder="Nhập nội dung cập nhật..."
+                    className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs sm:text-sm text-slate-800 leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Nội dung này được tạo tự động theo quy định ngày gửi của phase hiện tại và sẽ được lưu vào lịch sử tiến độ / chat task.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmDropModal(null)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmSchedule}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Xác nhận & Cập nhật</span>
+                </Button>
+              </div>
+            </motion.div>
           </div>
         )}
-      >
-        <div className="space-y-4 p-5 sm:p-6">
-          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-800">{scheduleTask && getRequestDisplayTitle(scheduleTask)}</div>
-          <label className="block text-xs font-semibold text-slate-700">Ngày dự kiến làm
-            <input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
-          </label>
-          {scheduleTask && <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><span>Deadline cam kết</span><strong>{formatShortDate(getTaskDeadline(scheduleTask))}</strong></div>}
-        </div>
-      </RightSheet>
+      </AnimatePresence>
 
       {/* Executive Summary Slide-Over Sheet */}
       <RightSheet
         open={isBriefingExpanded}
         onClose={() => setIsBriefingExpanded(false)}
         size="lg"
-        title="Bản tin điều hành UX (Executive Summary)"
+        title="Bản tin điều hành UX (Executive Summary 360°)"
         description={`Cập nhật tuần ${formatShortDate(weekStart)} – ${formatShortDate(weekEnd)} · Trọng tâm ${dominantPhaseText}`}
         icon={<img src="/ai-default.png" alt="AI" className="h-5 w-5 object-contain" />}
         bodyClassName="overflow-y-auto bg-slate-50/50 p-0"
@@ -2860,25 +3573,139 @@ export default function DesignerPlannerPage() {
               variant="outline"
               size="sm"
               onClick={() => setIsBriefingExpanded(false)}
-              className="h-9 px-5 text-sm font-semibold"
+              className="h-9 px-5 text-sm font-semibold cursor-pointer"
             >
               Đóng
             </Button>
           </div>
         )}
       >
+        {/* Navigation Tabs */}
+        <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-md border-b border-slate-200/80 px-6 pt-3 pb-2.5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setBriefingExpandedTab("summary")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+              briefingExpandedTab === "summary"
+                ? "bg-purple-600 text-white shadow-xs"
+                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80"
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>360° Tổng quan</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setBriefingExpandedTab("delegated")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+              briefingExpandedTab === "delegated"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80"
+            )}
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span>Radar task ủy quyền</span>
+            <span
+              className={cn(
+                "inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-tight",
+                briefingExpandedTab === "delegated" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
+              )}
+            >
+              {executiveIntelligence.totalDelegatedCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setBriefingExpandedTab("discussions")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+              briefingExpandedTab === "discussions"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80"
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>Điểm nóng thảo luận</span>
+            <span
+              className={cn(
+                "inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-tight",
+                briefingExpandedTab === "discussions" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700"
+              )}
+            >
+              {executiveIntelligence.totalChatCount}
+            </span>
+          </button>
+        </div>
         <div className="p-6 sm:p-7 space-y-6">
-          {/* Top highlight card */}
-          <div className="rounded-2xl border border-purple-200/70 bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/40 p-5 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100/80 px-2 py-0.5 text-xs font-bold text-purple-700 border border-purple-200/60">
-                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-                Định hướng điều hành tuần
-              </span>
-              <span className="text-[11px] text-purple-600/80 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-purple-100">
-                UXTeamMB Intelligence
-              </span>
-            </div>
+          {briefingExpandedTab === "summary" && (
+            <div className="space-y-6">
+              {/* Top highlight card */}
+              <div className="rounded-2xl border border-purple-200/70 bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/40 p-5 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100/80 px-2 py-0.5 text-xs font-bold text-purple-700 border border-purple-200/60">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                    {executiveIntelligence.greeting} {executiveIntelligence.userName}!
+                  </span>
+                  <span className="text-[11px] text-purple-600/80 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-purple-100">
+                    AI Copilot
+                  </span>
+                </div>
+
+                {/* Deep Work & Meeting Capacity Widget */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="rounded-xl border border-purple-100 bg-white/90 p-2.5">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <Clock3 className="h-3.5 w-3.5 text-purple-600" />
+                      <span>Deep Work</span>
+                    </div>
+                    <p className="text-lg font-bold text-purple-950 mt-0.5">
+                      {executiveIntelligence.deepWorkHoursAvailable}h <span className="text-[10px] font-normal text-slate-400">trống</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-blue-100 bg-white/90 p-2.5">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <CalendarDays className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Cuộc họp hôm nay</span>
+                    </div>
+                    <p className="text-lg font-bold text-blue-950 mt-0.5">
+                      {executiveIntelligence.todayMeetingCount} <span className="text-[10px] font-normal text-slate-400">lịch ({executiveIntelligence.todayMeetingDurationMinutes}p)</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-100 bg-white/90 p-2.5">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <Users className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Task ủy quyền</span>
+                    </div>
+                    <p className="text-lg font-bold text-emerald-950 mt-0.5">
+                      {executiveIntelligence.totalDelegatedCount} <span className="text-[10px] font-normal text-slate-400">task ({executiveIntelligence.avgDelegatedProgress}%)</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-amber-100 bg-white/90 p-2.5">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                      <span>Thảo luận chat</span>
+                    </div>
+                    <p className="text-lg font-bold text-amber-950 mt-0.5">
+                      {executiveIntelligence.totalChatCount} <span className="text-[10px] font-normal text-slate-400">lượt</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actionable Advice from Assistant */}
+                {executiveIntelligence.actionableAdvice.length > 0 && (
+                  <div className="rounded-xl border border-purple-200/80 bg-purple-50/50 p-3 space-y-1.5 text-xs text-purple-950">
+                    <span className="font-bold flex items-center gap-1 text-[11px] text-purple-800 uppercase tracking-wider">
+                      💡 Khuyến nghị hành động từ trợ lý:
+                    </span>
+                    <ul className="space-y-1 pl-4 list-disc marker:text-purple-500 leading-relaxed">
+                      {executiveIntelligence.actionableAdvice.map((advice, i) => (
+                        <li key={i}>{advice}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
             <div className="space-y-4 text-sm leading-relaxed text-slate-800">
               {/* BLOCK 1: HÔM NAY */}
@@ -3148,6 +3975,319 @@ export default function DesignerPlannerPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 2: DELEGATED TASKS RADAR */}
+      {briefingExpandedTab === "delegated" && (
+        <div className="space-y-5">
+          {/* Radar Overview Banner */}
+          <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50/70 via-white to-sky-50/40 p-4 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                  <Users className="h-4 w-4" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-blue-950">Radar bài toán bạn ủy quyền</h4>
+                  <p className="text-xs text-blue-700/80">
+                    Giám sát các task do bạn tạo và chuyển giao cho đồng đội thực hiện
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
+                {executiveIntelligence.totalDelegatedCount} bài toán
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Tiến độ trung bình</span>
+                <p className="text-lg font-bold text-slate-900 mt-0.5">{executiveIntelligence.avgDelegatedProgress}%</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Trễ hạn</span>
+                <p className={cn("text-lg font-bold mt-0.5", executiveIntelligence.delegatedTasks.filter(t => t.isOverdue).length > 0 ? "text-rose-600" : "text-emerald-600")}>
+                  {executiveIntelligence.delegatedTasks.filter(t => t.isOverdue).length} task
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Lượt trao đổi</span>
+                <p className="text-lg font-bold text-blue-600 mt-0.5">
+                  {executiveIntelligence.delegatedTasks.reduce((s, t) => s + t.chatCount, 0)} tin
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Người phối hợp</span>
+                <p className="text-lg font-bold text-purple-600 mt-0.5">
+                  {new Set(executiveIntelligence.delegatedTasks.map(t => t.assignee)).size} đồng đội
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Delegated Task Cards */}
+          <div className="space-y-3">
+            {executiveIntelligence.delegatedTasks.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center space-y-2">
+                <Users className="h-8 w-8 text-slate-300 mx-auto" />
+                <p className="text-sm font-semibold text-slate-700">Chưa có bài toán ủy quyền nào</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Khi bạn tạo một task mới và gán cho đồng đội khác trong team, Radar này sẽ tự động thống kê tiến độ %, lịch trình và các trao đổi phát sinh.
+                </p>
+              </div>
+            ) : (
+              executiveIntelligence.delegatedTasks.map((item) => {
+                const task = item.task
+                const initial = item.assignee.trim().charAt(0).toUpperCase() || "?"
+                return (
+                  <div
+                    key={task.request_id}
+                    className={cn(
+                      "rounded-xl border bg-white p-4 shadow-2xs space-y-3 transition-all hover:border-blue-300 hover:shadow-xs",
+                      item.isOverdue ? "border-rose-200 bg-rose-50/20" : "border-slate-200/80"
+                    )}
+                  >
+                    {/* Top row: Assignee info + task header */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span className="font-mono font-bold text-slate-500">{task.request_id}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-medium text-slate-500">{task.product || "App MB"}</span>
+                          {task.squad_name && (
+                            <>
+                              <span className="text-slate-300">·</span>
+                              <span className="text-slate-500 font-medium">{task.squad_name}</span>
+                            </>
+                          )}
+                          <PriorityBadge priority={task.priority} size="xs" />
+                        </div>
+                        <h5
+                          onClick={() => {
+                            setIsBriefingExpanded(false)
+                            openTask(task.request_id)
+                          }}
+                          className="text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors cursor-pointer"
+                        >
+                          {getRequestDisplayTitle(task)}
+                        </h5>
+                      </div>
+
+                      {/* Assignee Badge */}
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-1.5 shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                          {initial}
+                        </span>
+                        <div className="text-left">
+                          <p className="text-[11px] font-bold text-slate-800 leading-none">{item.assignee}</p>
+                          <span className="text-[9px] text-slate-400 font-medium">Người thực hiện</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle row: Progress bar + Phase + Deadline */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 uppercase">
+                            {item.phase}
+                          </span>
+                          <span className="text-slate-500 text-[11px] font-medium">{item.status}</span>
+                        </div>
+                        <div className="flex items-center gap-2 font-medium text-xs">
+                          {item.deadline && (
+                            <span className={cn(
+                              "rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                              item.isOverdue ? "bg-rose-100 text-rose-700 font-bold" : "bg-slate-100 text-slate-600"
+                            )}>
+                              {item.isOverdue ? `⚠️ Trễ (Hạn ${formatShortDate(item.deadline)})` : `Hạn ${formatShortDate(item.deadline)}`}
+                            </span>
+                          )}
+                          <span className="font-bold text-slate-800">{item.progress}%</span>
+                        </div>
+                      </div>
+                      {/* Progress bar visual */}
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            item.isOverdue ? "bg-rose-500" : item.progress >= 80 ? "bg-emerald-500" : "bg-blue-500"
+                          )}
+                          style={{ width: `${Math.min(item.progress, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bottom row: Chat preview & Actions */}
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      {item.chatCount > 0 ? (
+                        <div className="flex items-center gap-2 text-slate-600 truncate max-w-[70%]">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200/60 shrink-0">
+                            <MessageSquare className="h-3 w-3" />
+                            <span>{item.chatCount} trao đổi</span>
+                          </span>
+                          {item.lastChatNote && (
+                            <span className="text-[11px] text-slate-500 truncate italic">
+                              &ldquo;{item.lastChatNote}&rdquo;
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Chưa có bình luận mới</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBriefingExpanded(false)
+                          openTask(task.request_id)
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer shrink-0 ml-auto"
+                      >
+                        <span>Xem chi tiết</span>
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: DISCUSSION HUB & ACTIVE CHATS */}
+      {briefingExpandedTab === "discussions" && (
+        <div className="space-y-5">
+          {/* Hub Overview Banner */}
+          <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 p-4 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                  <MessageSquare className="h-4 w-4" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-950">Điểm nóng trao đổi &amp; Thảo luận</h4>
+                  <p className="text-xs text-emerald-700/80">
+                    Tổng hợp số lượng chat, phản hồi từ PO, Tech và đồng đội trên từng bài toán
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                {executiveIntelligence.totalChatCount} tin trao đổi
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 pt-1">
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Task có trao đổi</span>
+                <p className="text-lg font-bold text-slate-900 mt-0.5">{executiveIntelligence.chatDiscussions.length} bài toán</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Tổng bình luận</span>
+                <p className="text-lg font-bold text-emerald-600 mt-0.5">{executiveIntelligence.totalChatCount} lượt</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-white p-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">Bình luận gần đây</span>
+                <p className="text-lg font-bold text-blue-600 mt-0.5">{executiveIntelligence.recentChatCount} trao đổi</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat Discussions List */}
+          <div className="space-y-3">
+            {executiveIntelligence.chatDiscussions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center space-y-2">
+                <MessageSquare className="h-8 w-8 text-slate-300 mx-auto" />
+                <p className="text-sm font-semibold text-slate-700">Chưa có luồng thảo luận nào</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Các bình luận, góp ý thiết kế hoặc cập nhật trạng thái từ PO/Tech trên từng bài toán sẽ được tổng hợp tự động tại đây.
+                </p>
+              </div>
+            ) : (
+              executiveIntelligence.chatDiscussions.map((item) => {
+                const task = item.task
+                return (
+                  <div
+                    key={task.request_id}
+                    className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs space-y-3 transition-all hover:border-emerald-300 hover:shadow-xs"
+                  >
+                    {/* Task title + chat badge */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span className="font-mono font-bold text-slate-500">{task.request_id}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-medium text-slate-500">{task.product || "App MB"}</span>
+                          <span className={cn(
+                            "rounded px-1.5 py-0.2 text-[9px] font-bold uppercase",
+                            item.isDelegated ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                          )}>
+                            {item.isDelegated ? "Bạn ủy quyền" : "Bạn phụ trách"}
+                          </span>
+                        </div>
+                        <h5
+                          onClick={() => {
+                            setIsBriefingExpanded(false)
+                            openTask(task.request_id)
+                          }}
+                          className="text-sm font-bold text-slate-900 hover:text-emerald-600 transition-colors cursor-pointer"
+                        >
+                          {getRequestDisplayTitle(task)}
+                        </h5>
+                      </div>
+
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200/80 shrink-0">
+                        <MessageSquare className="h-3 w-3" />
+                        <span>{item.chatCount} trao đổi</span>
+                      </span>
+                    </div>
+
+                    {/* Latest message quote bubble */}
+                    {item.lastCommentText && (
+                      <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-1 text-xs">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-semibold text-slate-700 flex items-center gap-1">
+                            <User className="h-3 w-3 text-slate-400" />
+                            <span>{item.lastCommentAuthor || "Thành viên"}</span>
+                          </span>
+                          {item.lastCommentTime && (
+                            <span className="text-slate-400 font-normal">
+                              {formatShortDate(item.lastCommentTime.slice(0, 10))}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-slate-700 italic leading-relaxed line-clamp-2">
+                          &ldquo;{item.lastCommentText}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-slate-400">
+                        Người phụ trách: <strong className="text-slate-700">{task.assigned_designer || "Chưa gán"}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBriefingExpanded(false)
+                          openTask(task.request_id)
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                      >
+                        <span>Mở box chat bài toán</span>
+                        <ArrowRight className="h-3 w-3 text-emerald-600" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
       </RightSheet>
 
       <ScheduleMeetingDialog

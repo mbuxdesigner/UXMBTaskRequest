@@ -261,12 +261,16 @@ const typewriterSource = readFileSync(new URL("../src/components/planner/Executi
 assert.match(typewriterSource, /text-blue-600 hover:text-blue-800 underline underline-offset-2 decoration-blue-300/)
 assert.match(typewriterSource, /text-purple-600 hover:text-purple-800 underline underline-offset-2 decoration-purple-300/)
 assert.match(typewriterSource, /animate-pulse rounded-\[1px\]/)
-assert.match(typewriterSource, /Hiện nhanh toàn bộ/)
-console.log("✓ ExecutiveSummaryTypewriter streams AI text character-by-character with blinking cursor, hyperlink styling, and skip option")
+assert.match(typewriterSource, /handleSkipTyping/)
+console.log("✓ ExecutiveSummaryTypewriter streams AI text character-by-character with blinking cursor and hyperlink styling")
 
 assert.match(updatedPlannerSource, /Card 1: Executive Summary - ĐỨNG IM, KHÔNG ANIMATION XUẤT HIỆN/)
 assert.match(updatedPlannerSource, /loading \|\| isAiRefreshing \? \(\s*<AgentActivityTrace/)
+assert.match(updatedPlannerSource, /const handleTraceComplete = useCallback\(\(\) => \{[\s\S]*setIsAiRefreshing\(false\)/)
+assert.match(updatedPlannerSource, /useEffect\(\(\) => \{[\s\S]*if \(!isAiRefreshing\) return[\s\S]*setIsAiRefreshing\(false\)/)
 console.log("✓ Executive Summary card is stationary (no entrance animation/jumping) and transitions directly to text typing")
+console.log("✓ handleTraceComplete resets isAiRefreshing(false) with a safety fallback timeout")
+
 
 
 

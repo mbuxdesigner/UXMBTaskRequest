@@ -1,32 +1,45 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { ExternalLink, SkipForward } from "lucide-react"
+import { ExternalLink, MessageSquare, User, Sparkles, Clock, CheckCircle2 } from "lucide-react"
 import { getRequestDisplayTitle, type UXRequest } from "@/data/mockData"
 import type { PlannerEntry } from "@/services/calendarService"
 import { cn } from "@/lib/utils"
+import {
+  type ExecutiveIntelligenceData,
+  type PerspectiveAngle,
+  type NarrativeSegment,
+  type NarrativeLine,
+  type NarrativeBlock,
+  buildAssistantNarrativeBlocks,
+} from "@/lib/executiveIntelligence"
 
 export interface ExecutiveSummaryTypewriterProps {
-  todayYMD: string
-  newAssignedTasks: UXRequest[]
-  overdueTasks: UXRequest[]
-  dueTodayTasks: UXRequest[]
-  plannedTodayTasks: UXRequest[]
-  todayEvents: PlannerEntry[]
-  todayPersonalLeaves: PlannerEntry[]
-  activeTasks: UXRequest[]
-  dominantPhaseText: string
-  focusSummaryText: string
-  goLiveTasks: UXRequest[]
-  poPendingTasks: UXRequest[]
-  weekEvents: PlannerEntry[]
-  isEndOfWeek: boolean
-  isBeginningOfWeek: boolean
-  nextWeekDeadlines: UXRequest[]
-  nextWeekEvents: PlannerEntry[]
-  unscheduledTasks: UXRequest[]
-  recommendationText: string
+  todayYMD?: string
+  newAssignedTasks?: UXRequest[]
+  overdueTasks?: UXRequest[]
+  dueTodayTasks?: UXRequest[]
+  plannedTodayTasks?: UXRequest[]
+  todayEvents?: PlannerEntry[]
+  todayPersonalLeaves?: PlannerEntry[]
+  activeTasks?: UXRequest[]
+  dominantPhaseText?: string
+  focusSummaryText?: string
+  goLiveTasks?: UXRequest[]
+  poPendingTasks?: UXRequest[]
+  weekEvents?: PlannerEntry[]
+  isEndOfWeek?: boolean
+  isBeginningOfWeek?: boolean
+  nextWeekDeadlines?: UXRequest[]
+  nextWeekEvents?: PlannerEntry[]
+  unscheduledTasks?: UXRequest[]
+  recommendationText?: string
   triggerKey?: number
+  // Rich Intelligence Engine props
+  intelligence?: ExecutiveIntelligenceData
+  perspectiveAngle?: PerspectiveAngle
+  seed?: number
   onOpenTask: (task: UXRequest) => void
   onOpenEvent: (event: PlannerEntry) => void
+  onOpenChat?: (task: UXRequest) => void
 }
 
 function formatShortDate(ymd?: string): string {
@@ -34,58 +47,49 @@ function formatShortDate(ymd?: string): string {
   const [year, month, day] = ymd.split("-").map(Number)
   if (!year || !month || !day) return ymd
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(
-    new Date(year, month - 1, day),
+    new Date(year, month - 1, day)
   )
 }
 
-interface Segment {
-  id: string
-  text: string
-  type: "text" | "bold" | "task" | "event" | "header" | "italic"
-  task?: UXRequest
-  event?: PlannerEntry
-}
-
-interface Line {
-  id: string
-  segments: Segment[]
-}
-
-interface Block {
-  id: string
-  lines: Line[]
-}
-
 export function ExecutiveSummaryTypewriter({
-  todayYMD,
-  newAssignedTasks,
-  overdueTasks,
-  dueTodayTasks,
-  plannedTodayTasks,
-  todayEvents,
-  todayPersonalLeaves,
-  activeTasks,
-  dominantPhaseText,
-  focusSummaryText,
-  goLiveTasks,
-  poPendingTasks,
-  weekEvents,
-  isEndOfWeek,
-  isBeginningOfWeek,
-  nextWeekDeadlines,
-  nextWeekEvents,
-  unscheduledTasks,
-  recommendationText,
+  todayYMD = "",
+  newAssignedTasks = [],
+  overdueTasks = [],
+  dueTodayTasks = [],
+  plannedTodayTasks = [],
+  todayEvents = [],
+  todayPersonalLeaves = [],
+  activeTasks = [],
+  dominantPhaseText = "",
+  focusSummaryText = "",
+  goLiveTasks = [],
+  poPendingTasks = [],
+  weekEvents = [],
+  isEndOfWeek = false,
+  isBeginningOfWeek = false,
+  nextWeekDeadlines = [],
+  nextWeekEvents = [],
+  unscheduledTasks = [],
+  recommendationText = "",
   triggerKey = 0,
+  intelligence,
+  perspectiveAngle = "overview",
+  seed = 0,
   onOpenTask,
   onOpenEvent,
+  onOpenChat,
 }: ExecutiveSummaryTypewriterProps) {
-  // Build structured blocks
-  const blocks = useMemo<Block[]>(() => {
-    const result: Block[] = []
+  // Build structured blocks: Use rich intelligence narrative if available, else legacy blocks
+  const blocks = useMemo<NarrativeBlock[]>(() => {
+    if (intelligence) {
+      return buildAssistantNarrativeBlocks(intelligence, perspectiveAngle, seed)
+    }
+
+    // Legacy fallback blocks for backward compatibility
+    const result: NarrativeBlock[] = []
 
     // ─── BLOCK 1: HÔM NAY ─────────────────────────────────────────────────────
-    const block1Lines: Line[] = [
+    const block1Lines: NarrativeLine[] = [
       {
         id: "b1-header",
         segments: [
@@ -100,7 +104,7 @@ export function ExecutiveSummaryTypewriter({
 
     // 1.1 Task mới gán
     if (newAssignedTasks.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b1-new-pre", text: "• 🔔 Bạn có ", type: "text" },
         { id: "b1-new-num", text: `${newAssignedTasks.length} task mới`, type: "bold" },
         { id: "b1-new-mid", text: " cần tiếp nhận & phân tích: ", type: "text" },
@@ -126,7 +130,7 @@ export function ExecutiveSummaryTypewriter({
 
     // 1.2 Task trễ hạn / chạm deadline
     if (overdueTasks.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b1-od-pre", text: "• ⚠️ Ưu tiên cứu hạn ", type: "text" },
         { id: "b1-od-num", text: `${overdueTasks.length} task trễ hạn`, type: "bold" },
         { id: "b1-od-mid", text: ": ", type: "text" },
@@ -149,7 +153,7 @@ export function ExecutiveSummaryTypewriter({
       })
       block1Lines.push({ id: "b1-line-od", segments: segs })
     } else if (dueTodayTasks.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b1-due-pre", text: "• ⏰ Hôm nay là hạn chót của ", type: "text" },
       ]
       dueTodayTasks.forEach((task, idx) => {
@@ -170,7 +174,7 @@ export function ExecutiveSummaryTypewriter({
 
     // 1.3 Lịch dự kiến làm hôm nay
     if (plannedTodayTasks.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b1-pl-pre", text: "• 📌 Lịch dự kiến làm hôm nay: ", type: "text" },
       ]
       plannedTodayTasks.slice(0, 3).forEach((task, idx) => {
@@ -191,7 +195,7 @@ export function ExecutiveSummaryTypewriter({
 
     // 1.4 Lịch sự kiện/họp hôm nay
     if (todayEvents.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b1-ev-pre", text: "• 📅 Hôm nay bạn có ", type: "text" },
         { id: "b1-ev-num", text: `${todayEvents.length} lịch hẹn/họp`, type: "bold" },
         { id: "b1-ev-mid", text: ": ", type: "text" },
@@ -224,24 +228,10 @@ export function ExecutiveSummaryTypewriter({
       })
     }
 
-    // 1.5 Lịch nghỉ phép cá nhân hôm nay
-    if (todayPersonalLeaves.length > 0) {
-      block1Lines.push({
-        id: "b1-line-leave",
-        segments: [
-          {
-            id: "b1-leave-txt",
-            text: `• 🏖️ Lưu ý: Bạn có lịch nghỉ phép (${todayPersonalLeaves.map((l) => l.title).join(", ")}) hôm nay.`,
-            type: "text",
-          },
-        ],
-      })
-    }
-
     result.push({ id: "b1-today", lines: block1Lines })
 
     // ─── BLOCK 2: TUẦN NÀY & GO-LIVE ──────────────────────────────────────────
-    const block2Lines: Line[] = [
+    const block2Lines: NarrativeLine[] = [
       {
         id: "b2-header",
         segments: [
@@ -254,7 +244,6 @@ export function ExecutiveSummaryTypewriter({
       },
     ]
 
-    // 2.1 Số lượng task & phase trọng tâm
     if (activeTasks.length > 0) {
       block2Lines.push({
         id: "b2-line-overview",
@@ -266,22 +255,10 @@ export function ExecutiveSummaryTypewriter({
           { id: "b2-ov-focus", text: focusSummaryText ? `. Hướng đến ${focusSummaryText}.` : ".", type: "text" },
         ],
       })
-    } else {
-      block2Lines.push({
-        id: "b2-line-empty",
-        segments: [
-          {
-            id: "b2-empty-txt",
-            text: "Hiện tại bạn chưa có bài toán nào đang thực hiện hoặc theo dõi.",
-            type: "italic",
-          },
-        ],
-      })
     }
 
-    // 2.2 Go-Live trong tuần
     if (goLiveTasks.length > 0) {
-      const segs: Segment[] = [
+      const segs: NarrativeSegment[] = [
         { id: "b2-gl-pre", text: "• 🚀 Mốc Go-Live tuần: Dự án ", type: "text" },
       ]
       goLiveTasks.forEach((t, idx) => {
@@ -301,157 +278,41 @@ export function ExecutiveSummaryTypewriter({
         type: "text",
       })
       block2Lines.push({ id: "b2-line-gl", segments: segs })
-    } else if (poPendingTasks.length > 0) {
-      const segs: Segment[] = [
-        { id: "b2-po-pre", text: "• ⏳ Có ", type: "text" },
-        { id: "b2-po-num", text: `${poPendingTasks.length} bài toán`, type: "bold" },
-        { id: "b2-po-mid", text: " đang chờ PO xác nhận duyệt phương án: ", type: "text" },
-      ]
-      poPendingTasks.slice(0, 2).forEach((t, idx) => {
-        segs.push({
-          id: `b2-po-t-${t.request_id || idx}`,
-          text: getRequestDisplayTitle(t),
-          type: "task",
-          task: t,
-        })
-        if (idx < Math.min(poPendingTasks.length, 2) - 1) {
-          segs.push({ id: `b2-po-sep-${idx}`, text: ", ", type: "text" })
-        }
-      })
-      segs.push({ id: "b2-po-dot", text: ".", type: "text" })
-      block2Lines.push({ id: "b2-line-po", segments: segs })
-    }
-
-    // 2.3 Sự kiện trong tuần
-    if (weekEvents.length > 0) {
-      const segs: Segment[] = [
-        { id: "b2-wev-pre", text: `• 🗓️ Sự kiện tuần có ${weekEvents.length} lịch làm việc: `, type: "text" },
-      ]
-      weekEvents.slice(0, 3).forEach((e, idx) => {
-        segs.push({
-          id: `b2-wev-${e.id || idx}`,
-          text: e.title,
-          type: "event",
-          event: e,
-        })
-        if (idx < Math.min(weekEvents.length, 3) - 1) {
-          segs.push({ id: `b2-wev-sep-${idx}`, text: ", ", type: "text" })
-        } else {
-          segs.push({ id: "b2-wev-dot", text: ".", type: "text" })
-        }
-      })
-      block2Lines.push({ id: "b2-line-wev", segments: segs })
     }
 
     result.push({ id: "b2-week", lines: block2Lines })
 
-    // ─── BLOCK 3: KẾ HOẠCH TIẾP THEO & CẢNH BÁO ─────────────────────────────
-    const block3Header = isEndOfWeek
-      ? "📋 Kế hoạch tuần sau (Cảnh báo T5 - T6):"
-      : isBeginningOfWeek
-      ? "📋 Định hướng đầu tuần:"
-      : "📋 Tiến độ giữa tuần:"
-
-    const block3Lines: Line[] = [
+    // ─── BLOCK 3: LỜI KHUYÊN & KẾ HOẠCH ─────────────────────────────────────
+    const block3Lines: NarrativeLine[] = [
       {
         id: "b3-header",
         segments: [
           {
             id: "b3-h-txt",
-            text: block3Header,
+            text: isEndOfWeek ? "📋 Kế hoạch tuần sau (Cảnh báo T5 - T6):" : "📋 Tiến độ & Đề xuất:",
             type: "header",
           },
         ],
       },
     ]
 
-    if (isEndOfWeek) {
-      // Deadline đầu tuần sau
-      if (nextWeekDeadlines.length > 0) {
-        const segs: Segment[] = [
-          { id: "b3-nw-pre", text: "• 📋 ", type: "text" },
-          { id: "b3-nw-num", text: `Đầu tuần tới có ${nextWeekDeadlines.length} deadline cam kết: `, type: "bold" },
-        ]
-        nextWeekDeadlines.slice(0, 3).forEach((t, idx) => {
-          segs.push({
-            id: `b3-nw-t-${t.request_id || idx}`,
-            text: getRequestDisplayTitle(t),
-            type: "task",
-            task: t,
-          })
-          if (idx < Math.min(nextWeekDeadlines.length, 3) - 1) {
-            segs.push({ id: `b3-nw-sep-${idx}`, text: ", ", type: "text" })
-          }
-        })
-        segs.push({
-          id: "b3-nw-suf",
-          text: ". Khuyến nghị hoàn tất bàn giao deliverables trước chiều Thứ 6 để tránh dồn việc.",
-          type: "text",
-        })
-        block3Lines.push({ id: "b3-line-nw", segments: segs })
-      } else {
-        block3Lines.push({
-          id: "b3-line-nw-free",
-          segments: [
-            {
-              id: "b3-nw-free-txt",
-              text: "• 📋 Đầu tuần tới tiến độ các bài toán tương đối thông thoáng, không ghi nhận deadline đột xuất.",
-              type: "text",
-            },
-          ],
-        })
-      }
-
-      // Sự kiện tuần tới
-      if (nextWeekEvents.length > 0) {
-        const segs: Segment[] = [
-          { id: "b3-nwev-pre", text: `• 🗓️ Lịch tuần tới: Có ${nextWeekEvents.length} cuộc họp/workshop đã lên lịch: `, type: "text" },
-        ]
-        nextWeekEvents.slice(0, 2).forEach((e, idx) => {
-          segs.push({
-            id: `b3-nwev-${e.id || idx}`,
-            text: e.title,
-            type: "event",
-            event: e,
-          })
-          if (idx < Math.min(nextWeekEvents.length, 2) - 1) {
-            segs.push({ id: `b3-nwev-sep-${idx}`, text: ", ", type: "text" })
-          } else {
-            segs.push({ id: "b3-nwev-dot", text: ".", type: "text" })
-          }
-        })
-        block3Lines.push({ id: "b3-line-nwev", segments: segs })
-      }
-
-      // Task chưa xếp ngày
-      if (unscheduledTasks.length > 0) {
-        block3Lines.push({
-          id: "b3-line-unsch",
-          segments: [
-            {
-              id: "b3-unsch-txt",
-              text: `• 💡 Bạn còn ${unscheduledTasks.length} task chưa xếp ngày dự kiến. Hãy tranh thủ kéo thả hoặc xếp ngày làm việc trên Planner để chủ động lịch trình tuần mới.`,
-              type: "text",
-            },
-          ],
-        })
-      }
-    } else {
-      block3Lines.push({
-        id: "b3-line-recom",
-        segments: [
-          {
-            id: "b3-recom-txt",
-            text: `• 💡 ${recommendationText}`,
-            type: "italic",
-          },
-        ],
-      })
-    }
+    block3Lines.push({
+      id: "b3-line-recom",
+      segments: [
+        {
+          id: "b3-recom-txt",
+          text: `• 💡 ${recommendationText || "Duy trì nhịp độ làm việc và rà soát tiến độ thường xuyên."}`,
+          type: "italic",
+        },
+      ],
+    })
 
     result.push({ id: "b3-plan", lines: block3Lines })
     return result
   }, [
+    intelligence,
+    perspectiveAngle,
+    seed,
     todayYMD,
     newAssignedTasks,
     overdueTasks,
@@ -475,7 +336,15 @@ export function ExecutiveSummaryTypewriter({
 
   // Flatten segments and calculate total character length
   const { flatSegments, totalChars } = useMemo(() => {
-    const list: Array<Segment & { start: number; end: number; blockId: string; lineId: string; isLineHeader: boolean }> = []
+    const list: Array<
+      NarrativeSegment & {
+        start: number
+        end: number
+        blockId: string
+        lineId: string
+        isLineHeader: boolean
+      }
+    > = []
     let cursor = 0
     blocks.forEach((block) => {
       block.lines.forEach((line) => {
@@ -499,19 +368,18 @@ export function ExecutiveSummaryTypewriter({
   const [visibleChars, setVisibleChars] = useState(0)
   const isTypingComplete = visibleChars >= totalChars
 
-  // Run typewriter animation on mount and when triggerKey increments
+  // Run typewriter animation on mount and when triggerKey / seed changes
   useEffect(() => {
     setVisibleChars(0)
     let animationFrameId: number | undefined
     let lastTick = performance.now()
     let current = 0
 
-    // Rapid, responsive token typing rate (approx 160-200 chars/sec)
+    // Rapid, responsive token typing rate (approx 180-240 chars/sec)
     const tick = (now: number) => {
       const delta = now - lastTick
       if (delta >= 14) {
-        // Advance by 2-3 characters per frame tick
-        const charsToAdd = Math.max(1, Math.round(delta / 8))
+        const charsToAdd = Math.max(1, Math.round(delta / 7))
         current = Math.min(totalChars, current + charsToAdd)
         setVisibleChars(current)
         lastTick = now
@@ -525,7 +393,7 @@ export function ExecutiveSummaryTypewriter({
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId)
     }
-  }, [totalChars, triggerKey])
+  }, [totalChars, triggerKey, seed, perspectiveAngle])
 
   // Skip typing on click
   const handleSkipTyping = () => {
@@ -535,7 +403,7 @@ export function ExecutiveSummaryTypewriter({
   return (
     <div
       onClick={!isTypingComplete ? handleSkipTyping : undefined}
-      className={cn("space-y-3 relative group", !isTypingComplete && "cursor-pointer")}
+      className={cn("space-y-3 relative group select-text", !isTypingComplete && "cursor-pointer")}
       title={!isTypingComplete ? "Nhấn vào đây để hiện toàn bộ văn bản ngay" : undefined}
     >
       {blocks.map((block, bIdx) => {
@@ -547,7 +415,7 @@ export function ExecutiveSummaryTypewriter({
         return (
           <div
             key={block.id}
-            className={cn("space-y-1", bIdx > 0 && "pt-2.5 border-t border-slate-100")}
+            className={cn("space-y-1.5", bIdx > 0 && "pt-2.5 border-t border-slate-100")}
           >
             {block.lines.map((line) => {
               const lineSegments = blockSegments.filter((s) => s.lineId === line.id)
@@ -565,7 +433,7 @@ export function ExecutiveSummaryTypewriter({
                       : "space-y-1 text-slate-700 pl-0.5 text-xs sm:text-[13px] leading-relaxed"
                   )}
                 >
-                  <p>
+                  <p className="leading-relaxed">
                     {lineSegments.map((seg) => {
                       if (visibleChars <= seg.start) return null
                       const isComplete = visibleChars >= seg.end
@@ -583,9 +451,41 @@ export function ExecutiveSummaryTypewriter({
                               onOpenTask(seg.task!)
                             }}
                             className="font-semibold text-blue-600 hover:text-blue-800 underline underline-offset-2 decoration-blue-300 hover:decoration-blue-700 cursor-pointer inline transition-colors text-left"
-                            title={`Mở chi tiết: ${getRequestDisplayTitle(seg.task)}`}
+                            title={`Mở chi tiết bài toán: ${getRequestDisplayTitle(seg.task)}`}
                           >
                             {displayedText}
+                          </button>
+                        )
+                      } else if (seg.type === "delegated") {
+                        element = (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (seg.task) onOpenTask(seg.task)
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200/80 shadow-2xs hover:bg-purple-100 hover:text-purple-900 transition-colors cursor-pointer align-baseline"
+                            title={`Xem tiến độ của ${seg.text}`}
+                          >
+                            <User className="h-2.5 w-2.5 text-purple-600 inline shrink-0" />
+                            <span>{displayedText}</span>
+                          </button>
+                        )
+                      } else if (seg.type === "chat") {
+                        element = (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (seg.task) {
+                                onOpenChat ? onOpenChat(seg.task) : onOpenTask(seg.task)
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/80 shadow-2xs hover:bg-blue-100 hover:text-blue-900 transition-colors cursor-pointer align-baseline"
+                            title="Bấm để xem chi tiết trao đổi trong task"
+                          >
+                            <MessageSquare className="h-2.5 w-2.5 text-blue-600 inline shrink-0" />
+                            <span>{displayedText}</span>
                           </button>
                         )
                       } else if (seg.type === "event" && seg.event) {
@@ -627,19 +527,6 @@ export function ExecutiveSummaryTypewriter({
           </div>
         )
       })}
-
-      {!isTypingComplete && (
-        <div className="pt-1 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={handleSkipTyping}
-            className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 transition-colors"
-          >
-            <SkipForward className="h-3 w-3" />
-            <span>Hiện nhanh toàn bộ</span>
-          </button>
-        </div>
-      )}
     </div>
   )
 }

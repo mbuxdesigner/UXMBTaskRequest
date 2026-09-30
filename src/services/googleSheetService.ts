@@ -1134,6 +1134,16 @@ export async function updateTaskProgressInSheet(
 
       const envConfig = getAppEnvironment()
       const isTestMode = envConfig.appEnv !== "production" || isTestTask(currentReq) || requestId.startsWith("REQ-TEST-")
+      const isMockToken = !session?.sessionToken || session.sessionToken.startsWith("MOCK_") || session.sessionToken === "DEMO_TOKEN"
+
+      // Khi chạy local dev với token mock/demo, không gọi lên Apps Script Production
+      if (envConfig.isLocal && isMockToken) {
+        return {
+          success: true,
+          message: "Đã cập nhật tiến độ vào bộ nhớ nội bộ (Chế độ Local Dev)!",
+          updatedRequest: updatedReq,
+        }
+      }
 
       const payload = {
         action: "update_task_progress",
@@ -1225,6 +1235,13 @@ export async function updateTaskProgressInSheet(
         return {
           success: true,
           message: data.message || "Cập nhật tiến độ thành công!",
+          updatedRequest: updatedReq,
+        }
+      }
+      if (envConfig.isLocal && (data.status === "unauthorized" || data.status === "forbidden")) {
+        return {
+          success: true,
+          message: "Đã cập nhật tiến độ vào bộ nhớ nội bộ (Chế độ Local Dev)!",
           updatedRequest: updatedReq,
         }
       }
@@ -1650,6 +1667,17 @@ export async function syncTeamMembersToSheet(
 
   try {
     const session = getStoredSession()
+    const envConfig = getAppEnvironment()
+    const isMockToken = !session?.sessionToken || session.sessionToken.startsWith("MOCK_") || session.sessionToken === "DEMO_TOKEN"
+
+    if (envConfig.isLocal && isMockToken) {
+      return {
+        success: true,
+        message: `Đã đồng bộ ${members.length} nhân sự vào bộ nhớ nội bộ (Chế độ Local Dev)!`,
+        membersCount: members.length,
+      }
+    }
+
     const payload = {
       action: "sync_team_members",
       members,
@@ -1676,6 +1704,14 @@ export async function syncTeamMembersToSheet(
         success: true,
         message: data.message || `Đã đồng bộ ${members.length} nhân sự lên Google Sheet thành công!`,
         membersCount: data.members_count || members.length,
+      }
+    }
+
+    if (envConfig.isLocal && (data.status === "unauthorized" || data.status === "forbidden")) {
+      return {
+        success: true,
+        message: `Đã đồng bộ ${members.length} nhân sự vào bộ nhớ nội bộ (Chế độ Local Dev)!`,
+        membersCount: members.length,
       }
     }
 
@@ -1804,6 +1840,16 @@ export async function syncMasterDataToSheet(params: {
 
   try {
     const session = getStoredSession()
+    const envConfig = getAppEnvironment()
+    const isMockToken = !session?.sessionToken || session.sessionToken.startsWith("MOCK_") || session.sessionToken === "DEMO_TOKEN"
+
+    if (envConfig.isLocal && isMockToken) {
+      return {
+        success: true,
+        message: "Đã đồng bộ Master Data vào bộ nhớ nội bộ (Chế độ Local Dev)!",
+      }
+    }
+
     const sanitizedIATrees = params.ia_trees ? sanitizeIATrees(params.ia_trees) : undefined
     const payload = {
       action: "sync_master_data",
@@ -1831,6 +1877,13 @@ export async function syncMasterDataToSheet(params: {
       return {
         success: true,
         message: data.message || "Đã đồng bộ Master Data lên Google Sheet!",
+      }
+    }
+
+    if (envConfig.isLocal && (data.status === "unauthorized" || data.status === "forbidden")) {
+      return {
+        success: true,
+        message: "Đã đồng bộ Master Data vào bộ nhớ nội bộ (Chế độ Local Dev)!",
       }
     }
 

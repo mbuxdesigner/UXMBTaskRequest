@@ -46,6 +46,45 @@ export function isTaskCompleted(task: UXRequest): boolean {
   return task.progress >= 100 || status.includes("hoàn thành") || status.includes("complete")
 }
 
+/**
+ * Kiểm tra bài toán có thuộc diện "Chưa xếp lịch" theo đúng logic trong chi tiết task:
+ * 1. Nếu đã có planned_work_date do Designer kéo thả/xếp trên Planner -> Đã xếp lịch.
+ * 2. Nếu ở khâu đầu (Chờ xác nhận, 1. Phân loại, Chờ tiếp nhận, Define đầu bài):
+ *    Trong chi tiết task chỉ hiển thị "Start" (ngày gửi yêu cầu/tiếp nhận), CHƯA có ngày hạn cam kết thiết kế -> Chưa xếp lịch.
+ * 3. Nếu ở các khâu thiết kế (Wireframe, UI Design, Ready to dev):
+ *    Nếu chưa có ngày hạn (design_deadline / expected_deadline) -> Chưa xếp lịch (trong chi tiết task hiển thị "Chọn ngày").
+ *    Nếu đã có ngày hạn -> Đã xếp lịch.
+ */
+export function isTaskUnscheduled(task: UXRequest): boolean {
+  if (isTaskCompleted(task)) return false
+
+  // 1. Đã có ngày kế hoạch cụ thể trên Planner (do kéo thả hoặc đặt lịch)
+  if (task.planned_work_date && normalizeDateToYMD(task.planned_work_date)) {
+    return false
+  }
+
+  // 2. Logic theo chi tiết task (RequestDetail)
+  const rawPhase = (task.current_phase || task.status || "").toLowerCase().trim()
+  const isEarlyPhase =
+    rawPhase.includes("chờ xác nhận") ||
+    rawPhase.includes("chờ tiếp nhận") ||
+    rawPhase.includes("define đầu bài") ||
+    rawPhase.startsWith("1.") ||
+    rawPhase.startsWith("2.")
+
+  if (isEarlyPhase) {
+    return true
+  }
+
+  // 3. Ở các khâu thiết kế, kiểm tra đã có deadline thiết kế hay chưa
+  const deadline = task.design_deadline || task.expected_deadline
+  if (!deadline || !normalizeDateToYMD(deadline)) {
+    return true
+  }
+
+  return false
+}
+
 export function getDesignerPhaseKey(task: UXRequest): DesignerPhaseKey | null {
   if (isTaskCompleted(task)) return null
   const phase = `${task.current_phase || ""} ${task.status || ""}`.toLowerCase()
