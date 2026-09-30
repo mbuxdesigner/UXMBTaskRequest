@@ -304,8 +304,42 @@ Người dùng có thể bật/tắt độc lập các lớp task/event. Ô ngà
 
 ---
 
-**Last Updated:** 29/09/2026
+## 10. EXECUTIVE INTELLIGENCE ALL-IN-ONE & CHUẨN HÓA REUI (30/09/2026)
+
+### 10.1. Chuẩn hóa ReUI Empty State (`EmptyState10` & `EmptyState1`)
+- **Vấn đề giải quyết:** Các trạng thái rỗng (Empty State) trước đây được viết ad-hoc, thiếu tính nhất quán với thư viện thiết kế chuẩn ReUI.
+- **Giải pháp chuẩn hóa:**
+  - **`EmptyState10` cho Panel Ngày đang chọn (Selected Day):** Tích hợp component ReUI Empty State 10 với icon hộp lưu trữ nét mảnh, tiêu đề "Chưa có công việc hoặc sự kiện", mô tả hướng dẫn người dùng kéo thả task hoặc tạo sự kiện mới, và nút CTA "Tạo sự kiện" nổi bật.
+  - **`EmptyState1` cho Notification Dropdown:** Tích hợp ReUI Empty State 1 với biểu tượng chuông thông báo cách điệu và nút bấm "Tải lại danh sách" khi không có thông báo mới.
+
+### 10.2. Tinh gọn Giao diện Ưu tiên (Priority) & Kéo thả (Drag & Drop)
+- **Loại bỏ chữ thừa:** Gỡ bỏ cụm chữ "Kéo thả" dài dòng ở từng đầu task; thay bằng icon `GripVertical` tinh tế đặt ngay phía trước tiêu đề (`opacity-40 group-hover:opacity-100 cursor-grab active:cursor-grabbing`).
+- **Ẩn tag Lv1 thừa:** Khi các bài toán đã được gom vào khu vực "Ưu tiên tuần này (Priority)", badge "Lv1" bên trong thẻ task được ẩn đi vì bản thân khu vực đã được định danh và phân loại thứ tự theo level ưu tiên.
+- **Xếp lịch kéo thả mượt mà:** Người dùng kéo task từ danh sách thả vào bất kỳ ô ngày nào trên lịch (Tháng hoặc Tuần), mở popup xác nhận với ghi chú deadline tiêu chuẩn theo phase (`getPhaseDeadlineInfo`), cập nhật tức thì (0ms Optimistic UI) và đồng bộ ngầm lên Google Sheet / Cloud.
+
+### 10.3. Executive Summary All-in-One (Tổng hợp 1 lần 5 chiều thông tin)
+- **Loại bỏ thanh tab phân mảnh:** Bỏ 4 nút tab nhỏ (`Tổng quan`, `Ủy quyền`, `Thảo luận`, `Năng suất`) và text "Trợ lý đồng hành" kèm chấm xanh ở đầu thẻ theo yêu cầu trải nghiệm.
+- **Tổng hợp toàn diện một lần đọc (`angle === "all"`):** Engine `src/lib/executiveIntelligence.ts` kết nối mượt mà 5 chiều thông tin cốt lõi trong một bản tin duy nhất:
+  1. **Lời chào & Tiến độ cá nhân:** Chào theo thời điểm trong ngày (sáng/trưa/chiều/tối/đêm), phân tích số bài toán đang phụ trách, tiến độ % và trọng tâm khâu UX hiện tại.
+  2. **Radar bài toán ủy quyền:** Điểm nhanh các bài toán do người dùng tạo nhưng giao cho đồng đội phụ trách kèm tiến độ %, hạn chót và avatar/tên người thực hiện.
+  3. **Điểm nóng thảo luận & Chat:** Nhận diện các bài toán có nhiều trao đổi sôi nổi nhất kèm badge `[💬 X trao đổi]` và trích dẫn phản hồi gần nhất.
+  4. **Phân tích Deep Work & Lịch trình:** Tổng hợp số cuộc họp trong ngày, tính toán số giờ tập trung Deep Work khả dụng và xếp hạng chất lượng tập trung.
+  5. **Đề xuất hành động chiến lược:** Lời khuyên cụ thể cho ngày/tuần giúp Designer chốt chặn sản phẩm đúng cam kết.
+- **Ma trận chống trùng lặp câu chữ (Anti-Repetition Narrative Matrix):** Tích hợp hệ thống xoay vòng hạt giống văn phong (`seed`) kết hợp thứ trong tuần và buổi trong ngày, xưng hô chuẩn mực ngôi "bạn" như trợ lý đồng hành chuyên biệt.
+
+### 10.4. Khắc phục triệt để lỗi đơ luồng Tóm tắt lại (Trace Freeze 4/4)
+- **Nguyên nhân cốt lõi:** Khi người dùng nhấn nút "Tóm tắt lại" (`handleRefreshBriefing`), state `isAiRefreshing` được bật thành `true`. Khi `AgentActivityTrace` chạy tới bước 4/4 và gọi callback `onComplete()` -> `handleTraceComplete`, hàm này chỉ gọi `setLoading(false)` mà không gọi `setIsAiRefreshing(false)`. Kết quả là điều kiện `loading || isAiRefreshing` luôn là `true`, khiến giao diện bị dừng cố định ở màn hình trace đã hoàn thành `4/4` mãi mãi.
+- **Biện pháp xử lý 3 tầng bảo vệ:**
+  1. **Direct State Reset:** `handleTraceComplete` đồng thời gọi `setLoading(false)` và `setIsAiRefreshing(false)` ngay khi animation trace hoàn tất.
+  2. **Safety Timeout Guard:** Bổ sung hook `useEffect` dự phòng tự động tắt `isAiRefreshing` sau 2200ms để chống treo trong trường hợp người dùng chuyển tab làm chậm `setTimeout`.
+  3. **Click-to-skip:** Người dùng có thể nhấp chuột trực tiếp vào thanh trace bất kỳ lúc nào để chuyển ngay sang màn hình nội dung tóm tắt typewriter mà không cần chờ chạy hết hiệu ứng.
+
+---
+
+**Last Updated:** 30/09/2026
 **Changelog:**
+- 30/09/2026: Chuẩn hóa ReUI Empty State (`EmptyState10` cho selected day, `EmptyState1` cho notifications), tinh gọn UI khu vực Priority (icon `GripVertical`, ẩn tag Lv1 thừa), chuyển Executive Summary sang All-in-One 1 lần xuất toàn bộ (bỏ 4 tab & nhãn trợ lý đồng hành), khắc phục triệt để lỗi đơ luồng tóm tắt (reset `isAiRefreshing` và bổ sung safety timeout 2200ms).
 - 29/09/2026: Chuẩn hóa Agent Activity Trace 4/4 bước không reset, ExecutiveSummaryTypewriter gõ chữ từng ký tự kèm clickable link mở task/event, thẻ Executive Summary đứng im chống giật CLS=0, cascade animation 120ms cho các card còn lại, personal scoping tuyệt đối cho mọi role (kể cả Admin), cho phép Creator/Admin sửa event và avatar stack người tham gia.
 - 28/09/2026: Chuyển từ đề xuất sang MVP Designer Planner; bổ sung UI cá nhân, AI briefing nền trắng với typewriter/hover preview, calendar 70/30, right-sheet interaction, Schedule Meeting có ảnh đính kèm, Cloud persistence cho `planned_work_date` và nền ngày nghỉ/nghỉ lễ không dùng task chip.
+
 

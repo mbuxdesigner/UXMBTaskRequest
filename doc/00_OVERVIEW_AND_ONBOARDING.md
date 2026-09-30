@@ -31,7 +31,9 @@ Deploy App/doc/
 │   ├── 📋 2026-09-23_CALENDAR_PLANNER_AND_ADMIN_SETTINGS_REPORT.md  <-- Báo cáo Planner/Calendar 4 tầng dữ liệu và cấu hình lịch trong Admin
 │   ├── 📋 2026-09-26_DAILY_UPDATE_REPORT.md  <-- Báo cáo Motion runtime, Sonner stack, đồng bộ task và nickname persistence
 │   ├── 📋 2026-09-27_DAILY_UPDATE_REPORT.md  <-- Báo cáo Task ↔ IA, cloud merge, IA canvas refinements và nghiên cứu Designer Planner
-│   └── 📋 2026-09-28_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner, Schedule Meeting, AI briefing, right sheet và planned work date persistence
+│   ├── 📋 2026-09-28_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner, Schedule Meeting, AI briefing, right sheet và planned work date persistence
+│   ├── 📋 2026-09-29_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner cá nhân, 4-step Agent Trace, Executive Typewriter Streaming & Clickable Link, Thẻ đứng im (CLS=0), Phân quyền sửa Event
+│   └── 📋 2026-09-30_DAILY_UPDATE_REPORT.md  <-- Báo cáo Chuẩn hóa ReUI Empty State (1 & 10), Tinh gọn UI Priority kéo thả, Executive Summary All-in-One 1 lần xuất toàn bộ & Sửa triệt để lỗi đơ luồng tóm tắt 4/4
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
@@ -71,7 +73,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
 │   │
 │   └── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
-│       └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, KPI, ngày dự kiến làm, event cá nhân, feed cập nhật, rule-based briefing hoặc cấu hình lịch Admin.
+│       └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, ReUI Empty State (1 & 10), Kéo thả task xếp ngày, Agent Activity Trace, Executive Summary All-in-One typewriter streaming & deep-link, KPI cá nhân, Right-Sheet, hoặc cấu hình lịch Admin.
 ```
 
 ---
