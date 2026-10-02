@@ -644,6 +644,7 @@ export const DEFAULT_RBAC_PERMISSIONS: Record<string, string[]> = {
   "cap-audit": ["Admin", "Design Owner"],
   "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
   "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
+  "cap-ai-use": ["Admin", "Design Owner", "Designer"],
 }
 
 export function getRbacPermissions(): Record<string, string[]> {
@@ -658,6 +659,7 @@ export function getRbacPermissions(): Record<string, string[]> {
           "cap-invite": parsed["cap-invite"] ?? DEFAULT_RBAC_PERMISSIONS["cap-invite"],
           "cap-ia-view": parsed["cap-ia-view"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ia-view"],
           "cap-ia-edit": parsed["cap-ia-edit"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ia-edit"],
+          "cap-ai-use": parsed["cap-ai-use"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ai-use"],
         }
       }
     }

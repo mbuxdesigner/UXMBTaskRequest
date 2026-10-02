@@ -17,6 +17,8 @@ import {
   UserPlus,
   Network,
   Calendar,
+  Bot,
+  Sparkles,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -36,7 +38,7 @@ import {
 } from "@/config/navVisibilityConfig"
 import { APP_CONTENT } from "@/config/content"
 
-export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia" | "calendar"
+export type Page = "overview" | "create" | "track" | "manage" | "test" | "compressor" | "ia" | "calendar" | "aichat"
 
 interface SidebarProps {
   currentPage: Page
@@ -99,6 +101,10 @@ export default function Sidebar({
     const currentSession = getStoredSession()
     return canRoleAccessCapability(currentSession?.role, "cap-ia-view")
   })
+  const [canUseAi, setCanUseAi] = useState<boolean>(() => {
+    const currentSession = getStoredSession()
+    return canRoleAccessCapability(currentSession?.role, "cap-ai-use")
+  })
   const [navConfig, setNavConfig] = useState<RoleNavConfig>(getRoleNavConfig())
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(getNavOrderConfig())
 
@@ -113,6 +119,7 @@ export default function Sidebar({
       setNavOrder(getNavOrderConfig())
       setCanInvite(canRoleAccessCapability(s?.role, "cap-invite"))
       setCanViewIa(canRoleAccessCapability(s?.role, "cap-ia-view"))
+      setCanUseAi(canRoleAccessCapability(s?.role, "cap-ai-use"))
     }
     window.addEventListener("storage", handleStorage)
     window.addEventListener("auth_session_changed", handleStorage)
@@ -243,7 +250,7 @@ export default function Sidebar({
   const isAdmin = userRole === "Admin"
   const canSwitchRoles = userRole === "Admin" || Boolean(session?.isImpersonating) || session?.originalRole === "Admin"
   const currentRoleVisibility = navConfig[userRole] || DEFAULT_ROLE_NAV_CONFIG[userRole] || DEFAULT_ROLE_NAV_CONFIG.Designer
-  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || (currentRoleVisibility.ia && canViewIa)
+  const hasPlatformItems = currentRoleVisibility.overview || currentRoleVisibility.track || currentRoleVisibility.create || (currentRoleVisibility.ia && canViewIa) || ((currentRoleVisibility.aichat ?? true) && canUseAi)
   const hasResourceItems = Boolean(currentRoleVisibility.compressor) || (currentRoleVisibility.test ?? true) || isAdmin
 
   const renderSidebarContent = (isMobile = false) => {
@@ -408,6 +415,47 @@ export default function Sidebar({
                       )}
                       <DynamicCalendarIcon className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10">Planner</span>
+                    </button>
+                  )
+                }
+
+                if (itemKey === "aichat" && (currentRoleVisibility.aichat ?? true) && canUseAi) {
+                  const isActive = currentPage === "aichat"
+                  const isHovered = hoveredNav === "aichat"
+                  return (
+                    <button
+                      key="nav-aichat"
+                      type="button"
+                      onClick={() => {
+                        onNavigate("aichat")
+                        if (isMobile) setMobileOpen(false)
+                      }}
+                      onMouseEnter={() => {
+                        setHoveredNav("aichat")
+                        preloadPage("aichat")
+                      }}
+                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                        isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={activeLayoutId}
+                          className="absolute inset-0 bg-[#E9EBEF] rounded-xl shadow-2xs -z-10"
+                          transition={springs.floating}
+                        />
+                      )}
+                      {isHovered && !isActive && (
+                        <motion.div
+                          layoutId={hoverLayoutId}
+                          className="absolute inset-0 bg-slate-200/50 rounded-xl -z-10"
+                          transition={springs.snappy}
+                        />
+                      )}
+                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                        <img src="/ai-default.png" alt="AI" className="w-5 h-5 shrink-0 object-contain" />
+                        <span className="truncate">AI Chats</span>
+                      </div>
                     </button>
                   )
                 }

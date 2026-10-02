@@ -268,7 +268,8 @@ export function extractExecutiveIntelligence(params: {
   }).length
 
   // 5. Calendar & Deep Work
-  const todayEvents = entries.filter((e) => e.date === todayYMD && (e.type === "personal" || e.type === "team"))
+  const safeEntries = Array.isArray(entries) ? entries : []
+  const todayEvents = safeEntries.filter((e) => e.date === todayYMD && (e.type === "personal" || e.type === "team"))
   const todayMeetingCount = todayEvents.length
   let todayMeetingDurationMinutes = 0
   todayEvents.forEach((ev) => {

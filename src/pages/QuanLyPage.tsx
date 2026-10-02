@@ -36,6 +36,7 @@ import AddMemberModal from "@/components/common/AddMemberModal"
 import { isMockDesigner } from "@/components/track/RequestDetail"
 import { ManagementSkeleton } from "@/components/common/ReuiSkeletons"
 import { sortMembersByVietnameseName } from "@/lib/utils"
+import { OpenRouterSettingsCard } from "@/components/admin/OpenRouterSettingsCard"
 import {
   Users,
   Eye,
@@ -1332,6 +1333,12 @@ const RBAC_CAPABILITIES = [
     description: "Di chuyển, sắp xếp vị trí, thêm mới, xóa, đổi tên, kéo dãn kích thước và nối dây các node trên sơ đồ IA.",
     category: "Kiến trúc Thông tin (IA)",
   },
+  {
+    id: "cap-ai-use",
+    title: "Sử dụng Trợ lý AI (AI Chats)",
+    description: "Truy cập không gian AI Chats, trò chuyện với trợ lý thiết kế, thực thi Slash Commands (/tiendo, /po,...) và quản lý kho Artifacts.",
+    category: "Trí tuệ Nhân tạo (AI)",
+  },
 ]
 
 export function isNameMatching(nameA?: string, nameB?: string): boolean {
@@ -1616,6 +1623,7 @@ export default function QuanLyPage() {
       "cap-audit": ["Admin", "Design Owner"],
       "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
       "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
+      "cap-ai-use": ["Admin", "Design Owner", "Designer"],
     }
     const saved = localStorage.getItem("mbbank_admin_rbac")
     if (saved) {
@@ -1627,6 +1635,7 @@ export default function QuanLyPage() {
           "cap-invite": parsed["cap-invite"] ?? defaultRbac["cap-invite"],
           "cap-ia-view": parsed["cap-ia-view"] ?? defaultRbac["cap-ia-view"],
           "cap-ia-edit": parsed["cap-ia-edit"] ?? defaultRbac["cap-ia-edit"],
+          "cap-ai-use": parsed["cap-ai-use"] ?? defaultRbac["cap-ai-use"],
         }
       } catch {}
     }
@@ -4000,6 +4009,7 @@ export default function QuanLyPage() {
                         "cap-audit": ["Admin", "Design Owner"],
                         "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
                         "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
+                        "cap-ai-use": ["Admin", "Design Owner", "Designer"],
                       }
                       setRbacRolesPermissions(defaultRbac)
                       localStorage.setItem("mbbank_admin_rbac", JSON.stringify(defaultRbac))
@@ -4304,6 +4314,7 @@ export default function QuanLyPage() {
                         overview: { label: "Overview (Tổng quan)", icon: <Home className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
                         track: { label: "My task (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
                         calendar: { label: "Lịch & UX Planner", icon: <Calendar className="w-3.5 h-3.5" />, desc: "Lịch trình công việc, deadline bài toán, lịch nghỉ phép & sự kiện team" },
+                        aichat: { label: "AI Chats", icon: <img src="/ai-default.png" alt="AI" className="w-3.5 h-3.5 object-contain" />, desc: "Trợ lý AI hỏi đáp trực tiếp, tra cứu thông tin bài toán & tư vấn nghiệp vụ" },
                         create: { label: "Tạo task mới (Gửi đề bài)", icon: <PlusCircle className="w-3.5 h-3.5" />, desc: "Form 3 bước gửi bài toán thiết kế UX cho team" },
                         ia: { label: "Kiến trúc Thông tin (IA)", icon: <Network className="w-3.5 h-3.5" />, desc: "Sơ đồ cây tương tác Mindmap & Phân cấp tính năng đa sản phẩm" },
                       }[key]
@@ -5802,7 +5813,7 @@ export default function QuanLyPage() {
                   <span>All Gateways Online</span>
                 </span>
                 <span className="text-xs text-slate-400">·</span>
-                <span className="text-xs text-slate-500">3 cổng kết nối ngoại vi đang sẵn sàng phục vụ</span>
+                <span className="text-xs text-slate-500">Google Sheets, Lịch nghỉ & Cổng OpenRouter AI Gateway sẵn sàng</span>
               </div>
             </div>
 
@@ -6203,6 +6214,14 @@ export default function QuanLyPage() {
                   </div>
                 )}
               </div>
+
+              {/* 3. OpenRouter AI Gateway (LLM Engine) */}
+              <OpenRouterSettingsCard
+                isExpanded={expandedGateway === "openrouter_ai"}
+                onToggleExpand={() =>
+                  setExpandedGateway(expandedGateway === "openrouter_ai" ? null : "openrouter_ai")
+                }
+              />
             </div>
           </div>
         )}

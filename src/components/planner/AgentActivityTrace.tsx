@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   Layers,
   Sparkles,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getRequestDisplayTitle, type UXRequest } from "@/data/mockData"
@@ -24,6 +25,12 @@ export interface AgentActivityTraceProps {
   onOpenTask?: (task: UXRequest) => void
   mode?: "live" | "inspector"
   onCloseInspector?: () => void
+  reasoning?: string
+  durationSeconds?: number
+  collapsible?: boolean
+  defaultOpen?: boolean
+  finalStepLabel?: string
+  finalStepDesc?: string
 }
 
 export function AgentActivityTrace({
@@ -37,6 +44,12 @@ export function AgentActivityTrace({
   onOpenTask,
   mode = "live",
   onCloseInspector,
+  reasoning,
+  durationSeconds,
+  collapsible = false,
+  defaultOpen = true,
+  finalStepLabel,
+  finalStepDesc,
 }: AgentActivityTraceProps) {
   // Step state for live animation:
   // Step 1: Searching (query scan)
@@ -48,20 +61,33 @@ export function AgentActivityTrace({
   const [sourcesRevealed, setSourcesRevealed] = useState<number>(isInspector ? 3 : 0)
   const [checksRevealed, setChecksRevealed] = useState<number>(isInspector ? 2 : 0)
   const [isFinished, setIsFinished] = useState<boolean>(isInspector)
+  const [isOpen, setIsOpen] = useState<boolean>(defaultOpen)
+
+  // Auto-collapse after 3s when finished and not currently refreshing in collapsible mode
+  useEffect(() => {
+    if (collapsible && isFinished && !isRefreshing) {
+      const timer = setTimeout(() => {
+        setIsOpen(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [collapsible, isFinished, isRefreshing])
 
   // Top sources to display
   const keySources = summaryProjects.slice(0, 3)
 
+  const durationText = durationSeconds ? ` (${durationSeconds}s)` : ""
+
   // Status text mapping
   const statusLabel = isFinished
-    ? `Đã đọc ${keySources.length} nguồn dự án và đối soát 2 tiêu chí`
+    ? `Đã đọc ${keySources.length} nguồn dự án và đối soát 2 tiêu chí${durationText}`
     : currentStep === 1
     ? "Đang quét danh mục công việc & yêu cầu UX..."
     : currentStep === 2
     ? `Đang đọc nguồn dữ liệu dự án (${Math.min(sourcesRevealed, keySources.length)}/${keySources.length})...`
     : currentStep === 3
     ? "Đang đối soát rủi ro & cột mốc Go-Live..."
-    : "Đang hoàn tất bản tin điều hành..."
+    : (finalStepLabel ? `Đang ${finalStepLabel.toLowerCase()}...` : "Đang hoàn tất bản tin điều hành...")
 
   const onCompleteRef = useRef(onComplete)
   useEffect(() => {
@@ -129,15 +155,24 @@ export function AgentActivityTrace({
 
   return (
     <div
-      onClick={!isInspector ? () => onCompleteRef.current?.() : undefined}
-      className={cn("flex w-full flex-col gap-2.5 py-0.5 font-sans select-none", !isInspector && "cursor-pointer")}
-      title={!isInspector ? "Nhấn để xem tóm tắt ngay" : undefined}
+      onClick={!isInspector && !collapsible ? () => onCompleteRef.current?.() : undefined}
+      className={cn(
+        "flex w-full flex-col gap-2.5 font-sans select-none",
+        !isInspector && !collapsible && "cursor-pointer"
+      )}
+      title={!isInspector && !collapsible ? "Nhấn để xem tóm tắt ngay" : undefined}
     >
       {/* Top Status Pill (ReUI Marker Style) */}
-      <div className="flex items-center justify-between border-b border-neutral-100 pb-2 text-xs">
+      <div
+        onClick={collapsible ? () => setIsOpen(!isOpen) : undefined}
+        className={cn(
+          "flex items-center justify-between border-b border-neutral-100 pb-2 text-xs",
+          collapsible && "cursor-pointer hover:opacity-90 transition-opacity"
+        )}
+      >
         <div className="flex items-center gap-2 min-w-0">
           {isFinished ? (
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shrink-0">
               <Check className="h-3 w-3 stroke-[2.5]" />
             </div>
           ) : (
@@ -148,203 +183,241 @@ export function AgentActivityTrace({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 ml-2">
           <span className="font-mono text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200/60 tabular-nums">
             {currentStep}/4
           </span>
-          {isInspector && onCloseInspector && (
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsOpen(!isOpen)
+                if (isOpen && onCloseInspector) onCloseInspector()
+              }}
+              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>{isOpen ? "Đóng" : "Xem chi tiết"}</span>
+              <ChevronDown className={cn("size-3 transition-transform duration-200", isOpen && "rotate-180")} />
+            </button>
+          ) : isInspector && onCloseInspector ? (
             <button
               type="button"
               onClick={onCloseInspector}
-              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 underline"
+              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 underline cursor-pointer"
             >
               Đóng
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* Stepper Vertical Timeline Track */}
-      <div className="relative pl-5 before:absolute before:left-2 before:top-2.5 before:bottom-2 before:w-px before:bg-neutral-200/80 space-y-3">
-        {/* Step 1: Quét danh mục công việc (Searching) */}
-        <div className="relative">
-          <div
-            className={cn(
-              "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-              currentStep > 1
-                ? "bg-purple-600 text-white"
-                : currentStep === 1
-                ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                : "bg-neutral-200 text-neutral-500"
-            )}
-          >
-            {currentStep > 1 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 1}
-          </div>
-
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-neutral-800 text-[11px]">
-              Quét danh mục công việc
-            </span>
-            <span className="text-[10px] font-medium text-neutral-400 tabular-nums">
-              active
-            </span>
-          </div>
-
-          <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 p-2 text-xs text-neutral-700 flex items-center gap-2 shadow-2xs">
-            <Search className="h-3 w-3 text-neutral-400 shrink-0" />
-            <span className="truncate text-[11px] font-medium text-neutral-700">
-              Yêu cầu UX: {activeTasks.length} task active · {dominantPhaseText}
-            </span>
-          </div>
-        </div>
-
-        {/* Step 2: Đọc nguồn dữ liệu dự án trọng điểm (Reviewing sources) */}
-        {currentStep >= 2 && (
+      {/* Stepper Vertical Timeline Track (Collapsible with AnimatePresence) */}
+      <AnimatePresence initial={false}>
+        {(!collapsible || isOpen) && (
           <motion.div
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={collapsible ? { height: 0, opacity: 0 } : false}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={collapsible ? { height: 0, opacity: 0 } : undefined}
             transition={{ duration: 0.2 }}
-            className="relative"
+            className="overflow-hidden space-y-3"
           >
-            <div
-              className={cn(
-                "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-                currentStep > 2
-                  ? "bg-purple-600 text-white"
-                  : currentStep === 2
-                  ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                  : "bg-neutral-200 text-neutral-500"
-              )}
-            >
-              {currentStep > 2 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 2}
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-neutral-800 text-[11px]">
-                Đọc nguồn dữ liệu dự án
-              </span>
-              <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
-                {Math.min(sourcesRevealed, keySources.length)}/{keySources.length} nguồn
-              </span>
-            </div>
-
-            <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
-              {keySources.slice(0, sourcesRevealed).map((task, idx) => (
+            <div className="relative pl-5 before:absolute before:left-2 before:top-2.5 before:bottom-2 before:w-px before:bg-neutral-200/80 space-y-3 pt-1">
+              {/* Step 1: Quét danh mục công việc (Searching) */}
+              <div className="relative">
                 <div
-                  key={task.request_id || idx}
-                  onClick={() => onOpenTask && onOpenTask(task)}
-                  className="flex items-center justify-between px-2.5 py-1 text-xs hover:bg-neutral-100/70 cursor-pointer transition-colors"
-                  title="Bấm để xem chi tiết task"
+                  className={cn(
+                    "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
+                    currentStep > 1
+                      ? "bg-purple-600 text-white"
+                      : currentStep === 1
+                      ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
+                      : "bg-neutral-200 text-neutral-500"
+                  )}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-[10px] font-bold text-neutral-400">
-                      [{idx + 1}]
-                    </span>
-                    <span className="truncate font-medium text-neutral-800 text-[11px]">
-                      {getRequestDisplayTitle(task)}
-                    </span>
-                  </div>
-                  <span className="shrink-0 text-[9px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 ml-2">
-                    {task.squad || "UX Team"}
+                  {currentStep > 1 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 1}
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-neutral-800 text-[11px]">
+                    Quét danh mục công việc
+                  </span>
+                  <span className="text-[10px] font-medium text-neutral-400 tabular-nums">
+                    active
                   </span>
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
 
-        {/* Step 3: Đối soát rủi ro & cột mốc Go-Live (Checking records) */}
-        {currentStep >= 3 && (
-          <motion.div
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative"
-          >
-            <div
-              className={cn(
-                "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-                currentStep > 3
-                  ? "bg-purple-600 text-white"
-                  : currentStep === 3
-                  ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                  : "bg-neutral-200 text-neutral-500"
-              )}
-            >
-              {currentStep > 3 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 3}
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-neutral-800 text-[11px]">
-                Đối soát rủi ro & cột mốc
-              </span>
-              <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
-                2 kiểm tra
-              </span>
-            </div>
-
-            <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
-              {checksRevealed >= 1 && (
-                <div className="flex items-center justify-between px-2.5 py-1 text-xs">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
-                    <span className="font-mono text-[10px] text-neutral-700">
-                      assessTaskRisk()
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
-                    {riskProjects.length > 0
-                      ? `${riskProjects.length} task chạm hạn / cần đẩy nhanh`
-                      : "0 rủi ro quá hạn"}
+                <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 p-2 text-xs text-neutral-700 flex items-center gap-2 shadow-2xs">
+                  <Search className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span className="truncate text-[11px] font-medium text-neutral-700">
+                    Yêu cầu UX: {activeTasks.length} task active · {dominantPhaseText}
                   </span>
                 </div>
-              )}
-              {checksRevealed >= 2 && (
-                <div className="flex items-center justify-between px-2.5 py-1 text-xs">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <CalendarCheck className="h-3 w-3 text-blue-500 shrink-0" />
-                    <span className="font-mono text-[10px] text-neutral-700">
-                      verifyMilestones()
+              </div>
+
+              {/* Step 2: Đọc nguồn dữ liệu dự án trọng điểm (Reviewing sources) */}
+              {currentStep >= 2 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative"
+                >
+                  <div
+                    className={cn(
+                      "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
+                      currentStep > 2
+                        ? "bg-purple-600 text-white"
+                        : currentStep === 2
+                        ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
+                        : "bg-neutral-200 text-neutral-500"
+                    )}
+                  >
+                    {currentStep > 2 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 2}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-neutral-800 text-[11px]">
+                      Đọc nguồn dữ liệu dự án
+                    </span>
+                    <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
+                      {Math.min(sourcesRevealed, keySources.length)}/{keySources.length} nguồn
                     </span>
                   </div>
-                  <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
-                    {goLiveTasks.length > 0
-                      ? `${goLiveTasks.length} task có kế hoạch Go-Live tuần`
-                      : "Không có Go-Live gấp"}
-                  </span>
-                </div>
+
+                  <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
+                    {keySources.slice(0, sourcesRevealed).map((task, idx) => (
+                      <div
+                        key={task.request_id || idx}
+                        onClick={() => onOpenTask && onOpenTask(task)}
+                        className="flex items-center justify-between px-2.5 py-1 text-xs hover:bg-neutral-100/70 cursor-pointer transition-colors"
+                        title="Bấm để xem chi tiết task"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-[10px] font-bold text-neutral-400">
+                            [{idx + 1}]
+                          </span>
+                          <span className="truncate font-medium text-neutral-800 text-[11px]">
+                            {getRequestDisplayTitle(task)}
+                          </span>
+                        </div>
+                        <span className="shrink-0 text-[9px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 ml-2">
+                          {task.squad || "UX Team"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 3: Đối soát rủi ro & cột mốc Go-Live (Checking records) */}
+              {currentStep >= 3 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative"
+                >
+                  <div
+                    className={cn(
+                      "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
+                      currentStep > 3
+                        ? "bg-purple-600 text-white"
+                        : currentStep === 3
+                        ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
+                        : "bg-neutral-200 text-neutral-500"
+                    )}
+                  >
+                    {currentStep > 3 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 3}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-neutral-800 text-[11px]">
+                      Đối soát rủi ro & cột mốc
+                    </span>
+                    <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
+                      2 kiểm tra
+                    </span>
+                  </div>
+
+                  <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
+                    {checksRevealed >= 1 && (
+                      <div className="flex items-center justify-between px-2.5 py-1 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
+                          <span className="font-mono text-[10px] text-neutral-700">
+                            assessTaskRisk()
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
+                          {riskProjects.length > 0
+                            ? `${riskProjects.length} task chạm hạn / cần đẩy nhanh`
+                            : "0 rủi ro quá hạn"}
+                        </span>
+                      </div>
+                    )}
+                    {checksRevealed >= 2 && (
+                      <div className="flex items-center justify-between px-2.5 py-1 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <CalendarCheck className="h-3 w-3 text-blue-500 shrink-0" />
+                          <span className="font-mono text-[10px] text-neutral-700">
+                            verifyMilestones()
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
+                          {goLiveTasks.length > 0
+                            ? `${goLiveTasks.length} task có kế hoạch Go-Live tuần`
+                            : "Không có Go-Live gấp"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 4: Tổng hợp phản hồi (Synthesizing) */}
+              {currentStep >= 4 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative"
+                >
+                  <div className="absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold bg-emerald-600 text-white">
+                    <Check className="h-2.5 w-2.5 stroke-[3]" />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-neutral-800 text-[11px]">
+                      {finalStepLabel || "Tổng hợp bản tin điều hành"}
+                    </span>
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 border border-emerald-200">
+                      Độ tin cậy cao
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-[11px] text-neutral-500 font-medium">
+                    {finalStepDesc || "Đã sẵn sàng bản tin điều hành UX tuần mới."}
+                  </p>
+                </motion.div>
               )}
             </div>
+
+            {/* Mạch suy nghĩ chi tiết nếu có */}
+            {reasoning && (
+              <div className="mt-2.5 pt-2 border-t border-neutral-200/60 space-y-1">
+                <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="size-3 text-purple-600" />
+                  <span>Mạch suy nghĩ chi tiết (Reasoning)</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200/60 font-mono text-[11px] leading-relaxed text-neutral-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {reasoning}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
-
-        {/* Step 4: Tổng hợp bản tin điều hành (Synthesizing) */}
-        {currentStep >= 4 && (
-          <motion.div
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative"
-          >
-            <div className="absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold bg-emerald-600 text-white">
-              <Check className="h-2.5 w-2.5 stroke-[3]" />
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-neutral-800 text-[11px]">
-                Tổng hợp bản tin điều hành
-              </span>
-              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 border border-emerald-200">
-                Độ tin cậy cao
-              </span>
-            </div>
-
-            <p className="mt-1 text-[11px] text-neutral-500 font-medium">
-              Đã sẵn sàng bản tin điều hành UX tuần mới.
-            </p>
-          </motion.div>
-        )}
-      </div>
+      </AnimatePresence>
     </div>
   )
 }

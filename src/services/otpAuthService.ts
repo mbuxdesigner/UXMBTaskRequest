@@ -77,7 +77,7 @@ export const DEMO_ACCOUNTS: Array<{
     displayName: "Admin MB UX Team",
     personalEmail: "admin@gmail.com",
     teamsEmail: "admin@mbbank.com.vn",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    avatarUrl: "",
     role: "Admin",
     squad: "All Squads",
     squads: ["Design System & Core", "Lending & Vay vốn", "Cards & Thanh toán số", "Core Banking & Tài khoản", "Digital Wealth & Đầu tư", "BaaS & Open API"],
@@ -442,6 +442,12 @@ export function migrateSessionSchema(): boolean {
       modified = true
     }
 
+    // 9. Dọn dẹp avatar mẫu Unsplash cũ nếu có
+    if (parsed.avatarUrl && (parsed.avatarUrl.includes("photo-1534528741775-53994a69daeb") || parsed.avatarUrl.includes("photo-1534528741775"))) {
+      parsed.avatarUrl = ""
+      modified = true
+    }
+
     if (modified) {
       const serialized = JSON.stringify(parsed)
       try {
@@ -542,6 +548,17 @@ export function getStoredSession(): UserSession | null {
       } else {
         session.expiresAt = session.loginAt + SESSION_DURATION_SECONDS * 1000
       }
+    }
+
+    // Dọn dẹp avatar mẫu Unsplash cũ nếu có trong phiên hiện tại
+    if (session.avatarUrl && (session.avatarUrl.includes("photo-1534528741775-53994a69daeb") || session.avatarUrl.includes("photo-1534528741775"))) {
+      session.avatarUrl = ""
+      try {
+        const serialized = JSON.stringify(session)
+        sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
+        localStorage.setItem(SESSION_STORAGE_KEY, serialized)
+        localStorage.setItem("ux_portal_session", serialized)
+      } catch {}
     }
 
     // 1. Kiểm tra cơ chế trượt 24 tiếng khi thoát (Sliding Inactivity 24h)

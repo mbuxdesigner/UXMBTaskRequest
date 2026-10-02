@@ -59,6 +59,7 @@ const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
 const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
 const IAPage = lazy(() => import("./pages/IAPage"))
 const CalendarPage = lazy(() => import("./pages/DesignerPlannerPage"))
+const AIChatPage = lazy(() => import("./pages/AIChatPage"))
 
 // Route Preloaders (dynamic import on demand)
 export const preloadPage = (targetPage: Page) => {
@@ -74,6 +75,9 @@ export const preloadPage = (targetPage: Page) => {
       break
     case "calendar":
       import("./pages/DesignerPlannerPage")
+      break
+    case "aichat":
+      import("./pages/AIChatPage")
       break
     case "manage":
       import("./pages/QuanLyPage")
@@ -94,6 +98,7 @@ function PageLoadingSkeleton({ page }: { page: Page }) {
   switch (page) {
     case "overview":
     case "calendar":
+    case "aichat":
       return <DashboardSkeleton />
 
     case "track":
@@ -135,6 +140,12 @@ export default function App() {
       const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
       return canView && Boolean(visibility.ia)
     }
+    if (targetPage === "aichat") {
+      const canUseAi = canRoleAccessCapability(role, "cap-ai-use")
+      const navConfig = getRoleNavConfig()
+      const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
+      return canUseAi && (visibility.aichat ?? true)
+    }
     if (targetPage === "test") return true
     const navConfig = getRoleNavConfig()
     const visibility = navConfig[role] || DEFAULT_ROLE_NAV_CONFIG[role] || DEFAULT_ROLE_NAV_CONFIG.Designer
@@ -146,7 +157,7 @@ export default function App() {
     const s = getStoredSession()
     const rawHashStr = window.location.hash.replace(/^#/, "").split("?")[0]
     const rawHash = (rawHashStr === "planner" ? "calendar" : rawHashStr) as Page
-    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia", "calendar"]
+    const validPages: Page[] = ["track", "overview", "create", "test", "compressor", "manage", "ia", "calendar", "aichat"]
 
     const role = (s?.role || "").toLowerCase().trim()
     const isPlannerRole =
@@ -231,6 +242,7 @@ export default function App() {
       ia: "Information Architecture — MB UX Request Portal",
 
       calendar: "Planner cá nhân — MB UX Request Portal",
+      aichat: "AI Chat Copilot — MB UX Request Portal",
     }
 
     document.title =
@@ -361,7 +373,8 @@ export default function App() {
         hash === "test" ||
         hash === "compressor" ||
         hash === "ia" ||
-        hash === "calendar"
+        hash === "calendar" ||
+        hash === "aichat"
       ) {
         setPage((prev) => (prev !== (hash as Page) ? (hash as Page) : prev))
       }
@@ -474,11 +487,15 @@ export default function App() {
     setSession(null)
   }
 
+
   return (
     <MotionConfig reducedMotion="never">
       <div
         className={cn(
-          "min-h-screen bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative transition-all duration-300",
+          "bg-[#FCFCFD] w-full max-w-full overflow-x-clip relative transition-all duration-300",
+          page === "aichat" || page === "ia"
+            ? "h-screen max-h-screen overflow-hidden"
+            : "min-h-screen",
           sessionExpiredState.open && "filter blur-[2px] pointer-events-none select-none"
         )}
       >
@@ -493,7 +510,14 @@ export default function App() {
         />
 
         {/* Container chính: Offset theo sidebar w-60 (240px) */}
-        <div className="md:ml-60 min-h-screen bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1">
+        <div
+          className={cn(
+            "md:ml-60 bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1",
+            page === "aichat" || page === "ia"
+              ? "h-screen max-h-screen overflow-hidden"
+              : "min-h-screen"
+          )}
+        >
           {/* Global System Announcement Banner (Admin Controlled) */}
           <GlobalAnnouncementBanner />
 
@@ -507,12 +531,13 @@ export default function App() {
             }
           />
 
-          {/* Main Content View: Tách biệt IA Canvas toàn màn hình và các trang cuộn tiêu chuẩn */}
+          {/* Main Content View: Tách biệt IA Canvas & AI Chat Copilot toàn màn hình và các trang cuộn tiêu chuẩn */}
           <Suspense fallback={<PageLoadingSkeleton page={page} />}>
-            {page === "ia" ? (
-              <div className="flex-1 w-full min-w-0 max-w-full p-0 flex flex-col h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] overflow-hidden">
+            {page === "ia" || page === "aichat" ? (
+              <div className="flex-1 min-h-0 w-full min-w-0 max-w-full p-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
-                  <IAPage />
+                  {page === "ia" && <IAPage />}
+                  {page === "aichat" && <AIChatPage />}
                 </ErrorBoundary>
               </div>
             ) : (

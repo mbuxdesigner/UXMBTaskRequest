@@ -51,6 +51,7 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { BorderBeam } from "@/components/jolyui/border-beam"
 import { AgentActivityTrace } from "@/components/planner/AgentActivityTrace"
 import { ExecutiveSummaryTypewriter } from "@/components/planner/ExecutiveSummaryTypewriter"
+import { AIChatCopilot } from "@/components/planner/AIChatCopilot"
 import { extractExecutiveIntelligence, type PerspectiveAngle } from "@/lib/executiveIntelligence"
 import PageHeader from "@/components/common/PageHeader"
 import { UserAvatar, getDesignerAvatar, getAvatarColorClass } from "@/components/common/UserAvatar"
@@ -811,6 +812,7 @@ export default function DesignerPlannerPage() {
   const [pendingSyncTaskIds, setPendingSyncTaskIds] = useState<Set<string>>(new Set())
   const [detailEntry, setDetailEntry] = useState<PlannerEntry | null>(null)
   const [activeDetailTask, setActiveDetailTask] = useState<UXRequest | null>(null)
+  const [isChatCopilotOpen, setIsChatCopilotOpen] = useState(false)
   const [eventModalOpen, setEventModalOpen] = useState(false)
   const [eventDate, setEventDate] = useState(todayYMD)
   const [editingEntry, setEditingEntry] = useState<PlannerEntry | null>(null)
@@ -1905,7 +1907,7 @@ export default function DesignerPlannerPage() {
   }, [session, rawRequests, myTasks, today, todayYMD, entries, dominantPhaseText])
 
   const handleCycleAngle = useCallback(() => {
-    const angles: PerspectiveAngle[] = ["overview", "delegated", "collaboration", "productivity"]
+    const angles: PerspectiveAngle[] = ["overview", "delegated", "collaboration", "productivity", "all"]
     const nextIdx = (angles.indexOf(perspectiveAngle) + 1) % angles.length
     const nextAngle = angles[nextIdx]
     setPerspectiveAngle(nextAngle)
@@ -1916,6 +1918,7 @@ export default function DesignerPlannerPage() {
       delegated: "Task bạn ủy quyền cho đồng đội",
       collaboration: "Điểm nóng thảo luận & chat",
       productivity: "Năng suất & Deep Work",
+      all: "Bản tin toàn diện",
     }
     toast.success("Đổi góc nhìn trợ lý", angleNames[nextAngle])
   }, [perspectiveAngle])
@@ -3305,31 +3308,13 @@ export default function DesignerPlannerPage() {
                         {selectedDateLabel}
                       </h3>
                     </div>
-                    <Button variant="outline" size="xs" onClick={() => openAddEvent(selectedDate)} className="rounded-lg shadow-2xs gap-1">
-                      <Plus className="h-3 w-3" />
-                      Thêm việc
-                    </Button>
                   </div>
                   <div className="space-y-3">
                     {selectedEntries.length === 0 ? (
                       <EmptyState10
                         title="Chưa có lịch trong ngày này"
-                        description="Thêm việc mới hoặc kéo thả task từ danh sách chưa xếp lịch vào ngày này."
+                        description="Kéo thả task từ danh sách chưa xếp lịch vào ngày này."
                         icon={<CalendarDays className="h-6 w-6 text-slate-700" />}
-                        primaryAction={{
-                          label: "Thêm việc",
-                          icon: <Plus className="h-3.5 w-3.5" />,
-                          onClick: () => openAddEvent(selectedDate),
-                        }}
-                        secondaryAction={
-                          unscheduledTasks.length > 0
-                            ? {
-                                label: "Xếp 1 task",
-                                icon: <Rocket className="h-3.5 w-3.5 text-blue-600" />,
-                                onClick: () => handleInitiateSchedule(unscheduledTasks[0], selectedDate),
-                              }
-                            : undefined
-                        }
                       />
                     ) : (
                       <>
@@ -5102,6 +5087,29 @@ export default function DesignerPlannerPage() {
           }
           debouncedSilentReload()
         }}
+      />
+
+      {/* Floating Copilot Button */}
+      {!isChatCopilotOpen && (
+        <button
+          type="button"
+          onClick={() => setIsChatCopilotOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105 border border-slate-700/60 cursor-pointer group"
+          title="Mở Trợ lý UX MB Copilot"
+        >
+          <div className="w-6 h-6 rounded-full bg-indigo-500/30 flex items-center justify-center text-indigo-300">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400 group-hover:rotate-12 transition-transform" />
+          </div>
+          <span className="text-xs font-semibold pr-1">Hỏi AI Copilot</span>
+        </button>
+      )}
+
+      {/* Interactive AI Chat Copilot Widget */}
+      <AIChatCopilot
+        isOpen={isChatCopilotOpen}
+        onClose={() => setIsChatCopilotOpen(false)}
+        intelligence={executiveIntelligence}
+        onOpenTask={openTask}
       />
     </div>
   )

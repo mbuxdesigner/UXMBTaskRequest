@@ -75,6 +75,7 @@ const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
   test: { title: "Khảo sát & Đánh giá UX", section: "Resources" },
   compressor: { title: "Nén & Tối ưu ảnh", section: "Resources" },
   ia: { title: "Information architecture", section: "Platform" },
+  aichat: { title: "AI Chats", section: "Platform" },
 }
 
 export default function AppHeader({

@@ -4,6 +4,7 @@ export interface RoleNavVisibility {
   overview: boolean
   track: boolean
   calendar: boolean
+  aichat?: boolean
   create: boolean
   test: boolean
   compressor: boolean
@@ -21,6 +22,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     calendar: true,
+    aichat: true,
     create: true,
     test: true,
     compressor: true,
@@ -32,6 +34,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     calendar: true,
+    aichat: true,
     create: true,
     test: true,
     compressor: true,
@@ -43,6 +46,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     calendar: true,
+    aichat: true,
     create: true,
     test: true,
     compressor: true,
@@ -54,6 +58,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     calendar: true,
+    aichat: true,
     create: true,
     test: true,
     compressor: false,
@@ -65,6 +70,7 @@ export const DEFAULT_ROLE_NAV_CONFIG: RoleNavConfig = {
     overview: true,
     track: true,
     calendar: true,
+    aichat: true,
     create: true,
     test: true,
     compressor: false,
@@ -88,6 +94,7 @@ export function getRoleNavConfig(): RoleNavConfig {
         overview: roleData.overview !== undefined ? roleData.overview : defaults.overview,
         track: roleData.track !== undefined ? roleData.track : defaults.track,
         calendar: roleData.calendar !== undefined ? roleData.calendar : defaults.calendar,
+        aichat: roleData.aichat !== undefined ? roleData.aichat : defaults.aichat,
         create: roleData.create !== undefined ? roleData.create : defaults.create,
         test: role === "Admin" ? (roleData.test ?? true) : (roleData.test !== undefined ? roleData.test : defaults.test),
         compressor: role === "Admin" ? (roleData.compressor ?? true) : (roleData.compressor !== undefined ? roleData.compressor : defaults.compressor),
@@ -109,7 +116,7 @@ export function getRoleNavConfig(): RoleNavConfig {
   }
 }
 
-export type PlatformNavItemKey = "overview" | "track" | "calendar" | "create" | "ia"
+export type PlatformNavItemKey = "overview" | "track" | "calendar" | "aichat" | "create" | "ia"
 export type ResourceNavItemKey = "compressor" | "test" | "manage" | "invite"
 export type NavItemKey = PlatformNavItemKey | ResourceNavItemKey
 
@@ -119,7 +126,7 @@ export interface NavOrderConfig {
 }
 
 export const DEFAULT_NAV_ORDER: NavOrderConfig = {
-  platform: ["overview", "track", "calendar", "create", "ia"],
+  platform: ["overview", "track", "calendar", "aichat", "create", "ia"],
   resources: ["compressor", "test", "manage", "invite"],
 }
 
@@ -138,6 +145,17 @@ export function getNavOrderConfig(): NavOrderConfig {
       } else {
         platform.push("calendar")
       }
+    }
+    if (!platform.includes("aichat")) {
+      const calIdx = platform.indexOf("calendar")
+      if (calIdx !== -1) {
+        platform.splice(calIdx + 1, 0, "aichat")
+      } else {
+        platform.push("aichat")
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_NAV_ORDER, JSON.stringify({ ...parsed, platform }))
+      } catch {}
     }
     if (!platform.includes("ia")) {
       platform.push("ia")
