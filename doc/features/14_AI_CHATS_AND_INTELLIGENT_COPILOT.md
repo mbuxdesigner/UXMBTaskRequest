@@ -231,3 +231,37 @@ Hệ thống cung cấp sẵn 4 tài liệu hạt nhân của UX MBBank:
    - Nhấn `Ctrl + V` dán tệp từ clipboard thành công và thông báo toast xác nhận.
 5. **Kiểm thử Build Production:**
    - Lệnh `npm run build` vượt qua 100% không có lỗi Type hay rò rỉ mã nguồn.
+
+---
+
+## 📁 9. KIẾN TRÚC KHO LƯU TRỮ GOOGLE DRIVE ĐÁM MÂY (CLOUD STORAGE TAXONOMY)
+
+Hệ thống tích hợp trực tiếp với Google Drive trung tâm tại thư mục gốc:  
+- **Root URL:** `https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g`
+- **Root Folder ID:** `1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g`
+
+Cấu trúc phân vùng 5 thư mục chuẩn hóa:
+1. `01_AI_Chat_History`: Lưu trữ lịch sử hội thoại các phiên chat theo định dạng `chat_threads_<email>.json`.
+2. `02_AI_Documents_Artifacts`: Chứa các tài liệu kỹ thuật, tiêu chuẩn bàn giao, checklist khâu 7 (.md, .pdf, .docx, .json).
+3. `03_Event_Photos_Media`: Chứa hình ảnh sự kiện, bằng chứng timeline dự án (.jpg, .png, .webp).
+4. `04_Task_Attachments`: Chứa tệp đính kèm đề bài yêu cầu và tài liệu nghiệp vụ (.pdf, .xlsx, .zip...).
+5. `05_User_Avatars`: Chứa ảnh đại diện của nhân sự trong hệ thống (.jpg, .png, .webp).
+
+Cơ chế backend Google Apps Script:
+- Tự động tạo thư mục thông qua hàm `initDriveFolderStructure()`.
+- Tự động phân luồng tệp thông qua hàm `getTargetDriveFolder(folderKeyOrName)`.
+- Cấp quyền xem công khai (`ANYONE_WITH_LINK`, `VIEW`) tự động cho mọi tệp tải lên để hiển thị liền mạch trên giao diện.
+
+---
+
+## 🧠 10. BỘ ĐIỀU PHỐI PHẢN HỒI NGỮ NGHĨA ĐỘNG (DYNAMIC SEMANTIC FALLBACK ENGINE)
+
+Nhằm đảm bảo trải nghiệm tương tác tự nhiên và sinh động ngay cả khi chưa kết nối API Key trực tiếp, `simulateSmartFallbackStream` trong `src/services/aiService.ts` phân tích câu hỏi của người dùng và điều hướng thông minh sang 7 kịch bản:
+1. **Năng lực Trợ lý:** Trình bày 5 trụ cột chức năng và gợi ý prompt tương tác.
+2. **Biểu đồ Trực quan:** Xuất cấu trúc JSON chuẩn Recharts hiển thị tiến độ và phân bổ bài toán.
+3. **Sơ đồ Quy trình:** Trực quan hóa quy trình 7 khâu UX bằng sơ đồ Mermaid tương tác.
+4. **Rà soát Điểm nghẽn:** Phân tích các bài toán PO Pending quá hạn và xuất Thẻ Hành động mở modal `RequestDetail`.
+5. **Quy chuẩn Design System:** Tra cứu bảng mã màu MB Blue `#1057FB`, tokens và typography.
+6. **Lọc theo Squad:** Trích xuất bảng dữ liệu bài toán theo từng squad/phân hệ cụ thể.
+7. **Đàm thoại Ngữ cảnh:** Tư vấn giải pháp thiết kế linh hoạt, loại bỏ tình trạng phản hồi lặp lại một mẫu duy nhất.
+

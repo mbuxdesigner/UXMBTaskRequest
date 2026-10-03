@@ -19,6 +19,11 @@ export interface UXArtifact {
   summary?: string
   tags?: string[]
   isCustomUploaded?: boolean
+  driveUrl?: string
+  driveFileId?: string
+  driveThumbnailUrl?: string
+  driveDownloadUrl?: string
+  uploadedBy?: string
 }
 
 const STORAGE_ARTIFACTS_KEY = "ux_mb_ai_artifacts"
@@ -273,4 +278,39 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * Hợp nhất danh sách Artifacts lấy từ Google Sheet với bộ nhớ Local
+ */
+export function mergeCloudArtifacts(cloudArtifacts: UXArtifact[]): UXArtifact[] {
+  if (!Array.isArray(cloudArtifacts) || cloudArtifacts.length === 0) {
+    return getStoredArtifacts()
+  }
+  const current = getStoredArtifacts()
+  const localMap = new Map<string, UXArtifact>()
+  current.forEach((a) => localMap.set(a.id, a))
+
+  let hasNewOrUpdated = false
+  cloudArtifacts.forEach((cloudArt) => {
+    if (!cloudArt || !cloudArt.id) return
+    const existing = localMap.get(cloudArt.id)
+    if (!existing) {
+      localMap.set(cloudArt.id, cloudArt)
+      hasNewOrUpdated = true
+    } else if (cloudArt.updatedAt && cloudArt.updatedAt !== existing.updatedAt) {
+      localMap.set(cloudArt.id, { ...existing, ...cloudArt })
+      hasNewOrUpdated = true
+    }
+  })
+
+  if (hasNewOrUpdated) {
+    const merged = Array.from(localMap.values())
+    saveStoredArtifacts(merged)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ux_mb_artifacts_changed", { detail: merged }))
+    }
+    return merged
+  }
+  return current
 }

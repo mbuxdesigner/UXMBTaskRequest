@@ -958,25 +958,35 @@ export default function RequestDetail({
     const squadList: typeof availableDesigners = []
     const supportList: typeof availableDesigners = []
 
-    // 4. Phân loại chuẩn: CHỈ những ai được cấu hình rõ ràng trong squad mới vào squadDesigners
+    // 4. Phân loại chuẩn: Cấu hình rõ ràng trong Admin Squads HOẶC được gán squad này trong hồ sơ cá nhân
     availableDesigners.forEach((d) => {
       const dSquadLower = (d.squad || "").toLowerCase()
-      const dSquadsLower = (d.squads || []).map((s: string) => s.toLowerCase())
+      const dSquadsLower = (d.squads || []).map((s: string) => String(s || "").toLowerCase())
 
-      let isSquadInCharge = false
-
-      if (cleanAssignedNames.length > 0) {
-        // Có cấu hình trong Admin: Chỉ khớp với nhân sự được gán trong squad này
-        isSquadInCharge = cleanAssignedNames.some((name) => matchesPerson(name, d))
-      } else if (rawSquad) {
-        // Squad chưa gán trong Admin: Khớp với designer có squad này cụ thể (không tính "all" hay "toàn hàng")
-        isSquadInCharge = Boolean(
-          !dSquadLower.includes("all") && (
+      const isConfiguredInSquad = cleanAssignedNames.length > 0 && cleanAssignedNames.some((name) => matchesPerson(name, d))
+      const isAssignedByProfile = Boolean(
+        rawSquad && squadLower && (
+          (!dSquadLower.includes("all") && (
             dSquadLower === squadLower ||
-            dSquadsLower.some((s: string) => !s.includes("all") && (s === squadLower || s.includes(squadLower) || squadLower.includes(s)))
+            dSquadLower.includes(squadLower) ||
+            squadLower.includes(dSquadLower)
+          )) ||
+          dSquadsLower.some((s: string) =>
+            !s.includes("all") && (
+              s === squadLower ||
+              s.includes(squadLower) ||
+              squadLower.includes(s) ||
+              (matchedSquad && (
+                s === (matchedSquad.name || "").toLowerCase() ||
+                s.includes((matchedSquad.name || "").toLowerCase()) ||
+                (matchedSquad.name || "").toLowerCase().includes(s)
+              ))
+            )
           )
         )
-      }
+      )
+
+      const isSquadInCharge = isConfiguredInSquad || isAssignedByProfile
 
       if (isSquadInCharge) {
         squadList.push(d)
@@ -1499,12 +1509,17 @@ export default function RequestDetail({
     return list
       .map((m: any) => {
         const normName = String(m.name || m.displayName || "").trim().normalize("NFC")
+        const rawSquads: string[] = Array.isArray(m.squads)
+          ? m.squads.map((s: any) => String(s || "").trim().normalize("NFC")).filter(Boolean)
+          : (m.squad ? [String(m.squad).trim().normalize("NFC")] : [])
+        const primarySquad = String(m.squad || (rawSquads.length > 0 ? rawSquads[0] : "") || "").trim().normalize("NFC")
         return {
           name: normName,
           role: String(m.role || "Thành viên").trim().normalize("NFC"),
           email: String(m.email || m.teamsEmail || "").trim(),
           avatar: String(m.avatarUrl || m.avatar || getDesignerAvatar(normName)),
-          squad: String(m.squad || (Array.isArray(m.squads) ? m.squads[0] : "") || "").trim().normalize("NFC"),
+          squad: primarySquad,
+          squads: rawSquads,
         }
       })
       .filter((m) => {
@@ -1720,19 +1735,35 @@ export default function RequestDetail({
 
     availableViewerMembers.forEach((m) => {
       const mSquadLower = (m.squad || "").toLowerCase()
-      let isInSquad = false
+      const mSquadsLower = (m.squads || []).map((s: string) => String(s || "").toLowerCase())
 
-      if (cleanSquadMemberNames.length > 0) {
-        isInSquad = cleanSquadMemberNames.some((name) => matchesPerson(name, m))
-      } else if (rawSquad && squadLower) {
-        isInSquad = Boolean(
-          !mSquadLower.includes("all") && (
+      // 1. Kiểm tra nếu nhân sự được cấu hình trực tiếp trong squad (Admin Squads)
+      const isConfiguredInSquad = cleanSquadMemberNames.length > 0 && cleanSquadMemberNames.some((name) => matchesPerson(name, m))
+
+      // 2. Kiểm tra nếu nhân sự có gán squad này trong hồ sơ cá nhân (Quản lý nhân sự)
+      const isAssignedByMemberProfile = Boolean(
+        rawSquad && squadLower && (
+          (!mSquadLower.includes("all") && (
             mSquadLower === squadLower ||
             mSquadLower.includes(squadLower) ||
             squadLower.includes(mSquadLower)
+          )) ||
+          mSquadsLower.some((s: string) =>
+            !s.includes("all") && (
+              s === squadLower ||
+              s.includes(squadLower) ||
+              squadLower.includes(s) ||
+              (matchedSquad && (
+                s === (matchedSquad.name || "").toLowerCase() ||
+                s.includes((matchedSquad.name || "").toLowerCase()) ||
+                (matchedSquad.name || "").toLowerCase().includes(s)
+              ))
+            )
           )
         )
-      }
+      )
+
+      const isInSquad = isConfiguredInSquad || isAssignedByMemberProfile
 
       if (isInSquad) {
         squadList.push(m)
@@ -2047,7 +2078,8 @@ export default function RequestDetail({
         m.name.toLowerCase().includes(q) ||
         m.role.toLowerCase().includes(q) ||
         m.email.toLowerCase().includes(q) ||
-        Boolean(m.squad && m.squad.toLowerCase().includes(q))
+        Boolean(m.squad && m.squad.toLowerCase().includes(q)) ||
+        Boolean(m.squads && m.squads.some((sq: string) => sq.toLowerCase().includes(q)))
       )
     }
 
@@ -2079,25 +2111,9 @@ export default function RequestDetail({
             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
           </div>
           <UserAvatar name={m.name} avatarUrl={m.avatar} size="sm" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className={`font-bold truncate ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
-                {m.name}
-              </p>
-              {isSquadRole ? (
-                <span className="text-[9.5px] font-semibold text-[#1057FB] bg-blue-50 border border-blue-200/80 px-1.5 py-0.2 rounded shrink-0">
-                  Phụ trách Squad
-                </span>
-              ) : (
-                <span className="text-[9.5px] font-medium text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.2 rounded shrink-0">
-                  Hỗ trợ
-                </span>
-              )}
-            </div>
-            <p className="text-[10px] text-slate-400 truncate">
-              {m.role}{m.squad ? ` • ${m.squad}` : ""}
-            </p>
-          </div>
+          <span className={`font-semibold truncate text-xs ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
+            {m.name}
+          </span>
         </button>
       )
     }
@@ -4344,7 +4360,7 @@ export default function RequestDetail({
                             <div className="flex items-center gap-2 min-w-0 max-w-full">
                               {localAssignees.length === 1 ? (
                                 <>
-                                  <UserAvatar name={localAssignees[0]} avatarUrl={getDesignerAvatar(localAssignees[0])} size="xs" />
+                                  <UserAvatar name={localAssignees[0]} avatarUrl={getDesignerAvatar(localAssignees[0])} size="md" />
                                   <span className="font-medium text-slate-900 truncate text-xs">{localAssignees[0]}</span>
                                 </>
                               ) : (
@@ -4352,7 +4368,7 @@ export default function RequestDetail({
                                   <div className="flex items-center -space-x-2 overflow-hidden shrink-0">
                                     {localAssignees.slice(0, 3).map((name, i) => (
                                       <div key={`assignee-av-${name}-${i}`} className="ring-2 ring-white rounded-full">
-                                        <UserAvatar name={name} avatarUrl={getDesignerAvatar(name)} size="xs" />
+                                        <UserAvatar name={name} avatarUrl={getDesignerAvatar(name)} size="md" />
                                       </div>
                                     ))}
                                   </div>
@@ -4366,9 +4382,9 @@ export default function RequestDetail({
                               )}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 text-slate-500 hover:text-[#1057FB] hover:border-blue-400 hover:bg-blue-50/50 transition-all text-xs font-semibold">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 text-slate-500 hover:text-[#1057FB] hover:border-blue-400 hover:bg-blue-50/50 transition-all text-xs font-semibold whitespace-nowrap shrink-0">
                               <User className="w-3.5 h-3.5 text-slate-400" />
-                              <span>+ Chưa phân công</span>
+                              <span>+ Designer</span>
                             </div>
                           )}
                         </button>
@@ -4496,23 +4512,9 @@ export default function RequestDetail({
                                           {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                                         </div>
                                         <UserAvatar name={des.name} avatarUrl={des.avatar} size="sm" />
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <p className={`font-bold truncate ${isSelected ? "text-blue-900" : "text-slate-900"}`}>{des.name}</p>
-                                            {isSquadRole ? (
-                                              <span className="text-[9.5px] font-semibold text-[#1057FB] bg-blue-50 border border-blue-200/80 px-1.5 py-0.2 rounded shrink-0">
-                                                Phụ trách Squad
-                                              </span>
-                                            ) : (
-                                              <span className="text-[9.5px] font-medium text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.2 rounded shrink-0">
-                                                Hỗ trợ
-                                              </span>
-                                            )}
-                                          </div>
-                                          <p className="text-[10px] text-slate-400 truncate">
-                                            {des.role}{des.squad ? ` • ${des.squad}` : ""}
-                                          </p>
-                                        </div>
+                                        <span className={`font-semibold truncate text-xs ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
+                                          {des.name}
+                                        </span>
                                       </button>
                                     )
                                   }
@@ -4790,12 +4792,12 @@ export default function RequestDetail({
                             </CAvatar29>
 
                             {/* Toast Danh sách người theo dõi khi trỏ chuột (Hover Tooltip Toast) */}
-                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[210px] max-w-[270px] p-2.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl border border-slate-800 pointer-events-none">
-                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-800">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[210px] max-w-[260px] p-2.5 bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200/90 pointer-events-none select-none">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-100">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                   Người theo dõi
                                 </span>
-                                <span className="px-1.5 py-0.2 rounded-full text-[9.5px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                   {localViewers.length} thành viên
                                 </span>
                               </div>
@@ -4805,12 +4807,7 @@ export default function RequestDetail({
                                   return (
                                     <div key={`hov-v-${vName}-${idx}`} className="flex items-center gap-2">
                                       <UserAvatar name={vName} avatarUrl={member?.avatar || getDesignerAvatar(vName)} size="xs" />
-                                      <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-white truncate text-[11px]">{vName}</p>
-                                        <p className="text-[9.5px] text-slate-400 truncate">
-                                          {member?.role || "Thành viên"}{member?.squad ? ` • ${member.squad}` : ""}
-                                        </p>
-                                      </div>
+                                      <span className="font-semibold text-slate-900 truncate text-[11px]">{vName}</span>
                                     </div>
                                   )
                                 })}

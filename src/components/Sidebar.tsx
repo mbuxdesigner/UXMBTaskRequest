@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { springs } from "@/lib/motion"
 import { 
-  Home,
+  BarChart3,
   CheckSquare,
   PlusCircle,
   ShieldCheck,
@@ -330,7 +330,7 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <Home className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      <BarChart3 className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
                       <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.overview.title}</span>
                     </button>
                   )

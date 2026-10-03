@@ -10,7 +10,7 @@ export const config = {
 }
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-const DEFAULT_MODEL = "qwen/qwen3.8-27b:free"
+const DEFAULT_MODEL = "google/gemma-4-31b-it:free"
 
 /**
  * Validates CORS origin against allowed domains
@@ -145,7 +145,13 @@ export default async function handler(req: Request): Promise<Response> {
 
     const openRouterPayload = {
       model,
-      models: Array.from(new Set([model, "openrouter/free", "nvidia/nemotron-3-super-120b-a12b:free"])),
+      models: Array.from(new Set([
+        model,
+        "google/gemma-4-31b-it:free",
+        "qwen/qwen3.8-27b:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "openrouter/free"
+      ])),
       route: "fallback",
       messages,
       stream: Boolean(stream),

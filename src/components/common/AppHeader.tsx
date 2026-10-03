@@ -6,7 +6,7 @@ import {
   LayoutGrid, 
   Menu, 
   X, 
-  Home, 
+  BarChart3, 
   CheckSquare, 
   PlusCircle, 
   ShieldCheck, 
@@ -491,7 +491,7 @@ export default function AppHeader({
         id: "action-overview",
         title: "Báo cáo tổng quan (Overview)",
         subtitle: "Số liệu KPI, tiến độ và tải công việc đội ngũ",
-        icon: Home,
+        icon: BarChart3,
         badge: "Overview",
         onSelect: () => onNavigate("overview"),
       })
@@ -806,7 +806,7 @@ export default function AppHeader({
     const items: { id: Page; title: string; subtitle: string; icon: React.ElementType }[] = []
 
     if (visibility.overview) {
-      items.push({ id: "overview", title: "Overview", subtitle: "Bảng điều hành", icon: Home })
+      items.push({ id: "overview", title: "Overview", subtitle: "Bảng điều hành", icon: BarChart3 })
     }
     if (visibility.track) {
       items.push({ id: "track", title: "My task", subtitle: "Bảng theo dõi tiến độ", icon: CheckSquare })

@@ -18,6 +18,9 @@ import {
   getAppEnvironment,
   isTestEnvironment,
   resolveApiUrl,
+  ROOT_DRIVE_FOLDER_ID,
+  ROOT_DRIVE_FOLDER_URL,
+  DRIVE_STORAGE_STRUCTURE,
 } from "../config/googleSheetConfig"
 import { getStoredSession, handleSessionExpired } from "./otpAuthService"
 import { broadcastTaskEvent } from "./realtimeSyncService"
@@ -1502,11 +1505,37 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Tải file đính kèm lên Google Drive (Folder: UX_Portal_Attachments)
+ * Lấy URL Thư mục gốc Google Drive lưu trữ hệ thống
+ */
+export function getDriveRootFolderUrl(): string {
+  return ROOT_DRIVE_FOLDER_URL
+}
+
+/**
+ * Bảng ánh xạ thư mục lưu trữ chuẩn hóa trên Google Drive (Taxonomy)
+ */
+const DRIVE_TAXONOMY_MAP: Record<string, string> = {
+  "UX_AI_Chat_History": "01_AI_Chat_History",
+  "chat": "01_AI_Chat_History",
+  "UX_AI_Artifacts": "02_AI_Documents_Artifacts",
+  "doc": "02_AI_Documents_Artifacts",
+  "artifacts": "02_AI_Documents_Artifacts",
+  "UX_Planner_Event_Attachments": "03_Event_Photos_Media",
+  "event": "03_Event_Photos_Media",
+  "event_photos": "03_Event_Photos_Media",
+  "UX_Portal_Attachments": "04_Task_Attachments",
+  "attachments": "04_Task_Attachments",
+  "tasks": "04_Task_Attachments",
+  "UX_Portal_Avatars": "05_User_Avatars",
+  "avatars": "05_User_Avatars",
+}
+
+/**
+ * Tải file đính kèm lên Google Drive (Theo quy hoạch chuẩn 5 thư mục)
  */
 export async function uploadFileToDrive(
   file: File,
-  folderName: string = "UX_Portal_Attachments"
+  folderName: string = "04_Task_Attachments"
 ): Promise<{
   success: boolean
   fileUrl?: string
@@ -1515,6 +1544,7 @@ export async function uploadFileToDrive(
   fileId?: string
   fileName?: string
   fileSize?: number
+  folderName?: string
   error?: string
 }> {
   const config = getGoogleSheetConfig()
@@ -1527,8 +1557,11 @@ export async function uploadFileToDrive(
       fileUrl: URL.createObjectURL(file),
       fileName: file.name,
       fileSize: file.size,
+      folderName,
     }
   }
+
+  const normalizedFolder = DRIVE_TAXONOMY_MAP[folderName] || folderName
 
   try {
     const session = getStoredSession()
@@ -1540,7 +1573,7 @@ export async function uploadFileToDrive(
       base64Data,
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
-      folderName,
+      folderName: normalizedFolder,
     }
 
     const res = await fetch(scriptUrl.trim(), {
@@ -1564,6 +1597,7 @@ export async function uploadFileToDrive(
         fileId: fileId || undefined,
         fileName: data.file_name || file.name,
         fileSize: data.file_size || file.size,
+        folderName: data.folder_name || normalizedFolder,
       }
     }
     return {
@@ -1575,6 +1609,47 @@ export async function uploadFileToDrive(
     return {
       success: false,
       error: `Lỗi tải file lên Drive: ${errorMsg}`,
+    }
+  }
+}
+
+/**
+ * Khởi tạo & quy hoạch cây thư mục lưu trữ Google Drive (5 thư mục chuẩn)
+ */
+export async function initDriveFolderStructureOnCloud(): Promise<{
+  success: boolean
+  message: string
+  rootFolderUrl?: string
+  subFolders?: any[]
+}> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      message: "Chưa cấu hình URL kết nối Google Apps Script.",
+    }
+  }
+
+  try {
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "init_drive_folders" }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return {
+      success: data.status === "success",
+      message: data.message || "Khởi tạo thư mục hoàn tất",
+      rootFolderUrl: data.rootFolderUrl,
+      subFolders: data.subFolders,
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Lỗi kết nối: ${err.message || String(err)}`,
     }
   }
 }
@@ -1859,6 +1934,8 @@ export async function syncMasterDataToSheet(params: {
   form_config?: any
   ia_trees?: any
   session_policies?: any
+  team_events?: any[]
+  ai_artifacts?: any[]
   actorEmail?: string
 }): Promise<{ success: boolean; message: string }> {
   const config = getGoogleSheetConfig()
@@ -1957,6 +2034,8 @@ export async function fetchMasterDataFromSheet(): Promise<{
     form_config?: any
     ia_trees?: any
     session_policies?: any
+    team_events?: any[]
+    ai_artifacts?: any[]
   }
 }> {
   const config = getGoogleSheetConfig()
@@ -1999,6 +2078,8 @@ export async function fetchMasterDataFromSheet(): Promise<{
             form_config: json.form_config || json.master_data?.FORM_CONFIG,
             ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
             session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
+            team_events: json.team_events || json.master_data?.TEAM_EVENTS_CONFIG,
+            ai_artifacts: json.ai_artifacts || json.master_data?.AI_ARTIFACTS_CONFIG,
           },
         }
       }
@@ -2053,6 +2134,8 @@ export async function fetchMasterDataFromSheet(): Promise<{
             form_config: json.form_config || json.master_data?.FORM_CONFIG,
             ia_trees: json.ia_trees || json.master_data?.IA_TREES_DATA,
             session_policies: json.session_policies || json.master_data?.SESSION_POLICIES_CONFIG,
+            team_events: json.team_events || json.master_data?.TEAM_EVENTS_CONFIG,
+            ai_artifacts: json.ai_artifacts || json.master_data?.AI_ARTIFACTS_CONFIG,
           },
         }
       }
@@ -2273,4 +2356,153 @@ export async function fetchTeamMembersFromSheet(): Promise<any[] | null> {
   }
 
   return null
+}
+
+/**
+ * Đồng bộ toàn bộ các cuộc trò chuyện của người dùng lên Google Drive & Google Sheet
+ */
+export async function syncUserChatThreadsToCloud(params: {
+  userEmail: string
+  userName?: string
+  threads: any[]
+}): Promise<{ success: boolean; message: string; file_id?: string }> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: true,
+      message: "Chế độ Local: Đã lưu trên bộ nhớ trình duyệt.",
+    }
+  }
+
+  try {
+    const session = getStoredSession()
+    const payload = {
+      action: "save_chat_threads",
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
+      user_email: params.userEmail,
+      user_name: params.userName || session?.displayName || "",
+      threads: params.threads,
+    }
+
+    const res = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Máy chủ Google Apps Script trả về lỗi HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.status === "success") {
+      return {
+        success: true,
+        message: data.message || "Đồng bộ lịch sử chat lên Google Drive thành công!",
+        file_id: data.file_id,
+      }
+    }
+    return {
+      success: false,
+      message: data.message || "Lỗi khi lưu lịch sử chat lên máy chủ.",
+    }
+  } catch (err: any) {
+    console.error("[syncUserChatThreadsToCloud] Error:", err)
+    return {
+      success: false,
+      message: err.message || "Không thể kết nối đến máy chủ Google Drive.",
+    }
+  }
+}
+
+/**
+ * Tải danh sách các cuộc trò chuyện của người dùng từ Google Drive
+ */
+export async function fetchUserChatThreadsFromCloud(
+  userEmail: string
+): Promise<{ success: boolean; threads: any[]; message?: string }> {
+  const config = getGoogleSheetConfig()
+  const scriptUrl = config?.scriptUrl
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      threads: [],
+      message: "Chưa cấu hình URL Google Apps Script.",
+    }
+  }
+
+  // 1. Thử POST trước
+  try {
+    const session = getStoredSession()
+    const payload = {
+      action: "get_chat_threads",
+      session_token: session?.sessionToken || "",
+      csrf_token: session?.csrfToken || "",
+      user_email: userEmail,
+    }
+
+    const postController = new AbortController()
+    const postTimeout = setTimeout(() => postController.abort(), 12000)
+
+    const postRes = await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      signal: postController.signal,
+    })
+    clearTimeout(postTimeout)
+
+    if (postRes.ok) {
+      const data = await postRes.json()
+      if (data.status === "success" && Array.isArray(data.threads)) {
+        return {
+          success: true,
+          threads: data.threads,
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[fetchUserChatThreadsFromCloud] POST failed, trying GET fallback...", e)
+  }
+
+  // 2. GET Fallback
+  try {
+    const url = resolveApiUrl(scriptUrl)
+    url.searchParams.set("action", "get_chat_threads")
+    url.searchParams.set("user_email", userEmail)
+    url.searchParams.set("t", String(Date.now()))
+
+    const getController = new AbortController()
+    const getTimeout = setTimeout(() => getController.abort(), 15000)
+
+    const getRes = await fetch(url.toString(), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: getController.signal,
+    })
+    clearTimeout(getTimeout)
+
+    if (getRes.ok) {
+      const data = await getRes.json()
+      if (data.status === "success" && Array.isArray(data.threads)) {
+        return {
+          success: true,
+          threads: data.threads,
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error("[fetchUserChatThreadsFromCloud] GET failed:", err)
+  }
+
+  return {
+    success: false,
+    threads: [],
+    message: "Không thể lấy lịch sử chat từ máy chủ Google Drive.",
+  }
 }

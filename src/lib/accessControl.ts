@@ -645,6 +645,7 @@ export const DEFAULT_RBAC_PERMISSIONS: Record<string, string[]> = {
   "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
   "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
   "cap-ai-use": ["Admin", "Design Owner", "Designer"],
+  "cap-ai-artifacts-upload": ["Admin", "Design Owner", "Designer"],
 }
 
 export function getRbacPermissions(): Record<string, string[]> {
@@ -660,6 +661,7 @@ export function getRbacPermissions(): Record<string, string[]> {
           "cap-ia-view": parsed["cap-ia-view"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ia-view"],
           "cap-ia-edit": parsed["cap-ia-edit"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ia-edit"],
           "cap-ai-use": parsed["cap-ai-use"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ai-use"],
+          "cap-ai-artifacts-upload": parsed["cap-ai-artifacts-upload"] ?? DEFAULT_RBAC_PERMISSIONS["cap-ai-artifacts-upload"],
         }
       }
     }
@@ -674,6 +676,15 @@ export function canRoleAccessCapability(role: string | undefined | null, capId: 
   const permissions = getRbacPermissions()
   const allowed = permissions[capId] || DEFAULT_RBAC_PERMISSIONS[capId] || []
   return allowed.includes(role)
+}
+
+/**
+ * Kiểm tra xem người dùng hiện tại có được quyền tải tài liệu lên kho Artifacts không
+ */
+export function canUploadAiArtifacts(session: UserSession | null): boolean {
+  if (!session) return false
+  if (session.role === "Admin") return true
+  return canRoleAccessCapability(session.role, "cap-ai-artifacts-upload")
 }
 
 /**

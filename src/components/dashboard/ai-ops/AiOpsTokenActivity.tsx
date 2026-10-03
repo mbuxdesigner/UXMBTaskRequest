@@ -263,24 +263,24 @@ export default function AiOpsTokenActivity() {
         {/* Hover Tooltip Popup */}
         {hoveredIdx !== null && data[hoveredIdx] && (
           <div
-            className="absolute top-2 pointer-events-none z-20 transform -translate-x-1/2 bg-slate-900/95 text-white backdrop-blur-md rounded-xl px-3 py-2 shadow-xl border border-slate-700/80 text-xs min-w-[120px]"
+            className="absolute top-2 pointer-events-none z-20 transform -translate-x-1/2 bg-white/95 text-slate-800 backdrop-blur-md rounded-xl px-3 py-2 shadow-xl border border-slate-200/90 text-xs min-w-[120px]"
             style={{
               left: `${(getX(hoveredIdx) / width) * 100}%`,
             }}
           >
-            <div className="font-bold border-b border-slate-700 pb-1 mb-1 text-slate-300">
+            <div className="font-bold border-b border-slate-100 pb-1 mb-1 text-slate-900">
               {data[hoveredIdx].time}
             </div>
             <div className="space-y-0.5">
-              <div className="flex items-center justify-between gap-3 text-blue-400">
+              <div className="flex items-center justify-between gap-3 text-blue-600">
                 <span>Input:</span>
                 <span className="font-mono font-bold">{data[hoveredIdx].input}M</span>
               </div>
-              <div className="flex items-center justify-between gap-3 text-orange-400">
+              <div className="flex items-center justify-between gap-3 text-orange-600">
                 <span>Output:</span>
                 <span className="font-mono font-bold">{data[hoveredIdx].output}M</span>
               </div>
-              <div className="flex items-center justify-between gap-3 text-slate-400">
+              <div className="flex items-center justify-between gap-3 text-slate-500">
                 <span>Blocked:</span>
                 <span className="font-mono font-bold">{data[hoveredIdx].blocked}M</span>
               </div>

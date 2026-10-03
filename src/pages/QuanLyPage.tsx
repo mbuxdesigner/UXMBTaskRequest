@@ -78,7 +78,7 @@ import {
   Briefcase,
   UserX,
   X,
-  Home,
+  BarChart3,
   CheckSquare,
   PlusCircle,
   Network,
@@ -1339,6 +1339,12 @@ const RBAC_CAPABILITIES = [
     description: "Truy cập không gian AI Chats, trò chuyện với trợ lý thiết kế, thực thi Slash Commands (/tiendo, /po,...) và quản lý kho Artifacts.",
     category: "Trí tuệ Nhân tạo (AI)",
   },
+  {
+    id: "cap-ai-artifacts-upload",
+    title: "Tải tài liệu lên kho Artifacts",
+    description: "Cho phép kéo thả hoặc tải lên tài liệu (.md, .pdf, .json, .csv, ảnh) vào kho lưu trữ Artifacts của Trợ lý AI.",
+    category: "Trí tuệ Nhân tạo (AI)",
+  },
 ]
 
 export function isNameMatching(nameA?: string, nameB?: string): boolean {
@@ -1624,6 +1630,7 @@ export default function QuanLyPage() {
       "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
       "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
       "cap-ai-use": ["Admin", "Design Owner", "Designer"],
+      "cap-ai-artifacts-upload": ["Admin", "Design Owner", "Designer"],
     }
     const saved = localStorage.getItem("mbbank_admin_rbac")
     if (saved) {
@@ -1636,6 +1643,7 @@ export default function QuanLyPage() {
           "cap-ia-view": parsed["cap-ia-view"] ?? defaultRbac["cap-ia-view"],
           "cap-ia-edit": parsed["cap-ia-edit"] ?? defaultRbac["cap-ia-edit"],
           "cap-ai-use": parsed["cap-ai-use"] ?? defaultRbac["cap-ai-use"],
+          "cap-ai-artifacts-upload": parsed["cap-ai-artifacts-upload"] ?? defaultRbac["cap-ai-artifacts-upload"],
         }
       } catch {}
     }
@@ -4010,6 +4018,7 @@ export default function QuanLyPage() {
                         "cap-ia-view": ["Admin", "Design Owner", "Designer", "PO", "Business"],
                         "cap-ia-edit": ["Admin", "Design Owner", "Designer"],
                         "cap-ai-use": ["Admin", "Design Owner", "Designer"],
+                        "cap-ai-artifacts-upload": ["Admin", "Design Owner", "Designer"],
                       }
                       setRbacRolesPermissions(defaultRbac)
                       localStorage.setItem("mbbank_admin_rbac", JSON.stringify(defaultRbac))
@@ -4311,7 +4320,7 @@ export default function QuanLyPage() {
 
                     {(navOrder?.platform || []).map((key, idx) => {
                       const itemMeta = {
-                        overview: { label: "Overview (Tổng quan)", icon: <Home className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
+                        overview: { label: "Overview (Tổng quan)", icon: <BarChart3 className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
                         track: { label: "My task (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
                         calendar: { label: "Lịch & UX Planner", icon: <Calendar className="w-3.5 h-3.5" />, desc: "Lịch trình công việc, deadline bài toán, lịch nghỉ phép & sự kiện team" },
                         aichat: { label: "AI Chats", icon: <img src="/ai-default.png" alt="AI" className="w-3.5 h-3.5 object-contain" />, desc: "Trợ lý AI hỏi đáp trực tiếp, tra cứu thông tin bài toán & tư vấn nghiệp vụ" },
@@ -6482,8 +6491,8 @@ export default function QuanLyPage() {
                         type="number"
                         min="1"
                         max="20"
-                        value={editingMember.capacity}
-                        onChange={(e) => setEditingMember({ ...editingMember, capacity: parseInt(e.target.value) || 5 })}
+                        value={editingMember.capacityLimit ?? (editingMember as any).capacity ?? 5}
+                        onChange={(e) => setEditingMember({ ...editingMember, capacityLimit: parseInt(e.target.value) || 5 })}
                         className="text-xs rounded-xl border-slate-200 text-center font-bold focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400"
                       />
                     </div>
@@ -7527,18 +7536,20 @@ export default function QuanLyPage() {
                             </p>
                             {filteredSquads.map((sq, sIdx) => {
                               const sColor = getSquadColorDef(sq.name, targetProdName, sq.color)
-                              const isDragging = draggedSquadId === sq.id
+                              const isDragging = draggedSquadInfo?.squadId === sq.id
 
                               return (
                                 <div
                                   key={`modal-reorder-sq-${sq.id}`}
                                   draggable
-                                  onDragStart={() => handleSquadDragStart(sq.id)}
+                                  onDragStart={() => handleSquadDragStart(targetProd?.id || "", sq.id)}
                                   onDragOver={(e) => {
-                                    if (draggedSquadId !== null) e.preventDefault()
+                                    if (draggedSquadInfo && draggedSquadInfo.productId === targetProd?.id) {
+                                      e.preventDefault()
+                                    }
                                   }}
-                                  onDrop={() => handleSquadDrop(sq.id, targetProdName)}
-                                  onDragEnd={() => setDraggedSquadId(null)}
+                                  onDrop={() => handleSquadDrop(targetProd?.id || "", sq.id)}
+                                  onDragEnd={() => setDraggedSquadInfo(null)}
                                   className={`flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs transition-all ${
                                     isDragging ? "opacity-30 ring-2 ring-indigo-500 scale-98" : ""
                                   }`}
@@ -7563,7 +7574,7 @@ export default function QuanLyPage() {
                                     <button
                                       type="button"
                                       disabled={sIdx === 0}
-                                      onClick={() => handleMoveSquad(sq.id, targetProdName, "prev")}
+                                      onClick={() => handleMoveSquadInProduct(targetProd?.id || "", sq.id, "prev")}
                                       className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
                                       title="Lên trên"
                                     >
@@ -7572,7 +7583,7 @@ export default function QuanLyPage() {
                                     <button
                                       type="button"
                                       disabled={sIdx === filteredSquads.length - 1}
-                                      onClick={() => handleMoveSquad(sq.id, targetProdName, "next")}
+                                      onClick={() => handleMoveSquadInProduct(targetProd?.id || "", sq.id, "next")}
                                       className="p-1 rounded hover:bg-white disabled:opacity-20 disabled:cursor-not-allowed text-slate-600 transition-colors cursor-pointer"
                                       title="Xuống dưới"
                                     >

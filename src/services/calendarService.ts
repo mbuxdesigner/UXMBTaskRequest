@@ -17,6 +17,7 @@ import {
   type TeamEvent,
   type EventCategoryConfig,
 } from "../config/systemConfig.ts"
+import { syncMasterDataToSheet, fetchMasterDataFromSheet } from "./googleSheetService.ts"
 export interface UserSession {
   email?: string
   displayName?: string
@@ -355,6 +356,11 @@ export function addTeamEvent(
     },
   })
 
+  // Đồng bộ sự kiện mới lên Google Sheet Master Data
+  syncMasterDataToSheet({ team_events: updatedEvents }).catch((err) => {
+    console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
+  })
+
   return newEvent
 }
 
@@ -378,6 +384,12 @@ export function updateTeamEvent(
       teamEvents: [...events],
     },
   })
+
+  // Đồng bộ sự kiện cập nhật lên Google Sheet Master Data
+  syncMasterDataToSheet({ team_events: events }).catch((err) => {
+    console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
+  })
+
   return true
 }
 
@@ -397,6 +409,12 @@ export function deleteTeamEvent(eventId: string): boolean {
       teamEvents: filtered,
     },
   })
+
+  // Đồng bộ sự kiện sau khi xóa lên Google Sheet Master Data
+  syncMasterDataToSheet({ team_events: filtered }).catch((err) => {
+    console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
+  })
+
   return true
 }
 
@@ -726,6 +744,40 @@ export async function loadAllCalendarItems(): Promise<{
     }
   } catch (err) {
     console.error("[CalendarService] Error loading leaves:", err)
+  }
+
+  // 1b. Tải sự kiện team từ Google Sheet Master Data nếu có
+  try {
+    const masterRes = await fetchMasterDataFromSheet()
+    if (masterRes.success && Array.isArray(masterRes.data?.team_events) && masterRes.data.team_events.length > 0) {
+      const cloudEvents = masterRes.data.team_events as TeamEvent[]
+      const localEvents = sysConfig.calendar.teamEvents || []
+      const eventMap = new Map<string, TeamEvent>()
+      localEvents.forEach((ev) => eventMap.set(ev.id, ev))
+      let hasChanges = false
+      cloudEvents.forEach((ev) => {
+        if (ev && ev.id) {
+          const current = eventMap.get(ev.id)
+          if (!current || JSON.stringify(current) !== JSON.stringify(ev)) {
+            eventMap.set(ev.id, ev)
+            hasChanges = true
+          }
+        }
+      })
+      if (hasChanges) {
+        const mergedEvents = Array.from(eventMap.values())
+        sysConfig.calendar.teamEvents = mergedEvents
+        saveSystemConfig({
+          ...sysConfig,
+          calendar: {
+            ...sysConfig.calendar,
+            teamEvents: mergedEvents,
+          },
+        })
+      }
+    }
+  } catch (err) {
+    console.warn("[CalendarService] Error syncing team_events from sheet:", err)
   }
 
   const todayLeaves = getLeavesOnDate(leaves)

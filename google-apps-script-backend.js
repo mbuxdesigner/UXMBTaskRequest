@@ -44,6 +44,41 @@ const SHEET_SELECTIONS_NAME = "Selections";
 const SHEET_TASK_UPDATES_NAME = "TASK_UPDATES";
 const SHEET_AUDIT_LOGS = "AuditLogs";
 
+// ==============================================================================
+// CẤU HÌNH QUY HOẠCH THƯ MỤC GOOGLE DRIVE (DRIVE STORAGE TAXONOMY)
+// Thư mục gốc: https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g
+// ==============================================================================
+const ROOT_DRIVE_FOLDER_ID = "1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g";
+const ROOT_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g?usp=sharing";
+
+const DRIVE_FOLDER_TAXONOMY = {
+  CHAT_HISTORY: {
+    folderName: "01_AI_Chat_History",
+    description: "Lịch sử trò chuyện và context trao đổi giữa nhân sự với AI Copilot (.json)",
+    aliases: ["UX_AI_Chat_History", "chat", "ai_chat", "01_AI_Chat_History"]
+  },
+  AI_DOCUMENTS: {
+    folderName: "02_AI_Documents_Artifacts",
+    description: "Tài liệu kỹ thuật, release notes, checklist và deliverables AI (.md, .pdf, .docx, .json)",
+    aliases: ["UX_AI_Artifacts", "doc", "artifacts", "ai_artifacts", "02_AI_Documents_Artifacts"]
+  },
+  EVENT_PHOTOS: {
+    folderName: "03_Event_Photos_Media",
+    description: "Hình ảnh sự kiện, bằng chứng thực hiện, media timeline từ Planner (.jpg, .png, .webp)",
+    aliases: ["UX_Planner_Event_Attachments", "event", "event_photos", "planner_media", "03_Event_Photos_Media"]
+  },
+  TASK_ATTACHMENTS: {
+    folderName: "04_Task_Attachments",
+    description: "Tài liệu đầu vào, brief, đặc tả và file đính kèm các bài toán UX (.pdf, .xlsx, .zip...)",
+    aliases: ["UX_Portal_Attachments", "attachments", "tasks", "04_Task_Attachments"]
+  },
+  USER_AVATARS: {
+    folderName: "05_User_Avatars",
+    description: "Ảnh đại diện nhân sự thuộc đội ngũ UX Team (.jpg, .png, .webp)",
+    aliases: ["UX_Portal_Avatars", "avatars", "user_avatars", "05_User_Avatars"]
+  }
+};
+
 // Hằng số cấu hình
 const OTP_EXPIRY_MINUTES = 3;        // 3 phút hiệu lực mã OTP
 const SESSION_EXPIRY_MINUTES = 480;  // 8 tiếng hiệu lực phiên làm việc mặc định (480 phút)
@@ -285,6 +320,10 @@ function doGet(e) {
       });
     }
 
+    if (action === "init_drive_folders" || action === "get_drive_storage_info") {
+      return initDriveFolderStructure();
+    }
+
     if (action === "check_session" || action === "touch_session" || action === "refresh_session") {
       const sessionToken = e.parameter.session_token;
       if (!sessionToken) {
@@ -366,6 +405,10 @@ function doGet(e) {
         session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
+    }
+
+    if (action === "get_chat_threads") {
+      return handleGetChatThreads(e ? (e.parameter || {}) : {});
     }
 
     return createJsonResponse({ status: "error", message: "Unknown action: " + action });
@@ -484,6 +527,8 @@ function doPost(e) {
         form_config: masterData["FORM_CONFIG"] || null,
         ia_trees: masterData["IA_TREES_DATA"] || null,
         session_policies: masterData["SESSION_POLICIES_CONFIG"] || null,
+        team_events: masterData["TEAM_EVENTS_CONFIG"] || null,
+        ai_artifacts: masterData["AI_ARTIFACTS_CONFIG"] || null,
         timestamp: new Date().toISOString()
       });
     }
@@ -574,6 +619,19 @@ function doPost(e) {
     }
     if (action === "get_submissions") {
       return handleGetSubmissions();
+    }
+
+    // 14. ACTION: CHAT THREADS SYNC (GOOGLE DRIVE & GOOGLE SHEET)
+    if (action === "save_chat_threads" || action === "sync_chat_threads") {
+      return handleSaveChatThreads(data);
+    }
+    if (action === "get_chat_threads") {
+      return handleGetChatThreads(data);
+    }
+
+    // 15. ACTION: DRIVE STORAGE TAXONOMY INITIALIZATION & INFO
+    if (action === "init_drive_folders" || action === "get_drive_storage_info") {
+      return initDriveFolderStructure();
     }
 
     return createJsonResponse({ status: "error", message: "Unknown POST action: " + action });
@@ -3466,19 +3524,154 @@ function getOrInitSelections() {
 
 /**
  * ==============================================================================
- * 5. TẢI FILE ĐÍNH KÈM & AVATAR LÊN GOOGLE DRIVE
+ * 5. TẢI FILE ĐÍNH KÈM & AVATAR LÊN GOOGLE DRIVE (THEO QUY HOẠCH CHUẨN)
+ * Thư mục gốc: https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g
  * ==============================================================================
  */
 
 /**
- * Tải file đính kèm lên Google Drive (Folder: UX_Portal_Attachments)
+ * Lấy hoặc tạo tự động thư mục con chuẩn hóa bên trong Thư mục gốc Google Drive
+ * @param {string} folderKeyOrName - Mã định danh hoặc tên thư mục
+ * @returns {GoogleAppsScript.Drive.Folder} Thư mục Google Drive đã được quy hoạch
+ */
+function getTargetDriveFolder(folderKeyOrName) {
+  let rootFolder = null;
+  try {
+    if (ROOT_DRIVE_FOLDER_ID) {
+      rootFolder = DriveApp.getFolderById(ROOT_DRIVE_FOLDER_ID);
+    }
+  } catch (err) {
+    console.warn("Không thể truy cập ROOT_DRIVE_FOLDER_ID (" + ROOT_DRIVE_FOLDER_ID + "): " + err.toString());
+  }
+
+  // Chuẩn hóa tên thư mục theo bảng quy hoạch chuẩn
+  let targetFolderName = "04_Task_Attachments";
+  const searchKey = String(folderKeyOrName || "").trim().toLowerCase();
+
+  for (const key in DRIVE_FOLDER_TAXONOMY) {
+    const item = DRIVE_FOLDER_TAXONOMY[key];
+    if (item.folderName.toLowerCase() === searchKey) {
+      targetFolderName = item.folderName;
+      break;
+    }
+    const matchedAlias = item.aliases.some(function(alias) {
+      return alias.toLowerCase() === searchKey;
+    });
+    if (matchedAlias) {
+      targetFolderName = item.folderName;
+      break;
+    }
+  }
+
+  if (!targetFolderName && folderKeyOrName) {
+    targetFolderName = String(folderKeyOrName).trim();
+  }
+
+  // 1. Tạo hoặc lấy subfolder bên trong Root Folder (ưu tiên số 1)
+  if (rootFolder) {
+    const subFolders = rootFolder.getFoldersByName(targetFolderName);
+    if (subFolders.hasNext()) {
+      return subFolders.next();
+    }
+    const createdFolder = rootFolder.createFolder(targetFolderName);
+    try {
+      createdFolder.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e1) {
+      try { createdFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}
+    }
+    return createdFolder;
+  }
+
+  // 2. Fallback nếu không có Root Folder: Tìm hoặc tạo ở root Drive của tài khoản
+  const fallbackFolders = DriveApp.getFoldersByName(targetFolderName);
+  if (fallbackFolders.hasNext()) {
+    return fallbackFolders.next();
+  }
+  const fallbackFolder = DriveApp.createFolder(targetFolderName);
+  try {
+    fallbackFolder.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e1) {
+    try { fallbackFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}
+  }
+  return fallbackFolder;
+}
+
+/**
+ * Khởi tạo toàn bộ cây thư mục lưu trữ Google Drive theo chuẩn quy hoạch
+ * Chạy hàm này trực tiếp từ Google Apps Script Editor hoặc từ frontend API
+ */
+function initDriveFolderStructure() {
+  try {
+    let rootFolder = DriveApp.getFolderById(ROOT_DRIVE_FOLDER_ID);
+    const results = [];
+
+    // Tạo file README quy hoạch hướng dẫn lưu trữ ngay tại thư mục gốc
+    const readmeContent = [
+      "==================================================================",
+      "QUY HOẠCH HỆ THỐNG THƯ MỤC LƯU TRỮ - MB UX REQUEST PORTAL & AI COPILOT",
+      "==================================================================",
+      "Thư mục gốc: https://drive.google.com/drive/folders/" + ROOT_DRIVE_FOLDER_ID,
+      "Thời gian quy hoạch: " + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss"),
+      "",
+      "CẤU TRÚC THƯ MỤC ĐƯỢC PHÂN CHIA NHƯ SAU:",
+      "├── 01_AI_Chat_History/",
+      "│   └── Lịch sử trao đổi, chat threads và context của từng nhân sự với AI Copilot (.json)",
+      "├── 02_AI_Documents_Artifacts/",
+      "│   └── Tài liệu kỹ thuật, release notes, checklist, deliverables được sinh hoặc upload qua AI (.md, .pdf, .docx, .json)",
+      "├── 03_Event_Photos_Media/",
+      "│   └── Hình ảnh sự kiện, bằng chứng nghiệm thu, media timeline từ Planner & Lịch công tác (.jpg, .png, .webp)",
+      "├── 04_Task_Attachments/",
+      "│   └── Tài liệu brief đầu vào, file đính kèm, spec bài toán UX từ Request Form & Request Detail (.pdf, .xlsx, .zip...)",
+      "└── 05_User_Avatars/",
+      "    └── Ảnh đại diện cá nhân hóa của các thành viên trong đội ngũ UX Team (.jpg, .png, .webp)",
+      "",
+      "Lưu ý: Tất cả các thao tác upload từ Web App đều được định tuyến tự động vào đúng các thư mục trên."
+    ].join("\n");
+
+    const existingReadme = rootFolder.getFilesByName("README_HUONG_DAN_LUU_TRU.txt");
+    if (existingReadme.hasNext()) {
+      existingReadme.next().setContent(readmeContent);
+    } else {
+      rootFolder.createFile("README_HUONG_DAN_LUU_TRU.txt", readmeContent, "text/plain");
+    }
+
+    // Tạo và kiểm tra 5 thư mục con theo quy hoạch
+    for (const key in DRIVE_FOLDER_TAXONOMY) {
+      const item = DRIVE_FOLDER_TAXONOMY[key];
+      const folder = getTargetDriveFolder(item.folderName);
+      results.push({
+        key: key,
+        folderName: item.folderName,
+        folderId: folder.getId(),
+        folderUrl: folder.getUrl(),
+        description: item.description
+      });
+    }
+
+    return createJsonResponse({
+      status: "success",
+      message: "Đã khởi tạo & quy hoạch hoàn tất hệ thống thư mục lưu trữ Google Drive!",
+      rootFolderId: ROOT_DRIVE_FOLDER_ID,
+      rootFolderUrl: ROOT_DRIVE_FOLDER_URL,
+      subFolders: results
+    });
+  } catch (err) {
+    return createJsonResponse({
+      status: "error",
+      message: "Lỗi khởi tạo cây thư mục Google Drive: " + err.toString()
+    });
+  }
+}
+
+/**
+ * Tải file đính kèm lên Google Drive (Theo thư mục đã quy hoạch)
  */
 function handleUploadFile(data) {
   try {
     const base64Data = data.base64Data || data.base64;
     const fileName = String(data.fileName || ("attachment_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss"))).trim();
     const mimeType = String(data.mimeType || "application/octet-stream").trim().toLowerCase();
-    const folderName = data.folderName || "UX_Portal_Attachments";
+    const folderName = data.folderName || "04_Task_Attachments";
 
     if (!base64Data) {
       return createJsonResponse({ status: "error", message: "Thiếu dữ liệu tệp Base64 (base64Data)." });
@@ -3493,7 +3686,7 @@ function handleUploadFile(data) {
     }
 
     // 2. Kiểm tra phần mở rộng tệp (Extension Whitelist)
-    const allowedExtensions = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "webp", "gif", "doc", "ppt", "xls"];
+    const allowedExtensions = ["pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "webp", "gif", "doc", "ppt", "xls", "txt", "md", "json", "csv", "svg", "ts", "tsx", "js", "jsx", "zip"];
     const extMatch = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
     const fileExt = extMatch ? extMatch[1] : "";
     if (!fileExt || !allowedExtensions.includes(fileExt)) {
@@ -3517,6 +3710,11 @@ function handleUploadFile(data) {
       "image/jpg",
       "image/webp",
       "image/gif",
+      "image/svg+xml",
+      "text/plain",
+      "text/markdown",
+      "application/json",
+      "text/csv",
       "application/octet-stream"
     ];
     if (mimeType && !allowedMimeTypes.includes(mimeType)) {
@@ -3526,9 +3724,8 @@ function handleUploadFile(data) {
       });
     }
 
-    // Tạo hoặc lấy Folder trên Google Drive
-    let folders = DriveApp.getFoldersByName(folderName);
-    let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    // Lấy Folder theo quy hoạch chuẩn bên trong Root Drive
+    const folder = getTargetDriveFolder(folderName);
 
     // Giải mã Base64
     const decoded = Utilities.base64Decode(base64Data);
@@ -3557,7 +3754,7 @@ function handleUploadFile(data) {
         action: "UPLOAD_FILE",
         targetResource: fileId,
         status: "SUCCESS",
-        details: "Tải file lên Drive: " + fileName + " (" + file.getSize() + " bytes)"
+        details: "Tải file lên Drive: " + fileName + " (" + file.getSize() + " bytes) vào thư mục: " + folder.getName()
       });
     } catch (ae) {}
 
@@ -3570,6 +3767,7 @@ function handleUploadFile(data) {
       mime_type: mimeType,
       file_url: previewUrl,
       download_url: downloadUrl,
+      folder_name: folder.getName(),
       thumbnail_url: "https://drive.google.com/thumbnail?id=" + encodeURIComponent(fileId) + "&sz=w1200"
     });
   } catch (err) {
@@ -3581,7 +3779,7 @@ function handleUploadFile(data) {
 }
 
 /**
- * Tải ảnh Avatar lên Google Drive (Folder: UX_Portal_Avatars) và tự động cập nhật USERS / RAW_SETTINGS
+ * Tải ảnh Avatar lên Google Drive (Folder: 05_User_Avatars) và tự động cập nhật USERS / RAW_SETTINGS
  */
 function handleUploadAvatar(data) {
   try {
@@ -3589,23 +3787,13 @@ function handleUploadAvatar(data) {
     const email = String(data.email || data.teamsEmail || data.personalEmail || "").trim().toLowerCase();
     const fileName = "avatar_" + (email ? email.replace(/[^a-zA-Z0-9]/g, "_") : "user") + "_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss") + ".jpg";
     const mimeType = data.mimeType || "image/jpeg";
-    const folderName = "UX_Portal_Avatars";
 
     if (!base64Data) {
       return createJsonResponse({ status: "error", message: "Thiếu dữ liệu ảnh Avatar (base64Data)." });
     }
 
-    // 1. Tìm hoặc tạo Folder UX_Portal_Avatars trên Google Drive
-    let folder;
-    const folders = DriveApp.getFoldersByName(folderName);
-    if (folders.hasNext()) {
-      folder = folders.next();
-    } else {
-      folder = DriveApp.createFolder(folderName);
-      try {
-        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (e) {}
-    }
+    // 1. Lấy Folder 05_User_Avatars theo quy hoạch chuẩn
+    const folder = getTargetDriveFolder("05_User_Avatars");
 
     // 2. Giải mã Base64 và tạo File
     const decoded = Utilities.base64Decode(base64Data);
@@ -4097,6 +4285,8 @@ function handleSyncMasterData(data) {
   // 1. RBAC Enforcement (Item 2). IA tree là dữ liệu nghiệp vụ riêng,
   // cho phép các role có cap-ia-edit đồng bộ khi payload không chứa master data khác.
   const hasIATrees = typeof data.ia_trees !== "undefined" || typeof data.iaTrees !== "undefined";
+  const hasArtifacts = typeof data.ai_artifacts !== "undefined" || typeof data.aiArtifacts !== "undefined";
+  const hasTeamEvents = typeof data.team_events !== "undefined" || typeof data.teamEvents !== "undefined";
   const nonIAMasterKeys = [
     "squads", "products", "phases", "selections", "status_rules", "audit_logs",
     "rbac", "nav_items", "nav_order", "team_members", "members", "form_config", "formConfig",
@@ -4105,18 +4295,25 @@ function handleSyncMasterData(data) {
   const isIAOnlySync = hasIATrees && !nonIAMasterKeys.some(function(key) {
     return typeof data[key] !== "undefined";
   });
+  const isArtifactsOrEventsOnlySync = (hasArtifacts || hasTeamEvents) && !nonIAMasterKeys.some(function(key) {
+    return typeof data[key] !== "undefined";
+  });
   let iaEditRoles = ["Admin", "Design Owner", "Designer"];
-  if (isIAOnlySync) {
+  let artifactUploadRoles = ["Admin", "Design Owner", "Designer"];
+  if (isIAOnlySync || isArtifactsOrEventsOnlySync) {
     try {
       const settingsForRbac = ss.getSheetByName(SHEET_RAW_SETTINGS);
       const currentMasterData = readMasterDataFromSettingsSheet(settingsForRbac);
       const configuredRoles = currentMasterData.RBAC_CONFIG && currentMasterData.RBAC_CONFIG["cap-ia-edit"];
       if (Array.isArray(configuredRoles)) iaEditRoles = configuredRoles;
+      const configuredArtifactRoles = currentMasterData.RBAC_CONFIG && currentMasterData.RBAC_CONFIG["cap-ai-artifacts-upload"];
+      if (Array.isArray(configuredArtifactRoles)) artifactUploadRoles = configuredArtifactRoles;
     } catch (rbacReadError) {}
   }
   const canSyncIA = isIAOnlySync && iaEditRoles.indexOf(String(user.role || "")) !== -1;
+  const canSyncArtifactsOrEvents = isArtifactsOrEventsOnlySync && (artifactUploadRoles.indexOf(String(user.role || "")) !== -1 || ["Admin", "Design Owner", "Designer"].indexOf(String(user.role || "")) !== -1);
 
-  if (user.role !== "Admin" && !canSyncIA) {
+  if (user.role !== "Admin" && !canSyncIA && !canSyncArtifactsOrEvents) {
     recordAuditLog(ss, {
       userEmail: user.teamsEmail || user.personalEmail,
       role: user.role,
@@ -4168,6 +4365,8 @@ function handleSyncMasterData(data) {
   if (data.team_members || data.members) configsToSave["USERS_LIST"] = data.team_members || data.members;
   if (data.form_config || data.formConfig) configsToSave["FORM_CONFIG"] = data.form_config || data.formConfig;
   if (data.ia_trees || data.iaTrees) configsToSave["IA_TREES_DATA"] = data.ia_trees || data.iaTrees;
+  if (data.ai_artifacts || data.aiArtifacts) configsToSave["AI_ARTIFACTS_CONFIG"] = data.ai_artifacts || data.aiArtifacts;
+  if (data.team_events || data.teamEvents) configsToSave["TEAM_EVENTS_CONFIG"] = data.team_events || data.teamEvents;
 
   const existingKeys = {};
   const lastRow = rawSettings.getLastRow();
@@ -4690,5 +4889,160 @@ function handleGetUnifiedOperationalData(data) {
   }
 }
 
+/**
+ * ==============================================================================
+ * 14. LƯU & TẢI ĐOẠN CHAT NGƯỜI DÙNG LÊN GOOGLE DRIVE & GOOGLE SHEET
+ * Folder: UX_AI_Chat_History
+ * File name: chat_threads_<sanitized_email>.json
+ * Index Sheet: AI_CHAT_THREADS (lưu thông tin tóm tắt & liên kết file Drive)
+ * ==============================================================================
+ */
 
+/**
+ * Lưu các đoạn chat của người dùng vào Google Drive & tóm tắt vào Google Sheet
+ */
+function handleSaveChatThreads(data) {
+  try {
+    const rawEmail = String(data.user_email || data.userEmail || "").trim().toLowerCase();
+    if (!rawEmail) {
+      return createJsonResponse({ status: "error", message: "Thiếu email người dùng (user_email)." });
+    }
+    const safeEmail = rawEmail.replace(/[^a-zA-Z0-9@._-]/g, "_");
+    const threads = data.threads || [];
+    const threadsJson = typeof threads === "string" ? threads : JSON.stringify(threads);
 
+    // Lưu vào thư mục 01_AI_Chat_History theo quy hoạch chuẩn
+    const folder = getTargetDriveFolder("01_AI_Chat_History");
+
+    const fileName = "chat_threads_" + safeEmail + ".json";
+    let files = folder.getFilesByName(fileName);
+    let file;
+    if (files.hasNext()) {
+      file = files.next();
+      file.setContent(threadsJson);
+    } else {
+      file = folder.createFile(fileName, threadsJson, "application/json");
+      try {
+        file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (e) {
+        try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}
+      }
+    }
+
+    // Cập nhật hoặc ghi nhận tóm tắt vào Sheet AI_CHAT_THREADS
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let sheet = ss.getSheetByName("AI_CHAT_THREADS");
+      if (!sheet) {
+        sheet = ss.insertSheet("AI_CHAT_THREADS");
+        const headers = ["User_Email", "Display_Name", "Total_Threads", "Active_Thread_Title", "Total_Messages", "Drive_File_Id", "Updated_At", "Drive_Link"];
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(1, 1, 1, headers.length).setBackground("#0F172A").setFontColor("#FFFFFF").setFontWeight("bold");
+        sheet.setFrozenRows(1);
+        sheet.setColumnWidth(1, 220);
+        sheet.setColumnWidth(2, 180);
+        sheet.setColumnWidth(3, 110);
+        sheet.setColumnWidth(4, 260);
+        sheet.setColumnWidth(5, 120);
+        sheet.setColumnWidth(6, 260);
+        sheet.setColumnWidth(7, 160);
+        sheet.setColumnWidth(8, 300);
+      }
+
+      const parsedThreads = Array.isArray(threads) ? threads : JSON.parse(threadsJson || "[]");
+      const totalThreads = parsedThreads.length;
+      let totalMessages = 0;
+      for (let i = 0; i < parsedThreads.length; i++) {
+        if (parsedThreads[i] && Array.isArray(parsedThreads[i].messages)) {
+          totalMessages += parsedThreads[i].messages.length;
+        }
+      }
+      const activeThreadTitle = totalThreads > 0 ? (parsedThreads[0].title || "Cuộc trò chuyện") : "Chưa có";
+      const displayName = String(data.user_name || data.displayName || rawEmail.split("@")[0]);
+      const nowStr = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+      const fileUrl = "https://drive.google.com/file/d/" + file.getId() + "/view";
+
+      let foundRow = -1;
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        const emailValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (let j = 0; j < emailValues.length; j++) {
+          if (String(emailValues[j][0]).toLowerCase().trim() === rawEmail) {
+            foundRow = j + 2;
+            break;
+          }
+        }
+      }
+
+      const rowValues = [rawEmail, displayName, totalThreads, activeThreadTitle, totalMessages, file.getId(), nowStr, fileUrl];
+      if (foundRow > 1) {
+        sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
+      } else {
+        sheet.appendRow(rowValues);
+      }
+    } catch (sheetErr) {
+      console.warn("AI_CHAT_THREADS sheet update warning: " + sheetErr.toString());
+    }
+
+    return createJsonResponse({
+      status: "success",
+      message: "Đồng bộ lịch sử chat lên Google Drive thành công!",
+      file_id: file.getId(),
+      folder_name: folder.getName(),
+      updated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    return createJsonResponse({
+      status: "error",
+      message: "Lỗi đồng bộ lịch sử chat: " + err.toString()
+    });
+  }
+}
+
+/**
+ * Tải danh sách các đoạn chat của người dùng từ Google Drive
+ */
+function handleGetChatThreads(data) {
+  try {
+    const rawEmail = String(data.user_email || data.userEmail || "").trim().toLowerCase();
+    if (!rawEmail) {
+      return createJsonResponse({ status: "error", message: "Thiếu email người dùng (user_email)." });
+    }
+    const safeEmail = rawEmail.replace(/[^a-zA-Z0-9@._-]/g, "_");
+    
+    // Tìm trong thư mục quy hoạch chuẩn 01_AI_Chat_History
+    const folder = getTargetDriveFolder("01_AI_Chat_History");
+    const fileName = "chat_threads_" + safeEmail + ".json";
+    let files = folder.getFilesByName(fileName);
+
+    // Fallback tìm trong thư mục cũ nếu chưa migrate
+    if (!files.hasNext()) {
+      const legacyFolders = DriveApp.getFoldersByName("UX_AI_Chat_History");
+      if (legacyFolders.hasNext()) {
+        const legacyFolder = legacyFolders.next();
+        const legacyFiles = legacyFolder.getFilesByName(fileName);
+        if (legacyFiles.hasNext()) {
+          files = legacyFiles;
+        }
+      }
+    }
+
+    if (!files.hasNext()) {
+      return createJsonResponse({ status: "success", threads: [], message: "Chưa có lịch sử chat trên Drive." });
+    }
+    const file = files.next();
+    const content = file.getBlob().getDataAsString("UTF-8");
+    const parsed = JSON.parse(content || "[]");
+
+    return createJsonResponse({
+      status: "success",
+      threads: Array.isArray(parsed) ? parsed : [],
+      updated_at: file.getLastUpdated().toISOString()
+    });
+  } catch (err) {
+    return createJsonResponse({
+      status: "error",
+      message: "Lỗi tải lịch sử chat từ Drive: " + err.toString()
+    });
+  }
+}

@@ -204,7 +204,7 @@ export function Tooltip({
                   pointerEvents: "none",
                 }}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/95 text-white backdrop-blur-md rounded-xl border border-slate-700/80 shadow-xl shadow-slate-950/20 text-xs font-medium select-none max-w-xs break-words",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-800 rounded-xl border border-slate-200/90 shadow-xl shadow-slate-900/10 text-xs font-medium select-none max-w-xs break-words",
                   className
                 )}
               >
@@ -214,7 +214,7 @@ export function Tooltip({
                     {shortcuts.map((sc, i) => (
                       <Kbd
                         key={i}
-                        variant="dark"
+                        variant="default"
                         size="xs"
                         className="text-[10px] px-1 py-0.5"
                       >
@@ -329,7 +329,7 @@ export function TooltipContent({
       role="tooltip"
       style={{ position: "fixed", top, left, zIndex: 99999, pointerEvents: "none" }}
       className={cn(
-        "flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/95 text-white backdrop-blur-md rounded-xl border border-slate-700/80 shadow-xl shadow-slate-950/20 text-xs font-medium select-none max-w-xs break-words",
+        "flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-800 rounded-xl border border-slate-200/90 shadow-xl shadow-slate-900/10 text-xs font-medium select-none max-w-xs break-words",
         className
       )}
       {...props}

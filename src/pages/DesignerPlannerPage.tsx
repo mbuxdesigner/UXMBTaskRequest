@@ -584,33 +584,33 @@ function PlannerEntryTooltip({
               className={cn("h-2 w-2 rounded-full shrink-0", !entry.accentColor && meta.dot)}
               style={entry.accentColor ? { backgroundColor: entry.accentColor } : undefined}
             />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
               {entry.label || meta.label}
             </span>
             {entry.time && (
-              <span className="text-[10px] text-slate-400 font-mono ml-auto">
+              <span className="text-[10px] text-slate-500 font-mono ml-auto">
                 {entry.time}{entry.endTime ? ` - ${entry.endTime}` : ""}
               </span>
             )}
           </div>
-          <p className="text-xs font-semibold text-white leading-snug break-words">
+          <p className="text-xs font-semibold text-slate-900 leading-snug break-words">
             {entry.title}
           </p>
           {isSyncing && (
-            <div className="flex items-center gap-1 text-[10px] text-blue-300 font-medium">
+            <div className="flex items-center gap-1 text-[10px] text-blue-600 font-medium">
               <RefreshCw className="h-2.5 w-2.5 animate-spin" />
               <span>Đang đồng bộ ngầm...</span>
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800 text-[10.5px]">
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 text-[10.5px]">
             {productOrSquad && (
-              <div className="flex items-center gap-1 text-slate-300 truncate max-w-[140px]" title={productOrSquad}>
+              <div className="flex items-center gap-1 text-slate-600 truncate max-w-[140px]" title={productOrSquad}>
                 <MapPin className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                 <span className="truncate">{productOrSquad}</span>
               </div>
             )}
             {avatarInfo.name && avatarInfo.name !== "MB" && (
-              <div className="ml-auto flex items-center gap-1 text-slate-300">
+              <div className="ml-auto flex items-center gap-1 text-slate-600">
                 <UserAvatar name={avatarInfo.name} avatarUrl={avatarInfo.avatarUrl} size="xs" className="h-3.5 w-3.5 text-[7px]" />
                 <span className="truncate max-w-[90px]">{avatarInfo.name}</span>
               </div>
@@ -2246,8 +2246,8 @@ export default function DesignerPlannerPage() {
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: group.color }}
                           />
-                          <span className="font-medium text-slate-200">{group.label}:</span>
-                          <span className="font-bold text-white">{group.count} task</span>
+                          <span className="font-medium text-slate-600">{group.label}:</span>
+                          <span className="font-bold text-slate-900">{group.count} task</span>
                           {pct > 0 && <span className="text-slate-400 text-[11px]">({pct}%)</span>}
                         </div>
                       }
@@ -2296,8 +2296,8 @@ export default function DesignerPlannerPage() {
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: item.color }}
                           />
-                          <span className="font-medium text-slate-200">{item.label}:</span>
-                          <span className="font-bold text-white">{item.count} task</span>
+                          <span className="font-medium text-slate-600">{item.label}:</span>
+                          <span className="font-bold text-slate-900">{item.count} task</span>
                           {pct > 0 && <span className="text-slate-400 text-[11px]">({pct}%)</span>}
                         </div>
                       }
@@ -2785,25 +2785,25 @@ export default function DesignerPlannerPage() {
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ duration: 0.12 }}
                                 className={cn(
-                                  "absolute z-50 w-72 max-w-[90vw] p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md text-white shadow-2xl border border-slate-700/80 pointer-events-none select-none",
+                                  "absolute z-50 w-72 max-w-[90vw] p-3 rounded-2xl bg-white text-slate-800 shadow-2xl border border-slate-200/90 pointer-events-none select-none",
                                   isTopHalf ? "top-full mt-1.5" : "bottom-full mb-1.5",
                                   isRightSide ? "right-0" : "left-0"
                                 )}
                               >
                                 {/* Header Tooltip */}
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
                                   <div>
-                                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                                       <span>{dayNameVi || formatShortDate(day.dateYMD)}</span>
                                       {day.isToday && (
-                                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-500 text-white">
+                                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
                                           Hôm nay
                                         </span>
                                       )}
                                     </div>
                                     <div className="text-[10px] text-slate-400">{formatShortDate(day.dateYMD)}</div>
                                   </div>
-                                  <span className="text-[10px] font-semibold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                                  <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                                     {dayEntries.length} sự kiện
                                   </span>
                                 </div>
@@ -2816,18 +2816,18 @@ export default function DesignerPlannerPage() {
                                     return (
                                       <div
                                         key={entry.id || `tip-${eIdx}`}
-                                        className="flex items-start gap-2 p-1.5 rounded-lg bg-slate-800/70 border border-slate-700/50 text-[11px]"
+                                        className="flex items-start gap-2 p-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]"
                                       >
                                         <span className={cn("h-2 w-2 rounded-full shrink-0 mt-1", meta.dot)} />
                                         <div className="flex-1 min-w-0">
-                                          <div className="font-semibold text-slate-100 leading-snug break-words">
+                                          <div className="font-semibold text-slate-900 leading-snug break-words">
                                             {entry.title}
                                           </div>
-                                          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
-                                            <span className="text-slate-300 font-medium">{meta.label}</span>
+                                          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
+                                            <span className="text-slate-600 font-medium">{meta.label}</span>
                                             {entry.time && <span>• {entry.time}</span>}
                                             {avatarInfo.name && (
-                                              <span className="text-slate-400 ml-auto truncate max-w-[90px]">
+                                              <span className="text-slate-500 ml-auto truncate max-w-[90px]">
                                                 {avatarInfo.name}
                                               </span>
                                             )}
@@ -4766,12 +4766,12 @@ export default function DesignerPlannerPage() {
                               </CAvatar29>
 
                               {/* Hover Tooltip Toast hiển thị danh sách người tham gia */}
-                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[220px] max-w-[280px] p-2.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl border border-slate-800 pointer-events-none">
-                                <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-800">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[220px] max-w-[280px] p-2.5 bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200/90 pointer-events-none select-none">
+                                <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-100">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                     Người tham gia
                                   </span>
-                                  <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                                     {detailEntry.attendees.length} thành viên
                                   </span>
                                 </div>
@@ -4782,8 +4782,8 @@ export default function DesignerPlannerPage() {
                                       <div key={`hov-att-${att}-${idx}`} className="flex items-center gap-2">
                                         <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
                                         <div className="min-w-0 flex-1">
-                                          <p className="font-semibold text-white truncate text-[11px]">{user.name}</p>
-                                          <p className="text-[9.5px] text-slate-400 truncate">
+                                          <p className="font-semibold text-slate-900 truncate text-[11px]">{user.name}</p>
+                                          <p className="text-[9.5px] text-slate-500 truncate">
                                             {user.email || "Thành viên"}
                                           </p>
                                         </div>
@@ -4937,12 +4937,12 @@ export default function DesignerPlannerPage() {
                             </CAvatar29>
 
                             {/* Hover Tooltip Toast hiển thị danh sách người tham gia */}
-                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[220px] max-w-[280px] p-2.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl border border-slate-800 pointer-events-none">
-                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-800">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:flex flex-col z-50 min-w-[220px] max-w-[280px] p-2.5 bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200/90 pointer-events-none select-none">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-100">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                   Người tham gia
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                                   {detailEntry.attendees.length} thành viên
                                 </span>
                               </div>
@@ -4953,8 +4953,8 @@ export default function DesignerPlannerPage() {
                                     <div key={`hov-att2-${att}-${idx}`} className="flex items-center gap-2">
                                       <UserAvatar name={user.name} avatarUrl={user.avatar} size="xs" />
                                       <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-white truncate text-[11px]">{user.name}</p>
-                                        <p className="text-[9.5px] text-slate-400 truncate">
+                                        <p className="font-semibold text-slate-900 truncate text-[11px]">{user.name}</p>
+                                        <p className="text-[9.5px] text-slate-500 truncate">
                                           {user.email || "Thành viên"}
                                         </p>
                                       </div>

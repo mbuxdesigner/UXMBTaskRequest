@@ -202,15 +202,21 @@ export function OpenRouterSettingsCard({
             <div className="md:col-span-2">
               <label className="text-xs font-medium text-slate-700 block mb-1 flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Mô hình AI Mặc định (Default Model):</span>
+                <span>Mô hình AI Mặc định (Tuyển tập các Model 100% Free xịn nhất):</span>
               </label>
               <DropdownMenu
                 className="w-full bg-white"
+                menuClassName="w-full min-w-80 max-h-80 overflow-y-auto"
                 value={selectedModel}
                 onChange={handleAddModelChange}
                 options={POPULAR_AI_MODELS.map((m) => ({
                   value: m.id,
-                  label: m.name,
+                  label: `${m.name} · ${m.provider}`,
+                  badge: (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
+                      {m.badge || "Free"}
+                    </span>
+                  ),
                 }))}
               />
             </div>
@@ -230,6 +236,52 @@ export function OpenRouterSettingsCard({
                 />
                 <span>{testing ? "Đang kiểm tra..." : "Test kết nối OpenRouter"}</span>
               </Button>
+            </div>
+          </div>
+
+          {/* Curated Free Models Guide Grid */}
+          <div className="bg-slate-100/70 rounded-xl p-3 border border-slate-200/80">
+            <div className="text-[11px] font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Gợi ý chọn Model Free phù hợp với từng tác vụ:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800">
+                  <span>Google Gemma 4 31B</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-medium">Khuyên dùng</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                  DeepMind 31B mới nhất, văn phong tiếng Việt rất tự nhiên, phân tích sâu.
+                </p>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800">
+                  <span>Nemotron 3 Ultra 550B</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">550B MoE</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                  NVIDIA 550B siêu lớn, tư duy suy luận logic sâu (Frontier Reasoning), ngữ cảnh 1M.
+                </p>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800">
+                  <span>Qwen 3.8 27B Vision</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-purple-50 text-purple-700 border border-purple-200 rounded font-medium">Code & UX</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                  Xuất sắc về Mermaid diagram, cấu trúc bảng, frontend code & flow nghiệp vụ.
+                </p>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800">
+                  <span>Nemotron 3.5 Lightning</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">Siêu tốc</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                  Tốc độ phản hồi tức thì, độ trễ cực thấp, tra cứu nhanh thông tin.
+                </p>
+              </div>
             </div>
           </div>
 

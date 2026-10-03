@@ -134,7 +134,8 @@ export const DEMO_ACCOUNTS: Array<{
  */
 export function getUserInitials(name?: string): string {
   if (!name || !name.trim()) return "U"
-  const parts = name.trim().split(/\s+/)
+  const clean = name.replace(/\(.*?\)/g, "").trim() || name.trim()
+  const parts = clean.split(/\s+/)
   const mainName = parts[parts.length - 1]
   return (mainName[0] || parts[0][0] || "U").toUpperCase()
 }
