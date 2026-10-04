@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Copy,
   Check,
+  Square,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,25 +47,41 @@ const QUICK_PROMPTS = [
   { label: "👥 Tiến độ bài toán ủy quyền?", prompt: "Tình hình các bài toán tôi đã giao cho đồng nghiệp hiện ra sao, có ai gặp khó khăn không?" },
 ]
 
+const STORAGE_COPILOT_HISTORY = "ux_mb_copilot_history"
+
 export function AIChatCopilot({
   intelligence,
   isOpen,
   onClose,
   onOpenTask,
 }: AIChatCopilotProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: `Xin chào ${intelligence?.userName || "bạn"}! Mình là **Trợ lý UX MB**. Mình đã nắm toàn bộ dữ liệu ${intelligence?.activeAssignedTasks.length || 0} bài toán, lịch họp và tiến độ hôm nay của bạn. Bạn cần mình giải đáp hoặc rà soát điều gì?`,
-      timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    },
-  ])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_COPILOT_HISTORY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    } catch (e) {
+      console.warn("[AIChatCopilot] Failed to read stored history:", e)
+    }
+    return [
+      {
+        id: "welcome",
+        role: "assistant",
+        content: `Xin chào ${intelligence?.userName || "bạn"}! Mình là **Trợ lý UX MB**. Mình đã nắm toàn bộ dữ liệu ${intelligence?.activeAssignedTasks.length || 0} bài toán, lịch họp và tiến độ hôm nay của bạn. Bạn cần mình giải đáp hoặc rà soát điều gì?`,
+        timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]
+  })
   const [input, setInput] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const cancelStreamRef = useRef<(() => void) | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -73,6 +90,17 @@ export function AIChatCopilot({
   useEffect(() => {
     scrollToBottom()
   }, [messages, isStreaming])
+
+  // Lưu lịch sử hội thoại vào localStorage
+  useEffect(() => {
+    try {
+      if (messages.length > 0) {
+        localStorage.setItem(STORAGE_COPILOT_HISTORY, JSON.stringify(messages))
+      }
+    } catch (e) {
+      console.warn("[AIChatCopilot] Failed to save history:", e)
+    }
+  }, [messages])
 
   // Dọn dẹp stream khi unmount
   useEffect(() => {
@@ -107,6 +135,9 @@ export function AIChatCopilot({
 
     setMessages((prev) => [...prev, userMsg, botMsgPlaceholder])
     setInput("")
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+    }
     setIsStreaming(true)
 
     // Chuẩn bị context nén từ dữ liệu intelligence
@@ -162,14 +193,21 @@ export function AIChatCopilot({
   const handleReset = () => {
     if (cancelStreamRef.current) cancelStreamRef.current()
     setIsStreaming(false)
-    setMessages([
+    const resetWelcome: ChatMessage[] = [
       {
         id: "welcome",
         role: "assistant",
         content: `Hội thoại đã được làm mới. Dữ liệu bài toán và lịch trình của bạn đang ở trạng thái mới nhất. Mình có thể giúp gì thêm cho bạn?`,
         timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       },
-    ])
+    ]
+    setMessages(resetWelcome)
+    try {
+      localStorage.setItem(STORAGE_COPILOT_HISTORY, JSON.stringify(resetWelcome))
+    } catch {}
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+    }
     toast.info("Đã làm mới cuộc hội thoại AI.")
   }
 
@@ -320,28 +358,58 @@ export function AIChatCopilot({
         </div>
 
         {/* Chat Input Bar */}
-        <div className="p-3 bg-white border-t border-slate-100 flex items-center gap-2">
-          <Input
+        <div className="p-3 bg-white border-t border-slate-100 flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              if (textareaRef.current) {
+                textareaRef.current.style.height = "auto"
+                textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
+                if (e.nativeEvent.isComposing) return
                 e.preventDefault()
                 handleSendMessage(input)
               }
             }}
-            placeholder="Hỏi về tiến độ, deadline, lịch họp hôm nay..."
+            rows={1}
+            placeholder="Hỏi về tiến độ, deadline, lịch họp hôm nay... (Shift+Enter để xuống dòng)"
             disabled={isStreaming}
-            className="flex-1 text-xs rounded-xl border-slate-200 bg-slate-50 focus:bg-white"
+            className="flex-1 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500/30 p-2.5 resize-none max-h-[120px] min-h-[38px] leading-relaxed transition-all placeholder:text-slate-400"
+            aria-label="Soạn tin nhắn cho Copilot"
           />
-          <Button
-            type="button"
-            onClick={() => handleSendMessage(input)}
-            disabled={isStreaming || !input.trim()}
-            className="rounded-xl h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs disabled:opacity-50"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          {isStreaming ? (
+            <Button
+              type="button"
+              onClick={() => {
+                if (cancelStreamRef.current) {
+                  cancelStreamRef.current()
+                  cancelStreamRef.current = null
+                  setIsStreaming(false)
+                }
+              }}
+              className="rounded-xl h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-xs shrink-0"
+              title="Dừng sinh phản hồi"
+              aria-label="Dừng sinh phản hồi"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => handleSendMessage(input)}
+              disabled={!input.trim()}
+              className="rounded-xl h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+              title="Gửi câu hỏi"
+              aria-label="Gửi câu hỏi"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </motion.div>
     </AnimatePresence>

@@ -57,6 +57,9 @@ import { EchoInteractiveChart, EchoMermaidFlowchart } from "@/components/common/
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { EchoArtifactSplitViewer } from "@/components/chat/EchoArtifactSplitViewer"
+import { EchoAssistantActionBar } from "@/components/chat/EchoAssistantActionBar"
+import { EchoUserMessageBubble } from "@/components/chat/EchoUserMessageBubble"
+import { EchoErrorCard } from "@/components/chat/EchoErrorCard"
 import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
@@ -150,6 +153,8 @@ interface ChatMessage {
   processSteps?: ChatProcessStep[]
   isThinkingComplete?: boolean
   traceData?: ChatTraceData
+  isError?: boolean
+  errorDetail?: any
 }
 
 interface ChatThread {
@@ -286,88 +291,57 @@ export function generateThreadTitle(prompt: string): string {
   return text
 }
 
-// Danh mục câu hỏi gợi ý chuẩn MBBank UX cho Empty State
-const EMPTY_STATE_CATEGORIES = [
+// 4 nhóm gợi ý câu hỏi khởi đầu chuẩn MBBank UX Designer cho Empty State
+export type EmptyCategoryType = "seven_steps" | "handoff" | "sla_po" | "microcopy"
+
+export const EMPTY_STATE_CATEGORIES = [
   {
-    id: "progress" as const,
-    label: "⚡ Tiến độ",
+    id: "seven_steps" as const,
+    label: "📐 7 Khâu UX MBBank",
     icon: Sparkles,
     color: "text-blue-600",
+    description: "Khảo sát, IA, Wireframe, Usability",
     prompts: [
-      "Tổng hợp các bài toán ưu tiên Lv1/Lv2 và deadline hôm nay",
-      "Rà soát tiến độ 7 khâu của các bài toán đang ở pha UI/UX Design",
-      "Báo cáo những bài toán có nguy cơ trễ hạn bàn giao trong tuần",
+      "Quy trình 7 khâu UX MBBank gồm những bước nào và tiêu chí nghiệm thu từng khâu?",
+      "Tạo checklist kiểm định Khâu 4 (IA & Wireframe) trước khi gửi PO /sentopo",
+      "Kế hoạch nghiên cứu người dùng và Usability Testing Khâu 6 đạt mục tiêu >85% task completion",
     ],
   },
   {
-    id: "po" as const,
-    label: "🔍 Rà soát PO",
-    icon: Clock,
-    color: "text-amber-500",
-    prompts: [
-      "Kiểm tra các bài toán đang PO Pending quá 24h cần đôn đốc",
-      "Soạn nội dung nhắc PO phê duyệt phương án thiết kế Wireframe",
-      "Danh sách bài toán đang chờ BA/PO làm rõ yêu cầu nghiệp vụ",
-    ],
-  },
-  {
-    id: "productivity" as const,
-    label: "🎯 Năng suất",
-    icon: Activity,
-    color: "text-emerald-500",
-    prompts: [
-      "Hôm nay tôi có bao nhiêu giờ Deep Work và lịch họp thế nào?",
-      "Đề xuất phân bổ bài toán để đảm bảo thời gian thiết kế tập trung",
-      "Thống kê tổng giờ thiết kế và khối lượng công việc tuần này",
-    ],
-  },
-  {
-    id: "standards" as const,
-    label: "📐 Quy chuẩn",
+    id: "handoff" as const,
+    label: "📋 Tiêu chuẩn Handoff",
     icon: BookOpen,
-    color: "text-purple-500",
+    color: "text-purple-600",
+    description: "Token specs, Redlines, Dev notes",
     prompts: [
-      "Tóm tắt checklist bàn giao thiết kế (Ready for Dev) cho tôi",
-      "Tra cứu bảng màu Brand Tokens và kích thước Button chuẩn MBBank",
-      "Quy chuẩn thiết kế các trạng thái Empty, Loading và Error State",
-      "So sánh tiêu chuẩn SLA bàn giao và quy trình 7 khâu UX",
+      "Tiêu chuẩn tổ chức file Figma Ready for Dev: Token specs, Redlines và Dev notes",
+      "Tra cứu thông số Tokens ReUI v3: Mã màu Primary Navy, bo góc 12px và 4px/8px Grid",
+      "Quy chuẩn thiết kế 4 trạng thái bắt buộc: Default, Loading shimmer, Error và Empty state",
     ],
   },
   {
-    id: "actions" as const,
-    label: "🔄 Cập nhật",
+    id: "sla_po" as const,
+    label: "⏱️ SLA & PO Alignment",
+    icon: Clock,
+    color: "text-amber-600",
+    description: "24h SLA, bài toán tồn đọng PO Pending",
+    prompts: [
+      "Rà soát các bài toán đang bị PO Pending quá 24h cần đôn đốc phản hồi",
+      "Báo cáo tiến độ các bài toán được giao của tôi và cảnh báo nguy cơ trễ SLA",
+      "Soạn nội dung nhắc nhở Product Owner phê duyệt phương án thiết kế Wireframe",
+    ],
+  },
+  {
+    id: "microcopy" as const,
+    label: "✍️ Microcopy Ngân Hàng",
     icon: Activity,
-    color: "text-rose-500",
+    color: "text-emerald-600",
+    description: "Thông báo lỗi, OTP, Chuyển tiền",
     prompts: [
-      "Cập nhật tiến độ các bài toán đang thiết kế lên 80%",
-      "Chuyển bài toán eKYC NFC sang khâu Nghiệm thu",
-      "Ghi chú: Đã hoàn thiện Wireframe v2 cho luồng mở thẻ tín dụng",
+      "Gợi ý 3 phương án microcopy cho thông báo lỗi giao dịch chuyển tiền ngoài 24/7",
+      "Viết nội dung tin nhắn xác thực Smart OTP và hướng dẫn bảo mật giao dịch",
+      "Microcopy hướng dẫn người dùng quét khuôn mặt NFC trong luồng mở tài khoản eKYC",
     ],
-  },
-]
-
-// Dữ liệu Recent Chats mẫu chuẩn MBBank khi người dùng chưa có cuộc trò chuyện nào
-const DEMO_RECENT_CHATS = [
-  {
-    id: "demo-recent-1",
-    title: "Rà soát điểm nghẽn luồng eKYC & Smart OTP",
-    fileBadge: "Quy-trinh-7-khau-UX-MBBank.md",
-    timeAgo: "2h",
-    prompt: "Rà soát điểm nghẽn luồng eKYC & Smart OTP theo quy trình 7 khâu của MBBank",
-  },
-  {
-    id: "demo-recent-2",
-    title: "Bàn giao thiết kế màn hình chuyển tiền quốc tế",
-    fileBadge: "Tieu-chuan-Design-Handoff-MB.md",
-    timeAgo: "1d",
-    prompt: "Kiểm tra tiêu chuẩn bàn giao thiết kế màn hình chuyển tiền quốc tế cho Dev",
-  },
-  {
-    id: "demo-recent-3",
-    title: "Rà soát các bài toán PO Pending quá hạn SLA 24h",
-    fileBadge: "Chinh-sach-SLA-va-PO-Pending.md",
-    timeAgo: "3d",
-    prompt: "Tổng hợp các bài toán đang bị PO Pending quá 24h theo chính sách SLA của MB",
   },
 ]
 
@@ -599,16 +573,42 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   }, [])
 
   // Empty state category selection (Tiến độ | Rà soát PO | Năng suất | Quy chuẩn)
-  const [emptyCategory, setEmptyCategory] = useState<"progress" | "po" | "productivity" | "standards" | "actions">("progress")
+  const [emptyCategory, setEmptyCategory] = useState<EmptyCategoryType>("seven_steps")
 
   const currentCategoryObj = useMemo(() => {
     return EMPTY_STATE_CATEGORIES.find((c) => c.id === emptyCategory) || EMPTY_STATE_CATEGORIES[0]
   }, [emptyCategory])
 
-  // Display Recent Chats for Empty State (uses real recent chats or curated MBBank UX recent topics)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Unmount cleanup hook: prevent fetch stream memory leak
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+    }
+  }, [])
+
+  // Abort active stream on thread switch and switch thread safely
+  const handleSelectThread = useCallback((threadId: string) => {
+    if (isStreaming) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      setIsStreaming(false)
+    }
+    setActiveThreadId(threadId)
+    localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, threadId)
+  }, [isStreaming])
+
+  // Display Recent Chats for Empty State (uses real recent chats only)
   const displayRecentChats = useMemo(() => {
     const actualThreads = threads.filter(
-      (t) => t.id !== "draft" && Array.isArray(t.messages) && t.messages.length > 0
+      (t) => t.id !== "draft" && Array.isArray(t.messages) && t.messages.length > 0 && !isEchoTestDemoThread(t)
     )
     if (actualThreads.length > 0) {
       return actualThreads.slice(0, 3).map((t) => ({
@@ -623,22 +623,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         })(),
         timeAgo: t.timeAgo || "Hôm nay",
         onClick: () => {
-          setActiveThreadId(t.id)
-          localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, t.id)
+          handleSelectThread(t.id)
         },
       }))
     }
-    return DEMO_RECENT_CHATS.map((demo) => ({
-      id: demo.id,
-      title: demo.title,
-      fileBadge: demo.fileBadge,
-      timeAgo: demo.timeAgo,
-      onClick: () => handleSendMessage(demo.prompt),
-    }))
-  }, [threads])
-
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+    return []
+  }, [threads, handleSelectThread])
 
   // Active thread computation
   const activeThread = useMemo(() => {
@@ -1707,6 +1697,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           updateAssistantMsg({
             content: `⚠️ ${errMsg || "Lỗi kết nối AI gateway. Vui lòng thử lại sau giây lát."}`,
             isThinkingComplete: true,
+            isError: true,
+            errorDetail: err,
             processSteps: currentSteps.map((s) => ({ ...s, status: "completed" })),
           })
         }
@@ -1717,6 +1709,53 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       setTimeout(() => scrollToBottom(true), 50)
     }
   }
+
+  // Regenerate assistant response for previous user prompt
+  const handleRegenerateMessage = useCallback((msgIndex: number) => {
+    if (isStreaming) return
+    const msgs = activeThread.messages
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (msgs[i].role === "user") {
+        handleSendMessage(msgs[i].content)
+        return
+      }
+    }
+    if (msgs[msgIndex]?.role === "user") {
+      handleSendMessage(msgs[msgIndex].content)
+    }
+  }, [isStreaming, activeThread.messages, handleSendMessage])
+
+  // Retry previous prompt on error
+  const handleRetryMessage = useCallback((msgIndex: number) => {
+    if (isStreaming) return
+    const msgs = activeThread.messages
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (msgs[i].role === "user") {
+        handleSendMessage(msgs[i].content)
+        return
+      }
+    }
+    if (msgs[msgIndex]?.role === "user") {
+      handleSendMessage(msgs[msgIndex].content)
+    }
+  }, [isStreaming, activeThread.messages, handleSendMessage])
+
+  // Edit and resend user prompt inline
+  const handleEditUserPrompt = useCallback((msgIndex: number, newPrompt: string) => {
+    if (isStreaming || !newPrompt.trim()) return
+    setThreads((prev) =>
+      prev.map((t) => {
+        if (t.id === activeThreadId) {
+          const updated = t.messages.map((m, idx) =>
+            idx === msgIndex ? { ...m, content: newPrompt.trim() } : m
+          )
+          return { ...t, messages: updated }
+        }
+        return t
+      })
+    )
+    handleSendMessage(newPrompt.trim())
+  }, [isStreaming, activeThreadId, handleSendMessage])
 
   // Filter threads (Only display threads that have messages and are not draft)
   const filteredThreads = useMemo(() => {
@@ -1958,10 +1997,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           key={t.id}
                           thread={t}
                           isActive={t.id === activeThreadId}
-                          onSelect={() => {
-                            setActiveThreadId(t.id)
-                            localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, t.id)
-                          }}
+                          onSelect={() => handleSelectThread(t.id)}
                           onPin={handleTogglePin}
                           onRename={openRenameModal}
                           onExport={handleExportThread}
@@ -2483,7 +2519,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     ))}
                   </div>
 
-                  {/* Recent chats section matching Echo Chat exactly */}
+                  {/* Recent chats section (rendered only if real threads exist) */}
+                  {displayRecentChats.length > 0 && (
                   <div className="mt-8 space-y-2">
                     <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground px-1">
                       <span>Recent chats</span>
@@ -2519,10 +2556,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       ))}
                     </div>
                   </div>
+                  )}
                 </div>
               ) : (
-                /* Active Messages List */
-                <div className="mx-auto max-w-4xl lg:max-w-5xl space-y-6 py-2">
+/* Active Messages List */
+                <div
+                  role="log"
+                  aria-live="polite"
+                  aria-relevant="additions text"
+                  aria-label="Lịch sử tin nhắn cuộc trò chuyện"
+                  className="mx-auto max-w-4xl lg:max-w-5xl space-y-6 py-2"
+                >
                   {activeThread.messages.map((m, idx) => (
                     <EchoMessageRow
                       key={m.id || `msg-${idx}`}
@@ -2534,6 +2578,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       intelligence={intelligence}
                       onOpenTask={(task) => setActiveDetailTask(task)}
                       onSendSuggestion={(text) => handleSendMessage(text)}
+                      onRegenerate={() => handleRegenerateMessage(idx)}
+                      onRetry={() => handleRetryMessage(idx)}
+                      onEditPrompt={(newText) => handleEditUserPrompt(idx, newText)}
+                      onOpenArtifact={() => {
+                        if (m.attachedArtifactName) {
+                          const matched = artifacts.find(
+                            (a) => a.name.toLowerCase() === m.attachedArtifactName?.toLowerCase()
+                          )
+                          if (matched) setSelectedArtifactId(matched.id)
+                        } else if (selectedArtifactId) {
+                          // Already open
+                        }
+                      }}
                     />
                   ))}
                   <div ref={messagesEndRef} />
@@ -2610,10 +2667,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   isStreaming={isStreaming}
                   onSend={(text) => handleSendMessage(
                     text,
-                    selectedArtifact
-                      ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${selectedArtifact.name}" (${selectedArtifact.fileType}) ===\n${selectedArtifact.content}`
+                    (selectedArtifact as any)
+                      ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${(selectedArtifact as any)?.name}" (${(selectedArtifact as any)?.fileType}) ===\n${(selectedArtifact as any)?.content}`
                       : undefined,
-                    selectedArtifact?.name
+                    (selectedArtifact as any)?.name
                   )}
                   onStop={handleStopStream}
                   onOpenArtifacts={() => setSidebarTab("artifacts")}
@@ -3221,6 +3278,10 @@ interface EchoMessageRowProps {
   intelligence?: ExecutiveIntelligenceData | null
   onOpenTask?: (task: UXRequest) => void
   onSendSuggestion?: (suggestion: string) => void
+  onRegenerate?: () => void
+  onRetry?: () => void
+  onEditPrompt?: (newText: string) => void
+  onOpenArtifact?: () => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4089,6 +4150,10 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   intelligence,
   onOpenTask,
   onSendSuggestion,
+  onRegenerate,
+  onRetry,
+  onEditPrompt,
+  onOpenArtifact,
 }: EchoMessageRowProps) {
   const isUser = message.role === "user"
 
@@ -4360,17 +4425,13 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   if (isUser) {
     return (
       <div className="flex items-end justify-end gap-2.5">
-        <div className="space-y-1 max-w-[85%] flex flex-col items-end">
-          {message.attachedArtifactName && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              <FileText className="size-3" />
-              <span>{message.attachedArtifactName}</span>
-            </span>
-          )}
-          <div className="rounded-2xl rounded-br-xs bg-muted/70 text-foreground px-3.5 py-2 text-[13.5px] sm:text-sm leading-relaxed">
-            {message.content}
-          </div>
-        </div>
+        <EchoUserMessageBubble
+          message={message}
+          isStreaming={isStreaming}
+          onEditAndResend={(newText) => {
+            if (onEditPrompt) onEditPrompt(newText)
+          }}
+        />
 
         {/* User Avatar: Displays the avatar of whoever sent this message */}
         <EchoUserAvatar
@@ -4383,6 +4444,11 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   }
 
   // Assistant Message Row
+  const isErrorMessage = Boolean(
+    message.isError ||
+    (message.content && message.content.startsWith("⚠️"))
+  )
+
   return (
     <div className="flex items-start gap-3">
       {/* Bot Circular Avatar: Uses ai-default.png */}
@@ -4425,7 +4491,13 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           </div>
         )}
 
-        {message.content ? (
+        {isErrorMessage ? (
+          <EchoErrorCard
+            error={message.errorDetail || message.content}
+            onRetry={onRetry}
+            isRetrying={isStreaming}
+          />
+        ) : message.content ? (
           renderedAssistantContent
         ) : (
           !message.reasoning && (
@@ -4435,6 +4507,18 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
             </div>
           )
         )}
+
+        {/* Assistant Action Bar */}
+        <EchoAssistantActionBar
+          messageId={message.id}
+          content={message.content}
+          isStreaming={isStreaming}
+          hasError={isErrorMessage}
+          artifactName={message.attachedArtifactName}
+          onRegenerate={onRegenerate}
+          onRetry={onRetry}
+          onOpenArtifact={onOpenArtifact}
+        />
       </div>
     </div>
   )
@@ -4888,6 +4972,15 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           onChange={handleTextChange}
           onKeyDown={(e) => {
             if (showCommands) {
+              if (e.key === "Tab") {
+                e.preventDefault()
+                if (e.shiftKey) {
+                  setSelectedIndex((prev) => (prev - 1 + AI_COMMAND_LIST.length) % AI_COMMAND_LIST.length)
+                } else {
+                  setSelectedIndex((prev) => (prev + 1) % AI_COMMAND_LIST.length)
+                }
+                return
+              }
               if (e.key === "ArrowDown") {
                 e.preventDefault()
                 setSelectedIndex((prev) => (prev + 1) % AI_COMMAND_LIST.length)
@@ -4899,6 +4992,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                 return
               }
               if (e.key === "Enter" && !e.shiftKey) {
+                if (e.nativeEvent.isComposing) return
                 e.preventDefault()
                 const selected = AI_COMMAND_LIST[selectedIndex]
                 if (selected) {
@@ -4914,6 +5008,8 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
             }
 
             if (e.key === "Enter" && !e.shiftKey) {
+              // Prevent premature sending with Vietnamese IME (Unikey/EVKey)
+              if (e.nativeEvent.isComposing) return
               e.preventDefault()
               handleSend()
             } else if (e.key === "Escape") {
@@ -4923,6 +5019,9 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           }}
           rows={1}
           disabled={isStreaming}
+          aria-label="Soạn câu hỏi cho AI (Enter để gửi, Shift+Enter để xuống dòng)"
+          aria-expanded={showCommands || showMentions}
+          aria-haspopup="listbox"
           placeholder={activeArtifact ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...` : "Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"}
           className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
