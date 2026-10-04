@@ -30,21 +30,172 @@ const STORAGE_KEYS_KEY = "ux_mb_ai_keys"
 const STORAGE_MODEL_KEY = "ux_mb_ai_model"
 const STORAGE_AI_ENABLED_KEY = "ux_mb_ai_enabled"
 export const STORAGE_GEMINI_KEY = "ux_mb_gemini_api_key"
+export const STORAGE_GEMINI_KEYS_KEY = "ux_mb_gemini_keys"
 export const STORAGE_AI_GATEWAY_KEY = "ux_mb_ai_gateway" // "auto" | "google_ai_studio" | "openrouter"
+
+export interface GeminiKeyEntry {
+  id: string
+  key: string
+  label: string
+  status: "active" | "error" | "rate_limited"
+  createdAt: string
+  lastUsedAt?: string
+  rpmLimitResetAt?: number
+  errorReason?: string
+}
+
+export const OPENROUTER_REQUESTS_PER_KEY_PER_DAY = 50
+export const GOOGLE_REQUESTS_PER_KEY_PER_DAY = 1500
+export const FREE_REQUESTS_PER_KEY_PER_DAY = 50 // Backward compatibility
 
 export const INITIAL_GEMINI_KEY =
   (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : "") || ""
 
+export function getStoredGeminiKeys(): GeminiKeyEntry[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(STORAGE_GEMINI_KEYS_KEY)
+    if (!raw) {
+      const legacyKey = localStorage.getItem(STORAGE_GEMINI_KEY) || INITIAL_GEMINI_KEY
+      if (legacyKey && legacyKey.trim()) {
+        const defaultEntry: GeminiKeyEntry = {
+          id: "google-key-main",
+          key: legacyKey.trim(),
+          label: "Google Main Key",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        }
+        localStorage.setItem(STORAGE_GEMINI_KEYS_KEY, JSON.stringify([defaultEntry]))
+        return [defaultEntry]
+      }
+      return []
+    }
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
+}
+
+export function saveGeminiKeys(keys: GeminiKeyEntry[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_GEMINI_KEYS_KEY, JSON.stringify(keys))
+    const firstActive = keys.find(k => k.status !== "error")?.key || ""
+    if (firstActive) {
+      localStorage.setItem(STORAGE_GEMINI_KEY, firstActive)
+    }
+    window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed"))
+    window.dispatchEvent(new CustomEvent("ux_mb_gemini_keys_changed"))
+  } catch (err) {
+    console.error("[AIService] Failed to save Gemini keys:", err)
+  }
+}
+
+export function addGeminiKey(rawKey: string, label: string = "Google Key"): GeminiKeyEntry[] {
+  const clean = rawKey.trim()
+  if (!clean) return getStoredGeminiKeys()
+
+  const current = getStoredGeminiKeys()
+  const exists = current.some(k => k.key === clean)
+  if (exists) return current
+
+  const newEntry: GeminiKeyEntry = {
+    id: `gkey-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    key: clean,
+    label: label.trim() || `Google Key #${current.length + 1}`,
+    status: "active",
+    createdAt: new Date().toISOString(),
+  }
+
+  const updated = [newEntry, ...current]
+  saveGeminiKeys(updated)
+  return updated
+}
+
+export function removeGeminiKey(id: string): GeminiKeyEntry[] {
+  const current = getStoredGeminiKeys()
+  const updated = current.filter(k => k.id !== id)
+  saveGeminiKeys(updated)
+  return updated
+}
+
+let globalGeminiKeyIndex = 0
+
+export function getNextActiveGeminiKey(): string {
+  const now = Date.now()
+  const current = getStoredGeminiKeys()
+  let modified = false
+  const activeKeys = current.map(k => {
+    if (k.status === "rate_limited" && k.rpmLimitResetAt && k.rpmLimitResetAt <= now) {
+      modified = true
+      return { ...k, status: "active" as const, rpmLimitResetAt: undefined }
+    }
+    return k
+  })
+  if (modified) {
+    saveGeminiKeys(activeKeys)
+  }
+
+  const available = activeKeys.filter(k => k.status === "active")
+  if (!available.length) {
+    return (typeof window !== "undefined" && localStorage.getItem(STORAGE_GEMINI_KEY)) || INITIAL_GEMINI_KEY
+  }
+  const chosen = available[globalGeminiKeyIndex % available.length]
+  globalGeminiKeyIndex = (globalGeminiKeyIndex + 1) % available.length
+  return chosen.key
+}
+
+export function markGeminiKeyRateLimited(key: string, cooldownMs: number = 60_000): void {
+  const current = getStoredGeminiKeys()
+  const now = Date.now()
+  const updated = current.map(k => {
+    if (k.key === key) {
+      return {
+        ...k,
+        status: "rate_limited" as const,
+        rpmLimitResetAt: now + cooldownMs,
+        lastUsedAt: new Date().toISOString(),
+      }
+    }
+    return k
+  })
+  saveGeminiKeys(updated)
+}
+
+export function markGeminiKeyError(key: string, reason: string): void {
+  const current = getStoredGeminiKeys()
+  const updated = current.map(k => {
+    if (k.key === key) {
+      return {
+        ...k,
+        status: "error" as const,
+        errorReason: reason,
+        lastUsedAt: new Date().toISOString(),
+      }
+    }
+    return k
+  })
+  saveGeminiKeys(updated)
+}
+
 export function getStoredGeminiKey(): string {
+  const next = getNextActiveGeminiKey()
+  if (next) return next
   if (typeof window === "undefined") return ""
-  const key = localStorage.getItem(STORAGE_GEMINI_KEY)
-  if (key && key.trim()) return key.trim()
-  return INITIAL_GEMINI_KEY
+  return localStorage.getItem(STORAGE_GEMINI_KEY) || INITIAL_GEMINI_KEY
 }
 
 export function saveGeminiKey(key: string): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem(STORAGE_GEMINI_KEY, key.trim())
+  const clean = key.trim()
+  if (!clean) return
+  const current = getStoredGeminiKeys()
+  const existing = current.find(k => k.key === clean)
+  if (!existing) {
+    addGeminiKey(clean, `Google Key #${current.length + 1}`)
+  } else {
+    localStorage.setItem(STORAGE_GEMINI_KEY, clean)
+    window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed"))
+  }
 }
 
 export function getStoredAIGateway(): "auto" | "google_ai_studio" | "openrouter" {
@@ -57,6 +208,7 @@ export function getStoredAIGateway(): "auto" | "google_ai_studio" | "openrouter"
 export function saveAIGateway(gateway: "auto" | "google_ai_studio" | "openrouter"): void {
   if (typeof window === "undefined") return
   localStorage.setItem(STORAGE_AI_GATEWAY_KEY, gateway)
+  window.dispatchEvent(new CustomEvent("ux_mb_ai_gateway_changed", { detail: { gateway } }))
 }
 
 /**
@@ -190,7 +342,7 @@ export const POPULAR_AI_MODELS: AIModelOption[] = [
 const INITIAL_DEFAULT_KEY =
   (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY || "") : "") || ""
 
-export const FREE_REQUESTS_PER_KEY_PER_DAY = 50
+// FREE_REQUESTS_PER_KEY_PER_DAY is exported above (line 49)
 const STORAGE_AI_DAILY_USAGE_KEY = "ux_mb_ai_daily_usage"
 
 export interface AIDailyUsage {
@@ -199,21 +351,38 @@ export interface AIDailyUsage {
   totalRequests: number
   percent: number
   keysCount: number
+  openRouterKeysCount: number
+  googleKeysCount: number
   remainingRequests: number
 }
 
 /**
  * Lấy thống kê số lượng request AI đã dùng trong ngày theo danh sách API Keys
- * Quy tắc: 1 Key = 50 requests/ngày. Tổng hạn mức = Số Keys * 50.
+ * Hợp nhất: Total Requests = (OpenRouter Keys * 50) + (Google Keys * 1.500)
  */
 export function getDailyAIUsage(): AIDailyUsage {
   if (typeof window === "undefined") {
-    return { date: "", usedRequests: 0, totalRequests: 50, percent: 0, keysCount: 1, remainingRequests: 50 }
+    return {
+      date: "",
+      usedRequests: 0,
+      totalRequests: 1550,
+      percent: 0,
+      keysCount: 2,
+      openRouterKeysCount: 1,
+      googleKeysCount: 1,
+      remainingRequests: 1550,
+    }
   }
-  const keys = getStoredAIKeys()
-  const activeKeys = keys.filter(k => k.status !== "error")
-  const keysCount = Math.max(1, activeKeys.length > 0 ? activeKeys.length : keys.length)
-  const totalRequests = keysCount * FREE_REQUESTS_PER_KEY_PER_DAY
+  const openRouterKeys = getStoredAIKeys().filter(k => k.status !== "error")
+  const googleKeys = getStoredGeminiKeys().filter(k => k.status !== "error")
+  const openRouterKeysCount = openRouterKeys.length
+  const googleKeysCount = googleKeys.length
+
+  const calculatedTotal =
+    (openRouterKeysCount * OPENROUTER_REQUESTS_PER_KEY_PER_DAY) +
+    (googleKeysCount * GOOGLE_REQUESTS_PER_KEY_PER_DAY)
+
+  const totalRequests = Math.max(50, calculatedTotal || 50)
   const todayStr = new Date().toLocaleDateString("en-CA") // "YYYY-MM-DD" theo local time
 
   let usedRequests = 14
@@ -235,7 +404,9 @@ export function getDailyAIUsage(): AIDailyUsage {
     usedRequests,
     totalRequests,
     percent,
-    keysCount,
+    keysCount: openRouterKeysCount + googleKeysCount,
+    openRouterKeysCount,
+    googleKeysCount,
     remainingRequests,
   }
 }
@@ -660,6 +831,7 @@ export async function streamAICompletion(
       ]))
 
       // 0. Cổng kết nối trực tiếp Google AI Studio (Official OpenAI-Compatible Endpoint)
+      const geminiKeys = getStoredGeminiKeys().filter(k => k.status !== "error")
       const geminiKey = getStoredGeminiKey()
       const gateway = getStoredAIGateway()
       const isGeminiTarget = targetModel.startsWith("gemini-") || targetModel.includes("gemini")
@@ -673,41 +845,60 @@ export async function streamAICompletion(
         (activeKey && activeKey.startsWith("AIzaSy"))
 
       if (shouldCallGoogleDirect) {
-        const googleKey = (activeKey && activeKey.startsWith("AIzaSy")) ? activeKey : geminiKey
         const rawM = targetModel.startsWith("google/") ? targetModel.replace(/^google\//, "").replace(/:free$/, "") : targetModel
         let googleModel = rawM.startsWith("gemini") ? rawM : DEFAULT_GEMINI_MODEL
-        try {
-          googleModel = await resolveGeminiModel(googleKey, googleModel)
-        } catch (resolveErr) {
-          console.warn("[AIService] Không lấy được danh sách model Gemini:", resolveErr)
+
+        // TẦNG 1 (ƯU TIÊN): Xoay vòng danh sách key trong Google AI Studio Key Pool
+        const candidates = geminiKeys.length > 0 ? geminiKeys.map(k => k.key) : (geminiKey ? [geminiKey] : [])
+        let googleSuccess = false
+
+        for (let attempt = 0; attempt < candidates.length; attempt++) {
+          const currentGoogleKey = candidates[attempt]
+          try {
+            googleModel = await resolveGeminiModel(currentGoogleKey, googleModel)
+          } catch (resolveErr) {
+            console.warn("[AIService] Không lấy được danh sách model Gemini:", resolveErr)
+          }
+
+          try {
+            const gRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${currentGoogleKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: googleModel,
+                messages,
+                stream: true,
+                temperature: config.temperature ?? 0.7,
+                max_tokens: config.max_tokens ?? 2048,
+              }),
+              signal: controller.signal,
+            })
+
+            if (gRes.ok) {
+              response = gRes
+              usedModel = googleModel
+              googleSuccess = true
+              break
+            } else if (gRes.status === 429) {
+              console.warn(`[AIService] Google Key (#${attempt + 1}) chạm giới hạn 15 RPM/1.500 RPD (429). Đang chuyển sang key Google tiếp theo trong Pool...`)
+              markGeminiKeyRateLimited(currentGoogleKey, 60_000)
+              continue
+            } else {
+              const errBody = await gRes.text()
+              console.warn(`[AIService] Google AI Studio direct call returned status ${gRes.status}:`, errBody)
+              break
+            }
+          } catch (gErr) {
+            console.warn("[AIService] Google AI Studio direct fetch failed:", gErr)
+            break
+          }
         }
 
-        try {
-          const gRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${googleKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: googleModel,
-              messages,
-              stream: true,
-              temperature: config.temperature ?? 0.7,
-              max_tokens: config.max_tokens ?? 2048,
-            }),
-            signal: controller.signal,
-          })
-
-          if (gRes.ok) {
-            response = gRes
-            usedModel = googleModel
-          } else {
-            const errBody = await gRes.text()
-            console.warn(`[AIService] Google AI Studio direct call returned status ${gRes.status}:`, errBody)
-          }
-        } catch (gErr) {
-          console.warn("[AIService] Google AI Studio direct fetch failed, falling back to OpenRouter:", gErr)
+        if (!googleSuccess && (gateway === "auto" || gateway === "google_ai_studio")) {
+          console.warn("[AIService] Tầng 1 (Google AI Studio) bận/lỗi. Tự động chuyển tiếp sang Tầng 2: OpenRouter Gateway Pool fallback!")
         }
       }
 

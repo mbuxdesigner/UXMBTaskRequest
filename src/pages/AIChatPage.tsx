@@ -2978,6 +2978,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           <span>{dailyUsage.percent}% hạn mức ngày ({dailyUsage.usedRequests}/{dailyUsage.totalRequests} lượt)</span>
                           <span>{dailyUsage.remainingRequests > 0 ? `Còn ${dailyUsage.remainingRequests} lượt khả dụng` : "Đã đạt hạn mức hôm nay"}</span>
                         </div>
+                        <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-400 font-mono pt-0.5">
+                          <span>Google AI Pool: {dailyUsage.googleKeysCount || 1} keys (~{((dailyUsage.googleKeysCount || 1) * 1500).toLocaleString('vi-VN')} RPD)</span>
+                          <span>OpenRouter Pool: {dailyUsage.openRouterKeysCount || 1} keys (~{((dailyUsage.openRouterKeysCount || 1) * 50).toLocaleString('vi-VN')} RPD)</span>
+                        </div>
                       </div>
                     )}
                   </div>

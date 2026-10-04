@@ -2582,8 +2582,53 @@ runTest("Integration", "INT-GATEWAY-05", "OpenRouterSettingsCard: verify ReUI Da
   assert.ok(cardSrc.includes("dark:border-neutral-800"), "Must support dark:border-neutral-800")
   assert.ok(cardSrc.includes("dark:text-slate-100"), "Text must support dark:text-slate-100")
 })
+runTest("Integration", "INT-DUALPOOL-01", "aiService: verify Google AI Studio Key Pool exports & storage key", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes('STORAGE_GEMINI_KEYS_KEY = "ux_mb_gemini_keys"'), "Must define STORAGE_GEMINI_KEYS_KEY")
+  assert.ok(serviceSrc.includes("export function getStoredGeminiKeys()"), "Must export getStoredGeminiKeys")
+  assert.ok(serviceSrc.includes("export function addGeminiKey("), "Must export addGeminiKey")
+  assert.ok(serviceSrc.includes("export function removeGeminiKey("), "Must export removeGeminiKey")
+})
+
+runTest("Integration", "INT-DUALPOOL-02", "aiService: verify Unified Quota formula with OpenRouter (50) and Google (1,500)", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes("OPENROUTER_REQUESTS_PER_KEY_PER_DAY = 50"), "OpenRouter quota must be 50")
+  assert.ok(serviceSrc.includes("GOOGLE_REQUESTS_PER_KEY_PER_DAY = 1500"), "Google quota must be 1500")
+  assert.ok(serviceSrc.includes("(openRouterKeysCount * OPENROUTER_REQUESTS_PER_KEY_PER_DAY) +"), "Must calculate OpenRouter quota")
+  assert.ok(serviceSrc.includes("(googleKeysCount * GOOGLE_REQUESTS_PER_KEY_PER_DAY)"), "Must calculate Google quota")
+})
+
+runTest("Integration", "INT-DUALPOOL-03", "aiService: verify Google Round-Robin & 15 RPM rate-limit auto recovery", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes("export function getNextActiveGeminiKey()"), "Must export getNextActiveGeminiKey")
+  assert.ok(serviceSrc.includes("markGeminiKeyRateLimited("), "Must export markGeminiKeyRateLimited")
+  assert.ok(serviceSrc.includes("rpmLimitResetAt <= now"), "Must check expiration of rate limit cooldown")
+})
+
+runTest("Integration", "INT-DUALPOOL-04", "aiService: verify Dual-Pool Fallback (Tier 1 Google -> Tier 2 OpenRouter)", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes("gRes.status === 429"), "Must intercept 429 rate limit on Google key")
+  assert.ok(serviceSrc.includes("markGeminiKeyRateLimited(currentGoogleKey, 60_000)"), "Must mark key with 60s cooldown for 15 RPM")
+  assert.ok(serviceSrc.includes("Tầng 2: OpenRouter Gateway Pool fallback"), "Must log fallback to OpenRouter Tier 2")
+})
+
+runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: verify Google Key Pool UI list and multi-account add form", () => {
+  const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(cardSrc.includes("getStoredGeminiKeys"), "Must load stored Google keys")
+  assert.ok(cardSrc.includes("handleAddGeminiKey"), "Must have handler to add Google Key")
+  assert.ok(cardSrc.includes("handleRemoveGeminiKey"), "Must have handler to remove Google Key")
+  assert.ok(cardSrc.includes("Lưu Key vào Google Pool"), "Must have submit button for Google Key")
+  assert.ok(cardSrc.includes("Test kết nối riêng key này"), "Must support individual Google key testing")
+})
+
+runTest("Integration", "INT-DUALPOOL-06", "AIChatPage: verify usage breakdown displays both Google and OpenRouter pools", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("Google AI Pool:"), "Must display Google AI Pool breakdown")
+  assert.ok(pageSrc.includes("OpenRouter Pool:"), "Must display OpenRouter Pool breakdown")
+})
 
 // ==============================================================================
+
 
 // TEST RESULTS SUMMARY & VERIFICATION
 // ==============================================================================
