@@ -72,7 +72,32 @@ CÁCH TRẢ LỜI
 
 // Giữ lại các alias cũ để tương thích với các module khác nếu có tham chiếu
 export const AI_BASE_KNOWLEDGE = CORE_SYSTEM_PROMPT
-export const AI_PERSONA = ""
+export const AI_PERSONA = `Bạn là Trợ lý Thiết kế Sản phẩm & Vận hành Thiết kế (Design Ops Copilot) tại Ngân hàng TMCP Quân đội (MBBank).
+Nhiệm vụ: Hỗ trợ đội ngũ UX/UI Designer, Design Owner và PO xây dựng trải nghiệm ngân hàng số vượt trội trên App MBBank, Biz MBBank và MB Portal.
+
+BẢN SẮC THƯƠNG HIỆU & HỆ THỐNG DESIGN TOKENS MB:
+- Màu sắc chủ đạo: Primary Blue (#1057FB, token --color-primary-500), MB Star Red (#ED1C24 / #E60000), Navy Dark (#072569), Pure White (#FFFFFF), Nền ứng dụng (#F6F8FA).
+- Màu trạng thái: Success (#10B981), Warning PO Pending (#F59E0B), Error (#EF4444), Info (#3B82F6).
+- Typography: Font chuẩn Be Vietnam Pro (và Google Sans Flex, monospace DM Mono). H1 32px, H2 28px, H3 24px, H4 20px; Body XL 18px, L 16px, M 14px, S 12px.
+- Quy chuẩn bo góc ReUI (4 cấp độ bắt buộc):
+  + Level 1 (rounded-lg, 8px): Nút phụ, input nhỏ, tooltip, tag filter.
+  + Level 2 (rounded-xl, 12px): Modal Dialog, Card ReUI, ô nhập liệu chính, CTA.
+  + Level 3 (rounded-2xl, 16px): Container lớn, Hero banner.
+  + Level 4 (rounded-full, 9999px): Avatar nhân sự, Status badge pill.
+  * Nghiêm cấm dùng rounded-3xl (24px) cho modal enterprise vì gây thô ráp.
+- Quy chuẩn Handoff: 100% Auto-layout, token từ thư viện; kiểm tra đủ 4 trạng thái (Empty State, Loading Shimmer, Error State, Edge Cases); đặt tên Frame [Feature]_[ScreenName]_[State].
+
+QUY TRÌNH 7 KHÂU UX MBBANK:
+1. Backlog & Prioritization — Tiếp nhận yêu cầu, Thấu cảm & Khảo sát (Backlog & Discovery).
+2. Scoping & Sizing — Phân loại quy mô S/M/L/XL, Định nghĩa bài toán & PO Alignment.
+3. Discovery & Define — Nghiên cứu người dùng, hành trình số (CJM, Problem Statement).
+4. IA & Wireframe — Thiết kế giải pháp IA/Wireframe, User Flow (lệnh /sentopo).
+5. UI Design — Thiết kế giao diện chi tiết, tuân thủ 100% Design System v3.0.
+6. Prototype & Usability Testing — Prototype tương tác & Kiểm thử Usability/PO Sign-off (>85%).
+7. Ready for Dev & UAT — Design Handoff & UAT, chuẩn bị specs, kiểm thử trước Go-Live.
+
+CHÍNH SÁCH SLA & PO PENDING:
+- Thời hạn PO phản hồi: tối đa 24 giờ (SLA 24h). Quá 24h tự động gắn cờ PO Pending (cờ Amber).`
 export const DOCUMENT_READING_AND_REPLY_GUIDELINES = ""
 export const AI_TASK_INTELLIGENCE_GUIDELINES = ""
 export const AI_DOCUMENT_INTELLIGENCE_GUIDELINES = ""
@@ -332,27 +357,47 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
 }
 
 /**
- * Serialize tài liệu Artifacts với metadata rõ ràng khi bị cắt bớt và che thông tin PII
+ * Serialize tài liệu Artifacts với ngân sách thích ứng (adaptive context budget) và che thông tin PII
+ * - Cấp tối đa 16,000 ký tự cho tài liệu mục tiêu (active/primary)
+ * - Cấp tối đa 4,000 ký tự cho các tài liệu tham chiếu phụ (secondary)
+ * - Bảo toàn trọn vẹn tài liệu hạt nhân 7 Khâu UX MBBank và seed documents
+ * - Phát thông báo metadata chuẩn xác khi xảy ra cắt bớt ở tài liệu quá lớn
  */
-export function serializeArtifactsContext(artifacts: UXArtifact[], mode: "summary" | "full" = "summary"): string {
+export function serializeArtifactsContext(
+  artifacts: UXArtifact[],
+  mode: "summary" | "full" = "summary",
+  options?: {
+    targetArtifactId?: string | null
+    targetBudget?: number
+    secondaryBudget?: number
+  }
+): string {
   if (!artifacts || artifacts.length === 0) return ""
-  
+
+  const {
+    targetArtifactId = null,
+    targetBudget = 16000,
+    secondaryBudget = 4000,
+  } = options || {}
+
   const lines: string[] = []
   lines.push(`=== DOCUMENT_DATA (${artifacts.length} tài liệu trong context) ===`)
-  
+
   artifacts.forEach((art, idx) => {
-    lines.push(`--- Tài liệu #${idx + 1}: "${sanitizeContextText(art.name)}" (${art.fileType}) ---`)
+    lines.push(`--- Tài liệu #${idx + 1}: "${sanitizeContextText(art.name)}" (${art.fileType || "doc"}) ---`)
     if (art.summary) lines.push(`Tóm tắt: ${sanitizeContextText(art.summary)}`)
     if (art.tags && art.tags.length > 0) lines.push(`Tags: ${art.tags.join(", ")}`)
-    
+
     if (mode === "full") {
       const rawContent = art.content || ""
       const content = sanitizeContextText(rawContent)
-      const MAX_LENGTH = 2000
-      if (content.length > MAX_LENGTH) {
-        lines.push(`[METADATA TRẠNG THÁI: TÀI LIỆU BỊ CẮT BỚT — HIỂN THỊ ${MAX_LENGTH} / ${content.length} KÝ TỰ]`)
-        lines.push(`[LƯU Ý: Phần sau ký tự thứ ${MAX_LENGTH} chưa được cung cấp. Chỉ trả lời dựa trên phần đã hiển thị, không suy đoán phần bị cắt]`)
-        lines.push(`Nội dung:\n${content.slice(0, MAX_LENGTH)}`)
+      const isTarget = targetArtifactId ? (art.id === targetArtifactId) : (idx === 0)
+      const budget = isTarget ? targetBudget : secondaryBudget
+
+      if (content.length > budget) {
+        lines.push(`[METADATA TRẠNG THÁI: TÀI LIỆU BỊ CẮT BỚT — HIỂN THỊ ${budget} / ${content.length} KÝ TỰ]`)
+        lines.push(`[LƯU Ý: Phần sau ký tự thứ ${budget} chưa được cung cấp. Chỉ trả lời dựa trên phần đã hiển thị, không suy đoán phần bị cắt]`)
+        lines.push(`Nội dung:\n${content.slice(0, budget)}`)
         lines.push(`[...HẾT PHẦN TRÍCH ĐOẠN ĐƯỢC CUNG CẤP...]`)
       } else {
         lines.push(`[METADATA TRẠNG THÁI: TOÀN VĂN ĐẦY ĐỦ — ${content.length} KÝ TỰ]`)
@@ -361,9 +406,15 @@ export function serializeArtifactsContext(artifacts: UXArtifact[], mode: "summar
     }
   })
   lines.push(`=== END_DOCUMENT_DATA ===`)
-  
+
   return lines.join("\n")
 }
+
+export const serializeArtifactsWithBudget = (
+  artifacts: UXArtifact[],
+  options?: { targetArtifactId?: string | null; targetBudget?: number; secondaryBudget?: number }
+) => serializeArtifactsContext(artifacts, "full", options)
+
 
 /**
  * Serialize danh mục bài toán UX sang chuỗi JSON đã được che giấu thông tin cá nhân (PII)
@@ -593,6 +644,9 @@ export function buildChatPrompt(
   const intent = detectUserIntent(userQuery)
 
   const systemChunks: string[] = [CORE_SYSTEM_PROMPT]
+  if (AI_PERSONA) {
+    systemChunks.push(AI_PERSONA)
+  }
 
   // CHỈ NẠP SCHEMA THEO INTENT THỰC TẾ
   if (intent.isChart) {

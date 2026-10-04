@@ -856,8 +856,11 @@ export async function streamAICompletion(
       }
 
       if (!response || !response.ok) {
+        const status = response?.status || 500
         const errBody = response ? await response.text() : "No response from AI provider"
-        throw new Error(`OpenRouter Error (${response?.status || 500}): ${errBody}`)
+        const err = new Error(`OpenRouter Error (${status}): ${errBody.slice(0, 160)}`)
+        ;(err as any).status = status
+        throw err
       }
 
       if (!response.body) {
@@ -955,29 +958,32 @@ export async function streamAICompletion(
     } catch (err: any) {
       if (err.name === "AbortError" || isCancelled) return
 
-      const isMissingServerKey =
-        err?.code === "MISSING_SERVER_API_KEY" ||
-        err?.status === 503 ||
-        err?.message?.includes("OPENROUTER_API_KEY")
+      let finalErr = err
+      const status = err?.status || err?.statusCode || null
+      const code = err?.code || ""
+      const rawMsg = String(err?.message || "")
 
-      const isAuthOrRateLimit =
-        err?.code === "UNAUTHORIZED" ||
-        err?.code === "RATE_LIMITED" ||
-        err?.status === 401 ||
-        err?.status === 429
-
-      if (isMissingServerKey || isAuthOrRateLimit || !isDev) {
-        console.error("[AIService] Server / Gateway configuration error (suppressing fake offline fallback):", err)
-        safeCallbacks.onError?.(err)
-        return
+      if (status === 401 || code === "UNAUTHORIZED" || rawMsg.includes("401")) {
+        finalErr = new Error("Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.")
+        ;(finalErr as any).status = 401
+        ;(finalErr as any).code = "UNAUTHORIZED"
+      } else if (status === 429 || code === "RATE_LIMITED" || rawMsg.includes("429")) {
+        finalErr = new Error("Quá giới hạn tần suất yêu cầu (tối đa 20 yêu cầu/phút). Vui lòng thử lại sau giây lát.")
+        ;(finalErr as any).status = 429
+        ;(finalErr as any).code = "RATE_LIMITED"
+      } else if (status === 503 || code === "MISSING_SERVER_API_KEY" || rawMsg.includes("OPENROUTER_API_KEY")) {
+        finalErr = new Error("Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường.")
+        ;(finalErr as any).status = 503
+        ;(finalErr as any).code = "MISSING_SERVER_API_KEY"
+      } else if (status === 500 || status === 502 || status === 504 || rawMsg.includes("500") || rawMsg.includes("502") || rawMsg.includes("504")) {
+        finalErr = new Error(`Máy chủ AI gặp sự cố xử lý (mã lỗi HTTP ${status || 500}). Vui lòng thử lại sau giây lát.`)
+        ;(finalErr as any).status = status || 500
+      } else if (rawMsg.includes("Failed to fetch") || rawMsg.includes("NetworkError") || rawMsg.includes("ECONNREFUSED")) {
+        finalErr = new Error("Không thể kết nối tới cổng AI Gateway hoặc máy chủ AI. Vui lòng kiểm tra lại kết nối mạng.")
       }
 
-      console.warn("[AIService] Remote API unavailable in dev. Seamlessly falling back to intelligent local synthesis:", err)
-      simulateSmartFallbackStream(messages, safeCallbacks, () => isCancelled, {
-        source: "local-fallback",
-        model: usedModel,
-        providerError: String(err?.message || "AI provider unavailable"),
-      })
+      console.error("[AIService] Stream completion error surfaced to caller:", finalErr)
+      safeCallbacks.onError?.(finalErr)
     }
   })()
 

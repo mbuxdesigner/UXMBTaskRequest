@@ -1694,7 +1694,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         const errMsg = String(err?.message || "")
         const isAuthError = errMsg.includes("401") || errMsg.includes("Authentication") || errMsg.includes("API Key") || errMsg.includes("quota")
 
-        if (isAuthError) {
+        if (false && isAuthError) {
           const fallbackReply = generateOfflineIntelligenceReply(text, tasks, intelligence, getStoredArtifacts(), userName)
           updateAssistantMsg({
             content: fallbackReply,
@@ -1705,7 +1705,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           toast.info("Đã quét và phản hồi dữ liệu thời gian thực từ hệ thống MB Portal.")
         } else {
           updateAssistantMsg({
-            content: `⚠️ ${errMsg || "Lỗi kết nối AI gateway."}`,
+            content: `⚠️ ${errMsg || "Lỗi kết nối AI gateway. Vui lòng thử lại sau giây lát."}`,
             isThinkingComplete: true,
             processSteps: currentSteps.map((s) => ({ ...s, status: "completed" })),
           })
@@ -3511,7 +3511,7 @@ function EchoActionCard({
 
       {/* Item List: Có thể click trực tiếp vào từng bài toán để mở task */}
       <div className="space-y-2">
-        {data.items.map((item, idx) => (
+        {(data.items || []).map((item, idx) => (
           <div
             key={idx}
             onClick={handleOpenDetail}
@@ -3852,7 +3852,7 @@ function EchoTaskUpdateCard({
  * Khớp hoàn hảo theo Screenshot 4 footer: "2 Documents Read" + các chip release-notes-3.4.md, release-notes-3.3.md
  */
 function EchoReferencedDocs({ docs }: { docs: ReferencedDoc[] }) {
-  if (!docs || docs.length === 0) return null
+  if (!Array.isArray(docs) || docs.length === 0) return null
 
   return (
     <div className="mt-3 pt-1">
@@ -3860,7 +3860,7 @@ function EchoReferencedDocs({ docs }: { docs: ReferencedDoc[] }) {
         {docs.length} Documents Read
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {docs.map((doc, idx) => (
+        {(Array.isArray(docs) ? docs : []).map((doc, idx) => (
           <div
             key={idx}
             className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-neutral-200/90 dark:border-border/80 bg-white/90 dark:bg-card/90 hover:bg-neutral-50 dark:hover:bg-accent/40 hover:border-neutral-300 transition-colors cursor-pointer shadow-2xs"
@@ -3914,6 +3914,138 @@ function EchoFollowUpSuggestions({
 /**
  * Render text với định dạng inline Markdown (đậm, nghiêng, danh sách, link)
  */
+/**
+ * Inline text parser for bold **text**, italic *text*, `code`, and links [label](url)
+ */
+function formatInlineText(text: string): React.ReactNode {
+  if (!text) return null
+
+  // Auto-bold key-value prefix if not already markdown formatted
+  if (!text.includes("**") && !text.includes("*") && !text.includes("`")) {
+    const colonMatch = text.match(/^([A-ZÀ-Ỹa-zà-ỹ0-9\s/]{2,30}:)(\s+.*)?$/)
+    if (colonMatch) {
+      return (
+        <>
+          <strong className="font-semibold text-foreground">{colonMatch[1]}</strong>
+          {colonMatch[2] ? colonMatch[2] : null}
+        </>
+      )
+    }
+  }
+
+  // Regex splitting by bold, inline code, links, and italic
+  const parts: React.ReactNode[] = []
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(
+        <React.Fragment key={`txt-${lastIdx}`}>
+          {text.substring(lastIdx, match.index)}
+        </React.Fragment>
+      )
+    }
+    const token = match[0]
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(
+        <strong key={`b-${match.index}`} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>
+      )
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      parts.push(
+        <code
+          key={`c-${match.index}`}
+          className="font-mono text-[85%] px-1.5 py-0.5 rounded-[4px] bg-neutral-100 dark:bg-muted text-primary font-normal"
+        >
+          {token.slice(1, -1)}
+        </code>
+      )
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      parts.push(
+        <em key={`i-${match.index}`} className="italic text-muted-foreground">
+          {token.slice(1, -1)}
+        </em>
+      )
+    } else if (token.startsWith("[") && token.includes("](")) {
+      const linkMatch = token.match(/\[([^\]]+)\]\(([^)]+)\)/)
+      if (linkMatch) {
+        parts.push(
+          <a
+            key={`a-${match.index}`}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:opacity-80 transition-opacity font-medium"
+          >
+            {linkMatch[1]}
+          </a>
+        )
+      } else {
+        parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
+      }
+    } else {
+      parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
+    }
+    lastIdx = match.index + token.length
+  }
+
+  if (lastIdx < text.length) {
+    parts.push(
+      <React.Fragment key={`txt-${lastIdx}`}>
+        {text.substring(lastIdx)}
+      </React.Fragment>
+    )
+  }
+
+  return parts.length > 0 ? parts : text
+}
+
+interface VisualErrorBoundaryProps {
+  children: React.ReactNode
+  fallbackCode?: string
+}
+
+interface VisualErrorBoundaryState {
+  hasError: boolean
+}
+
+class VisualErrorBoundary extends React.Component<VisualErrorBoundaryProps, VisualErrorBoundaryState> {
+  constructor(props: VisualErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): VisualErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.warn("[AIChatPage] Visual component render error caught by ErrorBoundary:", error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="my-2.5 p-3 rounded-xl border border-amber-200/90 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+          <div className="font-medium flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            <span>Không thể hiển thị trực quan (dữ liệu biểu đồ hoặc sơ đồ không hợp lệ)</span>
+          </div>
+          {this.props.fallbackCode && (
+            <pre className="font-mono text-[11px] p-2 rounded-lg bg-black/5 dark:bg-black/30 overflow-x-auto whitespace-pre-wrap max-h-40 text-muted-foreground">
+              {this.props.fallbackCode}
+            </pre>
+          )}
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function RenderMarkdownParagraph({ text }: { text: string }) {
   if (!text) return null
   const paragraphs = text.split("\n\n")
@@ -3931,7 +4063,7 @@ function RenderMarkdownParagraph({ text }: { text: string }) {
             <ul key={pIdx} className="space-y-1 list-disc list-inside text-foreground pl-1">
               {items.map((it, iIdx) => (
                 <li key={iIdx} className="leading-relaxed">
-                  {it}
+                  {formatInlineText(it)}
                 </li>
               ))}
             </ul>
@@ -3940,7 +4072,7 @@ function RenderMarkdownParagraph({ text }: { text: string }) {
 
         return (
           <div key={pIdx} className="whitespace-pre-wrap leading-relaxed">
-            {trimmed}
+            {formatInlineText(trimmed)}
           </div>
         )
       })}
@@ -4032,7 +4164,8 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
     const sourcesMatch = workingText.match(/```sources\n([\s\S]*?)```/) || workingText.match(/:::sources\n([\s\S]*?):::/)
     if (sourcesMatch) {
       try {
-        referencedDocs = JSON.parse(sourcesMatch[1])
+        const parsedSources = JSON.parse(sourcesMatch[1])
+        referencedDocs = Array.isArray(parsedSources) ? parsedSources : (parsedSources && typeof parsedSources === "object" ? [parsedSources] : [])
         workingText = workingText.replace(sourcesMatch[0], "").trim()
       } catch {}
     } else if (message.attachedArtifactName) {
@@ -4154,7 +4287,11 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
               rawLang === "json:chart" ||
               (rawLang === "json" && trimmed.includes('"type"') && trimmed.includes('"data"'))
             ) {
-              return <EchoInteractiveChart key={bIdx} rawJson={block.content} />
+              return (
+                <VisualErrorBoundary key={bIdx} fallbackCode={block.content}>
+                  <EchoInteractiveChart rawJson={block.content} />
+                </VisualErrorBoundary>
+              )
             }
 
             // 2. Interactive Mermaid Flowchart (Sơ đồ luồng)
@@ -4164,7 +4301,11 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
               trimmed.startsWith("flowchart ") ||
               trimmed.startsWith("sequenceDiagram")
             ) {
-              return <EchoMermaidFlowchart key={bIdx} code={block.content} />
+              return (
+                <VisualErrorBoundary key={bIdx} fallbackCode={block.content}>
+                  <EchoMermaidFlowchart code={block.content} />
+                </VisualErrorBoundary>
+              )
             }
 
             return (
