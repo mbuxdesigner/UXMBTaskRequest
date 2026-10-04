@@ -57,6 +57,9 @@ CÁCH TRẢ LỜI
 1. Vào thẳng câu trả lời, có cấu trúc rõ ràng (tiêu đề, gạch đầu dòng, bảng biểu nếu cần).
 2. Tập trung vào các thành phần UI thực tế: Nhóm chức năng, Data Fields, Trạng thái (Empty/Loading/Error), Microcopy và CTA.
 3. Ngắn gọn, súc tích, ưu tiên dạng danh sách dễ copy và áp dụng trực tiếp vào Figma.
+4. Với dữ liệu công việc, mọi kết luận quan trọng phải gắn mã bài toán dạng [REQUEST_ID]. Cuối câu trả lời thêm mục "Nguồn đã dùng" chỉ liệt kê task/tài liệu thực sự có trong dữ liệu được cung cấp.
+5. Nếu chưa xác định chắc chắn người dùng đang nói tới bài toán nào, không tự chọn. Hãy nêu tối đa 3 bài toán phù hợp và hỏi lại một câu ngắn.
+6. Phân biệt rõ: dữ kiện có trong nguồn, suy luận từ dữ kiện, và đề xuất của AI.
 
 ĐỊNH DẠNG
 - Chỉ tạo chart khi người dùng yêu cầu biểu đồ số liệu.
@@ -445,7 +448,18 @@ export const serializeArtifactsWithBudget = (
 /**
  * Serialize danh mục bài toán UX sang chuỗi JSON đã được che giấu thông tin cá nhân (PII)
  */
-export function serializeTaskContext(tasks: UXRequest[], metricsTodayYMD: string = ""): string {
+export function serializeTaskContext(
+  tasks: UXRequest[],
+  metricsTodayYMD: string = "",
+  options?: { detailed?: boolean; maxUpdates?: number }
+): string {
+  const detailed = options?.detailed ?? tasks.length <= 3
+  const maxUpdates = options?.maxUpdates ?? 5
+  const clip = (value: unknown, max = 1800) => {
+    const clean = sanitizeContextText(String(value || "").trim())
+    return clean.length > max ? `${clean.slice(0, max)}…` : clean
+  }
+
   const taskContextRecords = tasks.map((t) => {
     const dl = t.expected_deadline || (t as any).design_deadline || null
     const prog = Number(t.progress) || 0
@@ -454,7 +468,7 @@ export function serializeTaskContext(tasks: UXRequest[], metricsTodayYMD: string
       ? t.task_updates[t.task_updates.length - 1]?.note
       : null
 
-    return {
+    const baseRecord = {
       id: t.request_id || t.id || "",
       title: sanitizeContextText(t.nickname?.trim() || t.title?.trim() || "Chưa đặt tên"),
       priority: t.priority || "Lv3",
@@ -467,6 +481,40 @@ export function serializeTaskContext(tasks: UXRequest[], metricsTodayYMD: string
       assignee: sanitizeContextText(t.assigned_designer || "Chưa gán"),
       figma_url: Boolean(t.figma_url),
       latest_note: lastNote ? sanitizeContextText(lastNote) : null,
+    }
+
+    if (!detailed) return baseRecord
+
+    const recentUpdates = [...(t.task_updates || [])]
+      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+      .slice(0, maxUpdates)
+      .map((update) => ({
+        timestamp: update.timestamp,
+        author: clip(update.updated_by, 120),
+        phase: update.new_phase,
+        progress: update.new_progress,
+        note: clip(update.note, 700),
+        is_comment: Boolean(update.is_comment),
+      }))
+
+    return {
+      ...baseRecord,
+      product: clip(t.product, 200),
+      feature_journey: clip(t.feature_journey, 300),
+      description: clip(t.description),
+      business_need: clip(t.business_need, 1200),
+      user_problem: clip(t.user_problem, 1200),
+      target_user: clip(t.target_user, 600),
+      expected_output: Array.isArray(t.expected_output) ? t.expected_output.map((item) => clip(item, 300)) : [],
+      pending_reason: clip(t.pending_reason, 600) || null,
+      sent_to_po_at: t.sent_to_po_at || null,
+      last_updated: t.last_updated || null,
+      related_links: {
+        brief_available: Boolean(t.doc_link),
+        figma_available: Boolean(t.figma_url),
+        attachment_names: (t.attachments || []).slice(0, 5).map((item) => clip(item.name, 160)),
+      },
+      recent_updates: recentUpdates,
     }
   })
   return JSON.stringify(taskContextRecords)
@@ -539,7 +587,7 @@ export function buildEnrichedContext(options: {
     )
 
     // 5. TASK_DATA_JSON (Nguồn duy nhất cho danh mục task, đã lọc bỏ PII)
-    parts.push(`=== TASK_DATA_JSON ===\n${serializeTaskContext(effectiveTasks, metrics.todayYMD)}\n=== END_TASK_DATA_JSON ===`)
+    parts.push(`=== TASK_DATA_JSON ===\n${serializeTaskContext(effectiveTasks, metrics.todayYMD, { detailed: effectiveTasks.length <= 3 })}\n=== END_TASK_DATA_JSON ===`)
   }
 
   // 6. Tài liệu Artifacts (Agentic Dynamic Knowledge Retrieval)
@@ -693,9 +741,28 @@ export function buildChatPrompt(
     systemChunks.push(`\n## DỮ LIỆU ĐƯỢC CUNG CẤP CHO PHIÊN LÀM VIỆC:\n${sanitizedContext}`)
   }
 
+  // Giữ ngữ cảnh hội thoại trong ngân sách ổn định. Ưu tiên các lượt gần nhất,
+  // tránh thread dài làm loãng dữ liệu task/tài liệu đang cần trả lời.
+  const historyBudget = 18000
+  let usedChars = 0
+  const compactedHistory: PromptMessage[] = []
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    const message = chatHistory[i]
+    const contentLength = typeof message.content === "string"
+      ? message.content.length
+      : message.content.reduce((sum, part) => sum + (part.text?.length || 0), 0)
+    if (compactedHistory.length > 0 && usedChars + contentLength > historyBudget) break
+    compactedHistory.unshift(message)
+    usedChars += contentLength
+  }
+  const omittedCount = chatHistory.length - compactedHistory.length
+  if (omittedCount > 0) {
+    systemChunks.push(`\n## BỘ NHỚ HỘI THOẠI:\nĐã lược bỏ ${omittedCount} tin nhắn cũ để ưu tiên dữ liệu hiện tại. Không suy đoán chi tiết không còn trong phần hội thoại được giữ lại.`)
+  }
+
   return [
     { role: "system", content: systemChunks.join("\n\n") },
-    ...chatHistory,
+    ...compactedHistory,
   ]
 }
 

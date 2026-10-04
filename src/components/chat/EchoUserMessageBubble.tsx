@@ -9,7 +9,7 @@
 
 import React, { useState, useRef, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Pencil, X, Send, FileText } from "lucide-react"
+import { Pencil, X, Send, FileText, Image as ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { springs, tactileProps } from "@/lib/motion"
 
@@ -18,6 +18,8 @@ export interface EchoUserMessageBubbleProps {
     id: string
     content: string
     attachedArtifactName?: string
+    attachedImageUrl?: string
+    attachedImageName?: string
   }
   isStreaming?: boolean
   onEditAndResend: (newText: string) => void
@@ -131,6 +133,25 @@ export function EchoUserMessageBubble({
 
   return (
     <div className={`group relative space-y-1.5 max-w-[85%] flex flex-col items-end ${className}`}>
+      {message.attachedImageUrl && (
+        <div className="relative rounded-2xl overflow-hidden border border-slate-200/90 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900 shadow-2xs max-w-[280px] sm:max-w-[340px] group/img">
+          <img
+            src={message.attachedImageUrl}
+            alt={message.attachedImageName || "Ảnh đính kèm"}
+            className="w-full max-h-[220px] object-cover rounded-xl transition-transform hover:scale-[1.01] cursor-pointer"
+            onClick={() => window.open(message.attachedImageUrl, "_blank")}
+            title="Bấm để xem ảnh phóng to"
+          />
+          <div className="p-1.5 px-2.5 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xs flex items-center justify-between text-[11px] text-slate-500 dark:text-neutral-400 font-medium border-t border-slate-100 dark:border-neutral-800">
+            <span className="truncate max-w-[200px] flex items-center gap-1.5 font-mono">
+              <ImageIcon className="size-3 text-amber-500 shrink-0" />
+              <span className="truncate">{message.attachedImageName || "Ảnh đính kèm"}</span>
+            </span>
+            <span className="text-[10px] text-slate-400">Xem ảnh ↗</span>
+          </div>
+        </div>
+      )}
+
       {message.attachedArtifactName && (
         <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/80 shadow-2xs">
           <FileText className="size-3 text-slate-500" />

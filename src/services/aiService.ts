@@ -23,6 +23,7 @@ export interface AIServiceConfig {
   temperature?: number
   max_tokens?: number
   stream?: boolean
+  signal?: AbortSignal
 }
 
 const STORAGE_KEYS_KEY = "ux_mb_ai_keys"
@@ -655,6 +656,10 @@ export async function streamAICompletion(
     })
   } else if (abortSignalOrConfig && typeof abortSignalOrConfig === "object") {
     config = abortSignalOrConfig
+    config.signal?.addEventListener("abort", () => {
+      isCancelled = true
+      controller.abort()
+    })
   }
 
   const model = optionalModel || config.model || getStoredAIModel()

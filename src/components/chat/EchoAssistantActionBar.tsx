@@ -17,6 +17,8 @@ import {
   Table,
   ExternalLink,
   Bookmark,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -37,6 +39,8 @@ export interface EchoAssistantActionBarProps {
   onRetry?: () => void
   onOpenArtifact?: () => void
   onSaveAsArtifact?: (title: string, content: string) => void
+  feedback?: "up" | "down"
+  onFeedback?: (feedback: "up" | "down") => void
   className?: string
 }
 
@@ -51,6 +55,8 @@ export function EchoAssistantActionBar({
   onRetry,
   onOpenArtifact,
   onSaveAsArtifact,
+  feedback,
+  onFeedback,
   className = "",
 }: EchoAssistantActionBarProps) {
   const [copiedType, setCopiedType] = useState<"figma" | "markdown" | "tsv" | null>(null)
@@ -177,6 +183,33 @@ export function EchoAssistantActionBar({
               <RotateCcw className="size-3.5 text-slate-400 group-hover:text-slate-700" />
               <span className="text-[11.5px] font-medium">Tạo lại</span>
             </motion.button>
+          )}
+
+          {onFeedback && (
+            <div className="ml-0.5 inline-flex items-center border-l border-slate-200 pl-1.5">
+              <motion.button
+                type="button"
+                onClick={() => onFeedback("up")}
+                {...tactileProps.iconButton}
+                className={`inline-flex size-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${feedback === "up" ? "bg-emerald-50 text-emerald-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}
+                title="Phản hồi hữu ích"
+                aria-label="Đánh giá phản hồi hữu ích"
+                aria-pressed={feedback === "up"}
+              >
+                <ThumbsUp className="size-3.5" />
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => onFeedback("down")}
+                {...tactileProps.iconButton}
+                className={`inline-flex size-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${feedback === "down" ? "bg-rose-50 text-rose-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}
+                title="Phản hồi chưa hữu ích"
+                aria-label="Đánh giá phản hồi chưa hữu ích"
+                aria-pressed={feedback === "down"}
+              >
+                <ThumbsDown className="size-3.5" />
+              </motion.button>
+            </div>
           )}
 
           {/* Action 5: Open Split View / Artifact Viewer */}

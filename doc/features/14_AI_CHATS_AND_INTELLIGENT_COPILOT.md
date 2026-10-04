@@ -449,5 +449,48 @@ Nhằm giải quyết triệt để các phản hồi thực tế từ Designer 
 ### 15.5. Phòng vệ Runtime Reference trong Agent Activity Trace
 - Bóc tách đầy đủ giá trị mặc định `loadedDocNames = []` trong danh sách tham số component `AgentActivityTrace`, đảm bảo không bao giờ phát sinh lỗi `ReferenceError: loadedDocNames is not defined` ngay cả khi gọi từ các trang ngoài hoặc khi `trace` data chưa kịp khởi tạo.
 
+---
 
+## 🧠 16. TRÍ TUỆ HỘI THOẠI ĐA LƯỢT & BỘ NHỚ NGỮ CẢNH (CONVERSATIONAL MEMORY & INTELLIGENCE)
 
+Để giải quyết vấn đề phản hồi thiếu tự nhiên hoặc "quên" ngữ cảnh bài toán khi hỏi tiếp, hệ thống được trang bị mô-đun Trí tuệ Hội thoại tại `src/lib/aiConversation.ts`:
+
+### 16.1. Xử lý Đại từ Thay thế & Câu hỏi Nối tiếp (Pronoun Resolution & Anaphora)
+- **Nhận diện tự nhiên:** Tự động phát hiện các đại từ chỉ định tiếng Việt (*"nó", "bài toán này", "task đó", "dự án này", "cái này", "đợt này"*).
+- **Kế thừa ngữ cảnh (Context Memory):** Khi người dùng hỏi một câu ngắn tiếp nối (ví dụ: *"ai phụ trách nó?"*, *"tiến độ thế nào rồi?"*, *"deadline khi nào?"*), bộ nhớ hội thoại tự động kế thừa `activeTaskId` và toàn bộ chi tiết bài toán của lượt trao đổi trước đó mà không yêu cầu người dùng phải gõ lại mã bài toán.
+- **Phân biệt câu hỏi tổng hợp:** Tự động phân biệt giữa câu hỏi tiếp nối và câu hỏi mang tính bao quát (*"tổng hợp toàn bộ", "liệt kê tất cả", "tình hình chung"*), tránh ép gượng ngữ cảnh của một bài toán đơn lẻ vào câu hỏi tổng hợp.
+
+### 16.2. Bộ Test Tự động hóa Toàn diện
+- Toàn bộ hành vi xử lý ngữ cảnh đa lượt được kiểm chứng nghiêm ngặt qua 12 kịch bản thực tế tại `tests/test-ai-conversation-intelligence.mjs` (độ chính xác 100%).
+
+---
+
+## 🔐 17. PHÂN QUYỀN TRUY CẬP & QUẢN TRỊ KHO ARTIFACTS (RBAC & ARTIFACT MANAGEMENT)
+
+Để bảo đảm tính toàn vẹn và độ bảo mật của kho tri thức thiết kế nội bộ ngân hàng MB, hệ thống áp dụng cơ chế phân quyền chặt chẽ:
+
+### 17.1. Phân quyền Tải lên & Quản trị
+- **Quyền Tải lên (Upload Permission):** Chỉ các tài khoản có vai trò Quản trị viên (`admin`) hoặc Trưởng nhóm Thiết kế / Nhà thiết kế chủ quản (`design_lead`, `designer`) mới được cấp quyền tải tệp lên kho Artifacts hoặc Drive.
+- **Các vai trò khác (Viewer, Business Requester, PO):** Chỉ có quyền xem và tra cứu tài liệu phục vụ đối soát, không được phép tải lên hoặc ghi đè tài liệu trong kho chung.
+- **Phản hồi UI thân thiện:** Nút tải tệp trong thanh công cụ tự động ẩn hoặc thông báo nhắc nhở chuẩn mực khi người dùng thuộc vai trò chỉ đọc.
+
+### 17.2. Cơ chế Xóa Tệp khỏi Kho Artifacts
+- **Tài liệu tùy chỉnh / Tệp tải lên:** Người dùng có thể xóa trực tiếp thông qua menu ngữ cảnh trên bảng xem Split Viewer hoặc qua trình quản lý danh sách Artifacts (`handleDeleteArtifact`).
+- **Đồng bộ hóa Drive & Local Storage:** Khi tệp bị xóa, bản ghi tương ứng trong bộ nhớ trình duyệt `localStorage` và hàng đợi đồng bộ Google Drive sẽ được giải phóng hoàn toàn, bảo đảm dọn sạch dung lượng lưu trữ.
+- **Bảo vệ tài liệu Hạt nhân (Seed Documents):** Các tài liệu quy chuẩn nền tảng (Quy trình 7 khâu, SLA, Tokens) được đánh dấu cố định để bảo vệ hệ thống không bị xóa nhầm.
+
+---
+
+## 🖼️ 18. ĐÍNH KÈM HÌNH ẢNH ĐA PHƯƠNG TIỆN & HIỂN THỊ TRỰC QUAN (IMAGE ATTACHMENT & VIEWER)
+
+Nhằm tối ưu hóa luồng làm việc thực tế của UX/UI Designer (thường xuyên chụp ảnh màn hình từ Figma, Lightshot, Snipping Tool để yêu cầu AI phân tích hoặc kiểm thử giao diện):
+
+### 18.1. Dán Ảnh Trực tiếp từ Clipboard (Ctrl + V) & Drag & Drop
+- **Dán tức thì (Ctrl + V):** Designer chỉ cần chụp màn hình trên Figma hoặc trình duyệt, nhấp vào ô nhập chat và bấm `Ctrl + V`. Ảnh sẽ được tự động nhận diện, giải mã Base64 và đính kèm vào khung chat ngay lập tức.
+- **Kéo & Thả (Drag & Drop):** Hỗ trợ kéo thả trực tiếp tệp hình ảnh (`.png`, `.jpg`, `.jpeg`, `.webp`, `.svg`) vào khung soạn thảo với hiệu ứng viền xanh tương tác trực quan.
+- **Chip Xem trước (Preview Chip):** Hiển thị thẻ tệp ảnh thu nhỏ kèm tên tệp, dung lượng và nút gỡ bỏ `[X]` nhanh chóng ngay trên khung soạn thảo.
+- **Gửi linh hoạt:** Cho phép gửi ảnh độc lập (AI tự động nhận diện và phân tích giao diện) hoặc gửi kèm theo câu hỏi/chỉ dẫn chi tiết.
+
+### 18.2. Hiển thị Hình ảnh Trong Tin nhắn Chat & Kho Artifacts
+- **Bong bóng tin nhắn (`EchoUserMessageBubble`):** Hiển thị trực tiếp ảnh thu nhỏ có viền bo tròn sắc nét. Designer có thể nhấp vào để mở xem toàn màn hình.
+- **Trình xem ảnh Artifacts (`EchoArtifactImageViewer`):** Hỗ trợ hiển thị ảnh từ Base64, Google Drive candidate URLs với độ phân giải cao (`sz=w1600`), tích hợp bộ công cụ thu phóng (Zoom In / Zoom Out) chuyên nghiệp.

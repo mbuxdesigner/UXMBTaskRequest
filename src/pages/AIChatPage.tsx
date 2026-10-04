@@ -66,6 +66,14 @@ import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import {
+  buildTaskRetrievalQuery,
+  createConversationMemory,
+  groundAIResponse,
+  isAggregateTaskQuery,
+  resolveTaskReference,
+  type AIConversationMemory,
+} from "@/lib/aiConversation"
+import {
   springs,
   durations,
   easings,
@@ -141,6 +149,9 @@ export interface ChatTraceData {
   goLiveTasks: UXRequest[]
   dominantPhaseText: string
   loadedDocNames?: string[]
+  resolvedTaskId?: string
+  retrievalSummary?: string
+  confidence?: number
 }
 
 export interface ChatProcessStep {
@@ -158,6 +169,8 @@ interface ChatMessage {
   modelUsed?: string
   feedback?: "up" | "down"
   attachedArtifactName?: string
+  attachedImageUrl?: string
+  attachedImageName?: string
   senderName?: string
   senderAvatar?: string
   senderEmail?: string
@@ -171,6 +184,12 @@ interface ChatMessage {
   traceData?: ChatTraceData
   isError?: boolean
   errorDetail?: any
+  grounding?: {
+    taskIds: string[]
+    documentNames: string[]
+    confidence: number
+    rejectedReferences?: string[]
+  }
 }
 
 interface ChatThread {
@@ -182,6 +201,7 @@ interface ChatThread {
   isPinned?: boolean
   fileBadge?: string
   timeAgo?: string
+  conversationMemory?: AIConversationMemory
 }
 
 const STORAGE_THREADS_KEY = "ux_mb_ai_chat_threads"
@@ -421,6 +441,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   // Navigation & Tabs State
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarTab, setSidebarTab] = useState<"chats" | "artifacts">("chats")
+  const [hoveredSidebarTab, setHoveredSidebarTab] = useState<"chats" | "artifacts" | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
 
   // Artifacts State (User Uploads & Pre-seeded Knowledge Base)
@@ -945,6 +966,20 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     setTimeout(() => setCopiedMsgId(null), 2000)
   }
 
+  const handleMessageFeedback = useCallback((msgId: string, feedback: "up" | "down") => {
+    setThreads((prev) =>
+      prev.map((thread) => ({
+        ...thread,
+        messages: thread.messages.map((message) =>
+          message.id === msgId
+            ? { ...message, feedback: message.feedback === feedback ? undefined : feedback }
+            : message
+        ),
+      }))
+    )
+    toast.success(feedback === "up" ? "Đã ghi nhận phản hồi hữu ích." : "Đã ghi nhận để cải thiện câu trả lời.")
+  }, [])
+
   // Export thread
   const handleExportThread = (thread: ChatThread, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -1366,7 +1401,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     text: string,
     customContext?: string,
     attachedDocName?: string,
-    historyOverride?: PromptMessage[]
+    historyOverride?: PromptMessage[],
+    attachedImage?: { file: File; dataUrl: string; name: string; size: string }
   ) => {
     const cleanText = text.trim()
     if (!cleanText || isStreaming) return
@@ -1376,7 +1412,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const isFlowCommand = /^\/(?:flow|sodo)(?:\s|$)/i.test(cleanText)
     const isTiendoCommand = /^\/tiendo(?:\s|$)/i.test(cleanText)
     const questionIntent = detectUserIntent(cleanText)
-    const usesTaskContext = isTiendoCommand || isChartCommand || questionIntent.isTask || questionIntent.isTaskUpdate || questionIntent.isActionCard
+    const baseUsesTaskContext = isTiendoCommand || isChartCommand || questionIntent.isTask || questionIntent.isTaskUpdate || questionIntent.isActionCard
 
     const startTime = Date.now()
     const userMsgId = `msg-user-${Date.now()}`
@@ -1393,18 +1429,76 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         : rawAvatar
     const senderEmail = currentSession?.teamsEmail || currentSession?.personalEmail || ""
 
+    // Xử lý lưu vết ảnh đính kèm từ clipboard / paste
+    if (attachedImage) {
+      try {
+        const newArt = addArtifact({
+          name: attachedImage.name,
+          fileType: "image",
+          size: attachedImage.size,
+          content: `# ${attachedImage.name}\n\n![${attachedImage.name}](${attachedImage.dataUrl})\n\n*Ảnh chụp màn hình do ${senderName} dán trực tiếp vào đoạn chat.*`,
+          summary: `Ảnh màn hình dán từ clipboard: ${attachedImage.name}`,
+          tags: ["Ảnh", "Clipboard", "Chat"],
+          isCustomUploaded: true,
+          uploadedBy: senderName,
+        })
+
+        // Tải lên Google Drive nền nếu có kết nối
+        uploadFileToDrive(attachedImage.file, "UX_AI_Artifacts").then((res) => {
+          if (res.fileUrl || res.thumbnailUrl) {
+            updateArtifact(newArt.id, {
+              driveUrl: res.fileUrl,
+              driveThumbnailUrl: res.thumbnailUrl,
+              driveDownloadUrl: res.downloadUrl,
+              driveFileId: res.fileId,
+            })
+          }
+        }).catch(() => {})
+      } catch {}
+
+      if (!customContext) {
+        customContext = `=== ẢNH THIẾT KẾ ĐƯỢC NGƯỜI DÙNG DÁN TRỰC TIẾP VÀO ĐOẠN CHAT: "${attachedImage.name}" ===\n![${attachedImage.name}](${attachedImage.dataUrl})\nNgười dùng đang thảo luận về hình ảnh thiết kế / màn hình giao diện này. Hãy phân tích cấu trúc màn hình, các thành phần UI, luồng trải nghiệm, thông tin hiển thị hoặc các tiêu chuẩn thiết kế liên quan theo câu hỏi của người dùng.`
+      }
+      if (!attachedDocName) {
+        attachedDocName = attachedImage.name
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: userMsgId,
       role: "user",
       content: text,
       timestamp: new Date().toISOString(),
-      attachedArtifactName: attachedDocName,
+      attachedArtifactName: attachedDocName || attachedImage?.name,
+      attachedImageUrl: attachedImage?.dataUrl,
+      attachedImageName: attachedImage?.name,
       senderName,
       senderAvatar,
       senderEmail,
     }
 
-    const activeAssigned = intelligence?.activeAssignedTasks || tasks
+    const previousThread = threads.find((thread) => thread.id === activeThreadId)
+    const previousMemory = previousThread?.conversationMemory
+    const taskResolution = resolveTaskReference(
+      cleanText,
+      tasks,
+      previousMemory?.activeTaskId,
+      previousMemory?.pendingTaskIds
+    )
+    const resolvedTask = taskResolution.task
+    const usesTaskContext = baseUsesTaskContext || Boolean(resolvedTask && taskResolution.isFollowUp)
+    const aggregateTaskQuery = isTiendoCommand || isChartCommand || isAggregateTaskQuery(cleanText)
+    const focusedTasks = aggregateTaskQuery
+      ? tasks
+      : resolvedTask
+      ? [resolvedTask]
+      : taskResolution.candidates.length > 0
+      ? taskResolution.candidates
+      : usesTaskContext
+      ? tasks
+      : []
+
+    const activeAssigned = focusedTasks.length > 0 ? focusedTasks : (intelligence?.activeAssignedTasks || tasks)
     const summaryProjs = intelligence?.activeAssignedTasks || (intelligence?.delegatedTasks?.map((d) => d.task) || tasks)
     const riskProjs = intelligence?.overdueTasks || []
     const goLive = intelligence?.goLiveTasks || []
@@ -1412,32 +1506,84 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     const allArtifacts = getStoredArtifacts()
     let loadedDocNames: string[] = []
+    let activeArtifactIds: string[] = previousMemory?.activeArtifactIds || []
     if (attachedDocName) {
       loadedDocNames = [attachedDocName]
+      activeArtifactIds = allArtifacts
+        .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
+        .map((artifact) => artifact.id)
     } else {
       const shouldSearchDocs = isDocCommand || questionIntent.isDoc || questionIntent.isProductSpec || (!usesTaskContext && Boolean(cleanText))
-      const matchedDocs = shouldSearchDocs ? searchArtifactsByQuery(cleanText, allArtifacts) : []
+      const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
+      const matchedDocs = shouldSearchDocs || Boolean(resolvedTask)
+        ? searchArtifactsByQuery(retrievalQuery, allArtifacts)
+        : []
       loadedDocNames = matchedDocs.map((d) => d.name)
+      if (matchedDocs.length > 0) activeArtifactIds = matchedDocs.map((document) => document.id)
     }
 
+    const intentLabel = questionIntent.isTaskUpdate
+      ? "task_update"
+      : questionIntent.isTask || resolvedTask
+      ? "task_analysis"
+      : questionIntent.isDoc || questionIntent.isProductSpec
+      ? "document_query"
+      : questionIntent.isCalendar
+      ? "calendar_query"
+      : "general"
+    const conversationMemory = createConversationMemory({
+      previous: previousMemory,
+      activeTask: resolvedTask,
+      activeArtifactIds,
+      pendingTaskIds: taskResolution.method === "ambiguous"
+        ? taskResolution.candidates.map((task) => task.request_id)
+        : [],
+      intent: intentLabel,
+      userQuery: cleanText,
+    })
+    const clarificationText = taskResolution.method === "ambiguous"
+      ? `Mình tìm thấy nhiều bài toán phù hợp:\n\n${taskResolution.candidates
+          .map((task, index) => `${index + 1}. **[${task.request_id}]** ${task.nickname || task.title}`)
+          .join("\n")}\n\nBạn muốn mình phân tích bài toán nào?`
+      : ""
+    if (clarificationText) conversationMemory.activeTaskId = undefined
+
     const traceData: ChatTraceData = {
-      activeTasks: usesTaskContext ? (activeAssigned.length > 0 ? activeAssigned : tasks) : [],
-      summaryProjects: usesTaskContext ? (summaryProjs.length > 0 ? summaryProjs : tasks) : [],
+      activeTasks: usesTaskContext ? activeAssigned : [],
+      summaryProjects: usesTaskContext ? (focusedTasks.length > 0 ? focusedTasks : summaryProjs) : [],
       riskProjects: usesTaskContext ? riskProjs : [],
       goLiveTasks: usesTaskContext ? goLive : [],
       dominantPhaseText: dominantPhase,
       loadedDocNames: loadedDocNames.length > 0 ? loadedDocNames : undefined,
+      resolvedTaskId: resolvedTask?.request_id,
+      retrievalSummary: resolvedTask
+        ? `Đã định danh bài toán ${resolvedTask.request_id} và nạp dữ liệu chi tiết.`
+        : taskResolution.method === "ambiguous"
+        ? `Tìm thấy ${taskResolution.candidates.length} bài toán có thể phù hợp; cần người dùng xác nhận.`
+        : usesTaskContext
+        ? `Đã nạp ${focusedTasks.length || tasks.length} bài toán trong phạm vi được phép.`
+        : loadedDocNames.length > 0
+        ? `Đã nạp ${loadedDocNames.length} tài liệu liên quan.`
+        : "Không cần nạp dữ liệu công việc cho câu hỏi này.",
+      confidence: taskResolution.confidence,
     }
 
     const assistantMsg: ChatMessage = {
       id: assistantMsgId,
       role: "assistant",
-      content: "",
+      content: clarificationText,
       timestamp: new Date().toISOString(),
       modelUsed: currentModel,
       reasoning: "",
-      isThinkingComplete: false,
+      isThinkingComplete: Boolean(clarificationText),
       traceData,
+      grounding: clarificationText
+        ? {
+            taskIds: taskResolution.candidates.map((task) => task.request_id),
+            documentNames: [],
+            confidence: 0.5,
+          }
+        : undefined,
     }
 
     let targetThreadId = activeThreadId
@@ -1454,6 +1600,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         timeAgo: "Vừa xong",
+        conversationMemory,
       }
       setThreads((prev) => [
         newThread,
@@ -1470,6 +1617,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               ...t,
               title: isFirst ? generateThreadTitle(text) : t.title,
               updatedAt: new Date().toISOString(),
+              conversationMemory,
               messages: [...(t.messages || []), userMsg, assistantMsg],
             }
           }
@@ -1479,19 +1627,34 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     }
 
     setTimeout(() => scrollToBottom(true), 50)
+    if (clarificationText) return
     setIsStreaming(true)
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
 
     const initialSteps: ChatProcessStep[] = [
-      { id: "step-1", label: "Phân tích yêu cầu & tiếp nhận bối cảnh", status: "running" },
-      { id: "step-2", label: "Rà soát dữ liệu bài toán & tài liệu quy trình", status: "pending" },
+      {
+        id: "step-1",
+        label: resolvedTask
+          ? `Đã xác định bài toán ${resolvedTask.request_id}`
+          : taskResolution.method === "ambiguous"
+          ? `Phát hiện ${taskResolution.candidates.length} bài toán cần xác nhận`
+          : "Đã phân tích yêu cầu và phạm vi dữ liệu",
+        status: "completed",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: "step-2",
+        label: `Đã nạp ${focusedTasks.length} bài toán và ${loadedDocNames.length} tài liệu liên quan`,
+        status: "completed",
+        timestamp: new Date().toISOString(),
+      },
       { id: "step-3", label: "Suy luận phương án & tổng hợp đề xuất", status: "pending" },
       { id: "step-4", label: "Sinh phản hồi hoàn chỉnh", status: "pending" },
     ]
+    initialSteps[2] = { ...initialSteps[2], status: "running", timestamp: new Date().toISOString() }
     let currentSteps = [...initialSteps]
-    let accumulatedReasoning = ""
 
     const updateAssistantMsg = (patch: Partial<ChatMessage>) => {
       setThreads((prev) =>
@@ -1512,29 +1675,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       )
     }
 
-    // Step 1 -> Step 2
-    const timerStep1 = setTimeout(() => {
-      if (abortController.signal.aborted) return
-      currentSteps = [
-        { ...currentSteps[0], status: "completed" },
-        { ...currentSteps[1], status: "running" },
-        currentSteps[2],
-        currentSteps[3],
-      ]
-      updateAssistantMsg({ processSteps: currentSteps })
-    }, 450)
-
-    // Step 2 -> Step 3
-    const timerStep2 = setTimeout(() => {
-      if (abortController.signal.aborted) return
-      currentSteps = [
-        { ...currentSteps[0], status: "completed" },
-        { ...currentSteps[1], status: "completed" },
-        { ...currentSteps[2], status: "running" },
-        currentSteps[3],
-      ]
-      updateAssistantMsg({ processSteps: currentSteps })
-    }, 1000)
+    // Các bước 1–2 phản ánh thao tác resolver/retrieval đã thực sự hoàn thành ở trên.
+    // Không dùng timer mô phỏng tiến trình.
+    const timerStep1: number | undefined = undefined
+    const timerStep2: number | undefined = undefined
 
     try {
       const currentThread = threads.find((t) => t.id === targetThreadId)
@@ -1545,8 +1689,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       const history: PromptMessage[] = [...baseHistory, { role: "user", content: text }]
 
       // Enhanced context building: Luôn kết hợp Tasks + Artifacts + Intelligence
-      const allArtifacts = getStoredArtifacts()
       let contextStr = ""
+      const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
 
       if (isDocCommand) {
         const query = cleanText.replace(/^\/doc\s*/i, "").trim()
@@ -1559,7 +1703,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           artifacts: [], // Đã inject trực tiếp bên dưới
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         }) + `\n\n${docsSummary}\n\n` +
           `YÊU CẦU ĐẶC BIỆT:\n` +
           `Người dùng đang tra cứu và cần tư vấn dựa trên kho tài liệu nội bộ.\n` +
@@ -1569,11 +1713,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         const chartTopic = cleanText.replace(/^(\/chart|\/bieudo)\s*/i, "").trim()
         contextStr = buildEnrichedContext({
           intelligence,
-          tasks,
+          tasks: focusedTasks.length > 0 ? focusedTasks : tasks,
           artifacts: allArtifacts,
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         }) +
           `\n\n=== CHỈ DẪN VẼ BIỂU ĐỒ TRỰC QUAN ===\n` +
           `Người dùng yêu cầu vẽ biểu đồ số liệu cho nội dung: "${chartTopic || "Số liệu công việc và tiến độ"}".\n` +
@@ -1582,11 +1726,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         const flowTopic = cleanText.replace(/^(\/flow|\/sodo)\s*/i, "").trim()
         contextStr = buildEnrichedContext({
           intelligence,
-          tasks,
+          tasks: focusedTasks.length > 0 ? focusedTasks : tasks,
           artifacts: allArtifacts,
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         }) +
           `\n\n=== CHỈ DẪN XÂY DỰNG SƠ ĐỒ LUỒNG (FLOWCHART) ===\n` +
           `Người dùng yêu cầu xây dựng sơ đồ luồng: "${flowTopic || "Quy trình luồng nghiệp vụ"}".\n` +
@@ -1600,29 +1744,36 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           artifacts: allArtifacts,
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         }) +
           `\n\nYÊU CẦU: Tổng hợp báo cáo tiến độ các bài toán của người dùng, phát hiện rủi ro và đề xuất hành động cụ thể. Nếu có task cần cập nhật, hãy đề xuất qua khối \`\`\`task_update.`
       } else if (customContext) {
         // Custom context (ví dụ: chat với artifact cụ thể được chọn/đính kèm)
         contextStr = buildEnrichedContext({
           intelligence,
-          tasks,
+          tasks: focusedTasks,
           artifacts: [], // Không nạp allArtifacts để tránh nhồi các tài liệu khác!
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         }) + `\n\n${customContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời đầy đủ, trực tiếp câu hỏi của người dùng. Trích xuất chính xác nguyên văn các nguyên tắc, điều khoản hoặc quy định được hỏi. Trả lời chi tiết, có cấu trúc rõ ràng.`
       } else {
         // Default: Luôn gửi enriched context (tasks + artifacts summary)
         contextStr = buildEnrichedContext({
           intelligence,
-          tasks,
+          tasks: focusedTasks.length > 0 ? focusedTasks : tasks,
           artifacts: allArtifacts,
           userName,
           userRole: session?.role,
-          userQuery: cleanText,
+          userQuery: retrievalQuery,
         })
+      }
+
+      if (taskResolution.method === "ambiguous" && taskResolution.candidates.length > 0) {
+        const candidateList = taskResolution.candidates
+          .map((task) => `- [${task.request_id}] ${task.nickname || task.title}`)
+          .join("\n")
+        contextStr += `\n\n=== TASK_REFERENCE_AMBIGUOUS ===\n${candidateList}\nKhông phân tích hoặc đề xuất cập nhật cho đến khi người dùng xác nhận đúng một bài toán. Chỉ hỏi lại một câu ngắn.\n=== END_TASK_REFERENCE_AMBIGUOUS ===`
       }
 
       const promptMessages = buildChatPrompt(contextStr, history)
@@ -1647,9 +1798,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         streamAICompletion(
           promptMessages,
           {
-            onReasoningChunk: (reasoningDelta, fullReasoning) => {
+            onReasoningChunk: () => {
               if (abortController.signal.aborted) return
-              accumulatedReasoning = fullReasoning
               if (currentSteps[2].status !== "running") {
                 currentSteps = [
                   { ...currentSteps[0], status: "completed" },
@@ -1659,7 +1809,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 ]
               }
               updateAssistantMsg({
-                reasoning: accumulatedReasoning,
+                reasoning: traceData.retrievalSummary,
                 processSteps: currentSteps,
               })
               messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
@@ -1682,30 +1832,34 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 lastRenderTime = now
                 updateAssistantMsg({
                   content: accumulated,
-                  reasoning: accumulatedReasoning,
+                  reasoning: traceData.retrievalSummary,
                   processSteps: currentSteps,
                 })
                 messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
               }
             },
-            onComplete: (fullText, fullReasoning, responseMeta) => {
+            onComplete: (fullText, _fullReasoning, responseMeta) => {
               abortController.signal.removeEventListener("abort", onAbort)
               clearTimeout(timerStep1)
               clearTimeout(timerStep2)
               accumulated = fullText || accumulated
-              accumulatedReasoning = fullReasoning || accumulatedReasoning
-
               const durationSeconds = Number(Math.max(1, (Date.now() - startTime) / 1000).toFixed(1))
               currentSteps = currentSteps.map((s) => ({ ...s, status: "completed" }))
 
               const syntheticReasoning = responseMeta?.source === "local-fallback"
                 ? "Mô hình trực tuyến không khả dụng; ứng dụng đã xử lý yêu cầu bằng dữ liệu và quy tắc cục bộ."
-                : "Đã nhận phản hồi từ mô hình AI theo ngữ cảnh được cung cấp."
+                : traceData.retrievalSummary || "Đã nhận phản hồi từ mô hình AI theo ngữ cảnh được cung cấp."
 
-              const finalReasoning = accumulatedReasoning.trim() || syntheticReasoning
+              // Chỉ hiển thị trace truy xuất có thể kiểm chứng; không lưu hoặc hiển thị chain-of-thought thô của model.
+              const finalReasoning = syntheticReasoning
+
+              const grounded = groundAIResponse(accumulated, {
+                taskIds: focusedTasks.map((task) => task.request_id).filter(Boolean),
+                documentNames: loadedDocNames,
+              })
 
               updateAssistantMsg({
-                content: accumulated,
+                content: grounded.content,
                 reasoning: finalReasoning,
                 processSteps: currentSteps,
                 isThinkingComplete: true,
@@ -1713,6 +1867,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 responseSource: responseMeta?.source || "remote",
                 responseModel: responseMeta?.model,
                 responseProviderError: responseMeta?.providerError,
+                grounding: {
+                  taskIds: focusedTasks.map((task) => task.request_id).filter(Boolean),
+                  documentNames: loadedDocNames,
+                  confidence: resolvedTask ? taskResolution.confidence : (taskResolution.method === "ambiguous" ? 0.5 : 0.75),
+                  rejectedReferences: grounded.unknownTaskReferences,
+                },
               })
               resolve()
             },
@@ -1723,8 +1883,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               reject(err)
             },
           },
-          abortController.signal,
-          currentModel
+          {
+            model: currentModel,
+            signal: abortController.signal,
+            temperature: usesTaskContext || questionIntent.isDoc || questionIntent.isProductSpec
+              ? 0.25
+              : aiMode === "fast"
+              ? 0.3
+              : 0.55,
+            max_tokens: aiMode === "fast" ? 1200 : aiMode === "deep" ? 3200 : 2200,
+          }
         ).catch((err) => {
           abortController.signal.removeEventListener("abort", onAbort)
           clearTimeout(timerStep1)
@@ -1955,13 +2123,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
               {/* TOP TABS: [ Chats ]  [ Artifacts ] (ReUI Segmented Control Standard) */}
               <div className="pt-2 pb-1 px-0.5">
-                <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-muted/70 rounded-xl border border-slate-200/80 dark:border-border text-xs select-none">
-                  <button
+                <div
+                  onMouseLeave={() => setHoveredSidebarTab(null)}
+                  className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-muted/70 rounded-xl border border-slate-200/80 dark:border-border text-xs select-none relative"
+                >
+                  <motion.button
                     type="button"
                     onClick={() => {
                       setSidebarTab("chats")
                       setSearchQuery("")
                     }}
+                    onMouseEnter={() => setHoveredSidebarTab("chats")}
+                    whileTap={{ scale: 0.97 }}
                     className={cn(
                       "relative isolate py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs select-none font-semibold",
                       sidebarTab === "chats"
@@ -1969,21 +2142,31 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground font-medium"
                     )}
                   >
+                    {hoveredSidebarTab === "chats" && sidebarTab !== "chats" && (
+                      <motion.span
+                        layoutId="aichat-sidebar-tab-hover"
+                        className="absolute inset-0 bg-slate-200/50 dark:bg-neutral-800/60 rounded-lg -z-10"
+                        transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                      />
+                    )}
                     {sidebarTab === "chats" && (
                       <motion.span
                         layoutId="aichat-sidebar-tab-pill"
-                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-sm border border-slate-200/90 dark:border-border -z-10"
-                        transition={springs.indicator}
+                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-xs border border-slate-200/90 dark:border-border -z-10"
+                        transition={springs.floating}
                       />
                     )}
+                    <MessageSquare className="size-3.5 relative z-10 shrink-0" />
                     <span className="relative z-10">Chats</span>
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
                     onClick={() => {
                       setSidebarTab("artifacts")
                       setSearchQuery("")
                     }}
+                    onMouseEnter={() => setHoveredSidebarTab("artifacts")}
+                    whileTap={{ scale: 0.97 }}
                     className={cn(
                       "relative isolate py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs select-none font-semibold",
                       sidebarTab === "artifacts"
@@ -1991,61 +2174,86 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground font-medium"
                     )}
                   >
+                    {hoveredSidebarTab === "artifacts" && sidebarTab !== "artifacts" && (
+                      <motion.span
+                        layoutId="aichat-sidebar-tab-hover"
+                        className="absolute inset-0 bg-slate-200/50 dark:bg-neutral-800/60 rounded-lg -z-10"
+                        transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                      />
+                    )}
                     {sidebarTab === "artifacts" && (
                       <motion.span
                         layoutId="aichat-sidebar-tab-pill"
-                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-sm border border-slate-200/90 dark:border-border -z-10"
-                        transition={springs.indicator}
+                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-xs border border-slate-200/90 dark:border-border -z-10"
+                        transition={springs.floating}
                       />
                     )}
+                    <FolderOpen className="size-3.5 relative z-10 shrink-0" />
                     <span className="relative z-10">Artifacts</span>
-                  </button>
+                  </motion.button>
                 </div>
               </div>
 
               {/* 3. Action Button (New Chat OR Upload Artifact) */}
-              <div className="flex flex-col gap-1 pt-1">
-                {sidebarTab === "chats" ? (
-                  <motion.button
-                    type="button"
-                    onClick={handleCreateNewChat}
-                    {...tactileProps.button}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 h-9 text-xs sm:text-sm bg-white border border-slate-200/80 shadow-2xs hover:bg-slate-50 hover:border-slate-300 font-semibold text-slate-700 hover:text-slate-900 cursor-pointer transition-all"
-                  >
-                    <Plus className="size-4 stroke-[2.2]" />
-                    <span>Tạo đoạn chat mới</span>
-                  </motion.button>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    {canUploadArtifacts ? (
-                      <>
-                        <motion.button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          {...tactileProps.button}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 h-9 text-xs bg-slate-900 text-white font-semibold hover:bg-slate-800 active:bg-slate-950 cursor-pointer transition-colors shadow-xs"
-                        >
-                          <Upload className="size-3.5 stroke-[2.2]" />
-                          <span>Tải lên tài liệu</span>
-                        </motion.button>
-                        <motion.button
-                          type="button"
-                          onClick={() => setCreateArtifactModalOpen(true)}
-                          {...tactileProps.iconButton}
-                          className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 cursor-pointer transition-colors shadow-2xs"
-                          title="Tạo văn bản mới"
-                        >
-                          <Plus className="size-4" />
-                        </motion.button>
-                      </>
-                    ) : (
-                      <div className="w-full py-2 px-3 rounded-xl bg-slate-100 border border-slate-200/70 text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">
-                        <Lock className="size-3 shrink-0 text-amber-500" />
-                        <span>Kho tài liệu chỉ đọc (RBAC)</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div className="flex flex-col gap-1 pt-1 min-h-[38px] justify-center">
+                <AnimatePresence mode="wait" initial={false}>
+                  {sidebarTab === "chats" ? (
+                    <motion.div
+                      key="action-chats"
+                      initial={{ opacity: 0, scale: 0.98, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98, y: 2 }}
+                      transition={{ duration: 0.16, ease: easings.easeOutExpo }}
+                    >
+                      <motion.button
+                        type="button"
+                        onClick={handleCreateNewChat}
+                        {...tactileProps.button}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 h-9 text-xs sm:text-sm bg-white border border-slate-200/80 shadow-2xs hover:bg-slate-50 hover:border-slate-300 font-semibold text-slate-700 hover:text-slate-900 cursor-pointer transition-all"
+                      >
+                        <Plus className="size-4 stroke-[2.2]" />
+                        <span>Tạo đoạn chat mới</span>
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="action-artifacts"
+                      initial={{ opacity: 0, scale: 0.98, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98, y: 2 }}
+                      transition={{ duration: 0.16, ease: easings.easeOutExpo }}
+                      className="flex items-center gap-1.5"
+                    >
+                      {canUploadArtifacts ? (
+                        <>
+                          <motion.button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            {...tactileProps.button}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 h-9 text-xs bg-slate-900 text-white font-semibold hover:bg-slate-800 active:bg-slate-950 cursor-pointer transition-colors shadow-xs"
+                          >
+                            <Upload className="size-3.5 stroke-[2.2]" />
+                            <span>Tải lên tài liệu</span>
+                          </motion.button>
+                          <motion.button
+                            type="button"
+                            onClick={() => setCreateArtifactModalOpen(true)}
+                            {...tactileProps.iconButton}
+                            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 cursor-pointer transition-colors shadow-2xs"
+                            title="Tạo văn bản mới"
+                          >
+                            <Plus className="size-4" />
+                          </motion.button>
+                        </>
+                      ) : (
+                        <div className="w-full py-2 px-3 rounded-xl bg-slate-100 border border-slate-200/70 text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">
+                          <Lock className="size-3 shrink-0 text-amber-500" />
+                          <span>Kho tài liệu chỉ đọc (RBAC)</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
@@ -2410,6 +2618,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           intelligence={intelligence}
                           onOpenTask={(task) => setActiveDetailTask(task)}
                           onSendSuggestion={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
+                          onFeedback={(feedback) => handleMessageFeedback(m.id, feedback)}
                         />
                       ))}
                       <div ref={messagesEndRef} />
@@ -2421,7 +2630,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 <div className="shrink-0 px-3 sm:px-4 pb-3 pt-1 z-20 border-t border-slate-200/70 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-sm">
                   <EchoComposerForm
                     isStreaming={isStreaming}
-                    onSend={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
+                    onSend={(text, attachedImg) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name, undefined, attachedImg)}
                     onStop={handleStopStream}
                     onOpenArtifacts={() => setSidebarTab("artifacts")}
                     onUploadFile={() => {
@@ -2730,6 +2939,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       onRegenerate={() => handleRegenerateMessage(idx)}
                       onRetry={() => handleRetryMessage(idx)}
                       onEditPrompt={(newText) => handleEditUserPrompt(idx, newText)}
+                      onFeedback={(feedback) => handleMessageFeedback(m.id, feedback)}
                       onOpenArtifact={() => {
                         if (m.attachedArtifactName) {
                           const matched = artifacts.find(
@@ -2815,12 +3025,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
                 <EchoComposerForm
                   isStreaming={isStreaming}
-                  onSend={(text) => handleSendMessage(
+                  onSend={(text, attachedImg) => handleSendMessage(
                     text,
                     (selectedArtifact as any)
                       ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${(selectedArtifact as any)?.name}" (${(selectedArtifact as any)?.fileType}) ===\n${(selectedArtifact as any)?.content}`
                       : undefined,
-                    (selectedArtifact as any)?.name
+                    (selectedArtifact as any)?.name,
+                    undefined,
+                    attachedImg
                   )}
                   onStop={handleStopStream}
                   onOpenArtifacts={() => setSidebarTab("artifacts")}
@@ -3435,6 +3647,7 @@ interface EchoMessageRowProps {
   onRetry?: () => void
   onEditPrompt?: (newText: string) => void
   onOpenArtifact?: () => void
+  onFeedback?: (feedback: "up" | "down") => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4727,6 +4940,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   onRetry,
   onEditPrompt,
   onOpenArtifact,
+  onFeedback,
 }: EchoMessageRowProps) {
   const isUser = message.role === "user"
 
@@ -5092,6 +5306,8 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           onRegenerate={onRegenerate}
           onRetry={onRetry}
           onOpenArtifact={onOpenArtifact}
+          feedback={message.feedback}
+          onFeedback={onFeedback}
         />
       </div>
     </div>
@@ -5104,7 +5320,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
 interface EchoComposerFormProps {
   isStreaming: boolean
-  onSend: (text: string) => void
+  onSend: (text: string, attachedImage?: { file: File; dataUrl: string; name: string; size: string }) => void
   onStop: () => void
   onOpenArtifacts: () => void
   onUploadFile: () => void
@@ -5197,12 +5413,64 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
   onModeChange,
 }: EchoComposerFormProps) {
   const [text, setText] = useState("")
+  const [pastedImage, setPastedImage] = useState<{
+    file: File
+    dataUrl: string
+    name: string
+    size: string
+  } | null>(null)
+  const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [showCommands, setShowCommands] = useState(false)
   const [showMentions, setShowMentions] = useState(false)
   const [showModelMenu, setShowModelMenu] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modelMenuRef = useRef<HTMLDivElement>(null)
+
+  const processImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn hoặc dán tệp định dạng hình ảnh (.png, .jpg, .webp, .svg...)")
+      return
+    }
+    // Limit to 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Dung lượng ảnh vượt quá giới hạn 10MB.")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      if (dataUrl) {
+        const rawName = file.name && file.name !== "image.png" ? file.name : `Screenshot_${new Date().toLocaleTimeString().replace(/:/g, "-")}.png`
+        const sizeStr = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${(file.size / 1024).toFixed(1)} KB`
+        setPastedImage({
+          file,
+          dataUrl,
+          name: rawName,
+          size: sizeStr,
+        })
+        toast.success(`Đã đính kèm ảnh: ${rawName}`)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile()
+        if (file) {
+          e.preventDefault()
+          processImageFile(file)
+          return
+        }
+      }
+    }
+  }, [processImageFile])
 
   const currentModelObj = useMemo(() => {
     return POPULAR_AI_MODELS.find((m) => m.id === currentModel) || POPULAR_AI_MODELS[0]
@@ -5235,9 +5503,10 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
 
   const handleSend = () => {
     const trimmed = text.trim()
-    if (!trimmed || isStreaming) return
-    onSend(trimmed)
+    if ((!trimmed && !pastedImage) || isStreaming) return
+    onSend(trimmed, pastedImage || undefined)
     setText("")
+    setPastedImage(null)
     setShowCommands(false)
     setShowMentions(false)
     if (textareaRef.current) {
@@ -5517,7 +5786,28 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
       {/* Main JolyUI Interactive Container: Exact Match to Task Detail */}
       <div 
         onClick={() => textareaRef.current?.focus()}
-        className="relative rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card p-2.5 shadow-xs transition-all duration-200 focus-within:border-slate-300 dark:focus-within:border-neutral-700 focus-within:ring-2 focus-within:ring-slate-900/10 cursor-text"
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDraggingOver(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          setIsDraggingOver(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDraggingOver(false)
+          const droppedFile = e.dataTransfer.files?.[0]
+          if (droppedFile && droppedFile.type.startsWith("image/")) {
+            processImageFile(droppedFile)
+          }
+        }}
+        className={cn(
+          "relative rounded-2xl border bg-white dark:bg-card p-2.5 shadow-xs transition-all duration-200 focus-within:ring-2 focus-within:ring-slate-900/10 cursor-text",
+          isDraggingOver
+            ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/20"
+            : "border-slate-200/90 dark:border-neutral-800 focus-within:border-slate-300 dark:focus-within:border-neutral-700"
+        )}
       >
         {/* Active Document Context Chip when an artifact is open */}
         {activeArtifact && (
@@ -5542,11 +5832,45 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           </div>
         )}
 
+        {/* Pasted/Dropped Image Attachment Preview Chip */}
+        {pastedImage && (
+          <div className="flex items-center justify-between p-2 mb-2 rounded-xl bg-slate-50 dark:bg-neutral-800/80 border border-slate-200/90 dark:border-neutral-700/80 shadow-2xs animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="size-11 rounded-lg overflow-hidden border border-slate-200 dark:border-neutral-700 bg-black/5 shrink-0 flex items-center justify-center">
+                <img src={pastedImage.dataUrl} alt={pastedImage.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <ImageIcon className="size-3.5 text-amber-500 shrink-0" />
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate block">
+                    {pastedImage.name}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {pastedImage.size} • Sẵn sàng gửi kèm câu hỏi
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPastedImage(null)
+              }}
+              className="size-6 rounded-md hover:bg-slate-200 dark:hover:bg-neutral-700 flex items-center justify-center text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+              title="Gỡ ảnh đính kèm"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Dynamic Auto-Expanding Textarea */}
         <textarea
           ref={textareaRef}
           value={text}
           onChange={handleTextChange}
+          onPaste={handlePaste}
           onKeyDown={(e) => {
             if (showCommands) {
               if (e.key === "Tab") {
@@ -5599,7 +5923,13 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           aria-label="Soạn câu hỏi cho AI (Enter để gửi, Shift+Enter để xuống dòng)"
           aria-expanded={showCommands || showMentions}
           aria-haspopup="listbox"
-          placeholder={activeArtifact ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...` : "Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"}
+          placeholder={
+            pastedImage
+              ? "Nhập câu hỏi hoặc yêu cầu phân tích về ảnh này (Enter để gửi ngay)..."
+              : activeArtifact
+              ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...`
+              : "Nhập nội dung trao đổi, hoặc dán ảnh chụp màn hình (Ctrl+V)... (Gõ / để gọi lệnh)"
+          }
           className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
 
@@ -5698,10 +6028,10 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
               <motion.button
                 type="button"
                 onClick={handleSend}
-                disabled={!text.trim()}
+                disabled={!text.trim() && !pastedImage}
                 {...tactileProps.button}
                 className={`size-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                  text.trim()
+                  text.trim() || pastedImage
                     ? "bg-slate-900 text-white hover:bg-slate-800 shadow-xs"
                     : "bg-slate-100 text-slate-300 cursor-not-allowed"
                 }`}
