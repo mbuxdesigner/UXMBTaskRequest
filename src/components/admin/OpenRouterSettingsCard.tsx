@@ -49,7 +49,14 @@ const CURATED_FREE_MODELS = [
     name: "Google Gemma 4 31B",
     tag: "Khuyên dùng",
     tagClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
-    desc: "DeepMind 31B mới nhất, văn phong tiếng Việt rất tự nhiên, phân tích sâu.",
+    desc: "DeepMind 31B mới nhất, văn phong tiếng Việt rất tự nhiên, phân tích UX sâu.",
+  },
+  {
+    id: "gemini-auto",
+    name: "Gemini Flash (Google AI)",
+    tag: "Vision 1.500 RPD",
+    tagClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
+    desc: "Gọi trực tiếp Google AI Studio, đọc ảnh chụp màn hình UI, miễn phí 1.500 lượt/ngày.",
   },
   {
     id: "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -61,16 +68,9 @@ const CURATED_FREE_MODELS = [
   {
     id: "qwen/qwen3.8-27b:free",
     name: "Qwen 3.8 27B Vision",
-    tag: "Code & UX",
+    tag: "Code & Mermaid",
     tagClass: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800",
-    desc: "Xuất sắc về Mermaid diagram, cấu trúc bảng, frontend code & flow nghiệp vụ.",
-  },
-  {
-    id: "nvidia/nemotron-3.5-lightning:free",
-    name: "Nemotron 3.5 Lightning",
-    tag: "Siêu tốc",
-    tagClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800",
-    desc: "Tốc độ phản hồi tức thì, độ trễ cực thấp, tra cứu nhanh thông tin.",
+    desc: "Xuất sắc về Mermaid diagram, cấu trúc bảng dữ liệu, frontend code & flow nghiệp vụ.",
   },
 ]
 

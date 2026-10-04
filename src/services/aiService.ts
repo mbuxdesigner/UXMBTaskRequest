@@ -149,30 +149,30 @@ export interface AIModelOption {
   contextLength?: string
 }
 
-export const DEFAULT_AI_MODEL = "openrouter/free"
+export const DEFAULT_AI_MODEL = "google/gemma-4-31b-it:free"
 
 export const POPULAR_AI_MODELS: AIModelOption[] = [
-  {
-    id: "gemini-auto",
-    name: "Gemini Flash tự động (Google AI Studio)",
-    provider: "Google AI Studio",
-    description: "Tự phát hiện model Gemini Flash miễn phí đang khả dụng cho API Key",
-    badge: "Tự động",
-    contextLength: "1M",
-  },
   {
     id: "google/gemma-4-31b-it:free",
     name: "Google Gemma 4 31B",
     provider: "Google DeepMind",
-    description: "Mô hình mới nhất của Google DeepMind, suy luận sâu, tiếng Việt chuẩn xác",
+    description: "Mô hình mới nhất của Google DeepMind, tư duy UX sâu sắc, văn phong tiếng Việt chuẩn xác",
     badge: "Khuyên dùng",
     contextLength: "262K",
+  },
+  {
+    id: "gemini-auto",
+    name: "Gemini Flash (Google AI Studio Direct)",
+    provider: "Google AI Studio",
+    description: "Kết nối trực tiếp máy chủ Google, đọc hiểu ảnh Vision, miễn phí 1.500 RPD",
+    badge: "Vision Free",
+    contextLength: "1M",
   },
   {
     id: "nvidia/nemotron-3-ultra-550b-a55b:free",
     name: "Nemotron 3 Ultra 550B",
     provider: "NVIDIA",
-    description: "Siêu mô hình 550B MoE, suy luận logic sâu (Frontier Reasoning)",
+    description: "Siêu mô hình 550B MoE, suy luận logic sâu (Frontier Reasoning), ngữ cảnh 1M",
     badge: "550B MoE",
     contextLength: "1M",
   },
@@ -180,49 +180,9 @@ export const POPULAR_AI_MODELS: AIModelOption[] = [
     id: "qwen/qwen3.8-27b:free",
     name: "Qwen 3.8 27B Vision",
     provider: "Alibaba",
-    description: "Top 1 về code, vẽ biểu đồ Mermaid, phân tích UX và luồng nghiệp vụ",
-    badge: "Code & UX",
+    description: "Top 1 về code, vẽ biểu đồ Mermaid, cấu trúc bảng dữ liệu và luồng UX",
+    badge: "Code & Mermaid",
     contextLength: "262K",
-  },
-  {
-    id: "google/gemma-4-26b-a4b-it:free",
-    name: "Google Gemma 4 26B MoE",
-    provider: "Google DeepMind",
-    description: "Kiến trúc MoE hiệu năng cao từ Google, cân bằng tốc độ và độ chuẩn xác",
-    badge: "Gọn nhẹ",
-    contextLength: "262K",
-  },
-  {
-    id: "nvidia/nemotron-3.5-lightning:free",
-    name: "Nemotron 3.5 Lightning",
-    provider: "NVIDIA",
-    description: "Phản hồi siêu tốc, độ trễ cực thấp, ngữ cảnh 1 triệu tokens",
-    badge: "Siêu tốc",
-    contextLength: "1M",
-  },
-  {
-    id: "cohere/north-mini-code:free",
-    name: "Cohere North Code",
-    provider: "Cohere",
-    description: "Chuyên biệt lập trình tác vụ, cấu trúc dữ liệu JSON và tài liệu",
-    badge: "Coding Agent",
-    contextLength: "256K",
-  },
-  {
-    id: "thinkingmachines/inkling:free",
-    name: "TM Inkling 41B",
-    provider: "Thinking Machines",
-    description: "Mô hình MoE 41B active tham số, tư duy sáng tạo & đa phương thức",
-    badge: "Multimodal",
-    contextLength: "1M",
-  },
-  {
-    id: "openrouter/free",
-    name: "Auto Free Router",
-    provider: "OpenRouter",
-    description: "Tự động điều phối đến mô hình Free sẵn sàng tốt nhất (Chống nghẽn tải)",
-    badge: "Tự động",
-    contextLength: "200K",
   },
 ]
 

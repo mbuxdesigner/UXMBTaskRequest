@@ -2524,32 +2524,32 @@ runTest("Integration", "INT-MD-05", "Verify Table cell normalization (strip **, 
   assert.ok(!isNaN(Number(cleanNumeric("**70%**"))), "70% must parse to valid number")
 })
 
-runTest("Integration", "INT-MOTION-01", "AIChatPage: verify AnimatePresence mode='wait' & easeOutExpo tab transitions", () => {
+runTest("Integration", "INT-MOTION-01", "AIChatPage: verify AnimatePresence mode='wait', chat continuity & split view motion", () => {
   const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8")
 
   // 1. Sidebar tab switcher has floating pill with springs.floating and hover layoutId
   assert.ok(pageSrc.includes('layoutId="aichat-sidebar-tab-pill"'), "Tab switcher must have layoutId for active floating pill")
   assert.ok(pageSrc.includes('layoutId="aichat-sidebar-tab-hover"'), "Tab switcher must have hover preview pill")
 
-  // 2. Sidebar content wrapped in AnimatePresence mode="wait"
+  // 2. Sidebar content wrapped in AnimatePresence mode="wait" for smooth list toggling
   assert.ok(pageSrc.includes('key="sidebar-chats-list"'), "Sidebar chats list must have unique key for AnimatePresence")
   assert.ok(pageSrc.includes('key="sidebar-artifacts-list"'), "Sidebar artifacts list must have unique key for AnimatePresence")
 
-  // 3. Top header title wrapped in AnimatePresence mode="wait"
-  assert.ok(pageSrc.includes('key="header-artifacts-hub"'), "Header must have key for Artifacts hub title")
+  // 3. User stays in current chat when clicking Artifacts (no standalone hub interruption)
+  assert.ok(pageSrc.includes('key={`main-view-chats-${activeThread?.id || "empty"}`}'), "Main canvas stays in Chat Stream when no artifact selected")
+  assert.ok(pageSrc.includes('key={`main-view-split-${selectedArtifact.id}`}'), "Main canvas smoothly transitions to Split Viewer when user clicks an artifact")
+  assert.ok(!pageSrc.includes('key="main-view-artifacts-hub"'), "Standalone Artifacts Hub must not replace the active chat conversation")
 
-  // 4. Main canvas viewport wrapped in AnimatePresence mode="wait" with easeOutExpo
-  assert.ok(pageSrc.includes('key="main-view-artifacts-hub"'), "Main canvas must have key for Artifacts Hub")
-  assert.ok(pageSrc.includes('key={`main-view-chats-${activeThread?.id || "empty"}`}'), "Main canvas must have key for Chat Stream")
+  // 4. Tab transitions use Apple HIG easeOutExpo curve
   assert.ok(pageSrc.includes('easings.easeOutExpo'), "Tab transitions must use Apple HIG easeOutExpo curve")
 })
 
-runTest("Integration", "INT-MOTION-02", "AIChatPage: verify cascadeWaveContainerVariants & item variants in Artifacts Hub", () => {
+runTest("Integration", "INT-MOTION-02", "AIChatPage: verify cascadeWaveContainerVariants & item variants in sidebar document list", () => {
   const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8")
 
-  // Check cascade wave applied in Artifacts Hub
-  assert.ok(pageSrc.includes("variants={cascadeWaveContainerVariants}"), "Artifacts Hub must use cascadeWaveContainerVariants")
-  assert.ok(pageSrc.includes("variants={cascadeWaveItemVariants}"), "Artifacts Hub items must use cascadeWaveItemVariants")
+  // Check cascade wave applied in Sidebar Artifacts List
+  assert.ok(pageSrc.includes("variants={cascadeWaveContainerVariants}"), "Sidebar list must use cascadeWaveContainerVariants")
+  assert.ok(pageSrc.includes("variants={cascadeWaveItemVariants}"), "Sidebar list items must use cascadeWaveItemVariants")
 })
 
 runTest("Integration", "INT-GATEWAY-01", "aiService: verify DEFAULT_GEMINI_MODEL and resilient fallback", () => {
