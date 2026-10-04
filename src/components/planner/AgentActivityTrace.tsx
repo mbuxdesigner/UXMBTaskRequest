@@ -111,6 +111,7 @@ export function AgentActivityTrace({
   dominantPhaseText,
   todayEvents = [],
   discussionCount = 0,
+  loadedDocNames = [],
   isRefreshing = false,
   onComplete,
   onOpenTask,
