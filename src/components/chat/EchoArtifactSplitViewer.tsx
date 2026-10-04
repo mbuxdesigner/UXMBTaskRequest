@@ -8,7 +8,10 @@ import {
   Copy,
   Check,
   File,
-  Trash2
+  Trash2,
+  Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -33,6 +36,14 @@ function getArtifactIcon(fileType: string, ext?: string) {
       color: "text-rose-500/90 dark:text-rose-400 stroke-[1.5]",
       bg: "bg-rose-50/60 dark:bg-rose-950/30 border-rose-200/50 dark:border-rose-900/40",
       label: "PDF",
+    }
+  }
+  if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(normalized) || fileType === "image") {
+    return {
+      icon: ImageIcon,
+      color: "text-amber-500/90 dark:text-amber-400 stroke-[1.5]",
+      bg: "bg-amber-50/60 dark:bg-amber-950/30 border-amber-200/50 dark:border-amber-900/40",
+      label: normalized === "image" ? "IMG" : normalized.toUpperCase(),
     }
   }
   if (["ts", "tsx", "js", "jsx", "code", "json"].includes(normalized) || fileType === "code" || fileType === "json") {
@@ -60,14 +71,171 @@ function getArtifactIcon(fileType: string, ext?: string) {
 }
 
 /**
- * Inline text parser for bold **text**, italic *text*, and `code`
+ * Extract Google Drive file ID from various link and thumbnail formats
  */
-function formatInlineText(text: string): React.ReactNode {
+function getGoogleDriveFileId(url?: string): string {
+  if (!url) return ""
+  const dMatch = url.match(/\/d\/([^/?#]+)/i)
+  if (dMatch?.[1]) return dMatch[1]
+  try {
+    const parsed = new URL(url)
+    return parsed.searchParams.get("id") || ""
+  } catch {
+    return ""
+  }
+}
+
+interface EchoArtifactImageViewerProps {
+  src: string
+  alt?: string
+  fileId?: string
+  driveUrl?: string
+  thumbnailUrl?: string
+}
+
+function EchoArtifactImageViewer({
+  src,
+  alt,
+  fileId,
+  driveUrl,
+  thumbnailUrl,
+}: EchoArtifactImageViewerProps) {
+  const fId = fileId || getGoogleDriveFileId(src) || getGoogleDriveFileId(thumbnailUrl) || getGoogleDriveFileId(driveUrl)
+
+  const candidates = useMemo(() => {
+    const list: string[] = []
+    // 1. Data URL (Base64) - loads immediately offline and online
+    if (src && src.startsWith("data:")) {
+      list.push(src)
+    }
+    // 2. Thumbnail URL if provided
+    if (thumbnailUrl) {
+      list.push(thumbnailUrl)
+    }
+    // 3. Google Drive fileId endpoints with high-res thumbnails
+    if (fId) {
+      list.push(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fId)}&sz=w1600`)
+      list.push(`https://lh3.googleusercontent.com/d/${encodeURIComponent(fId)}`)
+      list.push(`https://drive.google.com/uc?export=view&id=${encodeURIComponent(fId)}`)
+    }
+    // 4. Regular image src if not data URL and not already included
+    if (src && !src.startsWith("data:") && !list.includes(src)) {
+      list.push(src)
+    }
+    if (driveUrl && !list.includes(driveUrl)) {
+      list.push(driveUrl)
+    }
+    return Array.from(new Set(list.filter(Boolean)))
+  }, [src, fId, driveUrl, thumbnailUrl])
+
+  const [candidateIndex, setCandidateIndex] = useState(0)
+  const [hasError, setHasError] = useState(false)
+  const [isZoomed, setIsZoomed] = useState(false)
+
+  const currentSrc = candidates[candidateIndex]
+
+  const handleImgError = () => {
+    if (candidateIndex < candidates.length - 1) {
+      setCandidateIndex((prev) => prev + 1)
+    } else {
+      setHasError(true)
+    }
+  }
+
+  const driveViewUrl = driveUrl || (fId ? `https://drive.google.com/file/d/${fId}/view` : undefined)
+
+  if (hasError || !currentSrc) {
+    return (
+      <div className="my-4 p-5 rounded-2xl border border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/40 text-center space-y-3">
+        <div className="size-11 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 mx-auto flex items-center justify-center shadow-2xs">
+          <ImageIcon className="size-5" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-slate-800 dark:text-neutral-200">
+            {alt || "Hình ảnh thiết kế"}
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
+            Ảnh được lưu trữ an toàn trên Google Drive. Một số trình duyệt chặn tải ảnh trực tiếp do chính sách cookie bên thứ ba.
+          </p>
+        </div>
+        {driveViewUrl && (
+          <a
+            href={driveViewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-neutral-200 hover:text-slate-900 dark:hover:text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <ExternalLink className="size-3.5" />
+            <span>Mở ảnh trên Google Drive</span>
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="my-4 group relative rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-slate-50/70 dark:bg-neutral-900/60 overflow-hidden shadow-2xs transition-all">
+      <div
+        className={cn(
+          "relative overflow-hidden cursor-zoom-in transition-all flex items-center justify-center p-2 sm:p-4 select-none",
+          isZoomed ? "max-h-none cursor-zoom-out bg-black/5 dark:bg-white/5" : "max-h-[540px]"
+        )}
+        onClick={() => setIsZoomed(!isZoomed)}
+        title={isZoomed ? "Thu nhỏ lại" : "Bấm để phóng to ảnh"}
+      >
+        <img
+          src={currentSrc}
+          alt={alt || "Ảnh thiết kế"}
+          onError={handleImgError}
+          className={cn(
+            "rounded-xl object-contain transition-transform duration-200",
+            isZoomed ? "w-auto max-w-full" : "w-auto max-w-full max-h-[500px] hover:scale-[1.008]"
+          )}
+          loading="lazy"
+        />
+
+        {/* Floating Zoom Action Badge */}
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-slate-900/75 dark:bg-neutral-800/90 backdrop-blur-xs text-white text-[11px] font-medium px-2.5 py-1 rounded-lg select-none shadow-xs pointer-events-none">
+          {isZoomed ? <ZoomOut className="size-3.5" /> : <ZoomIn className="size-3.5" />}
+          <span>{isZoomed ? "Thu nhỏ" : "Phóng to"}</span>
+        </div>
+      </div>
+
+      {/* Footer Info & Drive Link */}
+      {(alt || driveViewUrl) && (
+        <div className="px-3.5 py-2 border-t border-slate-200/60 dark:border-neutral-800/80 bg-white/80 dark:bg-neutral-900/80 flex items-center justify-between text-[11.5px] text-slate-500 dark:text-neutral-400">
+          <span className="truncate max-w-[75%] font-medium text-slate-700 dark:text-neutral-300">
+            {alt || "Ảnh tài liệu"}
+          </span>
+          {driveViewUrl && (
+            <a
+              href={driveViewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-blue-600 dark:hover:text-blue-400 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-colors"
+            >
+              <span>Xem Drive</span>
+              <ExternalLink className="size-3" />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Inline text parser for bold **text**, italic *text*, code, and embedded images/links
+ */
+function formatInlineText(
+  text: string,
+  contextMeta?: { fileId?: string; driveUrl?: string; thumbnailUrl?: string }
+): React.ReactNode {
   if (!text) return null
 
   // Auto-bold key-value prefix if not already markdown formatted
   // e.g. "Định vị UX: ..." or "Lãi suất: ..." -> bold "Định vị UX:"
-  if (!text.includes("**") && !text.includes("*") && !text.includes("`")) {
+  if (!text.includes("**") && !text.includes("*") && !text.includes("`") && !text.includes("![")) {
     const colonMatch = text.match(/^([A-ZÀ-Ỹa-zà-ỹ0-9\s/]{2,30}:)(\s+.*)?$/)
     if (colonMatch) {
       return (
@@ -79,9 +247,9 @@ function formatInlineText(text: string): React.ReactNode {
     }
   }
 
-  // Regex splitting by bold, inline code, and links
+  // Regex splitting by bold, inline code, images (![alt](url)), and links ([title](url))
   const parts: React.ReactNode[] = []
-  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g
   let lastIdx = 0
   let match: RegExpExecArray | null
 
@@ -116,6 +284,22 @@ function formatInlineText(text: string): React.ReactNode {
           {token.slice(1, -1)}
         </em>
       )
+    } else if (token.startsWith("![") && token.includes("](")) {
+      const imgMatch = token.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+      if (imgMatch) {
+        parts.push(
+          <EchoArtifactImageViewer
+            key={`inline-img-${match.index}`}
+            src={imgMatch[2]}
+            alt={imgMatch[1]}
+            fileId={contextMeta?.fileId}
+            driveUrl={contextMeta?.driveUrl}
+            thumbnailUrl={contextMeta?.thumbnailUrl}
+          />
+        )
+      } else {
+        parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
+      }
     } else if (token.startsWith("[") && token.includes("](")) {
       const titleMatch = token.match(/\[([^\]]+)\]\(([^)]+)\)/)
       if (titleMatch) {
@@ -249,6 +433,24 @@ export function EchoArtifactSplitViewer({
       // 2. Notion Divider (---)
       if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
         elements.push(<hr key={`hr-${i}`} className="my-6 border-0 h-[1px] bg-[#E9E9E7]" />)
+        i++
+        continue
+      }
+
+      // 2b. Standalone Image Block (![alt](url))
+      const standaloneImgMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+      if (standaloneImgMatch) {
+        elements.push(
+          <div key={`img-block-${i}`} className="my-3">
+            <EchoArtifactImageViewer
+              src={standaloneImgMatch[2]}
+              alt={standaloneImgMatch[1] || artifact.name}
+              fileId={artifact.driveFileId}
+              driveUrl={artifact.driveUrl}
+              thumbnailUrl={artifact.driveThumbnailUrl}
+            />
+          </div>
+        )
         i++
         continue
       }
@@ -532,6 +734,7 @@ export function EchoArtifactSplitViewer({
           lTrim.startsWith("> ") ||
           lTrim === "---" ||
           lTrim === "***" ||
+          lTrim.startsWith("![") ||
           (lTrim.startsWith("|") && lTrim.endsWith("|")) ||
           /^(\s*)([-*+•◦▪])\s+/.test(rawLines[i]) ||
           /^\d+\.\s+/.test(lTrim) ||
@@ -546,8 +749,36 @@ export function EchoArtifactSplitViewer({
       if (paraLines.length > 0) {
         elements.push(
           <p key={`p-${startIdx}`} className="text-[15px] sm:text-[15.5px] text-[#37352F] leading-[1.65] font-normal my-2">
-            {formatInlineText(paraLines.join(" "))}
+            {formatInlineText(paraLines.join(" "), {
+              fileId: artifact.driveFileId,
+              driveUrl: artifact.driveUrl,
+              thumbnailUrl: artifact.driveThumbnailUrl,
+            })}
           </p>
+        )
+      }
+    }
+
+    // Auto-prepend image preview for image files if not already in markdown
+    const isImageArtifact =
+      ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext) ||
+      artifact.fileType === "image" ||
+      artifact.tags?.includes("Ảnh")
+
+    const hasImageBlock = /!\[.*?\]\(.*?\)/.test(artifact.content)
+    if (isImageArtifact && !hasImageBlock) {
+      const candidateSrc = artifact.driveThumbnailUrl || artifact.driveUrl || ""
+      if (candidateSrc) {
+        elements.unshift(
+          <div key="auto-top-img-preview" className="mb-4">
+            <EchoArtifactImageViewer
+              src={candidateSrc}
+              alt={artifact.name}
+              fileId={artifact.driveFileId}
+              driveUrl={artifact.driveUrl}
+              thumbnailUrl={artifact.driveThumbnailUrl}
+            />
+          </div>
         )
       }
     }
@@ -558,7 +789,7 @@ export function EchoArtifactSplitViewer({
       </div>
     )
 
-  }, [artifact.content, artifact.fileType, artifact.name, isCopied])
+  }, [artifact.content, artifact.fileType, artifact.name, artifact.driveFileId, artifact.driveThumbnailUrl, artifact.driveUrl, ext, isCopied])
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white h-full border-l border-slate-200/80">

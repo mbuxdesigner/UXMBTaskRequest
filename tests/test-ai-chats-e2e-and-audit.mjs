@@ -2463,6 +2463,67 @@ runTest("Integration", "INT-ROUTER-03", "Verify Vietnamese semantic matching for
   assert.ok(qNorm.includes("san pham"), "Normalized query must contain 'san pham'")
 })
 
+runTest("Integration", "INT-MD-01", "Verify Markdown Headings extraction and level detection (#, ##, ###)", () => {
+  const h1 = "# Tiêu đề chính".match(/^#{1,2}\s+(.+)$/)
+  const h2 = "## 1. Thông tin tổng quan".match(/^#{1,2}\s+(.+)$/)
+  const h3 = "### 1. Thông tin định danh & Quản trị".match(/^#{3,4}\s+(.+)$/)
+  const h4 = "#### Ghi chú chi tiết".match(/^#{3,4}\s+(.+)$/)
+
+  assert.ok(h1 && h1[1] === "Tiêu đề chính", "H1 must match correctly")
+  assert.ok(h2 && h2[1] === "1. Thông tin tổng quan", "H2 must match correctly")
+  assert.ok(h3 && h3[1] === "1. Thông tin định danh & Quản trị", "H3 must match correctly")
+  assert.ok(h4 && h4[1] === "Ghi chú chi tiết", "H4 must match correctly")
+})
+
+runTest("Integration", "INT-MD-02", "Verify Markdown Divider / Horizontal Rule (---, ***, ___)", () => {
+  const hrRegex = /^([*\-_])\s*(?:\1\s*){2,}$/
+  assert.ok(hrRegex.test("---"), "--- must match hr")
+  assert.ok(hrRegex.test("***"), "*** must match hr")
+  assert.ok(hrRegex.test("___"), "___ must match hr")
+  assert.ok(hrRegex.test("- - -"), "- - - must match hr")
+  assert.ok(!hrRegex.test("--"), "-- must not match hr")
+  assert.ok(!hrRegex.test("abc ---"), "mixed text must not match hr")
+})
+
+runTest("Integration", "INT-MD-03", "Verify Markdown List bullets (-, *, +, •) and numbered lists (1., 2.)", () => {
+  const ulRegex = /^[-*+•]\s+(.+)$/
+  const olRegex = /^(\d+)[\.)]\s+(.+)$/
+
+  assert.ok(ulRegex.test("- Mã bài toán: UXMB-001"), "- bullet must match")
+  assert.ok(ulRegex.test("* Tên bài toán: eKYC"), "* bullet must match")
+  assert.ok(ulRegex.test("• Designer: Nguyễn Văn A"), "• bullet must match")
+  assert.ok(olRegex.test("1. Khảo sát nhu cầu người dùng"), "1. numbered list must match")
+  assert.ok(olRegex.test("2) Lên wireframe chi tiết"), "2) numbered list must match")
+})
+
+runTest("Integration", "INT-MD-04", "Verify Key-Value prefix detection and Task ID / Status extraction", () => {
+  const kvRegex = /^([*_]*)([A-ZÀ-Ỹa-zà-ỹ0-9\s/()._#=\-]{2,45})(?::[*_]*|[*_]*:)\s*(.*)$/
+  
+  const m1 = "Mã bài toán: UXMB-20260908-008".match(kvRegex)
+  assert.ok(m1 && m1[2].trim() === "Mã bài toán" && m1[3].trim() === "UXMB-20260908-008")
+
+  const m2 = "*Chất lượng thực tế = Figma:* Tỷ lệ hoàn thành 95%".match(kvRegex)
+  assert.ok(m2 && m2[2].trim() === "Chất lượng thực tế = Figma" && m2[3].trim() === "Tỷ lệ hoàn thành 95%")
+
+  const m3 = "- Trạng thái: Đang thực hiện (70%)".replace(/^[-*+•]\s+/, "").match(kvRegex)
+  assert.ok(m3 && m3[2].trim() === "Trạng thái" && m3[3].trim() === "Đang thực hiện (70%)")
+
+  const taskMatch = "UXMB-20260908-008".match(/^UXMB-[\w-]+$/)
+  assert.ok(taskMatch, "Task ID regex must validate UXMB format")
+})
+
+runTest("Integration", "INT-MD-05", "Verify Table cell normalization (strip **, ``, %, auto numeric check)", () => {
+  const clean = (val) => val.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").trim()
+  const cleanNumeric = (val) => clean(val).replace(/[%,\s]/g, "")
+
+  assert.strictEqual(clean("**Mã bài toán**"), "Mã bài toán")
+  assert.strictEqual(clean("`UXMB-20260908-008`"), "UXMB-20260908-008")
+  assert.strictEqual(clean("**Đang thực hiện**"), "Đang thực hiện")
+  assert.strictEqual(cleanNumeric("**70%**"), "70")
+  assert.strictEqual(cleanNumeric("1,250"), "1250")
+  assert.ok(!isNaN(Number(cleanNumeric("**70%**"))), "70% must parse to valid number")
+})
+
 // ==============================================================================
 // TEST RESULTS SUMMARY & VERIFICATION
 // ==============================================================================

@@ -12,7 +12,7 @@
 export interface UXArtifact {
   id: string
   name: string
-  fileType: "markdown" | "pdf" | "code" | "csv" | "text" | "json"
+  fileType: "markdown" | "pdf" | "code" | "csv" | "text" | "json" | "image"
   size: string
   updatedAt: string
   content: string

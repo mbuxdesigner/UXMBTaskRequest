@@ -52,6 +52,7 @@ import {
   CloudOff,
   RefreshCw,
   Key,
+  Image as ImageIcon,
 } from "lucide-react"
 import { EchoInteractiveChart, EchoMermaidFlowchart } from "@/components/common/EchoChartsAndFlowcharts"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
@@ -1027,16 +1028,20 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         const driveDownloadUrl = driveRes.downloadUrl
 
         if (isImage) {
-          // Tạo nội dung Markdown tham chiếu ảnh từ Google Drive
-          let imageEmbedUrl = driveThumbnailUrl || driveUrl
-          if (!imageEmbedUrl) {
-            imageEmbedUrl = await new Promise<string>((resolve) => {
-              const r = new FileReader()
-              r.onload = (e) => resolve((e.target?.result as string) || "")
-              r.onerror = () => resolve("")
-              r.readAsDataURL(file)
-            })
-          }
+          // Tạo data URL cục bộ tức thì để hiển thị mượt mà không phụ thuộc cookie Google Drive
+          let localDataUrl = ""
+          try {
+            if (file.size < 4 * 1024 * 1024) {
+              localDataUrl = await new Promise<string>((resolve) => {
+                const r = new FileReader()
+                r.onload = (e) => resolve((e.target?.result as string) || "")
+                r.onerror = () => resolve("")
+                r.readAsDataURL(file)
+              })
+            }
+          } catch {}
+
+          const imageEmbedUrl = localDataUrl || driveThumbnailUrl || driveUrl
 
           const driveLinksMd = driveUrl
             ? `\n\n[🔗 Mở xem trên Google Drive](${driveUrl}) · [📥 Tải file gốc](${driveDownloadUrl || driveUrl})\n\n`
@@ -1044,7 +1049,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
           const newArt = addArtifact({
             name: fileName,
-            fileType: "markdown",
+            fileType: "image",
             size: formatFileSize(driveRes.fileSize || file.size),
             content: `# ${fileName}\n\n![${fileName}](${imageEmbedUrl})${driveLinksMd}*Ảnh màn hình / tài liệu thiết kế do ${userName} tải lên và lưu trữ an toàn trên Google Drive.*`,
             summary: `Ảnh thiết kế / tư liệu: ${fileName}${driveUrl ? " (Đã lưu Google Drive)" : ""}`,
@@ -2164,7 +2169,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     const isPdf = art.fileType === "pdf" || ext === "pdf"
                     const isCode = ["ts", "tsx", "js", "json", "code"].includes(art.fileType) || ["ts", "tsx", "js", "json"].includes(ext)
                     const isCsv = art.fileType === "csv" || ext === "csv"
-                    const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext)
+                    const isImage = ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext) || art.fileType === "image" || art.tags?.includes("Ảnh")
 
                     return (
                       <motion.div
@@ -2191,7 +2196,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         ) : isCsv ? (
                           <FileSpreadsheet className="size-4 shrink-0 text-emerald-500 stroke-[1.8]" />
                         ) : isImage ? (
-                          <FileText className="size-4 shrink-0 text-amber-500 stroke-[1.8]" />
+                          <ImageIcon className="size-4 shrink-0 text-amber-500 stroke-[1.8]" />
                         ) : (
                           <FileText className="size-4 shrink-0 text-slate-500 stroke-[1.8]" />
                         )}
@@ -3461,6 +3466,341 @@ interface ReferencedDoc {
 }
 
 /**
+ * Trình hỗ trợ phân tích và hiển thị Inline Markdown tokens
+ */
+function formatRawWords(raw: string): React.ReactNode {
+  if (!raw) return null
+
+  // Tự động nhận diện Task Code dạng UXMB-YYYYMMDD-XXX hoặc UXMB-... trong văn bản thuần
+  if (/(UXMB-[A-Za-z0-9_-]+)/.test(raw)) {
+    const subParts: React.ReactNode[] = []
+    const taskRegex = /(UXMB-[A-Za-z0-9_-]+)/g
+    let sIdx = 0
+    let sMatch: RegExpExecArray | null
+    while ((sMatch = taskRegex.exec(raw)) !== null) {
+      if (sMatch.index > sIdx) {
+        subParts.push(raw.substring(sIdx, sMatch.index))
+      }
+      subParts.push(
+        <span
+          key={`tc-${sMatch.index}`}
+          className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[11.5px] font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-neutral-700 select-all mx-0.5"
+        >
+          {sMatch[1]}
+        </span>
+      )
+      sIdx = sMatch.index + sMatch[0].length
+    }
+    if (sIdx < raw.length) {
+      subParts.push(raw.substring(sIdx))
+    }
+    return <>{subParts}</>
+  }
+  return raw
+}
+
+/**
+ * Render inline tokens: **bold**, `code/task-id`, [link](url), *italic*
+ */
+function formatInlineTokens(text: string): React.ReactNode {
+  if (!text) return null
+
+  const parts: React.ReactNode[] = []
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(
+        <React.Fragment key={`txt-${lastIdx}`}>
+          {formatRawWords(text.substring(lastIdx, match.index))}
+        </React.Fragment>
+      )
+    }
+    const token = match[0]
+    if (token.startsWith("**") && token.endsWith("**")) {
+      const inner = token.slice(2, -2)
+      parts.push(
+        <strong key={`b-${match.index}`} className="font-semibold text-slate-900 dark:text-white">
+          {inner}
+        </strong>
+      )
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      const inner = token.slice(1, -1)
+      if (/^UXMB-[\w-]+$/i.test(inner)) {
+        parts.push(
+          <span
+            key={`c-${match.index}`}
+            className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[11.5px] font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-neutral-700 select-all"
+          >
+            {inner}
+          </span>
+        )
+      } else {
+        parts.push(
+          <code
+            key={`c-${match.index}`}
+            className="font-mono text-[12px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-800 text-slate-900 dark:text-slate-100 border border-slate-200/60 dark:border-neutral-700 font-normal"
+          >
+            {inner}
+          </code>
+        )
+      }
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      const inner = token.slice(1, -1)
+      if (inner.trim().endsWith(":")) {
+        parts.push(
+          <strong key={`i-${match.index}`} className="font-semibold text-slate-900 dark:text-white">
+            {inner}
+          </strong>
+        )
+      } else {
+        parts.push(
+          <em key={`i-${match.index}`} className="italic text-slate-700 dark:text-slate-300 font-normal">
+            {inner}
+          </em>
+        )
+      }
+    } else if (token.startsWith("[") && token.includes("](")) {
+      const linkMatch = token.match(/\[([^\]]+)\]\(([^)]+)\)/)
+      if (linkMatch) {
+        parts.push(
+          <a
+            key={`a-${match.index}`}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:opacity-85 font-medium transition-opacity inline-flex items-center gap-0.5"
+          >
+            {linkMatch[1]}
+          </a>
+        )
+      } else {
+        parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
+      }
+    } else {
+      parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
+    }
+    lastIdx = match.index + token.length
+  }
+
+  if (lastIdx < text.length) {
+    parts.push(
+      <React.Fragment key={`txt-${lastIdx}`}>
+        {formatRawWords(text.substring(lastIdx))}
+      </React.Fragment>
+    )
+  }
+
+  return parts.length > 0 ? parts : text
+}
+
+/**
+ * Hiển thị giá trị trạng thái kèm badge pastel và % tiến độ
+ */
+function renderStatusWithValue(val: string): React.ReactNode {
+  const trimmed = (val || "").trim()
+  if (!trimmed) return null
+
+  const match = trimmed.match(/^(Đang thực hiện|Hoàn thành|Pending|Ready to dev|Quá hạn|Chờ [A-Za-zÀ-Ỹa-zà-ỹ0-9\s]+)(\s*\(.*?\))?(.*)$/i)
+  if (match) {
+    const statusText = match[1].trim()
+    const pct = match[2] ? match[2].trim() : ""
+    const rest = match[3] ? match[3].trim() : ""
+
+    const lower = statusText.toLowerCase()
+    let badgeClass = "bg-slate-100 text-slate-800 border-slate-200"
+    let dotClass = "bg-slate-400"
+
+    if (lower === "đang thực hiện" || lower === "in progress") {
+      badgeClass = "bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60"
+      dotClass = "bg-blue-500 animate-pulse"
+    } else if (lower === "hoàn thành" || lower === "done" || lower === "completed") {
+      badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
+      dotClass = "bg-emerald-500"
+    } else if (lower.includes("pending") || lower.includes("chờ")) {
+      badgeClass = "bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60"
+      dotClass = "bg-amber-500"
+    } else if (lower.includes("ready") || lower.includes("sẵn sàng")) {
+      badgeClass = "bg-purple-50 text-purple-700 border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60"
+      dotClass = "bg-purple-500"
+    } else if (lower.includes("quá hạn") || lower.includes("trễ hạn") || lower.includes("overdue")) {
+      badgeClass = "bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60"
+      dotClass = "bg-rose-500"
+    }
+
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold border", badgeClass)}>
+          <span className={cn("size-1.5 rounded-full shrink-0", dotClass)} />
+          {statusText}
+        </span>
+        {pct && (
+          <strong className="font-mono text-xs font-semibold text-slate-900 dark:text-white">
+            {pct}
+          </strong>
+        )}
+        {rest && <span className="text-slate-800 dark:text-slate-200">{formatInlineTokens(rest)}</span>}
+      </span>
+    )
+  }
+
+  return formatInlineTokens(trimmed)
+}
+
+/**
+ * Render text với định dạng inline Markdown (đậm, nghiêng, mã, link, key-value)
+ */
+function formatInlineText(text: string): React.ReactNode {
+  if (!text) return null
+
+  // Không format URL dạng https:// làm key-value
+  if (/^https?:\/\//i.test(text)) {
+    return (
+      <a
+        href={text}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:opacity-85 font-medium transition-opacity inline-flex items-center gap-1 break-all"
+      >
+        {text}
+      </a>
+    )
+  }
+
+  // 1. Kiểm tra pattern Key-Value (ví dụ: "Mã bài toán: UXMB-001" hoặc "*Chất lượng thực tế = Figma:* 95%")
+  const kvMatch = text.match(/^([*_]*)([A-ZÀ-Ỹa-zà-ỹ0-9\s/()._#=\-]{2,45})(?::[*_]*|[*_]*:)\s*(.*)$/)
+  if (kvMatch) {
+    const keyLabel = kvMatch[2].trim()
+    const valueRest = kvMatch[3]
+
+    // Nếu key là Trạng thái / Status / Tiến độ
+    if (/trạng thái|status/i.test(keyLabel)) {
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <strong className="font-semibold text-slate-900 dark:text-white shrink-0">
+            {keyLabel}:
+          </strong>
+          {renderStatusWithValue(valueRest)}
+        </span>
+      )
+    }
+
+    // Nếu key là Mã bài toán / Task ID
+    if (/mã bài toán|mã task|task id/i.test(keyLabel)) {
+      return (
+        <span className="inline-flex flex-wrap items-baseline gap-1.5">
+          <strong className="font-semibold text-slate-900 dark:text-white shrink-0">
+            {keyLabel}:
+          </strong>
+          <span className="text-slate-800 dark:text-slate-200">
+            {formatInlineTokens(valueRest)}
+          </span>
+        </span>
+      )
+    }
+
+    return (
+      <span className="inline-flex flex-wrap items-baseline gap-1.5">
+        <strong className="font-semibold text-slate-900 dark:text-white shrink-0">
+          {keyLabel}:
+        </strong>
+        <span className="text-slate-800 dark:text-slate-200">
+          {formatInlineTokens(valueRest)}
+        </span>
+      </span>
+    )
+  }
+
+  return formatInlineTokens(text)
+}
+
+/**
+ * Render nội dung ô bảng với Badge trạng thái, Task Code Monospace, Số liệu căn phải
+ */
+function renderTableCellContent(cell: string, isNumeric?: boolean): React.ReactNode {
+  const trimmed = (cell || "").trim()
+  if (!trimmed) return null
+
+  // Chuẩn hóa, bỏ qua wrapper **...** hoặc `...`
+  const clean = trimmed.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").trim()
+
+  // 1. Task ID (ví dụ UXMB-20260908-008)
+  if (/^UXMB-[\w-]+$/i.test(clean)) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-[11.5px] font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-neutral-700 select-all">
+        {clean}
+      </span>
+    )
+  }
+
+  // 2. Status Badge detection (Soft Pastel colors theo UI Design System)
+  const lower = clean.toLowerCase()
+  if (lower === "đang thực hiện" || lower === "in progress") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60 whitespace-nowrap">
+        <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />
+        {clean}
+      </span>
+    )
+  }
+  if (lower === "hoàn thành" || lower === "done" || lower === "completed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 whitespace-nowrap">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        {clean}
+      </span>
+    )
+  }
+  if (lower.includes("pending") || lower.includes("chờ duyệt") || lower.includes("chờ po")) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60 whitespace-nowrap">
+        <span className="size-1.5 rounded-full bg-amber-500" />
+        {clean}
+      </span>
+    )
+  }
+  if (lower.includes("ready") || lower.includes("sẵn sàng")) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60 whitespace-nowrap">
+        <span className="size-1.5 rounded-full bg-purple-500" />
+        {clean}
+      </span>
+    )
+  }
+  if (lower.includes("quá hạn") || lower.includes("trễ hạn") || lower.includes("overdue")) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60 whitespace-nowrap">
+        <span className="size-1.5 rounded-full bg-rose-500" />
+        {clean}
+      </span>
+    )
+  }
+
+  // 3. Tỷ lệ % (ví dụ 70%, 100%)
+  if (/^\d{1,3}%$/.test(clean)) {
+    return (
+      <span className="font-semibold font-mono text-[12.5px] text-slate-900 dark:text-white">
+        {clean}
+      </span>
+    )
+  }
+
+  // 4. Nếu toàn bộ cell ban đầu là **bold**
+  if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+    return (
+      <strong className="font-semibold text-slate-900 dark:text-white">
+        {clean}
+      </strong>
+    )
+  }
+
+  // 5. Mặc định render inline tokens (hỗ trợ italic, links, code)
+  return formatInlineTokens(trimmed)
+}
+
+/**
  * 1. BẢNG DỮ LIỆU TƯƠNG TÁC (MARKDOWN TABLE WITH COLUMN SORTING & TOTAL ROW)
  * Khớp hoàn hảo theo Screenshot 2: Driver ↕, July ↕, August ↕, Change ↕, dòng Total ở cuối
  */
@@ -3495,14 +3835,16 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
     )
   }, [lines])
 
-  // Tự động nhận diện cột số liệu để căn phải (Right Align)
+  // Tự động nhận diện cột số liệu để căn phải (Right Align), hỗ trợ cả % và số có dấu phẩy
   const numericCols = useMemo(() => {
     const isNum: boolean[] = []
     headers.forEach((_, colIdx) => {
       const allNums = rows.every((r) => {
-        const val = r[colIdx] || ""
+        const rawVal = r[colIdx] || ""
+        if (!rawVal) return true
+        const val = rawVal.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").replace(/[%,\s]/g, "").trim()
         if (!val) return true
-        return !isNaN(Number(val.replace(/,/g, "")))
+        return !isNaN(Number(val))
       })
       isNum.push(allNums && rows.length > 0)
     })
@@ -3534,11 +3876,13 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
     const dir = sortDir === "asc" ? 1 : -1
 
     return [...regularRows].sort((a, b) => {
-      const valA = a[sortCol] || ""
-      const valB = b[sortCol] || ""
+      const rawA = a[sortCol] || ""
+      const rawB = b[sortCol] || ""
+      const valA = rawA.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").trim()
+      const valB = rawB.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").trim()
       if (isNum) {
-        const numA = Number(valA.replace(/,/g, "")) || 0
-        const numB = Number(valB.replace(/,/g, "")) || 0
+        const numA = Number(valA.replace(/[%,\s]/g, "")) || 0
+        const numB = Number(valB.replace(/[%,\s]/g, "")) || 0
         return (numA - numB) * dir
       }
       return valA.localeCompare(valB, "vi") * dir
@@ -3563,23 +3907,26 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
     <div className="my-3 overflow-x-auto rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card shadow-xs">
       <table className="w-full text-left text-[13px] border-collapse">
         <thead>
-          <tr className="border-b border-slate-200/80 dark:border-neutral-800 bg-slate-50/80 dark:bg-neutral-800/50 text-slate-500 font-semibold text-[11px] uppercase tracking-wider select-none">
-            {headers.map((h, hIdx) => (
-              <th
-                key={hIdx}
-                onClick={() => handleHeaderClick(hIdx)}
-                className={cn(
-                  "py-2.5 px-3.5 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800 hover:text-slate-900 transition-colors group",
-                  numericCols[hIdx] ? "text-right" : "text-left"
-                )}
-                title="Nhấp để sắp xếp dữ liệu cột"
-              >
-                <div className={cn("inline-flex items-center gap-1", numericCols[hIdx] && "flex-row-reverse")}>
-                  <span>{h}</span>
-                  <ChevronsUpDown className="size-3 opacity-50 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </th>
-            ))}
+          <tr className="border-b border-slate-200/80 dark:border-neutral-800 bg-slate-50/80 dark:bg-neutral-800/50 text-slate-600 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider select-none">
+            {headers.map((h, hIdx) => {
+              const cleanH = h.replace(/^\*\*|\*\*$/g, "").replace(/^`|`$/g, "").trim()
+              return (
+                <th
+                  key={hIdx}
+                  onClick={() => handleHeaderClick(hIdx)}
+                  className={cn(
+                    "py-2.5 px-3.5 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800 hover:text-slate-900 dark:hover:text-white transition-colors group",
+                    numericCols[hIdx] ? "text-right" : "text-left"
+                  )}
+                  title="Nhấp để sắp xếp dữ liệu cột"
+                >
+                  <div className={cn("inline-flex items-center gap-1", numericCols[hIdx] && "flex-row-reverse")}>
+                    <span>{cleanH}</span>
+                    <ChevronsUpDown className="size-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/60">
@@ -3589,11 +3936,11 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
                 <td
                   key={cIdx}
                   className={cn(
-                    "py-2 px-3.5 text-slate-800 dark:text-slate-200",
+                    "py-2.5 px-3.5 text-slate-800 dark:text-slate-200",
                     numericCols[cIdx] ? "text-right font-mono tabular-nums" : "text-left"
                   )}
                 >
-                  {cell}
+                  {renderTableCellContent(cell, numericCols[cIdx])}
                 </td>
               ))}
             </tr>
@@ -3610,7 +3957,7 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
                     numericCols[cIdx] ? "text-right font-mono tabular-nums" : "text-left"
                   )}
                 >
-                  {cell}
+                  {renderTableCellContent(cell, numericCols[cIdx])}
                 </td>
               ))}
             </tr>
@@ -4133,98 +4480,6 @@ function EchoFollowUpSuggestions({
   )
 }
 
-/**
- * Render text với định dạng inline Markdown (đậm, nghiêng, danh sách, link)
- */
-/**
- * Inline text parser for bold **text**, italic *text*, `code`, and links [label](url)
- */
-function formatInlineText(text: string): React.ReactNode {
-  if (!text) return null
-
-  // Auto-bold key-value prefix if not already markdown formatted
-  if (!text.includes("**") && !text.includes("*") && !text.includes("`")) {
-    const colonMatch = text.match(/^([A-ZÀ-Ỹa-zà-ỹ0-9\s/]{2,30}:)(\s+.*)?$/)
-    if (colonMatch) {
-      return (
-        <>
-          <strong className="font-semibold text-foreground">{colonMatch[1]}</strong>
-          {colonMatch[2] ? colonMatch[2] : null}
-        </>
-      )
-    }
-  }
-
-  // Regex splitting by bold, inline code, links, and italic
-  const parts: React.ReactNode[] = []
-  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g
-  let lastIdx = 0
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIdx) {
-      parts.push(
-        <React.Fragment key={`txt-${lastIdx}`}>
-          {text.substring(lastIdx, match.index)}
-        </React.Fragment>
-      )
-    }
-    const token = match[0]
-    if (token.startsWith("**") && token.endsWith("**")) {
-      parts.push(
-        <strong key={`b-${match.index}`} className="font-semibold text-foreground">
-          {token.slice(2, -2)}
-        </strong>
-      )
-    } else if (token.startsWith("`") && token.endsWith("`")) {
-      parts.push(
-        <code
-          key={`c-${match.index}`}
-          className="font-mono text-[85%] px-1.5 py-0.5 rounded-[4px] bg-neutral-100 dark:bg-muted text-primary font-normal"
-        >
-          {token.slice(1, -1)}
-        </code>
-      )
-    } else if (token.startsWith("*") && token.endsWith("*")) {
-      parts.push(
-        <em key={`i-${match.index}`} className="italic text-muted-foreground">
-          {token.slice(1, -1)}
-        </em>
-      )
-    } else if (token.startsWith("[") && token.includes("](")) {
-      const linkMatch = token.match(/\[([^\]]+)\]\(([^)]+)\)/)
-      if (linkMatch) {
-        parts.push(
-          <a
-            key={`a-${match.index}`}
-            href={linkMatch[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2 hover:opacity-80 transition-opacity font-medium"
-          >
-            {linkMatch[1]}
-          </a>
-        )
-      } else {
-        parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
-      }
-    } else {
-      parts.push(<React.Fragment key={`tok-${match.index}`}>{token}</React.Fragment>)
-    }
-    lastIdx = match.index + token.length
-  }
-
-  if (lastIdx < text.length) {
-    parts.push(
-      <React.Fragment key={`txt-${lastIdx}`}>
-        {text.substring(lastIdx)}
-      </React.Fragment>
-    )
-  }
-
-  return parts.length > 0 ? parts : text
-}
-
 interface VisualErrorBoundaryProps {
   children: React.ReactNode
   fallbackCode?: string
@@ -4270,32 +4525,189 @@ class VisualErrorBoundary extends React.Component<VisualErrorBoundaryProps, Visu
 
 function RenderMarkdownParagraph({ text }: { text: string }) {
   if (!text) return null
-  const paragraphs = text.split("\n\n")
+
+  // Phân tích văn bản markdown thành danh sách các khối có cấu trúc
+  const lines = text.split(/\r?\n/)
+
+  type Block =
+    | { type: "hr" }
+    | { type: "h2"; text: string }
+    | { type: "h3"; text: string }
+    | { type: "ul"; items: { text: string; isIndented: boolean }[] }
+    | { type: "ol"; items: string[] }
+    | { type: "quote"; text: string }
+    | { type: "p"; lines: string[] }
+
+  const blocks: Block[] = []
+  let currentBlock: Block | null = null
+
+  const flush = () => {
+    if (currentBlock) {
+      blocks.push(currentBlock)
+      currentBlock = null
+    }
+  }
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim()
+
+    // 1. Dòng trống
+    if (!trimmed) {
+      flush()
+      continue
+    }
+
+    // 2. Horizontal divider: ---, ***, ___ (ít nhất 3 ký tự)
+    if (/^([*\-_])\s*(?:\1\s*){2,}$/.test(trimmed)) {
+      flush()
+      blocks.push({ type: "hr" })
+      continue
+    }
+
+    // 3. Heading 1 hoặc Heading 2: # hoặc ##
+    const h2Match = trimmed.match(/^#{1,2}\s+(.+)$/)
+    if (h2Match) {
+      flush()
+      blocks.push({ type: "h2", text: h2Match[1].trim() })
+      continue
+    }
+
+    // 4. Heading 3 hoặc Heading 4: ### hoặc ####
+    const h3Match = trimmed.match(/^#{3,4}\s+(.+)$/)
+    if (h3Match) {
+      flush()
+      blocks.push({ type: "h3", text: h3Match[1].trim() })
+      continue
+    }
+
+    // 5. Blockquote: > nội dung
+    const quoteMatch = trimmed.match(/^>\s*(.+)$/)
+    if (quoteMatch) {
+      flush()
+      blocks.push({ type: "quote", text: quoteMatch[1].trim() })
+      continue
+    }
+
+    // 6. Bullet list item: - hoặc * hoặc + hoặc •
+    const ulMatch = trimmed.match(/^[-*+•]\s+(.+)$/)
+    if (ulMatch) {
+      const isIndented = /^\s{2,}|\t/.test(rawLine)
+      if (currentBlock && currentBlock.type === "ul") {
+        currentBlock.items.push({ text: ulMatch[1].trim(), isIndented })
+      } else {
+        flush()
+        currentBlock = { type: "ul", items: [{ text: ulMatch[1].trim(), isIndented }] }
+      }
+      continue
+    }
+
+    // 7. Numbered list item: 1. hoặc 1)
+    const olMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/)
+    if (olMatch) {
+      if (currentBlock && currentBlock.type === "ol") {
+        currentBlock.items.push(olMatch[2].trim())
+      } else {
+        flush()
+        currentBlock = { type: "ol", items: [olMatch[2].trim()] }
+      }
+      continue
+    }
+
+    // 8. Regular text line
+    if (currentBlock && currentBlock.type === "p") {
+      currentBlock.lines.push(trimmed)
+    } else {
+      flush()
+      currentBlock = { type: "p", lines: [trimmed] }
+    }
+  }
+
+  flush()
 
   return (
-    <div className="space-y-2.5">
-      {paragraphs.map((p, pIdx) => {
-        const trimmed = p.trim()
-        if (!trimmed) return null
+    <div className="space-y-3 leading-relaxed">
+      {blocks.map((b, bIdx) => {
+        if (b.type === "hr") {
+          return <hr key={bIdx} className="my-4 border-t border-slate-200/80 dark:border-neutral-800" />
+        }
 
-        // Render bullet list
-        if (trimmed.split("\n").every((l) => l.trim().startsWith("- ") || l.trim().startsWith("* "))) {
-          const items = trimmed.split("\n").map((l) => l.trim().replace(/^[-*]\s*/, ""))
+        if (b.type === "h2") {
           return (
-            <ul key={pIdx} className="space-y-1 list-disc list-inside text-foreground pl-1">
-              {items.map((it, iIdx) => (
-                <li key={iIdx} className="leading-relaxed">
-                  {formatInlineText(it)}
+            <div key={bIdx} className="pt-3 pb-1 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-2.5">
+              <span className="w-1.5 h-4.5 rounded-full bg-slate-900 dark:bg-slate-100 shrink-0" />
+              <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                {formatInlineText(b.text)}
+              </h2>
+            </div>
+          )
+        }
+
+        if (b.type === "h3") {
+          return (
+            <div key={bIdx} className="pt-2.5 pb-0.5 flex items-center gap-2">
+              <span className="w-1 h-3.5 rounded-full bg-slate-800 dark:bg-slate-200 shrink-0" />
+              <h3 className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                {formatInlineText(b.text)}
+              </h3>
+            </div>
+          )
+        }
+
+        if (b.type === "quote") {
+          return (
+            <blockquote
+              key={bIdx}
+              className="my-2 pl-3 py-1.5 border-l-2 border-slate-300 dark:border-neutral-700 bg-slate-50/60 dark:bg-neutral-800/30 rounded-r-lg text-slate-700 dark:text-slate-300 italic text-[13px]"
+            >
+              {formatInlineText(b.text)}
+            </blockquote>
+          )
+        }
+
+        if (b.type === "ul") {
+          return (
+            <ul key={bIdx} className="my-1.5 space-y-1.5 pl-0.5">
+              {b.items.map((it, iIdx) => (
+                <li
+                  key={iIdx}
+                  className={cn(
+                    "flex items-start gap-2.5 text-slate-800 dark:text-slate-200 text-[13.5px] leading-relaxed",
+                    it.isIndented && "ml-4 pl-1 border-l border-slate-200 dark:border-neutral-800"
+                  )}
+                >
+                  <span className="size-1.5 rounded-full bg-slate-400 dark:bg-slate-500 mt-2 shrink-0" />
+                  <div className="flex-1">{formatInlineText(it.text)}</div>
                 </li>
               ))}
             </ul>
           )
         }
 
+        if (b.type === "ol") {
+          return (
+            <ol key={bIdx} className="my-1.5 space-y-1.5 pl-0.5">
+              {b.items.map((it, iIdx) => (
+                <li key={iIdx} className="flex items-start gap-2 text-slate-800 dark:text-slate-200 text-[13.5px] leading-relaxed">
+                  <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs mt-0.5 shrink-0 min-w-[18px]">
+                    {iIdx + 1}.
+                  </span>
+                  <div className="flex-1">{formatInlineText(it)}</div>
+                </li>
+              ))}
+            </ol>
+          )
+        }
+
+        // Paragraph
         return (
-          <div key={pIdx} className="whitespace-pre-wrap leading-relaxed">
-            {formatInlineText(trimmed)}
-          </div>
+          <p key={bIdx} className="text-[13.5px] sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
+            {b.lines.map((line, lIdx) => (
+              <React.Fragment key={lIdx}>
+                {lIdx > 0 && <br />}
+                {formatInlineText(line)}
+              </React.Fragment>
+            ))}
+          </p>
         )
       })}
     </div>
