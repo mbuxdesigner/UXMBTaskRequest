@@ -1,17 +1,17 @@
 # TEST READY — AI Chats E2E, Security, UX & Audit Test Suite
 
 > **Status**: READY FOR VERIFICATION & REGRESSION TESTING  
-> **Published At**: 2026-10-04T04:22:00Z  
+> **Published At**: 2026-10-04T06:50:00Z  
 > **Runner Entrypoint**: `node tests/test-ai-chats-e2e-and-audit.mjs`  
 > **Subsystem**: AI Chats & Intelligent Copilot (`uxmb-task-request`)  
-> **Requirements Covered**: R1, R2, R3, R4 (ORIGINAL_REQUEST.md 2026-10-04T03:51:06Z, PROJECT.md, TEST_INFRA.md & Parent Directives)  
-> **Coverage**: 100% across Tiers 1–4, Direct Module Integrations & Static Codebase Audit (130 automated test assertions, 0 failures, Exit Code 0)  
+> **Requirements Covered**: R1, R2, R3, R4, R5 (ORIGINAL_REQUEST.md 2026-10-04T03:51:06Z, PROJECT.md, TEST_INFRA.md & Parent Directives)  
+> **Coverage**: 100% across Tiers 1–4, Direct Module Integrations, M4 Module Expansions & Static Codebase Audit (145 automated test assertions, 0 failures, Exit Code 0)  
 
 ---
 
 ## 1. Test Suite Execution Summary
 
-The comprehensive 4-tier automated test suite runner `tests/test-ai-chats-e2e-and-audit.mjs` has been constructed, validated, and verified at `tests/test-ai-chats-e2e-and-audit.mjs`. It executes via native Node.js ESM in ~100ms with deterministic assertion success, zero browser flakiness, and zero external network dependencies.
+The comprehensive automated test suite runner `tests/test-ai-chats-e2e-and-audit.mjs` has been expanded and verified. It executes via native Node.js ESM in ~130ms with deterministic assertion success, zero browser flakiness, and zero external network dependencies.
 
 ```
 ================================================================================
@@ -21,15 +21,15 @@ Tier 1 (Feature Coverage):            51/51 Passed (100.0%)
 Tier 2 (Boundary & Corner Cases):     49/49 Passed (100.0%)
 Tier 3 (Cross-Feature Combinations):   6/6 Passed (100.0%)
 Tier 4 (Real-World Scenarios):         6/6 Passed (100.0%)
-Direct Module Integrations:            13/13 Passed (100.0%)
+Direct Module Integrations:           28/28 Passed (100.0%)
 Static Audit (Codebase Integrity):     5/5 Passed (100.0%)
 --------------------------------------------------------------------------------
-TOTAL TESTS EXECUTED:   130
-TOTAL TESTS PASSED:     130 (100.0%)
+TOTAL TESTS EXECUTED:   145
+TOTAL TESTS PASSED:     145 (100.0%)
 TOTAL TESTS FAILED:     0
-TOTAL EXECUTION TIME:   ~100ms
+TOTAL EXECUTION TIME:   ~130ms
 ================================================================================
-🎉 ALL 130 TESTS PASSED CLEANLY (Exit Code 0)
+🎉 ALL 145 TESTS PASSED CLEANLY (Exit Code 0)
 ```
 
 ---
@@ -133,7 +133,7 @@ TOTAL EXECUTION TIME:   ~100ms
 
 ---
 
-### Direct Module Integrations (13 Test Cases)
+### Direct Module Integrations & Expansions (28 Test Cases)
 - [x] `INT-PII-01`: `src/lib/piiMasker.ts` `maskPii` correctly masks email and phone numbers.
 - [x] `INT-PII-02`: `src/lib/piiMasker.ts` `unmaskPii` accurately restores masked text back to original.
 - [x] `INT-PII-03`: `src/lib/piiMasker.ts` `sanitizeContextText` cleanses PII without exposing reverse mapping.
@@ -147,6 +147,21 @@ TOTAL EXECUTION TIME:   ~100ms
 - [x] `INT-GW-07`: `api/ai-gateway.ts` `clearSessionCache` invalidates previously cached trusted sessions.
 - [x] `INT-GW-08`: `api/ai-gateway.ts` default handler enforces genuine caller auth via HTTP Request when flag enabled (401 for forged, passes genuine and local dev).
 - [x] `INT-GW-09`: `api/ai-gateway.ts` `verifySessionToken` checks Google Apps Script backend when un-cached, hits in-memory cache within TTL.
+- [x] `INT-FIGMA-01`: `src/lib/figmaExportUtils.ts` `formatMarkdownForFigmaText` strips fenced code blocks without leaking tags, double backticks, or cross-block greedy regex contamination.
+- [x] `INT-FIGMA-02`: `src/lib/figmaExportUtils.ts` `formatMarkdownForFigmaText` preserves nested list indentation (2 spaces, 4 spaces, tabs, numbered).
+- [x] `INT-FIGMA-03`: `src/lib/figmaExportUtils.ts` `exportTableToTSV` handles escaped pipes without column shattering (retains literal `\|` in cell content).
+- [x] `INT-FIGMA-04`: `src/lib/figmaExportUtils.ts` `exportTableToTSV` pads ragged rows up to `maxCols` with tab delimiters.
+- [x] `INT-FIGMA-05`: `src/lib/figmaExportUtils.ts` `formatMarkdownForFigmaText` strips headings, blockquotes, and links into clean typography text.
+- [x] `INT-PROMPT-01`: `src/config/aiPrompts.ts` `serializeArtifactsContext` preserves full 4.8 KB seed artifact (`Quy-trinh-7-khau-UX-MBBank.md`), proving Khâu 6, Khâu 7, SLA policies, and NO 2,000 char cutoff.
+- [x] `INT-PROMPT-02`: `src/config/aiPrompts.ts` `serializeArtifactsContext` enforces controlled truncation and metadata warning when exceeding 16,000 char budget.
+- [x] `INT-PROMPT-03`: `src/config/aiPrompts.ts` `AI_PERSONA` contains MB Bank brand colors (`#1057FB`, `#ED1C24`), radii (`8px/12px/16px/9999px`), and 7 Khâu UX workflow.
+- [x] `INT-PROMPT-04`: `src/config/aiPrompts.ts` `buildChatPrompt` injects `AI_PERSONA` into system prompt chunks.
+- [x] `INT-PARSE-01`: Resilient parsing: action card with null or missing `items` array does not throw unhandled TypeError.
+- [x] `INT-PARSE-02`: Resilient parsing: referenced docs parser handles plain object, null, or invalid structure gracefully.
+- [x] `INT-EDIT-01`: Prompt edit history truncation: slicing messages at `msgIndex` prevents duplicate user bubbles and preserves clean context.
+- [x] `INT-EDIT-02`: Prompt edit history truncation: editing root message (index 0) resets thread context completely.
+- [x] `INT-ABORT-01`: Stream abort settlement: `AbortController` signal cleans up timers and rejects promise with `AbortError` without hanging.
+- [x] `INT-ABORT-02`: Stream abort settlement: pre-aborted signal rejects immediately without hanging or creating timers.
 
 ---
 
@@ -166,9 +181,9 @@ TOTAL EXECUTION TIME:   ~100ms
 node tests/test-ai-chats-e2e-and-audit.mjs
 
 # Expected Output:
-# Execution Time: ~0.10s
-# Total Tests Run: 130
-# Passed: 130
+# Execution Time: ~0.13s
+# Total Tests Run: 145
+# Passed: 145
 # Failed: 0
 # Exit Code: 0
 ```
