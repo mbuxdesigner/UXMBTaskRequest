@@ -1346,7 +1346,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   }
 
   // Send message & Stream reply
-  const handleSendMessage = async (text: string, customContext?: string, attachedDocName?: string) => {
+  const handleSendMessage = async (
+    text: string,
+    customContext?: string,
+    attachedDocName?: string,
+    historyOverride?: PromptMessage[]
+  ) => {
     const cleanText = text.trim()
     if (!cleanText || isStreaming) return
 
@@ -1482,6 +1487,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     // Step 1 -> Step 2
     const timerStep1 = setTimeout(() => {
+      if (abortController.signal.aborted) return
       currentSteps = [
         { ...currentSteps[0], status: "completed" },
         { ...currentSteps[1], status: "running" },
@@ -1493,6 +1499,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     // Step 2 -> Step 3
     const timerStep2 = setTimeout(() => {
+      if (abortController.signal.aborted) return
       currentSteps = [
         { ...currentSteps[0], status: "completed" },
         { ...currentSteps[1], status: "completed" },
@@ -1504,11 +1511,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     try {
       const currentThread = threads.find((t) => t.id === targetThreadId)
-      const history: PromptMessage[] = (currentThread?.messages || []).map((m) => ({
+      const baseHistory: PromptMessage[] = historyOverride ?? (currentThread?.messages || []).map((m) => ({
         role: m.role,
         content: m.content,
       }))
-      history.push({ role: "user", content: text })
+      const history: PromptMessage[] = [...baseHistory, { role: "user", content: text }]
 
       // Enhanced context building: Luôn kết hợp Tasks + Artifacts + Intelligence
       const allArtifacts = getStoredArtifacts()
@@ -1597,10 +1604,24 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       let lastRenderTime = 0
 
       await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timerStep1)
+          clearTimeout(timerStep2)
+          reject(new DOMException("Aborted", "AbortError"))
+        }
+
+        if (abortController.signal.aborted) {
+          onAbort()
+          return
+        }
+
+        abortController.signal.addEventListener("abort", onAbort, { once: true })
+
         streamAICompletion(
           promptMessages,
           {
             onReasoningChunk: (reasoningDelta, fullReasoning) => {
+              if (abortController.signal.aborted) return
               accumulatedReasoning = fullReasoning
               if (currentSteps[2].status !== "running") {
                 currentSteps = [
@@ -1617,6 +1638,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
             },
             onChunk: (token, cleanOutput) => {
+              if (abortController.signal.aborted) return
               accumulated = cleanOutput
               // Khi bắt đầu có output câu trả lời, đánh dấu Step 3 hoàn tất, Step 4 chạy
               if (currentSteps[3].status !== "running") {
@@ -1640,6 +1662,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               }
             },
             onComplete: (fullText, fullReasoning, responseMeta) => {
+              abortController.signal.removeEventListener("abort", onAbort)
               clearTimeout(timerStep1)
               clearTimeout(timerStep2)
               accumulated = fullText || accumulated
@@ -1667,6 +1690,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               resolve()
             },
             onError: (err) => {
+              abortController.signal.removeEventListener("abort", onAbort)
               clearTimeout(timerStep1)
               clearTimeout(timerStep2)
               reject(err)
@@ -1674,7 +1698,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           },
           abortController.signal,
           currentModel
-        ).catch(reject)
+        ).catch((err) => {
+          abortController.signal.removeEventListener("abort", onAbort)
+          clearTimeout(timerStep1)
+          clearTimeout(timerStep2)
+          reject(err)
+        })
       })
     } catch (err: any) {
       clearTimeout(timerStep1)
@@ -1743,19 +1772,22 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   // Edit and resend user prompt inline
   const handleEditUserPrompt = useCallback((msgIndex: number, newPrompt: string) => {
     if (isStreaming || !newPrompt.trim()) return
+    const currentMsgs = activeThread.messages || []
+    const truncated = currentMsgs.slice(0, msgIndex)
     setThreads((prev) =>
       prev.map((t) => {
         if (t.id === activeThreadId) {
-          const updated = t.messages.map((m, idx) =>
-            idx === msgIndex ? { ...m, content: newPrompt.trim() } : m
-          )
-          return { ...t, messages: updated }
+          return { ...t, messages: truncated }
         }
         return t
       })
     )
-    handleSendMessage(newPrompt.trim())
-  }, [isStreaming, activeThreadId, handleSendMessage])
+    const historyOverride: PromptMessage[] = truncated.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }))
+    handleSendMessage(newPrompt.trim(), undefined, undefined, historyOverride)
+  }, [isStreaming, activeThreadId, activeThread.messages, handleSendMessage])
 
   // Filter threads (Only display threads that have messages and are not draft)
   const filteredThreads = useMemo(() => {
@@ -2027,10 +2059,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         key={t.id}
                         thread={t}
                         isActive={t.id === activeThreadId}
-                        onSelect={() => {
-                          setActiveThreadId(t.id)
-                          localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, t.id)
-                        }}
+                        onSelect={() => handleSelectThread(t.id)}
                         onPin={handleTogglePin}
                         onRename={openRenameModal}
                         onExport={handleExportThread}

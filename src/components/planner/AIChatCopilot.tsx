@@ -82,6 +82,7 @@ export function AIChatCopilot({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const cancelStreamRef = useRef<(() => void) | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const copyTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -102,12 +103,37 @@ export function AIChatCopilot({
     }
   }, [messages])
 
-  // Dọn dẹp stream khi unmount
+  // Dọn dẹp stream và timer khi unmount khỏi React Fiber
   useEffect(() => {
     return () => {
-      if (cancelStreamRef.current) cancelStreamRef.current()
+      if (cancelStreamRef.current) {
+        cancelStreamRef.current()
+        cancelStreamRef.current = null
+      }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current)
+        copyTimerRef.current = null
+      }
     }
   }, [])
+
+  // Hủy stream và reset trạng thái khi đóng dialog Copilot (isOpen chuyển sang false)
+  useEffect(() => {
+    if (!isOpen && isStreaming) {
+      if (cancelStreamRef.current) {
+        cancelStreamRef.current()
+        cancelStreamRef.current = null
+      }
+      setIsStreaming(false)
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (last && last.role === "assistant" && !last.content.trim()) {
+          return prev.slice(0, -1)
+        }
+        return prev
+      })
+    }
+  }, [isOpen, isStreaming])
 
   const handleSendMessage = async (userText: string) => {
     const text = userText.trim()
@@ -191,7 +217,10 @@ export function AIChatCopilot({
   }
 
   const handleReset = () => {
-    if (cancelStreamRef.current) cancelStreamRef.current()
+    if (cancelStreamRef.current) {
+      cancelStreamRef.current()
+      cancelStreamRef.current = null
+    }
     setIsStreaming(false)
     const resetWelcome: ChatMessage[] = [
       {
@@ -214,7 +243,11 @@ export function AIChatCopilot({
   const copyMessage = (id: string, text: string) => {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = setTimeout(() => {
+      setCopiedId(null)
+      copyTimerRef.current = null
+    }, 2000)
     toast.success("Đã sao chép phản hồi!")
   }
 
@@ -325,10 +358,14 @@ export function AIChatCopilot({
                   >
                     {m.content ? (
                       m.content
-                    ) : (
+                    ) : isStreaming ? (
                       <div className="flex items-center gap-1.5 py-1 text-slate-400">
                         <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
                         <span>Đang suy nghĩ...</span>
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 italic py-1">
+                        (Đã dừng phản hồi)
                       </div>
                     )}
                   </div>
@@ -389,8 +426,15 @@ export function AIChatCopilot({
                 if (cancelStreamRef.current) {
                   cancelStreamRef.current()
                   cancelStreamRef.current = null
-                  setIsStreaming(false)
                 }
+                setIsStreaming(false)
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1]
+                  if (last && last.role === "assistant" && !last.content.trim()) {
+                    return prev.slice(0, -1)
+                  }
+                  return prev
+                })
               }}
               className="rounded-xl h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-xs shrink-0"
               title="Dừng sinh phản hồi"

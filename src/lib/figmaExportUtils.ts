@@ -23,29 +23,32 @@ export function formatMarkdownForFigmaText(markdown: string): string {
   // 2. Remove markdown headers: # Header -> Header
   text = text.replace(/^#{1,6}\s+(.*)$/gm, "$1")
 
-  // 3. Remove bold / italic: **text**, *text*, __text__, _text_
+  // 3. Remove fenced code block delimiters (```lang and ```) before inline code regex
+  text = text.replace(/^[\t ]*`{3,}.*$/gm, "")
+
+  // 4. Remove bold / italic: **text**, *text*, __text__, _text_
   text = text.replace(/\*\*([^*]+)\*\*/g, "$1")
   text = text.replace(/\*([^*]+)\*/g, "$1")
   text = text.replace(/__([^_]+)__/g, "$1")
   text = text.replace(/_([^_]+)_/g, "$1")
 
-  // 4. Remove inline code: `code` -> code
+  // 5. Remove inline code: `code` -> code
   text = text.replace(/`([^`]+)`/g, "$1")
 
-  // 5. Remove strikethrough: ~~text~~ -> text
+  // 6. Remove strikethrough: ~~text~~ -> text
   text = text.replace(/~~([^~]+)~~/g, "$1")
 
-  // 6. Convert markdown links: [Text](url) -> Text
+  // 7. Convert markdown links: [Text](url) -> Text
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
 
-  // 7. Convert list bullets (- , * , 1. ) to clean bullet •
-  text = text.replace(/^[\s]*[-*+]\s+(.*)$/gm, "• $1")
-  text = text.replace(/^[\s]*\d+\.\s+(.*)$/gm, "• $1")
+  // 8. Convert list bullets (- , * , 1. ) to clean bullet • while preserving indentation
+  text = text.replace(/^([\t ]*)[-*+]\s+(.*)$/gm, "$1• $2")
+  text = text.replace(/^([\t ]*)\d+\.\s+(.*)$/gm, "$1• $2")
 
-  // 8. Remove blockquotes: > quote -> quote
+  // 9. Remove blockquotes: > quote -> quote
   text = text.replace(/^>\s*(.*)$/gm, "$1")
 
-  // 9. Trim excessive consecutive blank lines
+  // 10. Trim excessive consecutive blank lines
   text = text.replace(/\n{3,}/g, "\n\n")
 
   return text.trim()
@@ -54,34 +57,54 @@ export function formatMarkdownForFigmaText(markdown: string): string {
 /**
  * Converts Markdown table headers and rows to tab-separated values (\t)
  * so pasting into Figma creates clean tabular auto-layouts or pasteable spreadsheets.
+ * Safely handles escaped pipes (\|) and normalizes ragged rows into uniform rectangular matrices.
  */
 export function exportTableToTSV(markdownTable: string): string {
   if (!markdownTable || typeof markdownTable !== "string") return ""
 
   const lines = markdownTable.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  const rows: string[] = []
+  const parsedRows: string[][] = []
 
   for (const line of lines) {
-    if (!line.includes("|")) continue
+    // Protect escaped pipes \| before checking or splitting
+    const protectedLine = line.replace(/\\\|/g, "\uE000")
+    if (!protectedLine.includes("|")) continue
     // Skip separator lines: |---|---| or |:---|---:|
-    if (/^\|?[\s\-:|]+\|?$/.test(line)) continue
+    if (/^\|?[\s\-:|]+\|?$/.test(protectedLine)) continue
 
-    const cells = line
+    const cells = protectedLine
       .split("|")
-      .map((c) => c.trim().replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1"))
+      .map((c) =>
+        c
+          .trim()
+          .replace(/\*\*([^*]+)\*\*/g, "$1")
+          .replace(/\*([^*]+)\*/g, "$1")
+          .replace(/\uE000/g, "|")
+      )
       .filter((_, idx, arr) => {
         // Drop first and last empty elements caused by leading/trailing pipes
-        if (idx === 0 && line.startsWith("|")) return false
-        if (idx === arr.length - 1 && line.endsWith("|")) return false
+        if (idx === 0 && protectedLine.startsWith("|")) return false
+        if (idx === arr.length - 1 && protectedLine.endsWith("|")) return false
         return true
       })
 
     if (cells.length > 0) {
-      rows.push(cells.join("\t"))
+      parsedRows.push(cells)
     }
   }
 
-  return rows.join("\n")
+  if (parsedRows.length === 0) return ""
+
+  // Normalize column count across all rows into a uniform rectangular matrix
+  const maxCols = Math.max(...parsedRows.map((r) => r.length))
+  const normalizedRows = parsedRows.map((row) => {
+    if (row.length < maxCols) {
+      return [...row, ...Array(maxCols - row.length).fill("")]
+    }
+    return row
+  })
+
+  return normalizedRows.map((row) => row.join("\t")).join("\n")
 }
 
 /**
