@@ -2180,6 +2180,8 @@ export default function QuanLyPage() {
     return "openrouter_ai"
   })
 
+  const [leaveTesting, setLeaveTesting] = useState<boolean>(false)
+
   const handleTestLeaveConnection = async () => {
     setLeaveTesting(true)
     const toastId = toast.loading("Đang kết nối và quét dữ liệu lịch nghỉ phép nhân sự...")

@@ -2524,7 +2524,67 @@ runTest("Integration", "INT-MD-05", "Verify Table cell normalization (strip **, 
   assert.ok(!isNaN(Number(cleanNumeric("**70%**"))), "70% must parse to valid number")
 })
 
+runTest("Integration", "INT-MOTION-01", "AIChatPage: verify AnimatePresence mode='wait' & easeOutExpo tab transitions", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8")
+
+  // 1. Sidebar tab switcher has floating pill with springs.floating and hover layoutId
+  assert.ok(pageSrc.includes('layoutId="aichat-sidebar-tab-pill"'), "Tab switcher must have layoutId for active floating pill")
+  assert.ok(pageSrc.includes('layoutId="aichat-sidebar-tab-hover"'), "Tab switcher must have hover preview pill")
+
+  // 2. Sidebar content wrapped in AnimatePresence mode="wait"
+  assert.ok(pageSrc.includes('key="sidebar-chats-list"'), "Sidebar chats list must have unique key for AnimatePresence")
+  assert.ok(pageSrc.includes('key="sidebar-artifacts-list"'), "Sidebar artifacts list must have unique key for AnimatePresence")
+
+  // 3. Top header title wrapped in AnimatePresence mode="wait"
+  assert.ok(pageSrc.includes('key="header-artifacts-hub"'), "Header must have key for Artifacts hub title")
+
+  // 4. Main canvas viewport wrapped in AnimatePresence mode="wait" with easeOutExpo
+  assert.ok(pageSrc.includes('key="main-view-artifacts-hub"'), "Main canvas must have key for Artifacts Hub")
+  assert.ok(pageSrc.includes('key={`main-view-chats-${activeThread?.id || "empty"}`}'), "Main canvas must have key for Chat Stream")
+  assert.ok(pageSrc.includes('easings.easeOutExpo'), "Tab transitions must use Apple HIG easeOutExpo curve")
+})
+
+runTest("Integration", "INT-MOTION-02", "AIChatPage: verify cascadeWaveContainerVariants & item variants in Artifacts Hub", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8")
+
+  // Check cascade wave applied in Artifacts Hub
+  assert.ok(pageSrc.includes("variants={cascadeWaveContainerVariants}"), "Artifacts Hub must use cascadeWaveContainerVariants")
+  assert.ok(pageSrc.includes("variants={cascadeWaveItemVariants}"), "Artifacts Hub items must use cascadeWaveItemVariants")
+})
+
+runTest("Integration", "INT-GATEWAY-01", "aiService: verify DEFAULT_GEMINI_MODEL and resilient fallback", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes('DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"'), "DEFAULT_GEMINI_MODEL must be gemini-2.0-flash")
+  assert.ok(serviceSrc.includes("testGeminiConnection(\n  apiKey?: string,\n  model: string = DEFAULT_GEMINI_MODEL"), "testGeminiConnection must default to DEFAULT_GEMINI_MODEL")
+})
+
+runTest("Integration", "INT-GATEWAY-02", "OpenRouterSettingsCard: verify MB Design System Dark Navy primary actions", () => {
+  const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
+  assert.ok(cardSrc.includes("bg-slate-900"), "Must use Dark Navy bg-slate-900 for primary action buttons")
+  assert.ok(!cardSrc.includes("bg-indigo-600"), "Must not use rogue accent bg-indigo-600")
+})
+
+runTest("Integration", "INT-GATEWAY-03", "OpenRouterSettingsCard: verify Framer Motion spring expand/collapse", () => {
+  const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
+  assert.ok(cardSrc.includes("<AnimatePresence initial={false}>"), "Must use AnimatePresence for collapse/expand")
+  assert.ok(cardSrc.includes('key="openrouter-settings-content"'), "Expanded content must have stable key for AnimatePresence")
+})
+
+runTest("Integration", "INT-GATEWAY-04", "OpenRouterSettingsCard: verify interactive curated model selection", () => {
+  const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
+  assert.ok(cardSrc.includes("handleSelectCuratedModel"), "Must have click-to-select handler for curated models")
+  assert.ok(cardSrc.includes("CURATED_FREE_MODELS"), "Must define curated free models list")
+})
+
+runTest("Integration", "INT-GATEWAY-05", "OpenRouterSettingsCard: verify ReUI Dark Mode compliance", () => {
+  const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
+  assert.ok(cardSrc.includes("dark:bg-card"), "Container must support dark:bg-card")
+  assert.ok(cardSrc.includes("dark:border-neutral-800"), "Must support dark:border-neutral-800")
+  assert.ok(cardSrc.includes("dark:text-slate-100"), "Text must support dark:text-slate-100")
+})
+
 // ==============================================================================
+
 // TEST RESULTS SUMMARY & VERIFICATION
 // ==============================================================================
 const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)

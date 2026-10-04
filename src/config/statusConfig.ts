@@ -438,11 +438,8 @@ function parseTimeMs(dateStr?: string | null): number {
   const trimmed = dateStr.trim()
   if (!trimmed) return 0
 
-  // 1. Try standard Date parsing (e.g. ISO-8601)
-  const parsed = new Date(trimmed).getTime()
-  if (!isNaN(parsed) && parsed > 0) return parsed
-
-  // 2. Extract DD/MM/YYYY and optional HH:mm:ss anywhere in string
+  // 1. Parse định dạng vi-VN trước. Date.parse có thể hiểu nhầm 4/10 thành
+  // April 10 thay vì 4 October, làm sai SLA hàng nghìn giờ.
   const dmyMatch = trimmed.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
   const timeMatch = trimmed.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/)
   if (dmyMatch) {
@@ -455,6 +452,10 @@ function parseTimeMs(dateStr?: string | null): number {
     const d = new Date(year, month, day, hour, minute, second).getTime()
     return isNaN(d) ? 0 : d
   }
+
+  // 2. Sau đó mới dùng parser chuẩn cho ISO-8601 và timestamp tương thích.
+  const parsed = new Date(trimmed).getTime()
+  if (!isNaN(parsed) && parsed > 0) return parsed
   return 0
 }
 

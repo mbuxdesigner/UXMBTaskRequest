@@ -1938,31 +1938,55 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const handleRegenerateMessage = useCallback((msgIndex: number) => {
     if (isStreaming) return
     const msgs = activeThread.messages
+    let userIndex = msgs[msgIndex]?.role === "user" ? msgIndex : -1
     for (let i = msgIndex - 1; i >= 0; i--) {
       if (msgs[i].role === "user") {
-        handleSendMessage(msgs[i].content)
-        return
+        userIndex = i
+        break
       }
     }
-    if (msgs[msgIndex]?.role === "user") {
-      handleSendMessage(msgs[msgIndex].content)
-    }
-  }, [isStreaming, activeThread.messages, handleSendMessage])
+    if (userIndex < 0) return
+    const historyBeforePrompt = msgs.slice(0, userIndex)
+    const attachedArtifact = msgs[userIndex].attachedArtifactName
+      ? artifacts.find((artifact) => artifact.name === msgs[userIndex].attachedArtifactName)
+      : undefined
+    setThreads((prev) => prev.map((thread) =>
+      thread.id === activeThreadId ? { ...thread, messages: historyBeforePrompt } : thread
+    ))
+    handleSendMessage(
+      msgs[userIndex].content,
+      attachedArtifact?.content,
+      msgs[userIndex].attachedArtifactName,
+      historyBeforePrompt.map((message) => ({ role: message.role, content: message.content }))
+    )
+  }, [isStreaming, activeThread.messages, activeThreadId, artifacts, handleSendMessage])
 
   // Retry previous prompt on error
   const handleRetryMessage = useCallback((msgIndex: number) => {
     if (isStreaming) return
     const msgs = activeThread.messages
+    let userIndex = msgs[msgIndex]?.role === "user" ? msgIndex : -1
     for (let i = msgIndex - 1; i >= 0; i--) {
       if (msgs[i].role === "user") {
-        handleSendMessage(msgs[i].content)
-        return
+        userIndex = i
+        break
       }
     }
-    if (msgs[msgIndex]?.role === "user") {
-      handleSendMessage(msgs[msgIndex].content)
-    }
-  }, [isStreaming, activeThread.messages, handleSendMessage])
+    if (userIndex < 0) return
+    const historyBeforePrompt = msgs.slice(0, userIndex)
+    const attachedArtifact = msgs[userIndex].attachedArtifactName
+      ? artifacts.find((artifact) => artifact.name === msgs[userIndex].attachedArtifactName)
+      : undefined
+    setThreads((prev) => prev.map((thread) =>
+      thread.id === activeThreadId ? { ...thread, messages: historyBeforePrompt } : thread
+    ))
+    handleSendMessage(
+      msgs[userIndex].content,
+      attachedArtifact?.content,
+      msgs[userIndex].attachedArtifactName,
+      historyBeforePrompt.map((message) => ({ role: message.role, content: message.content }))
+    )
+  }, [isStreaming, activeThread.messages, activeThreadId, artifacts, handleSendMessage])
 
   // Edit and resend user prompt inline
   const handleEditUserPrompt = useCallback((msgIndex: number, newPrompt: string) => {
@@ -2260,9 +2284,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             {/* Separator */}
             <div className="h-[1px] bg-slate-200/70 mx-2.5 my-1" />
 
-            {/* 4. SIDEBAR CONTENT: CHATS TAB OR ARTIFACTS TAB */}
-            {sidebarTab === "chats" ? (
-              <div className="flex-1 overflow-y-auto px-2 py-1 space-y-3 text-sm select-none">
+            {/* 4. SIDEBAR CONTENT: CHATS TAB OR ARTIFACTS TAB (Smooth AnimatePresence Transition) */}
+            <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
+              <AnimatePresence mode="wait" initial={false}>
+                {sidebarTab === "chats" ? (
+                  <motion.div
+                    key="sidebar-chats-list"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: easings.easeOutExpo }}
+                    className="flex-1 min-h-0 overflow-y-auto px-2 py-1 space-y-3 text-sm select-none"
+                  >
                 {/* Pinned Group */}
                 {pinnedList.length > 0 && (
                   <div className="space-y-1">
@@ -2356,10 +2389,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             ) : (
               /* ARTIFACTS LIST (DATA USER PUSHES UP) */
-              <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1 text-sm select-none">
+              <motion.div
+                key="sidebar-artifacts-list"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: easings.easeOutExpo }}
+                className="flex-1 min-h-0 overflow-y-auto px-2 py-1 space-y-1 text-sm select-none"
+              >
                 <div className="flex items-center justify-between px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
                   <span>Kho tài liệu</span>
                   <span className="text-[11px] font-mono text-slate-400 font-normal">({filteredArtifacts.length})</span>
@@ -2452,8 +2492,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     )}
                   </div>
                 )}
-              </div>
-            )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Sidebar User Footer */}
             <div className="p-3 border-t border-slate-200/80 shrink-0 bg-slate-50/80 flex items-center justify-between text-xs text-slate-600 select-none">
@@ -2492,21 +2534,39 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </motion.button>
             )}
 
-            {sidebarTab === "artifacts" && selectedArtifact ? (
-              <div className="flex items-center gap-2 min-w-0">
-                <FileText className="size-4 text-slate-500 stroke-[1.8] shrink-0" />
-                <h1 className="min-w-0 truncate text-sm sm:text-base font-bold tracking-tight text-slate-900">
-                  {selectedArtifact.name}
-                </h1>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0 border border-slate-200/70 font-medium">
-                  {selectedArtifact.fileType.toUpperCase()} · {selectedArtifact.size}
-                </span>
-              </div>
-            ) : (
-              <h1 className="min-w-0 truncate text-base sm:text-lg font-bold tracking-tight text-slate-900">
-                {activeThread?.title || "Cuộc trò chuyện mới"}
-              </h1>
-            )}
+            <AnimatePresence mode="wait" initial={false}>
+              {selectedArtifact ? (
+                <motion.div
+                  key={`header-art-${selectedArtifact.id}`}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease: easings.easeOutExpo }}
+                  className="flex items-center gap-2 min-w-0"
+                >
+                  <FileText className="size-4 text-slate-500 stroke-[1.8] shrink-0" />
+                  <h1 className="min-w-0 truncate text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {selectedArtifact.name}
+                  </h1>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0 border border-slate-200/70 font-medium">
+                    {selectedArtifact.fileType.toUpperCase()} · {selectedArtifact.size}
+                  </span>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`header-chat-${activeThread?.id || "new"}`}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease: easings.easeOutExpo }}
+                  className="flex items-center gap-2 min-w-0"
+                >
+                  <h1 className="min-w-0 truncate text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {activeThread?.title || "Cuộc trò chuyện mới"}
+                  </h1>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -2527,7 +2587,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             </motion.button>
 
             {/* Bookmark button */}
-            {sidebarTab === "chats" && (
+            {!selectedArtifact && (
               <motion.button
                 type="button"
                 onClick={() => activeThread && handleTogglePin(activeThread.id)}
@@ -2563,9 +2623,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* CONDITIONAL BODY: CHAT VIEWPORT OR ARTIFACT VIEWER                  */}
         {/* ─────────────────────────────────────────────────────────────────── */}
-        {selectedArtifact ? (
-          /* DUAL PANE / SPLIT VIEW: CHAT VIEWPORT (LEFT) + ARTIFACT VIEWER (RIGHT) */
-          <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative w-full h-full">
+          <AnimatePresence mode="wait" initial={false}>
+            {selectedArtifact ? (
+              /* DUAL PANE / SPLIT VIEW: CHAT VIEWPORT (LEFT) + ARTIFACT VIEWER (RIGHT) */
+              <motion.div
+                key={`main-view-split-${selectedArtifact.id}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8, scale: 0.995 }}
+                transition={{ duration: 0.22, ease: easings.easeOutExpo }}
+                className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full"
+              >
             {/* Left Pane: Chat Conversation (Can be collapsed via isChatSplitOpen) */}
             {isChatSplitOpen && (
               <div className="w-full lg:w-1/2 xl:w-[48%] flex flex-col border-r border-slate-200/80 dark:border-neutral-800 min-h-0 h-full overflow-hidden bg-white dark:bg-card">
@@ -2666,128 +2735,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 onAskAboutDoc={(prompt) => handleSendMessage(prompt, selectedArtifact.content, selectedArtifact.name)}
               />
             </div>
-          </div>
-        ) : sidebarTab === "artifacts" ? (
-            /* ARTIFACTS HUB (DRAG & DROP UPLOAD ZONE OR READ-ONLY VIEW BASED ON RBAC) */
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-10 flex flex-col items-center justify-center">
-              <div className="max-w-4xl w-full text-center space-y-6">
-                {!canUploadArtifacts ? (
-                  /* Read-Only State for Roles without cap-ai-artifacts-upload permission */
-                  <div className="w-full rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center space-y-4">
-                    <div className="size-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-2xs">
-                      <Lock className="size-7" />
-                    </div>
-                    <div className="space-y-2 max-w-md">
-                      <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-foreground">
-                        Kho tri thức Artifacts (Chỉ đọc)
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-muted-foreground leading-relaxed">
-                        Tài khoản với vai trò <span className="font-semibold text-slate-800 dark:text-neutral-200 font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-800">{session?.role || "Chưa xác định"}</span> chỉ có quyền đọc và tra cứu tài liệu sẵn có. Quyền tải lên hoặc tạo tài liệu mới được cấu hình bởi Quản trị viên (Admin) trong tab <span className="font-semibold text-slate-800 dark:text-neutral-200">Quản lý &gt; Phân quyền (RBAC)</span>.
-                      </p>
-                    </div>
-                    <div className="pt-2 text-xs text-slate-400 dark:text-neutral-500">
-                      👇 Vui lòng chọn một tài liệu trong danh sách bên dưới hoặc cột bên trái để xem nội dung
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* ReUI c-file-upload-10: Khung lớn chuẩn tỷ lệ màn hình (Aspect 21:9) giống Compress Images */}
-                    <div
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={cn(
-                        "w-full transition-all duration-200 relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-6 sm:p-12 lg:p-16 text-center cursor-pointer min-h-[380px] sm:min-h-[460px] lg:min-h-[500px] aspect-[21/9] bg-white dark:bg-card hover:bg-slate-50/50 dark:hover:bg-muted/30 border-slate-200/90 dark:border-border hover:border-slate-300 dark:hover:border-border/80 shadow-2xs group select-none",
-                        isDraggingOver && "border-slate-900 dark:border-slate-100 bg-slate-50 dark:bg-muted ring-4 ring-slate-900/10 dark:ring-white/10"
-                      )}
-                    >
-                      {/* ReUI c-icon-stack-2 Large Illustration */}
-                      <div className="mb-4 pointer-events-none flex items-center justify-center">
-                        <IconStackLarge icon={<FileText className="size-6 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors duration-200" />} />
-                      </div>
-
-                      <div className="space-y-1.5 max-w-lg mx-auto pointer-events-none">
-                        <p className="text-base sm:text-lg font-medium text-slate-900 dark:text-foreground tracking-tight">
-                          Kéo thả tài liệu vào đây, hoặc{" "}
-                          <span className="text-slate-900 dark:text-white underline underline-offset-4 font-semibold hover:text-slate-700 transition-colors">
-                            Duyệt tệp
-                          </span>
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-muted-foreground font-normal">
-                          Hỗ trợ Markdown (.md), PDF, TXT, JSON, CSV, Mã nguồn & Ảnh tư liệu • Dán trực tiếp (Ctrl + V)
-                        </p>
-                      </div>
-
-                      {/* Guidelines Bullets 2 Cột (Chuẩn Tài liệu & Tri thức Artifacts) */}
-                      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-border/60 w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-left text-xs text-slate-500 dark:text-muted-foreground pointer-events-none">
-                        <div className="space-y-1.5">
-                          <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
-                            <span>Đa dạng định dạng (.md, .pdf, .txt, .json, .csv, code, ảnh)</span>
-                          </p>
-                          <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
-                            <span>Tự động phân tích trích xuất dữ liệu cho AI Copilot</span>
-                          </p>
-                        </div>
-                        <div className="space-y-1.5">
-                          <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
-                            <span>Đồng bộ an toàn Google Drive & Master Data MB</span>
-                          </p>
-                          <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
-                            <span>100% Bảo mật dữ liệu nội bộ MBBank</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-4 text-xs text-slate-500">
-                      <span>Hoặc bạn có thể</span>
-                      <motion.button
-                        type="button"
-                        onClick={() => setCreateArtifactModalOpen(true)}
-                        {...tactileProps.button}
-                        className="text-slate-900 dark:text-white font-semibold hover:underline cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Plus className="size-3.5" />
-                        <span>Tạo tài liệu trực tiếp</span>
-                      </motion.button>
-                    </div>
-                  </>
-                )}
-
-                {/* Pre-seeded list */}
-                <div className="pt-4 border-t border-slate-200/80 dark:border-border text-left">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
-                    Tài liệu có sẵn trong hệ thống ({artifacts.length}):
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {artifacts.slice(0, 4).map((art) => (
-                      <motion.div
-                        key={art.id}
-                        onClick={() => setSelectedArtifactId(art.id)}
-                        {...tactileProps.card}
-                        className="p-2.5 rounded-xl border border-slate-200/80 bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted/40 hover:border-slate-300 cursor-pointer transition-colors flex items-center gap-2.5 shadow-2xs"
-                      >
-                        <FileText className="size-4 text-slate-700 dark:text-slate-300 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate block">{art.name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">{art.size}</span>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
+          </motion.div>
+        ) : (
           /* ───────────────────────────────────────────────────────────────── */
           /* CHAT STREAM VIEWPORT & STICKY COMPOSER                           */
           /* ───────────────────────────────────────────────────────────────── */
-          <>
+          <motion.div
+            key={`main-view-chats-${activeThread?.id || "empty"}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8, scale: 0.995 }}
+              transition={{ duration: 0.2, ease: easings.easeOutExpo }}
+              className="flex-1 min-h-0 flex flex-col overflow-hidden w-full h-full relative"
+            >
             {/* Scrollable Message Viewport */}
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
               {!activeThread?.messages || activeThread.messages.length === 0 ? (
@@ -3056,9 +3016,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 </p>
               </div>
             </div>
-          </>
+          </motion.div>
         )}
-      </main>
+      </AnimatePresence>
+    </div>
+  </main>
 
       {/* Modal Popup: Thông báo chưa đồng bộ dữ liệu AI (Thay thế cụm nút vàng vàng cũ) */}
       <Dialog

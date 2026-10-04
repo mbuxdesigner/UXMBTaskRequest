@@ -121,16 +121,22 @@ function scoreGeminiModel(id: string): number {
  * - Model ưu tiên có trong danh sách → dùng luôn.
  * - Không có → chọn model Flash mới nhất mà key được phép gọi.
  */
+export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+
 export async function resolveGeminiModel(apiKey: string, preferred?: string): Promise<string> {
-  const models = await listAvailableGeminiModels(apiKey)
-  const pref = (preferred || "").replace(/^google\//, "").replace(/:free$/, "")
-  if (pref && models.includes(pref)) return pref
-  const ranked = models
-    .map((id) => ({ id, s: scoreGeminiModel(id) }))
-    .filter((x) => x.s >= 0)
-    .sort((a, b) => b.s - a.s)
-  const flash = ranked.find((x) => x.id.includes("flash"))
-  return (flash || ranked[0])?.id || pref || DEFAULT_AI_MODEL
+  try {
+    const models = await listAvailableGeminiModels(apiKey)
+    const pref = (preferred || "").replace(/^google\//, "").replace(/:free$/, "")
+    if (pref && models.includes(pref)) return pref
+    const ranked = models
+      .map((id) => ({ id, s: scoreGeminiModel(id) }))
+      .filter((x) => x.s >= 0)
+      .sort((a, b) => b.s - a.s)
+    const flash = ranked.find((x) => x.id.includes("flash"))
+    return (flash || ranked[0])?.id || (pref?.startsWith("gemini") ? pref : DEFAULT_GEMINI_MODEL)
+  } catch {
+    return (preferred?.startsWith("gemini") ? preferred : DEFAULT_GEMINI_MODEL)
+  }
 }
 
 
@@ -554,7 +560,7 @@ export async function testAIConnection(apiKey?: string, model: string = DEFAULT_
  */
 export async function testGeminiConnection(
   apiKey?: string,
-  model: string = DEFAULT_AI_MODEL
+  model: string = DEFAULT_GEMINI_MODEL
 ): Promise<{ success: boolean; message: string; latencyMs: number }> {
   const startTime = Date.now()
   const keyToUse = apiKey?.trim() || getStoredGeminiKey()
@@ -697,15 +703,19 @@ export async function streamAICompletion(
       const geminiKey = getStoredGeminiKey()
       const gateway = getStoredAIGateway()
       const isGeminiTarget = targetModel.startsWith("gemini-") || targetModel.includes("gemini")
+      const hasImageContent = messages.some((m) =>
+        Array.isArray(m.content) && m.content.some((part: any) => part.type === "image_url")
+      )
       const shouldCallGoogleDirect = 
         (Boolean(geminiKey) && isGeminiTarget) ||
         (gateway === "google_ai_studio" && Boolean(geminiKey)) ||
+        (gateway === "auto" && Boolean(geminiKey) && (hasImageContent || isGeminiTarget)) ||
         (activeKey && activeKey.startsWith("AIzaSy"))
 
       if (shouldCallGoogleDirect) {
         const googleKey = (activeKey && activeKey.startsWith("AIzaSy")) ? activeKey : geminiKey
         const rawM = targetModel.startsWith("google/") ? targetModel.replace(/^google\//, "").replace(/:free$/, "") : targetModel
-        let googleModel = rawM.startsWith("gemini") ? rawM : DEFAULT_AI_MODEL
+        let googleModel = rawM.startsWith("gemini") ? rawM : DEFAULT_GEMINI_MODEL
         try {
           googleModel = await resolveGeminiModel(googleKey, googleModel)
         } catch (resolveErr) {
