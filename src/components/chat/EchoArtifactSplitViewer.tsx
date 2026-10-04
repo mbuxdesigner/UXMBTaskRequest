@@ -561,44 +561,44 @@ export function EchoArtifactSplitViewer({
   }, [artifact.content, artifact.fileType, artifact.name, isCopied])
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white h-full border-l border-[#EDEDEB]">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white h-full border-l border-slate-200/80">
       {/* ───────────────────────────────────────────────────────────────── */}
-      {/* 1. TOP HEADER (NOTION-STYLE EDITORIAL HEADER)                      */}
+      {/* 1. TOP HEADER (EDITORIAL HEADER ALIGNED WITH DESIGN SYSTEM)        */}
       {/* ───────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-[#EDEDEB] text-xs shrink-0 select-none shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-white/95 backdrop-blur-xs border-b border-slate-200/80 text-xs shrink-0 select-none shadow-2xs">
         {/* Left: File Icon + Title + Meta */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className={cn("size-7 rounded-md border flex items-center justify-center shrink-0", iconMeta.bg)}>
+          <div className={cn("size-7 rounded-lg border flex items-center justify-center shrink-0", iconMeta.bg)}>
             <IconComponent className={cn("size-3.5 stroke-[1.5]", iconMeta.color)} />
           </div>
 
           <div className="min-w-0 flex-1 truncate">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-[#37352F] text-xs sm:text-sm truncate">
+              <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">
                 {artifact.name}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[10.5px] text-[#787774] font-mono">
-              <span>{iconMeta.label}, {artifact.size}</span>
+            <div className="flex items-center gap-1.5 text-[10.5px] text-slate-500 font-mono">
+              <span>{iconMeta.label} · {artifact.size}</span>
               {artifact.tags && artifact.tags.length > 0 && (
                 <>
                   <span>•</span>
-                  <span className="truncate text-[#787774]">#{artifact.tags[0]}</span>
+                  <span className="truncate text-slate-500">#{artifact.tags[0]}</span>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right: Actions matching Notion / Echo Chat */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Google Drive Link if present */}
           {artifact.driveUrl && (
             <a
               href={artifact.driveUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#EDEDEB] bg-white hover:bg-[#F7F6F3] text-[#37352F] text-xs font-medium cursor-pointer transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
               title="Mở trên Google Drive"
             >
               <ExternalLink className="size-3.5" />
@@ -615,7 +615,7 @@ export function EchoArtifactSplitViewer({
                   onDelete()
                 }
               }}
-              className="size-7 rounded-md hover:bg-rose-50 text-[#787774] hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors"
+              className="size-7 rounded-lg border border-transparent hover:border-rose-200 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors"
               title="Xóa tài liệu này"
             >
               <Trash2 className="size-3.5" />
@@ -626,7 +626,7 @@ export function EchoArtifactSplitViewer({
           <button
             type="button"
             onClick={onClose}
-            className="size-7 rounded-md hover:bg-[#F7F6F3] text-[#787774] hover:text-[#37352F] flex items-center justify-center cursor-pointer transition-colors"
+            className="size-7 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center cursor-pointer transition-colors"
             title="Đóng tài liệu"
           >
             <X className="size-4" />

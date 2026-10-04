@@ -421,4 +421,33 @@ flowchart LR
   3. *Design Ops & Workflow Agent:* Chuyên phân tích tiến độ 7 khâu, đôn đốc PO và đối soát SLA.
 - **Orchestrator:** Một Supervisor Agent phân tích câu hỏi người dùng, quyết định triệu hồi đặc vụ nào giải quyết hoặc cho các đặc vụ phối hợp chéo trước khi trả kết quả cuối cùng cho Designer.
 
+---
+
+## 🛡️ 15. TỐI ƯU HÓA NGỮ CẢNH CHUYÊN SÂU & TRẢI NGHIỆM VI MÔ (DEEP CONTEXT ISOLATION & TACTILE INTERACTIONS)
+
+Nhằm giải quyết triệt để các phản hồi thực tế từ Designer trong quá trình tương tác (hiện tượng AI bị cắt cụt trả lời thành 1 ký tự, nạp nhầm toàn bộ 5 tài liệu hạt nhân, hay lỗi runtime khi destructure), hệ thống đã hoàn thiện 5 cơ chế bảo vệ nâng cao:
+
+### 15.1. Bộ lọc Từ dừng Tiếng Việt (Vietnamese Stop Words Filter)
+- **Vấn đề:** Khi người dùng nhập các câu hỏi ngắn tự nhiên như *"tóm tắt giúp tôi nguyên tắc số 5"*, các từ đơn *"số", "tắt", "tóm", "tôi", "giúp"* trùng lặp ngẫu nhiên trong nội dung của hầu hết các tài liệu hạt nhân (SLA, Tokens, Tiền gửi, 7 Khâu, Handoff), kích hoạt cơ chế nạp toàn bộ các tài liệu vào context.
+- **Giải pháp:** Xây dựng danh sách `VIETNAMESE_STOP_WORDS` trong `src/config/aiPrompts.ts`. Loại bỏ hoàn toàn các từ dừng này trước khi tính điểm tương đồng (`score`), nâng ngưỡng tin cậy lên `score >= 10` và chỉ lấy tối đa 2 tài liệu điểm cao nhất (`matched.slice(0, 2)`).
+
+### 15.2. Cô lập Ngữ cảnh Tài liệu Đính kèm (Custom Context Isolation)
+- **Vấn đề:** Khi người dùng đã đính kèm hoặc bấm hỏi về một tài liệu cụ thể (`attachedDocName` hoặc `customContext`), nếu vẫn nạp 5 tài liệu hạt nhân chung, tổng prompt sẽ phình to (>20.000 tokens), gây tràn context window của các mô hình LLM và dẫn đến hiện tượng phản hồi bị đứt gãy ngay từ ký tự đầu tiên.
+- **Giải pháp:**
+  - Tại `src/pages/AIChatPage.tsx`: Khi có `attachedDocName`, cố định `loadedDocNames = [attachedDocName]` và không tìm kiếm thêm tài liệu ngoài.
+  - Khi truyền `customContext` vào `buildEnrichedContext`, truyền `artifacts: []` để loại trừ hoàn toàn các tài liệu hạt nhân nền, giữ độ dài context ở mức tối ưu (~1.500 tokens).
+  - Bổ sung chỉ dẫn hệ thống: *"Hãy trích xuất nguyên văn, đầy đủ các đề mục/nội dung quan trọng từ tài liệu được cung cấp, không tóm tắt quá sơ sài hoặc ngắt quãng giữa chừng."*
+
+### 15.3. Nâng cấp Hạn mức Token Trả về (Max Output Tokens Expansion)
+- Nâng `max_tokens` mặc định từ `1024` lên `2048` tokens trong cả luồng gọi Serverless Gateway và Direct OpenRouter Call tại `src/services/aiService.ts`.
+- Đảm bảo các câu trả lời phân tích chuyên sâu về quy trình, điều khoản tài chính hoặc danh sách tiêu chuẩn Figma Handoff được hiển thị trọn vẹn, không bị đứt đoạn giữa chừng.
+
+### 15.4. Tinh chỉnh Tương tác Xúc giác & Dark Mode (Tactile Motion & ReUI Tokens)
+- Tích hợp chuẩn tương tác xúc giác `tactileProps` với hiệu ứng đàn hồi siêu nhẹ (`tap: scale(0.97)`, `hover: scale(1.02)`) trên toàn bộ hệ thống nút bấm của `AIChatPage.tsx`, `EchoAssistantActionBar.tsx`, `EchoArtifactSplitViewer.tsx`, và `EchoUserMessageBubble.tsx`.
+- Đồng bộ hóa các token Dark Mode theo chuẩn ReUI (`dark:bg-neutral-800`, `dark:text-white`, `dark:border-neutral-700`), đảm bảo độ tương phản cao và thẩm mỹ hiện đại cho chế độ nền tối.
+
+### 15.5. Phòng vệ Runtime Reference trong Agent Activity Trace
+- Bóc tách đầy đủ giá trị mặc định `loadedDocNames = []` trong danh sách tham số component `AgentActivityTrace`, đảm bảo không bao giờ phát sinh lỗi `ReferenceError: loadedDocNames is not defined` ngay cả khi gọi từ các trang ngoài hoặc khi `trace` data chưa kịp khởi tạo.
+
+
 

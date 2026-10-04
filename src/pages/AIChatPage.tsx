@@ -64,6 +64,20 @@ import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import {
+  springs,
+  durations,
+  easings,
+  tactileProps,
+  cascadeWaveContainerVariants,
+  cascadeWaveItemVariants,
+  staggerContainerVariants,
+  staggerItemVariants,
+  dataContinuityTransition,
+  originPopoverVariants,
+  dialogOverlayVariants,
+  dialogContentVariants,
+} from "@/lib/motion"
 import { getStoredSession } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { type UXRequest } from "@/data/mockData"
@@ -1832,29 +1846,30 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
   if (!canUseAi) {
     return (
-      <div className="flex h-screen w-full items-center justify-center p-6 bg-slate-50 dark:bg-background">
-        <div className="flex flex-col items-center justify-center max-w-md p-8 text-center bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border shadow-xs">
-          <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 flex items-center justify-center mb-4 border border-amber-200 dark:border-amber-500/20">
-            <ShieldAlert className="w-7 h-7" />
+      <div className="flex h-screen w-full items-center justify-center p-6 bg-slate-50">
+        <div className="flex flex-col items-center justify-center max-w-md p-8 text-center bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="size-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 border border-amber-200 shadow-2xs">
+            <ShieldAlert className="size-7" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-foreground mb-1.5">
+          <h2 className="text-xl font-bold text-slate-900 mb-2 tracking-tight">
             Chưa được cấp quyền sử dụng AI Chats
           </h2>
-          <p className="text-sm text-slate-500 dark:text-muted-foreground leading-relaxed mb-6">
-            Tài khoản với vai trò <span className="font-semibold text-slate-700 dark:text-foreground">{session?.role || "Hiện tại"}</span> chưa được cấp quyền sử dụng Trợ lý AI. Vui lòng liên hệ Quản trị viên (Admin) hoặc Design Owner để được phân quyền trong mục Cài đặt hệ thống.
+          <p className="text-sm text-slate-600 leading-relaxed mb-6">
+            Tài khoản với vai trò <span className="font-semibold text-slate-800">{session?.role || "Hiện tại"}</span> chưa được cấp quyền sử dụng Trợ lý AI. Vui lòng liên hệ Quản trị viên (Admin) hoặc Design Owner để được phân quyền trong mục Cài đặt hệ thống.
           </p>
           {onBackToPortal ? (
-            <button
+            <motion.button
               type="button"
               onClick={onBackToPortal}
-              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium text-xs hover:bg-primary/90 transition-colors cursor-pointer"
+              {...tactileProps.button}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-xs hover:bg-slate-800 active:bg-slate-950 transition-colors cursor-pointer shadow-xs"
             >
               Quay lại trang chủ
-            </button>
+            </motion.button>
           ) : (
             <a
               href="#overview"
-              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium text-xs hover:bg-primary/90 transition-colors cursor-pointer inline-flex items-center"
+              className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-xs hover:bg-slate-800 active:bg-slate-950 transition-colors cursor-pointer inline-flex items-center shadow-xs"
             >
               Quay lại trang chủ
             </a>
@@ -1865,7 +1880,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background text-foreground font-sans select-text">
+    <div className="flex h-full w-full overflow-hidden bg-[#FCFCFD] text-slate-800 font-sans select-text">
       {/* Hidden file input for uploading artifacts & documents */}
       <input
         ref={fileInputRef}
@@ -1883,16 +1898,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         {sidebarOpen && (
           <motion.aside
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 252, opacity: 1 }}
+            animate={{ width: 256, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="flex flex-col h-full bg-sidebar border-r border-border shrink-0 overflow-hidden z-20 text-sm select-none"
+            transition={springs.gentle}
+            className="flex flex-col h-full bg-slate-50/90 border-r border-slate-200/80 shrink-0 overflow-hidden z-20 text-sm select-none"
           >
             {/* 1. Header: Brand Logo (/ai-default.png), Title, Search, Collapse */}
-            <div className="flex flex-col p-2 gap-2 shrink-0">
+            <div className="flex flex-col p-2.5 gap-2 shrink-0">
               <div className="flex items-center gap-2 px-1 pt-1">
                 {/* Brand Logo Box: Uses ai-default.png */}
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background shadow-2xs overflow-hidden">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
                   <img
                     src={aiDefaultLogo}
                     alt="AI MB"
@@ -1903,37 +1918,39 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   />
                 </div>
 
-                <span className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-foreground">
+                <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-slate-900">
                   Trợ lý UX MB
                 </span>
 
                 {/* Search */}
-                <button
+                <motion.button
                   type="button"
                   onClick={() => {
                     const q = prompt("Tìm kiếm đoạn chat hoặc tài liệu:")
                     if (q !== null) setSearchQuery(q)
                   }}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+                  {...tactileProps.iconButton}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200/60 hover:text-slate-900 cursor-pointer transition-colors"
                   title="Tìm kiếm"
                 >
                   <Search className="size-3.5" />
-                </button>
+                </motion.button>
 
                 {/* Collapse sidebar */}
-                <button
+                <motion.button
                   type="button"
                   onClick={() => setSidebarOpen(false)}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+                  {...tactileProps.iconButton}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200/60 hover:text-slate-900 cursor-pointer transition-colors"
                   title="Thu gọn sidebar"
                 >
                   <PanelLeft className="size-3.5" />
-                </button>
+                </motion.button>
               </div>
 
-              {/* TOP TABS: [ Chats ]  [ Artifacts ] (Exact Match to ReUI Echo Chat) */}
-              <div className="pt-2 pb-1 px-1">
-                <div className="grid grid-cols-2 p-[3px] bg-foreground/5 rounded-lg text-xs font-medium">
+              {/* TOP TABS: [ Chats ]  [ Artifacts ] (ReUI Segmented Control Standard) */}
+              <div className="pt-2 pb-1 px-0.5">
+                <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-muted/70 rounded-xl border border-slate-200/80 dark:border-border text-xs select-none">
                   <button
                     type="button"
                     onClick={() => {
@@ -1941,13 +1958,20 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       setSearchQuery("")
                     }}
                     className={cn(
-                      "py-1 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                      "relative isolate py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs select-none font-semibold",
                       sidebarTab === "chats"
-                        ? "bg-background text-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "text-slate-900 dark:text-foreground font-semibold"
+                        : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground font-medium"
                     )}
                   >
-                    <span>Chats</span>
+                    {sidebarTab === "chats" && (
+                      <motion.span
+                        layoutId="aichat-sidebar-tab-pill"
+                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-sm border border-slate-200/90 dark:border-border -z-10"
+                        transition={springs.indicator}
+                      />
+                    )}
+                    <span className="relative z-10">Chats</span>
                   </button>
                   <button
                     type="button"
@@ -1956,51 +1980,61 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       setSearchQuery("")
                     }}
                     className={cn(
-                      "py-1 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                      "relative isolate py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs select-none font-semibold",
                       sidebarTab === "artifacts"
-                        ? "bg-background text-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "text-slate-900 dark:text-foreground font-semibold"
+                        : "text-slate-500 hover:text-slate-900 dark:text-muted-foreground dark:hover:text-foreground font-medium"
                     )}
                   >
-                    <span>Artifacts</span>
+                    {sidebarTab === "artifacts" && (
+                      <motion.span
+                        layoutId="aichat-sidebar-tab-pill"
+                        className="absolute inset-0 bg-white dark:bg-card rounded-lg shadow-sm border border-slate-200/90 dark:border-border -z-10"
+                        transition={springs.indicator}
+                      />
+                    )}
+                    <span className="relative z-10">Artifacts</span>
                   </button>
                 </div>
               </div>
 
               {/* 3. Action Button (New Chat OR Upload Artifact) */}
-              <div className="flex flex-col gap-0.5 pt-1 px-0.5">
+              <div className="flex flex-col gap-1 pt-1">
                 {sidebarTab === "chats" ? (
-                  <button
+                  <motion.button
                     type="button"
                     onClick={handleCreateNewChat}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 h-9 text-sm hover:bg-foreground/5 font-medium text-foreground cursor-pointer transition-colors"
+                    {...tactileProps.button}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 h-9 text-xs sm:text-sm bg-white border border-slate-200/80 shadow-2xs hover:bg-slate-50 hover:border-slate-300 font-semibold text-slate-700 hover:text-slate-900 cursor-pointer transition-all"
                   >
-                    <Plus className="size-4" />
+                    <Plus className="size-4 stroke-[2.2]" />
                     <span>Tạo đoạn chat mới</span>
-                  </button>
+                  </motion.button>
                 ) : (
                   <div className="flex items-center gap-1.5">
                     {canUploadArtifacts ? (
                       <>
-                        <button
+                        <motion.button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-2 h-9 text-xs bg-primary text-primary-foreground font-semibold hover:bg-primary/90 cursor-pointer transition-colors shadow-2xs"
+                          {...tactileProps.button}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 h-9 text-xs bg-slate-900 text-white font-semibold hover:bg-slate-800 active:bg-slate-950 cursor-pointer transition-colors shadow-xs"
                         >
-                          <Upload className="size-3.5" />
+                          <Upload className="size-3.5 stroke-[2.2]" />
                           <span>Tải lên tài liệu</span>
-                        </button>
-                        <button
+                        </motion.button>
+                        <motion.button
                           type="button"
                           onClick={() => setCreateArtifactModalOpen(true)}
-                          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          {...tactileProps.iconButton}
+                          className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 cursor-pointer transition-colors shadow-2xs"
                           title="Tạo văn bản mới"
                         >
                           <Plus className="size-4" />
-                        </button>
+                        </motion.button>
                       </>
                     ) : (
-                      <div className="w-full py-1.5 px-2.5 rounded-md bg-muted/60 border border-border/50 text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+                      <div className="w-full py-2 px-3 rounded-xl bg-slate-100 border border-slate-200/70 text-[11px] text-slate-600 font-medium flex items-center justify-center gap-1.5">
                         <Lock className="size-3 shrink-0 text-amber-500" />
                         <span>Kho tài liệu chỉ đọc (RBAC)</span>
                       </div>
@@ -2011,18 +2045,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             </div>
 
             {/* Separator */}
-            <div className="h-[1px] bg-sidebar-border mx-2 my-1" />
+            <div className="h-[1px] bg-slate-200/70 mx-2.5 my-1" />
 
             {/* 4. SIDEBAR CONTENT: CHATS TAB OR ARTIFACTS TAB */}
             {sidebarTab === "chats" ? (
               <div className="flex-1 overflow-y-auto px-2 py-1 space-y-3 text-sm select-none">
                 {/* Pinned Group */}
                 {pinnedList.length > 0 && (
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     <button
                       type="button"
                       onClick={() => setCollapsedPinned((v) => !v)}
-                      className="w-full flex items-center justify-between px-2 py-1 text-[13px] font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                     >
                       <span>Đã ghim</span>
                       <div className="flex items-center gap-1 font-mono text-xs">
@@ -2031,52 +2065,80 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       </div>
                     </button>
 
-                    {!collapsedPinned &&
-                      pinnedList.map((t) => (
-                        <EchoSidebarRow
-                          key={t.id}
-                          thread={t}
-                          isActive={t.id === activeThreadId}
-                          onSelect={() => handleSelectThread(t.id)}
-                          onPin={handleTogglePin}
-                          onRename={openRenameModal}
-                          onExport={handleExportThread}
-                          onDelete={handleDeleteThread}
-                        />
-                      ))}
+                    {!collapsedPinned && (
+                      <motion.div
+                        variants={cascadeWaveContainerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        className="space-y-0.5"
+                      >
+                        {pinnedList.map((t) => (
+                          <motion.div
+                            key={t.id}
+                            variants={cascadeWaveItemVariants}
+                            layout="position"
+                            transition={dataContinuityTransition}
+                          >
+                            <EchoSidebarRow
+                              thread={t}
+                              isActive={t.id === activeThreadId}
+                              onSelect={() => handleSelectThread(t.id)}
+                              onPin={handleTogglePin}
+                              onRename={openRenameModal}
+                              onExport={handleExportThread}
+                              onDelete={handleDeleteThread}
+                            />
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
                   </div>
                 )}
 
                 {/* Recent Group */}
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <button
                     type="button"
                     onClick={() => setCollapsedRecent((v) => !v)}
-                    className="w-full flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-between px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                   >
                     <span>Gần đây</span>
-                    <div className="flex items-center gap-1 font-mono text-[11px]">
+                    <div className="flex items-center gap-1 font-mono text-xs">
                       <span>{recentList.length}</span>
                       <ChevronDown className={cn("size-3.5 transition-transform", !collapsedRecent && "rotate-180")} />
                     </div>
                   </button>
 
-                  {!collapsedRecent &&
-                    recentList.map((t) => (
-                      <EchoSidebarRow
-                        key={t.id}
-                        thread={t}
-                        isActive={t.id === activeThreadId}
-                        onSelect={() => handleSelectThread(t.id)}
-                        onPin={handleTogglePin}
-                        onRename={openRenameModal}
-                        onExport={handleExportThread}
-                        onDelete={handleDeleteThread}
-                      />
-                    ))}
+                  {!collapsedRecent && (
+                    <motion.div
+                      variants={cascadeWaveContainerVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="space-y-0.5"
+                    >
+                      {recentList.map((t) => (
+                        <motion.div
+                          key={t.id}
+                          variants={cascadeWaveItemVariants}
+                          layout="position"
+                          transition={dataContinuityTransition}
+                        >
+                          <EchoSidebarRow
+                            thread={t}
+                            isActive={t.id === activeThreadId}
+                            onSelect={() => handleSelectThread(t.id)}
+                            onPin={handleTogglePin}
+                            onRename={openRenameModal}
+                            onExport={handleExportThread}
+                            onDelete={handleDeleteThread}
+                          />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
 
                   {recentList.length === 0 && pinnedList.length === 0 && (
-                    <div className="p-3 text-center text-xs text-muted-foreground">
+                    <div className="p-4 text-center text-xs text-slate-500 leading-relaxed">
                       Chưa có đoạn chat nào. Bấm "+ Tạo đoạn chat mới" để bắt đầu.
                     </div>
                   )}
@@ -2085,79 +2147,90 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             ) : (
               /* ARTIFACTS LIST (DATA USER PUSHES UP) */
               <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1 text-sm select-none">
-                <div className="flex items-center justify-between px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  <span>Recent artifacts</span>
-                  <span className="text-[11px] font-mono opacity-70">({filteredArtifacts.length})</span>
+                <div className="flex items-center justify-between px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <span>Kho tài liệu</span>
+                  <span className="text-[11px] font-mono text-slate-400 font-normal">({filteredArtifacts.length})</span>
                 </div>
 
-                {filteredArtifacts.map((art) => {
-                  const isSelected = selectedArtifactId === art.id
-                  const ext = art.name.split(".").pop()?.toLowerCase() || ""
-                  const isPdf = art.fileType === "pdf" || ext === "pdf"
-                  const isCode = ["ts", "tsx", "js", "json", "code"].includes(art.fileType) || ["ts", "tsx", "js", "json"].includes(ext)
-                  const isCsv = art.fileType === "csv" || ext === "csv"
-                  const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext)
+                <motion.div
+                  variants={cascadeWaveContainerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-0.5"
+                >
+                  {filteredArtifacts.map((art) => {
+                    const isSelected = selectedArtifactId === art.id
+                    const ext = art.name.split(".").pop()?.toLowerCase() || ""
+                    const isPdf = art.fileType === "pdf" || ext === "pdf"
+                    const isCode = ["ts", "tsx", "js", "json", "code"].includes(art.fileType) || ["ts", "tsx", "js", "json"].includes(ext)
+                    const isCsv = art.fileType === "csv" || ext === "csv"
+                    const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext)
 
-                  return (
-                    <div
-                      key={art.id}
-                      onClick={() => {
-                        setSelectedArtifactId(art.id)
-                        setIsChatSplitOpen(true)
-                      }}
-                      className={cn(
-                        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] cursor-pointer transition-colors text-left",
-                        isSelected
-                          ? "bg-foreground/10 font-medium text-foreground"
-                          : "hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {/* Icon per file type */}
-                      {isPdf ? (
-                        <FileText className="size-4 shrink-0 text-rose-500/80 stroke-[1.5]" />
-                      ) : isCode ? (
-                        <FileCode className="size-4 shrink-0 text-sky-500/80 stroke-[1.5]" />
-                      ) : isCsv ? (
-                        <FileSpreadsheet className="size-4 shrink-0 text-emerald-500/80 stroke-[1.5]" />
-                      ) : isImage ? (
-                        <FileText className="size-4 shrink-0 text-amber-500/80 stroke-[1.5]" />
-                      ) : (
-                        <FileText className="size-4 shrink-0 text-slate-500 dark:text-slate-400 stroke-[1.5]" />
-                      )}
+                    return (
+                      <motion.div
+                        key={art.id}
+                        variants={cascadeWaveItemVariants}
+                        layout="position"
+                        transition={dataContinuityTransition}
+                        onClick={() => {
+                          setSelectedArtifactId(art.id)
+                          setIsChatSplitOpen(true)
+                        }}
+                        className={cn(
+                          "group relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] cursor-pointer transition-all text-left border",
+                          isSelected
+                            ? "bg-slate-200/70 font-semibold text-slate-900 border-slate-300/60 shadow-2xs"
+                            : "border-transparent hover:bg-slate-100/70 text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        {/* Icon per file type */}
+                        {isPdf ? (
+                          <FileText className="size-4 shrink-0 text-rose-500 stroke-[1.8]" />
+                        ) : isCode ? (
+                          <FileCode className="size-4 shrink-0 text-blue-500 stroke-[1.8]" />
+                        ) : isCsv ? (
+                          <FileSpreadsheet className="size-4 shrink-0 text-emerald-500 stroke-[1.8]" />
+                        ) : isImage ? (
+                          <FileText className="size-4 shrink-0 text-amber-500 stroke-[1.8]" />
+                        ) : (
+                          <FileText className="size-4 shrink-0 text-slate-500 stroke-[1.8]" />
+                        )}
 
-                      <div className="min-w-0 flex-1 truncate">
-                        <span className="block truncate text-xs font-medium text-foreground">{art.name}</span>
-                        <span className="block text-[10px] text-muted-foreground font-mono">{art.size} · {art.updatedAt}</span>
-                      </div>
+                        <div className="min-w-0 flex-1 truncate">
+                          <span className="block truncate text-xs font-semibold text-slate-800 group-hover:text-slate-900">{art.name}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">{art.size} · {art.updatedAt}</span>
+                        </div>
 
-                      {/* Delete button on hover (Only for roles with upload permission) */}
-                      {canUploadArtifacts && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (window.confirm(`Bạn có chắc chắn muốn xóa tài liệu "${art.name}" không?`)) {
-                              handleDeleteArtifact(art.id, e)
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 size-6 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-muted-foreground hover:text-rose-600 flex items-center justify-center cursor-pointer transition-all shrink-0"
-                          title="Xóa tài liệu này"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
+                        {/* Delete button on hover (Only for roles with upload permission) */}
+                        {canUploadArtifacts && (
+                          <motion.button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (window.confirm(`Bạn có chắc chắn muốn xóa tài liệu "${art.name}" không?`)) {
+                                handleDeleteArtifact(art.id, e)
+                              }
+                            }}
+                            {...tactileProps.iconButton}
+                            className="opacity-0 group-hover:opacity-100 size-6.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-all shrink-0"
+                            title="Xóa tài liệu này"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </motion.button>
+                        )}
+                      </motion.div>
+                    )
+                  })}
+                </motion.div>
 
                 {filteredArtifacts.length === 0 && (
-                  <div className="p-3 text-center text-xs text-muted-foreground space-y-2">
+                  <div className="p-4 text-center text-xs text-slate-500 space-y-2">
                     <p>Chưa có tài liệu nào.</p>
                     {canUploadArtifacts ? (
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="text-primary hover:underline text-xs"
+                        className="text-slate-900 font-semibold hover:underline text-xs"
                       >
                         Bấm vào đây để tải lên tệp tin
                       </button>
@@ -2169,17 +2242,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </div>
             )}
 
-            {/* Sidebar User Footer matching ReUI Echo Chat */}
-            <div className="p-2.5 border-t border-border/80 shrink-0 bg-sidebar/80 flex items-center justify-between text-xs text-muted-foreground select-none">
+            {/* Sidebar User Footer */}
+            <div className="p-3 border-t border-slate-200/80 shrink-0 bg-slate-50/80 flex items-center justify-between text-xs text-slate-600 select-none">
               <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
                 <UserAvatar
                   name={session?.displayName || userName}
                   avatarUrl={session?.avatarUrl}
-                  className="size-6 shrink-0"
+                  className="size-6.5 shrink-0 rounded-full border border-slate-200/80 shadow-2xs"
                 />
-                <span className="truncate font-medium text-foreground text-xs">{session?.displayName || userName}</span>
+                <span className="truncate font-semibold text-slate-800 text-xs">{session?.displayName || userName}</span>
               </div>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-foreground/5 text-muted-foreground shrink-0 uppercase border border-border/50">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold border border-slate-200/70 shrink-0 uppercase">
                 {session?.role || "Designer"}
               </span>
             </div>
@@ -2190,43 +2263,42 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {/* MAIN CANVAS: CHAT STREAM OR ARTIFACT VIEWER                          */}
       {/* ─────────────────────────────────────────────────────────────────── */}
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background h-full relative">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FCFCFD] h-full relative">
         {/* Top Header */}
-        <header className="bg-background relative z-10 flex h-12 shrink-0 items-center justify-between gap-2 px-4 md:h-13 border-b border-border/40">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <header className="bg-white/95 backdrop-blur-xs relative z-10 flex h-13 shrink-0 items-center justify-between gap-2 px-4 sm:px-6 border-b border-slate-200/70">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             {!sidebarOpen && (
-              <button
+              <motion.button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+                {...tactileProps.iconButton}
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-2xs cursor-pointer transition-colors"
                 title="Mở sidebar"
               >
                 <PanelLeft className="size-4" />
-              </button>
+              </motion.button>
             )}
 
             {sidebarTab === "artifacts" && selectedArtifact ? (
               <div className="flex items-center gap-2 min-w-0">
-                <FileText className="size-4 text-slate-500 dark:text-slate-400 stroke-[1.5] shrink-0" />
-                <h1 className="min-w-0 truncate text-sm sm:text-base font-semibold text-foreground">
+                <FileText className="size-4 text-slate-500 stroke-[1.8] shrink-0" />
+                <h1 className="min-w-0 truncate text-sm sm:text-base font-bold tracking-tight text-slate-900">
                   {selectedArtifact.name}
                 </h1>
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0 border border-border/60">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0 border border-slate-200/70 font-medium">
                   {selectedArtifact.fileType.toUpperCase()} · {selectedArtifact.size}
                 </span>
               </div>
             ) : (
-              <h1 className="min-w-0 truncate text-base font-semibold text-foreground">
+              <h1 className="min-w-0 truncate text-base sm:text-lg font-bold tracking-tight text-slate-900">
                 {activeThread?.title || "Cuộc trò chuyện mới"}
               </h1>
             )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-
-
             {/* AI Gateway & Google AI Studio Key Settings button */}
-            <button
+            <motion.button
               type="button"
               onClick={() => {
                 setQuickGeminiKey(getStoredGeminiKey())
@@ -2234,41 +2306,43 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 setQuickTestResult(null)
                 setAiSettingsModalOpen(true)
               }}
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border text-sm font-medium cursor-pointer transition-all bg-background text-foreground hover:bg-muted hover:text-blue-600"
+              {...tactileProps.iconButton}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 text-xs font-semibold cursor-pointer transition-all bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs"
               title="Cài đặt Cổng AI & Google AI Studio Key"
             >
-              <Key className="size-3.5 text-blue-600 dark:text-blue-400" />
-            </button>
+              <Key className="size-3.5 text-slate-600" />
+            </motion.button>
 
             {/* Bookmark button */}
             {sidebarTab === "chats" && (
-              <button
+              <motion.button
                 type="button"
                 onClick={() => activeThread && handleTogglePin(activeThread.id)}
+                {...tactileProps.iconButton}
                 className={cn(
-                  "inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border text-sm font-medium cursor-pointer transition-all",
+                  "inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 text-xs font-semibold cursor-pointer transition-all shadow-2xs",
                   activeThread?.isPinned
-                    ? "bg-secondary text-foreground"
-                    : "bg-background text-foreground hover:bg-muted"
+                    ? "bg-slate-100 text-slate-900 border-slate-300"
+                    : "bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 )}
                 title="Ghim đoạn chat"
               >
-                <Bookmark className={cn("size-3.5", activeThread?.isPinned && "fill-current")} />
-              </button>
+                <Bookmark className={cn("size-3.5", activeThread?.isPinned && "fill-current text-slate-900")} />
+              </motion.button>
             )}
-
 
             {/* Return to MB Portal button */}
             {onBackToPortal && (
-              <button
+              <motion.button
                 type="button"
                 onClick={onBackToPortal}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-border/60 cursor-pointer ml-1"
+                {...tactileProps.button}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200/80 shadow-2xs cursor-pointer ml-1"
                 title="Quay lại MB UX Portal"
               >
                 <ArrowLeft className="size-3.5" />
                 <span className="hidden sm:inline">MB Portal</span>
-              </button>
+              </motion.button>
             )}
           </div>
         </header>
@@ -2281,39 +2355,40 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full">
             {/* Left Pane: Chat Conversation (Can be collapsed via isChatSplitOpen) */}
             {isChatSplitOpen && (
-              <div className="w-full lg:w-1/2 xl:w-[48%] flex flex-col border-r border-border min-h-0 h-full overflow-hidden bg-background">
+              <div className="w-full lg:w-1/2 xl:w-[48%] flex flex-col border-r border-slate-200/80 dark:border-neutral-800 min-h-0 h-full overflow-hidden bg-white dark:bg-card">
                 {/* Scrollable Message Viewport */}
                 <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
                   {!activeThread?.messages || activeThread.messages.length === 0 ? (
                     <div className="mx-auto flex w-full max-w-lg flex-col justify-center py-6">
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                        <div className="size-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-neutral-700 flex items-center justify-center text-slate-800 dark:text-slate-200 shadow-2xs">
                           <FileText className="size-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-base font-bold text-foreground">Hỏi AI về tài liệu</h3>
-                          <p className="text-xs text-muted-foreground truncate">{selectedArtifact.name}</p>
+                          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Hỏi AI về tài liệu</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{selectedArtifact.name}</p>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
                         Bạn có thể đặt bất kỳ câu hỏi nào về nội dung, quy trình, thông số hoặc yêu cầu AI phân tích tài liệu này.
                       </p>
-                      <div className="space-y-1.5 border-t border-border/60 pt-3">
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Gợi ý câu hỏi:</span>
+                      <div className="space-y-1.5 border-t border-slate-200/70 dark:border-neutral-800 pt-3">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Gợi ý câu hỏi:</span>
                         {[
                           `Tóm tắt 3 điểm cốt lõi nhất của tài liệu ${selectedArtifact.name}`,
                           `Quy trình này quy định những bước nào và SLA ra sao?`,
                           `Chỉ ra các điểm cần lưu ý đặc biệt cho Designer và PO trong tài liệu này`
                         ].map((promptText, idx) => (
-                          <button
+                          <motion.button
                             key={idx}
                             type="button"
                             onClick={() => handleSendMessage(promptText, selectedArtifact.content, selectedArtifact.name)}
-                            className="group flex w-full items-center justify-between py-2 px-2.5 rounded-lg text-left text-xs text-foreground bg-muted/30 hover:bg-muted transition-colors cursor-pointer"
+                            {...tactileProps.button}
+                            className="group flex w-full items-center justify-between py-2 px-2.5 rounded-xl text-left text-xs text-slate-700 dark:text-slate-300 bg-slate-50/80 hover:bg-slate-100 border border-slate-200/60 dark:border-neutral-800 transition-colors cursor-pointer"
                           >
                             <span className="truncate">{promptText}</span>
-                            <CornerDownLeft className="size-3.5 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5 text-primary" />
-                          </button>
+                            <CornerDownLeft className="size-3.5 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5 text-slate-900 dark:text-slate-100" />
+                          </motion.button>
                         ))}
                       </div>
                     </div>
@@ -2338,7 +2413,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 </div>
 
                 {/* Composer Form in Split Pane */}
-                <div className="shrink-0 px-3 sm:px-4 pb-3 pt-1 z-20 border-t border-border/40 bg-background/80 backdrop-blur-sm">
+                <div className="shrink-0 px-3 sm:px-4 pb-3 pt-1 z-20 border-t border-slate-200/70 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-sm">
                   <EchoComposerForm
                     isStreaming={isStreaming}
                     onSend={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
@@ -2410,18 +2485,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       onClick={() => fileInputRef.current?.click()}
                       className={cn(
                         "w-full transition-all duration-200 relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-6 sm:p-12 lg:p-16 text-center cursor-pointer min-h-[380px] sm:min-h-[460px] lg:min-h-[500px] aspect-[21/9] bg-white dark:bg-card hover:bg-slate-50/50 dark:hover:bg-muted/30 border-slate-200/90 dark:border-border hover:border-slate-300 dark:hover:border-border/80 shadow-2xs group select-none",
-                        isDraggingOver && "border-[#1B3A6B] dark:border-primary bg-slate-50 dark:bg-muted ring-4 ring-[#1B3A6B]/10 dark:ring-primary/10"
+                        isDraggingOver && "border-slate-900 dark:border-slate-100 bg-slate-50 dark:bg-muted ring-4 ring-slate-900/10 dark:ring-white/10"
                       )}
                     >
                       {/* ReUI c-icon-stack-2 Large Illustration */}
                       <div className="mb-4 pointer-events-none flex items-center justify-center">
-                        <IconStackLarge icon={<FileText className="size-6 text-slate-400 group-hover:text-[#1057FB] dark:group-hover:text-blue-400 transition-colors duration-200" />} />
+                        <IconStackLarge icon={<FileText className="size-6 text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors duration-200" />} />
                       </div>
 
                       <div className="space-y-1.5 max-w-lg mx-auto pointer-events-none">
                         <p className="text-base sm:text-lg font-medium text-slate-900 dark:text-foreground tracking-tight">
                           Kéo thả tài liệu vào đây, hoặc{" "}
-                          <span className="text-[#1057FB] dark:text-blue-400 underline underline-offset-4 font-semibold hover:text-[#1B3A6B] dark:hover:text-blue-300 transition-colors">
+                          <span className="text-slate-900 dark:text-white underline underline-offset-4 font-semibold hover:text-slate-700 transition-colors">
                             Duyệt tệp
                           </span>
                         </p>
@@ -2434,59 +2509,61 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       <div className="mt-8 pt-6 border-t border-slate-100 dark:border-border/60 w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-left text-xs text-slate-500 dark:text-muted-foreground pointer-events-none">
                         <div className="space-y-1.5">
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
                             <span>Đa dạng định dạng (.md, .pdf, .txt, .json, .csv, code, ảnh)</span>
                           </p>
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
                             <span>Tự động phân tích trích xuất dữ liệu cho AI Copilot</span>
                           </p>
                         </div>
                         <div className="space-y-1.5">
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
                             <span>Đồng bộ an toàn Google Drive & Master Data MB</span>
                           </p>
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-slate-200 shrink-0" />
                             <span>100% Bảo mật dữ liệu nội bộ MBBank</span>
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center gap-4 text-xs text-slate-500">
                       <span>Hoặc bạn có thể</span>
-                      <button
+                      <motion.button
                         type="button"
                         onClick={() => setCreateArtifactModalOpen(true)}
-                        className="text-primary font-medium hover:underline cursor-pointer flex items-center gap-1"
+                        {...tactileProps.button}
+                        className="text-slate-900 dark:text-white font-semibold hover:underline cursor-pointer flex items-center gap-1.5"
                       >
                         <Plus className="size-3.5" />
                         <span>Tạo tài liệu trực tiếp</span>
-                      </button>
+                      </motion.button>
                     </div>
                   </>
                 )}
 
                 {/* Pre-seeded list */}
-                <div className="pt-4 border-t border-border text-left">
-                  <span className="text-xs font-medium text-muted-foreground block mb-2">
+                <div className="pt-4 border-t border-slate-200/80 dark:border-border text-left">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
                     Tài liệu có sẵn trong hệ thống ({artifacts.length}):
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {artifacts.slice(0, 4).map((art) => (
-                      <div
+                      <motion.div
                         key={art.id}
                         onClick={() => setSelectedArtifactId(art.id)}
-                        className="p-2.5 rounded-lg border border-border bg-card hover:bg-muted cursor-pointer transition-colors flex items-center gap-2.5"
+                        {...tactileProps.card}
+                        className="p-2.5 rounded-xl border border-slate-200/80 bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted/40 hover:border-slate-300 cursor-pointer transition-colors flex items-center gap-2.5 shadow-2xs"
                       >
-                        <FileText className="size-4 text-primary shrink-0" />
+                        <FileText className="size-4 text-slate-700 dark:text-slate-300 shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-medium text-foreground truncate block">{art.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{art.size}</span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate block">{art.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{art.size}</span>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
@@ -2504,7 +2581,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 <div className="mx-auto flex w-full max-w-4xl lg:max-w-5xl flex-col justify-center py-6 sm:py-10">
                   {/* Title & Subtitle */}
                   <div className="flex items-start gap-3.5">
-                    <div className="size-10 rounded-xl border border-border/70 bg-background shadow-2xs flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                    <div className="size-10 rounded-xl border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-card shadow-2xs flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
                       <img
                         src={aiDefaultLogo}
                         alt="AI MB"
@@ -2515,18 +2592,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <h2 className="text-2xl sm:text-[28px] font-medium leading-tight tracking-tight text-foreground/90">
+                      <h2 className="text-2xl sm:text-[28px] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100">
                         Trợ lý UX MB có thể hỗ trợ gì cho bạn?
                       </h2>
-                      <p className="text-muted-foreground text-sm sm:text-base">
+                      <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
                         Hỏi đáp về tiến độ bài toán, rà soát PO Pending, phân bổ Deep Work hoặc tra cứu quy chuẩn thiết kế MBBank.
                       </p>
                     </div>
                   </div>
 
-                  {/* 4 Category Pill Buttons matching Echo Chat */}
+                  {/* 4 Category Pill Buttons with Floating Active Indicator */}
                   <div
-                    className="mt-5 flex flex-wrap gap-2"
+                    className="mt-5 flex flex-wrap gap-2 relative"
                     role="tablist"
                     aria-label="Nhóm câu hỏi gợi ý"
                   >
@@ -2534,75 +2611,92 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       const isSelected = emptyCategory === cat.id
                       const Icon = cat.icon
                       return (
-                        <button
+                        <motion.button
                           key={cat.id}
                           type="button"
                           onClick={() => setEmptyCategory(cat.id)}
                           role="tab"
                           aria-selected={isSelected}
+                          {...tactileProps.button}
                           className={cn(
-                            "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm rounded-full border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                            "relative inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
                             isSelected
-                              ? "border-primary/25 bg-primary/[0.07] text-primary font-medium"
-                              : "border-border/80 bg-background text-muted-foreground font-normal hover:border-border hover:bg-muted/50 hover:text-foreground"
+                              ? "text-white font-medium"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-card hover:bg-slate-50 shadow-2xs"
                           )}
                         >
-                          <Icon className={cn("size-3.5", isSelected ? "text-primary" : "text-muted-foreground/80")} />
-                          <span>{cat.label}</span>
-                        </button>
+                          {isSelected && (
+                            <motion.span
+                              layoutId="aichat-empty-category-pill"
+                              className="absolute inset-0 rounded-full bg-slate-900 dark:bg-slate-100 shadow-xs"
+                              transition={springs.indicator}
+                            />
+                          )}
+                          <Icon className={cn("size-3.5 relative z-10", isSelected ? "text-white dark:text-slate-900" : "text-slate-500")} />
+                          <span className={cn("relative z-10", isSelected && "text-white dark:text-slate-900")}>{cat.label}</span>
+                        </motion.button>
                       )
                     })}
                   </div>
 
-                  {/* 3 Prompt Suggestions matching the selected category */}
-                  <div className="mt-6 flex flex-col divide-y divide-border/70 border-y border-border/70">
+                  {/* 3 Prompt Suggestions matching the selected category with micro-staggering */}
+                  <motion.div
+                    key={emptyCategory}
+                    variants={staggerContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="mt-6 flex flex-col divide-y divide-slate-200/70 dark:divide-neutral-800 border-y border-slate-200/70 dark:border-neutral-800"
+                  >
                     {currentCategoryObj.prompts.map((promptText) => (
-                      <button
+                      <motion.button
                         key={promptText}
+                        variants={staggerItemVariants}
                         type="button"
                         onClick={() => handleSendMessage(promptText)}
-                        className="group flex min-h-11 w-full items-center justify-between px-1 py-2.5 text-left text-sm sm:text-[15px] font-normal text-foreground/80 hover:text-primary transition-colors cursor-pointer focus-visible:outline-none focus-visible:bg-muted/40"
+                        {...tactileProps.button}
+                        className="group flex min-h-11 w-full items-center justify-between px-2 py-2.5 text-left text-sm sm:text-[15px] font-normal text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50/70 dark:hover:bg-neutral-800/40 transition-colors cursor-pointer focus-visible:outline-none"
                       >
                         <span className="truncate">{promptText}</span>
-                        <CornerDownLeft className="size-4 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                      </button>
+                        <CornerDownLeft className="size-4 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-2 text-slate-900 dark:text-slate-100" />
+                      </motion.button>
                     ))}
-                  </div>
+                  </motion.div>
 
                   {/* Recent chats section (rendered only if real threads exist) */}
                   {displayRecentChats.length > 0 && (
                   <div className="mt-8 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground/90 px-1">
-                      <span>Recent chats</span>
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+                      <span>Đoạn chat gần đây</span>
                     </div>
 
-                    <div className="divide-y divide-border/60 border-y border-border/60">
+                    <div className="divide-y divide-slate-200/70 dark:divide-neutral-800 border-y border-slate-200/70 dark:border-neutral-800">
                       {displayRecentChats.map((item, idx) => (
-                        <button
+                        <motion.button
                           key={item.id}
                           type="button"
                           onClick={() => item.onClick()}
-                          className="group flex w-full items-center justify-between py-2.5 text-left text-sm hover:bg-muted/30 px-2 rounded-md transition-colors cursor-pointer"
+                          {...tactileProps.button}
+                          className="group flex w-full items-center justify-between py-2.5 text-left text-sm hover:bg-slate-50/80 dark:hover:bg-neutral-800/40 px-2 rounded-xl transition-colors cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span className="text-muted-foreground/50 font-mono text-xs w-4 shrink-0">
+                            <span className="text-slate-400 font-mono text-xs w-4 shrink-0">
                               {idx + 1}.
                             </span>
-                            <span className="truncate text-foreground/80 group-hover:text-primary font-normal text-[13.5px]">
+                            <span className="truncate text-slate-800 dark:text-slate-200 group-hover:text-slate-950 dark:group-hover:text-white font-medium text-[13.5px]">
                               {item.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 ml-3">
                             {item.fileBadge && (
-                              <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded border border-border/60 bg-muted/25 text-muted-foreground/80 group-hover:border-border group-hover:text-muted-foreground transition-colors">
+                              <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md border border-slate-200/80 bg-slate-50 text-slate-600 group-hover:border-slate-300 transition-colors">
                                 {item.fileBadge}
                               </span>
                             )}
-                            <span className="text-xs text-muted-foreground/80 font-mono min-w-7 text-right">
+                            <span className="text-xs text-slate-400 font-mono min-w-7 text-right">
                               {item.timeAgo}
                             </span>
                           </div>
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
@@ -2655,11 +2749,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               <div className="mx-auto w-full max-w-4xl lg:max-w-5xl">
                 {/* Real-time MBBank AI Daily Usage Bar */}
                 {showUsageNotice && (
-                  <div className="mb-2 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-2xs overflow-hidden transition-all">
+                  <div className="mb-2 rounded-2xl border border-slate-200/80 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-xs overflow-hidden transition-all">
                     {/* Top Notice Line */}
-                    <div className="flex items-center justify-between px-3.5 py-1.5 text-xs text-neutral-600 dark:text-muted-foreground select-none">
+                    <div className="flex items-center justify-between px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 select-none">
                       <div
-                        className="flex min-w-0 flex-1 items-center gap-2 cursor-pointer hover:text-neutral-900 dark:hover:text-foreground transition-colors"
+                        className="flex min-w-0 flex-1 items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                         onClick={() => {
                           setNoticeCollapsed((v) => {
                             const next = !v
@@ -2672,39 +2766,40 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       >
                         <Sparkles className="size-3.5 shrink-0 text-amber-500" />
                         <span className="truncate text-xs font-normal">
-                          Đã dùng <span className="font-semibold text-foreground">{dailyUsage.usedRequests}/{dailyUsage.totalRequests}</span> lượt AI hôm nay (Còn lại {dailyUsage.remainingRequests} lượt)
-                          <span className="text-neutral-300 dark:text-muted-foreground/40 mx-1.5">•</span>
+                          Đã dùng <span className="font-semibold text-slate-900 dark:text-white">{dailyUsage.usedRequests}/{dailyUsage.totalRequests}</span> lượt AI hôm nay (Còn lại {dailyUsage.remainingRequests} lượt)
+                          <span className="text-slate-300 dark:text-neutral-600 mx-1.5">•</span>
                           Tự động làm mới lúc 00:00
                         </span>
                         {noticeCollapsed ? (
-                          <ChevronDown className="size-3 text-neutral-400 dark:text-muted-foreground ml-0.5 shrink-0" />
+                          <ChevronDown className="size-3 text-slate-400 ml-0.5 shrink-0" />
                         ) : (
-                          <ChevronUp className="size-3 text-neutral-400 dark:text-muted-foreground ml-0.5 shrink-0" />
+                          <ChevronUp className="size-3 text-slate-400 ml-0.5 shrink-0" />
                         )}
                       </div>
-                      <button
+                      <motion.button
                         type="button"
                         onClick={() => setShowUsageNotice(false)}
-                        className="size-5 rounded hover:bg-neutral-100 dark:hover:bg-muted text-neutral-400 hover:text-neutral-700 dark:hover:text-foreground flex items-center justify-center cursor-pointer transition-colors shrink-0 ml-2"
+                        {...tactileProps.iconButton}
+                        className="size-5 rounded hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors shrink-0 ml-2"
                         title="Đóng thanh hạn mức"
                       >
                         <X className="size-3" />
-                      </button>
+                      </motion.button>
                     </div>
 
                     {/* Progress Bar & Subtitle Information */}
                     {!noticeCollapsed && (
-                      <div className="px-3.5 pb-2.5 space-y-1.5 pt-0.5 border-t border-neutral-100 dark:border-border/40">
-                        <div className="h-1.5 w-full bg-neutral-100 dark:bg-muted rounded-full overflow-hidden relative flex">
+                      <div className="px-3.5 pb-2.5 space-y-1.5 pt-0.5 border-t border-slate-100 dark:border-neutral-800">
+                        <div className="h-1.5 w-full bg-slate-100 dark:bg-neutral-800 rounded-full overflow-hidden relative flex">
                           <div
-                            className="h-full bg-neutral-900 dark:bg-neutral-100 transition-all duration-300 rounded-full"
+                            className="h-full bg-slate-900 dark:bg-slate-100 transition-all duration-300 rounded-full"
                             style={{ width: `${Math.min(100, Math.max(2, dailyUsage.percent))}%` }}
                           />
                           <div
                             className="h-full flex-1 opacity-40 bg-[repeating-linear-gradient(45deg,#94a3b8,#94a3b8_2px,transparent_2px,transparent_6px)]"
                           />
                         </div>
-                        <div className="flex flex-wrap items-center justify-between text-[11px] text-neutral-500 dark:text-muted-foreground font-mono">
+                        <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 font-mono">
                           <span>{dailyUsage.percent}% hạn mức ngày ({dailyUsage.usedRequests}/{dailyUsage.totalRequests} lượt)</span>
                           <span>{dailyUsage.remainingRequests > 0 ? `Còn ${dailyUsage.remainingRequests} lượt khả dụng` : "Đã đạt hạn mức hôm nay"}</span>
                         </div>
@@ -2756,14 +2851,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         className="p-5 sm:p-6 space-y-4 rounded-2xl"
       >
         <div className="flex items-start gap-3.5">
-          <div className="size-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+          <div className="size-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
             <CloudOff className="size-5" />
           </div>
           <div className="min-w-0 flex-1 space-y-1">
-            <h3 className="font-bold text-sm sm:text-base text-foreground">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">
               Chưa đồng bộ dữ liệu AI
             </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               Dữ liệu trò chuyện và tài liệu chưa được đồng bộ với Google Sheet / Google Drive hoặc chưa cấu hình liên kết bảng tính. Vui lòng thử lại để cập nhật toàn bộ lịch sử trò chuyện và tài liệu.
             </p>
             <div className="pt-1">
@@ -2771,7 +2866,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 href="https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g?usp=sharing"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-900 dark:text-white hover:underline font-semibold"
               >
                 <span>Mở thư mục Google Drive lưu trữ hệ thống</span>
                 <ExternalLink className="size-3" />
@@ -2780,13 +2875,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/80 dark:border-neutral-800">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setSyncWarningModalOpen(false)}
-            className="h-8 text-xs text-foreground cursor-pointer"
+            className="h-8 text-xs text-slate-700 rounded-xl border border-slate-200/80 cursor-pointer"
           >
             Đóng
           </Button>
@@ -2797,7 +2892,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               setSyncWarningModalOpen(false)
               await handleManualCloudSync()
             }}
-            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer inline-flex items-center gap-1.5"
+            className="h-8 text-xs bg-slate-900 text-white hover:bg-slate-800 rounded-xl cursor-pointer inline-flex items-center gap-1.5 shadow-xs font-semibold px-3"
           >
             <RefreshCw className="size-3.5" />
             <span>Thử lại ngay</span>
@@ -2813,19 +2908,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         className="p-5 sm:p-6 space-y-4 rounded-2xl max-w-lg"
       >
         <div className="flex items-start gap-3.5">
-          <div className="size-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800">
+          <div className="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-neutral-700 shadow-2xs">
             <Key className="size-5" />
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm sm:text-base text-foreground">
+              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">
                 Cổng Kết Nối AI & Google AI Studio
               </h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold border border-emerald-300 dark:border-emerald-800">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 shadow-2xs">
                 1.500 RPD Free
               </span>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               Kết nối trực tiếp máy chủ Google AI Studio để sử dụng mô hình <strong>Gemini 2.0 Flash</strong> với khả năng đọc hiểu ảnh (Vision) tốc độ cao và hoàn toàn miễn phí.
             </p>
           </div>
@@ -2833,7 +2928,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
         {/* Gateway Mode */}
         <div className="space-y-1.5 pt-1">
-          <label className="text-xs font-semibold text-foreground">
+          <label className="text-xs font-semibold text-slate-900 dark:text-slate-100">
             Chế độ điều phối Cổng AI:
           </label>
           <div className="grid grid-cols-3 gap-1.5 text-xs">
@@ -2845,10 +2940,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 toast.success("Đã chọn: Tự động điều phối")
               }}
               className={cn(
-                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                "p-2 rounded-xl border text-center transition-all cursor-pointer text-[11px]",
                 quickGateway === "auto"
-                  ? "border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 font-bold"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  ? "border-slate-900 bg-slate-900 text-white font-semibold shadow-xs"
+                  : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50"
               )}
             >
               Tự động (Auto)
@@ -2861,10 +2956,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 toast.success("Đã chọn: Google AI Studio Trực tiếp")
               }}
               className={cn(
-                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                "p-2 rounded-xl border text-center transition-all cursor-pointer text-[11px]",
                 quickGateway === "google_ai_studio"
-                  ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-800 font-semibold shadow-xs"
+                  : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50"
               )}
             >
               Google AI Studio
@@ -2877,10 +2972,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 toast.success("Đã chọn: OpenRouter Gateway")
               }}
               className={cn(
-                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                "p-2 rounded-xl border text-center transition-all cursor-pointer text-[11px]",
                 quickGateway === "openrouter"
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 font-bold"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  ? "border-indigo-600 bg-indigo-50 text-indigo-800 font-semibold shadow-xs"
+                  : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50"
               )}
             >
               OpenRouter Pool
@@ -2891,14 +2986,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         {/* API Key Input */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-foreground">
+            <label className="text-xs font-semibold text-slate-900 dark:text-slate-100">
               Google AI Studio API Key:
             </label>
             <a
               href="https://aistudio.google.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] text-primary hover:underline inline-flex items-center gap-1 font-medium"
+              className="text-[11px] text-slate-900 dark:text-white hover:underline inline-flex items-center gap-1 font-semibold"
             >
               <span>Lấy key tại aistudio.google.com</span>
               <ExternalLink className="size-3" />
@@ -2909,7 +3004,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             value={quickGeminiKey}
             onChange={(e) => setQuickGeminiKey(e.target.value)}
             placeholder="AIzaSy... (Dán Google AI Studio API Key vào đây)"
-            className="w-full text-xs font-mono rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary shadow-2xs"
+            className="w-full text-xs font-mono rounded-xl border border-slate-200/90 bg-white px-3.5 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 shadow-2xs"
           />
         </div>
 
@@ -2917,10 +3012,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         {quickTestResult && (
           <div
             className={cn(
-              "p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2",
+              "p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 shadow-2xs",
               quickTestResult.success
-                ? "bg-emerald-50/90 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-                : "bg-rose-50/90 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-rose-50 border-rose-200 text-rose-800"
             )}
           >
             <div className="flex items-center gap-2">
@@ -2940,7 +3035,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/80 dark:border-neutral-800">
           <Button
             type="button"
             variant="outline"
@@ -2960,7 +3055,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               }
             }}
             disabled={quickTestingGemini || !quickGeminiKey.trim()}
-            className="text-xs h-9 cursor-pointer"
+            className="text-xs h-9 cursor-pointer rounded-xl border border-slate-200/80 text-slate-700 hover:bg-slate-50"
           >
             <RefreshCw className={cn("size-3.5 mr-1.5", quickTestingGemini && "animate-spin")} />
             <span>{quickTestingGemini ? "Đang thử..." : "Test kết nối"}</span>
@@ -2976,7 +3071,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               toast.success("Đã lưu cấu hình Google AI Studio thành công!")
               setAiSettingsModalOpen(false)
             }}
-            className="text-xs h-9 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
+            className="text-xs h-9 cursor-pointer bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs font-semibold px-3.5"
           >
             <Check className="size-3.5 mr-1.5" />
             <span>Lưu & Kích hoạt</span>
@@ -2989,11 +3084,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         open={renameModalOpen}
         onClose={() => setRenameModalOpen(false)}
         size="sm"
-        className="p-5 space-y-4"
+        className="p-5 space-y-4 rounded-2xl"
       >
         <div className="space-y-1.5">
-          <h3 className="font-semibold text-sm text-foreground">Đổi tên đoạn trò chuyện</h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Đổi tên đoạn trò chuyện</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Nhập tiêu đề rõ ràng để dễ dàng tìm kiếm lại sau này.
           </p>
         </div>
@@ -3005,18 +3100,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSaveRename()
           }}
-          className="w-full h-8 px-3 text-xs bg-background border border-border rounded-lg focus:outline-hidden focus:ring-1 focus:ring-ring"
+          className="w-full h-9 px-3.5 text-xs bg-white dark:bg-card border border-slate-200/90 dark:border-neutral-800 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 shadow-2xs"
           placeholder="Tiêu đề đoạn hội thoại..."
           autoFocus
         />
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-neutral-800">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setRenameModalOpen(false)}
-            className="h-8 text-xs cursor-pointer"
+            className="h-8 text-xs text-slate-700 rounded-xl border border-slate-200/80 cursor-pointer"
           >
             Hủy
           </Button>
@@ -3024,7 +3119,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             type="button"
             size="sm"
             onClick={handleSaveRename}
-            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            className="h-8 text-xs bg-slate-900 text-white hover:bg-slate-800 rounded-xl shadow-xs cursor-pointer font-semibold px-3.5"
           >
             Lưu
           </Button>
@@ -3036,18 +3131,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         open={createArtifactModalOpen}
         onClose={() => setCreateArtifactModalOpen(false)}
         size="lg"
-        className="p-6 space-y-4 max-w-2xl"
+        className="p-6 space-y-4 max-w-2xl rounded-2xl"
       >
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+        <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-neutral-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-slate-100 text-slate-800 border border-slate-200/80 shadow-2xs">
               <FileText className="size-4" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm text-foreground">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 Tạo tài liệu / Specs mới
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Dữ liệu tài liệu này sẽ được lưu trữ và có thể dùng làm bối cảnh để AI hỏi đáp.
               </p>
             </div>
@@ -3055,7 +3150,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           <button
             type="button"
             onClick={() => setCreateArtifactModalOpen(false)}
-            className="size-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+            className="size-6 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors"
           >
             <X className="size-3.5" />
           </button>
@@ -3063,7 +3158,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">
+            <label className="text-xs font-semibold text-slate-900 dark:text-slate-100 block mb-1">
               Tên tài liệu
             </label>
             <input
@@ -3071,12 +3166,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               value={newArtTitle}
               onChange={(e) => setNewArtTitle(e.target.value)}
               placeholder="Ví dụ: Specs-Mo-The-Tin-Dung-JCB.md"
-              className="w-full h-8 px-3 text-xs bg-background border border-border rounded-lg focus:outline-hidden focus:ring-1 focus:ring-ring"
+              className="w-full h-9 px-3.5 text-xs bg-white dark:bg-card border border-slate-200/90 dark:border-neutral-800 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 shadow-2xs"
             />
           </div>
 
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">
+            <label className="text-xs font-semibold text-slate-900 dark:text-slate-100 block mb-1">
               Định dạng
             </label>
             <div className="flex items-center gap-2">
@@ -3086,10 +3181,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   type="button"
                   onClick={() => setNewArtType(t)}
                   className={cn(
-                    "px-2.5 py-1 text-xs rounded-md border font-medium cursor-pointer transition-colors",
+                    "px-3 py-1 text-xs rounded-lg font-semibold cursor-pointer transition-colors shadow-2xs",
                     newArtType === t
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50"
                   )}
                 >
                   {t.toUpperCase()}
@@ -3099,7 +3194,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">
+            <label className="text-xs font-semibold text-slate-900 dark:text-slate-100 block mb-1">
               Nội dung tài liệu
             </label>
             <textarea
@@ -3107,18 +3202,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               value={newArtContent}
               onChange={(e) => setNewArtContent(e.target.value)}
               placeholder="Dán nội dung tài liệu, specs hoặc hướng dẫn thiết kế vào đây..."
-              className="w-full p-3 text-xs font-mono bg-background border border-border rounded-lg focus:outline-hidden focus:ring-1 focus:ring-ring resize-none leading-relaxed"
+              className="w-full p-3.5 text-xs font-mono bg-white dark:bg-card border border-slate-200/90 dark:border-neutral-800 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 resize-none leading-relaxed shadow-2xs"
             />
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/80 dark:border-neutral-800">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setCreateArtifactModalOpen(false)}
-            className="h-8 text-xs cursor-pointer"
+            className="h-8 text-xs text-slate-700 rounded-xl border border-slate-200/80 cursor-pointer"
           >
             Hủy
           </Button>
@@ -3126,7 +3221,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             type="button"
             size="sm"
             onClick={handleCreateArtifactSubmit}
-            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            className="h-8 text-xs bg-slate-900 text-white hover:bg-slate-800 rounded-xl shadow-xs cursor-pointer font-semibold px-3.5"
           >
             Lưu tài liệu
           </Button>
@@ -3226,10 +3321,10 @@ function EchoSidebarRow({
     <div
       onClick={onSelect}
       className={cn(
-        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 h-9 text-[13px] sm:text-sm cursor-pointer transition-colors text-left",
+        "group relative flex w-full items-center gap-2 rounded-xl px-2.5 py-2 h-9 text-[13px] sm:text-sm cursor-pointer transition-colors text-left",
         isActive
-          ? "bg-foreground/10 font-medium text-foreground"
-          : "hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+          ? "bg-slate-100 dark:bg-neutral-800 font-semibold text-slate-900 dark:text-white shadow-2xs"
+          : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
       )}
     >
       <span className="truncate flex-1">{thread.title}</span>
@@ -3242,35 +3337,38 @@ function EchoSidebarRow({
         )}
         ref={menuRef}
       >
-        <button
+        <motion.button
           type="button"
           onClick={(e) => onPin(thread.id, e)}
-          className="size-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer"
+          {...tactileProps.iconButton}
+          className="size-5 rounded hover:bg-slate-200/60 dark:hover:bg-neutral-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center cursor-pointer transition-colors"
           title={thread.isPinned ? "Bỏ ghim" : "Ghim"}
         >
-          <Pin className={cn("size-2.5", thread.isPinned && "fill-current text-primary")} />
-        </button>
+          <Pin className={cn("size-2.5", thread.isPinned && "fill-current text-slate-900 dark:text-white")} />
+        </motion.button>
 
-        <button
+        <motion.button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             setMenuOpen((v) => !v)
           }}
-          className="size-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer"
+          {...tactileProps.iconButton}
+          className="size-5 rounded hover:bg-slate-200/60 dark:hover:bg-neutral-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center cursor-pointer transition-colors"
           title="Tùy chọn khác"
         >
           <MoreHorizontal className="size-2.5" />
-        </button>
+        </motion.button>
 
         <AnimatePresence>
           {menuOpen && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ duration: 0.12 }}
-              className="absolute right-0 top-6 z-50 w-36 py-1 bg-background text-foreground rounded-lg shadow-md border border-border text-xs"
+              variants={originPopoverVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={springs.popover}
+              className="absolute right-0 top-7 z-50 w-36 p-1 bg-white dark:bg-card text-slate-800 dark:text-slate-200 rounded-xl shadow-lg border border-slate-200/90 dark:border-neutral-800 text-xs select-none"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -3279,9 +3377,9 @@ function EchoSidebarRow({
                   setMenuOpen(false)
                   onRename(thread, e)
                 }}
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 cursor-pointer"
+                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
               >
-                <Edit2 className="size-3" />
+                <Edit2 className="size-3 text-slate-500" />
                 <span>Đổi tên</span>
               </button>
               <button
@@ -3290,19 +3388,19 @@ function EchoSidebarRow({
                   setMenuOpen(false)
                   onExport(thread, e)
                 }}
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 cursor-pointer"
+                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
               >
-                <Download className="size-3" />
+                <Download className="size-3 text-slate-500" />
                 <span>Xuất .md</span>
               </button>
-              <div className="h-[1px] bg-border my-0.5" />
+              <div className="h-[1px] bg-slate-100 dark:bg-neutral-800 my-0.5" />
               <button
                 type="button"
                 onClick={(e) => {
                   setMenuOpen(false)
                   onDelete(thread.id, e)
                 }}
-                className="w-full px-3 py-1.5 text-left hover:bg-destructive/10 text-destructive flex items-center gap-2 cursor-pointer"
+                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors"
               >
                 <Trash2 className="size-3" />
                 <span>Xóa</span>
@@ -3462,16 +3560,16 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
   if (headers.length === 0) return null
 
   return (
-    <div className="my-3 overflow-x-auto rounded-lg border border-neutral-200/90 dark:border-border/70 bg-card/40 shadow-2xs">
+    <div className="my-3 overflow-x-auto rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card shadow-xs">
       <table className="w-full text-left text-[13px] border-collapse">
         <thead>
-          <tr className="border-b border-neutral-200/80 dark:border-border/70 bg-muted/40 text-neutral-600 dark:text-muted-foreground font-medium text-xs select-none">
+          <tr className="border-b border-slate-200/80 dark:border-neutral-800 bg-slate-50/80 dark:bg-neutral-800/50 text-slate-500 font-semibold text-[11px] uppercase tracking-wider select-none">
             {headers.map((h, hIdx) => (
               <th
                 key={hIdx}
                 onClick={() => handleHeaderClick(hIdx)}
                 className={cn(
-                  "py-2.5 px-3.5 cursor-pointer hover:bg-muted/70 hover:text-foreground transition-colors group",
+                  "py-2.5 px-3.5 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800 hover:text-slate-900 transition-colors group",
                   numericCols[hIdx] ? "text-right" : "text-left"
                 )}
                 title="Nhấp để sắp xếp dữ liệu cột"
@@ -3484,14 +3582,14 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-200/50 dark:divide-border/40">
+        <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/60">
           {sortedRows.map((row, rIdx) => (
-            <tr key={rIdx} className="hover:bg-muted/20 transition-colors">
+            <tr key={rIdx} className="hover:bg-slate-50/60 dark:hover:bg-neutral-800/30 transition-colors">
               {row.map((cell, cIdx) => (
                 <td
                   key={cIdx}
                   className={cn(
-                    "py-2 px-3.5 text-foreground",
+                    "py-2 px-3.5 text-slate-800 dark:text-slate-200",
                     numericCols[cIdx] ? "text-right font-mono tabular-nums" : "text-left"
                   )}
                 >
@@ -3503,7 +3601,7 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
 
           {/* Dòng Total / Tổng cộng theo chuẩn Screenshot 2 */}
           {totalRow && (
-            <tr className="border-t-2 border-neutral-300 dark:border-border/80 font-semibold bg-muted/25 text-foreground">
+            <tr className="border-t-2 border-slate-300 dark:border-neutral-700 font-bold bg-slate-50/90 dark:bg-neutral-800/70 text-slate-900 dark:text-white">
               {totalRow.map((cell, cIdx) => (
                 <td
                   key={cIdx}
@@ -3608,12 +3706,12 @@ function EchoActionCard({
   }
 
   return (
-    <div className="my-3 rounded-2xl border border-neutral-200/90 dark:border-border/80 bg-white/95 dark:bg-card/95 p-4 shadow-xs space-y-3.5 max-w-xl">
+    <div className="my-3 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card p-4 shadow-xs space-y-3.5 max-w-xl">
       {data.title && (
-        <div className="text-[13.5px] font-semibold text-foreground flex items-center justify-between">
+        <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100 flex items-center justify-between">
           <span>{data.title}</span>
           {matchedTask?.squad_name && (
-            <span className="text-[11px] font-normal text-muted-foreground bg-neutral-100 dark:bg-muted px-2 py-0.5 rounded-md">
+            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-neutral-800 border border-slate-200/80 dark:border-neutral-700 px-2 py-0.5 rounded-lg shadow-2xs">
               {matchedTask.squad_name}
             </span>
           )}
@@ -3623,57 +3721,59 @@ function EchoActionCard({
       {/* Item List: Có thể click trực tiếp vào từng bài toán để mở task */}
       <div className="space-y-2">
         {(data.items || []).map((item, idx) => (
-          <div
+          <motion.div
             key={idx}
             onClick={handleOpenDetail}
-            className="flex items-start gap-2.5 text-[13px] text-foreground p-2.5 rounded-xl bg-neutral-50/70 hover:bg-neutral-100/80 dark:bg-muted/40 dark:hover:bg-muted/70 transition-colors cursor-pointer group border border-transparent hover:border-neutral-200 dark:hover:border-border/80"
+            {...tactileProps.card}
+            className="flex items-start gap-2.5 text-[13px] text-slate-800 dark:text-slate-200 p-2.5 rounded-xl bg-slate-50/70 hover:bg-slate-100/90 dark:bg-neutral-800/40 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer group border border-slate-200/60 dark:border-neutral-800 shadow-2xs"
             title="Bấm để xem chi tiết bài toán"
           >
-            <div className="size-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            <div className="size-6 rounded-lg bg-slate-200/80 dark:bg-neutral-700 text-slate-700 dark:text-slate-200 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-slate-900 group-hover:text-white transition-colors">
               <ExternalLink className="size-3.5" />
             </div>
             <div className="leading-snug flex-1 min-w-0">
-              <span className="font-semibold text-foreground group-hover:text-primary transition-colors underline decoration-neutral-300 dark:decoration-neutral-700 underline-offset-3">
+              <span className="font-semibold text-slate-900 dark:text-white group-hover:text-slate-950 underline decoration-slate-300 dark:decoration-neutral-700 underline-offset-3">
                 {item.title}
               </span>{" "}
-              <span className="text-neutral-600 dark:text-neutral-400">
+              <span className="text-slate-600 dark:text-slate-400">
                 {item.action || item.desc}
               </span>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
       {/* Thông tin Designer phụ trách (Chính xác theo Designer thực tế, không phải PO) */}
-      <div className="flex items-center justify-between pt-1 border-t border-neutral-100 dark:border-border/50">
+      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-neutral-800">
         <div className="flex items-center gap-2.5">
           <UserAvatar
             name={designerName}
-            className="inline-flex size-7 rounded-full ring-2 ring-background text-[10px] font-bold shadow-2xs"
+            className="inline-flex size-7 rounded-full ring-2 ring-white dark:ring-neutral-900 text-[10px] font-bold shadow-2xs"
           />
           <div className="flex flex-col">
-            <span className="text-[11px] text-muted-foreground font-medium">Designer phụ trách</span>
-            <span className="text-xs font-semibold text-foreground">{designerName}</span>
+            <span className="text-[11px] text-slate-400 font-medium">Designer phụ trách</span>
+            <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{designerName}</span>
           </div>
         </div>
 
         {matchedTask?.current_phase && (
-          <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+          <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 rounded-full shadow-2xs">
             {matchedTask.current_phase}
           </span>
         )}
       </div>
 
-      {/* Nút hành động trực tiếp: Xem chi tiết bài toán (Không đôn đốc) */}
+      {/* Nút hành động trực tiếp: Xem chi tiết bài toán (Dark Navy CTA) */}
       <div className="pt-1">
-        <button
+        <motion.button
           type="button"
           onClick={handleOpenDetail}
-          className="w-full py-2.5 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 dark:bg-primary dark:hover:bg-primary/90 text-white dark:text-primary-foreground text-xs font-medium transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+          {...tactileProps.button}
+          className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
         >
           <ExternalLink className="size-3.5" />
           <span>{data.approveText || "Xem chi tiết bài toán"}</span>
-        </button>
+        </motion.button>
       </div>
     </div>
   )
@@ -3699,31 +3799,32 @@ function EchoArtifactBox({
   const codeLines = useMemo(() => code.trim().split("\n"), [code])
 
   return (
-    <div className="rounded-xl border border-neutral-200/90 dark:border-border/80 bg-background shadow-xs overflow-hidden my-3">
-      <div className="flex items-center justify-between px-3.5 py-2 bg-muted/30 border-b border-border/70 text-xs text-muted-foreground">
-        <span className="font-mono text-xs text-foreground/90 font-medium select-all">
+    <div className="rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card shadow-xs overflow-hidden my-3">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/80 dark:bg-neutral-800/50 border-b border-slate-200/80 dark:border-neutral-800 text-xs text-slate-500">
+        <span className="font-mono text-xs text-slate-800 dark:text-slate-200 font-semibold select-all">
           {fileName || (lang ? lang.toUpperCase() : "release-notes-3.4.md")}
         </span>
-        <button
+        <motion.button
           type="button"
           onClick={() => onCopy(code)}
-          className="size-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer"
+          {...tactileProps.iconButton}
+          className="size-6 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
           title="Sao chép nội dung"
         >
           {isCopied ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
-        </button>
+        </motion.button>
       </div>
 
-      <div className="p-3.5 font-mono text-xs overflow-x-auto space-y-1 bg-background text-foreground leading-relaxed">
+      <div className="p-3.5 font-mono text-xs overflow-x-auto space-y-1 bg-white dark:bg-card text-slate-800 dark:text-slate-200 leading-relaxed">
         {codeLines.map((line, lIdx) => (
           <div key={lIdx} className="flex gap-3">
-            <span className="text-muted-foreground/40 select-none w-4 text-right shrink-0">
+            <span className="text-slate-400 select-none w-4 text-right shrink-0">
               {lIdx + 1}
             </span>
             <span
               className={cn(
                 "whitespace-pre",
-                line.startsWith("#") ? "text-primary font-semibold" : "text-foreground"
+                line.startsWith("#") ? "text-slate-900 dark:text-white font-bold" : "text-slate-800 dark:text-slate-200"
               )}
             >
               {line}
@@ -3833,52 +3934,52 @@ function EchoTaskUpdateCard({
     typeof data.suggested_progress === "number" ? data.suggested_progress : (matchedTask?.progress ?? 50)
 
   return (
-    <div className="my-3 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 bg-gradient-to-b from-indigo-50/40 to-white/95 dark:from-indigo-950/20 dark:to-card/95 p-4 shadow-sm space-y-3.5 max-w-xl">
+    <div className="my-3 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card p-4 shadow-xs space-y-3.5 max-w-xl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+          <div className="size-6 rounded-lg bg-slate-100 dark:bg-neutral-800 text-slate-800 dark:text-slate-200 flex items-center justify-center shrink-0">
             <Sparkles className="size-3.5" />
           </div>
-          <span className="text-[13px] font-semibold text-foreground">
+          <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">
             Đề xuất cập nhật tiến độ bài toán
           </span>
         </div>
-        <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-neutral-700">
           {data.request_id}
         </span>
       </div>
 
       {/* Tên bài toán */}
-      <div className="text-sm font-medium text-foreground">
+      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         "{data.task_name || matchedTask?.nickname || matchedTask?.title || "Bài toán UX"}"
       </div>
 
       {/* Trạng thái thay đổi: Hiện tại -> Mới */}
-      <div className="p-3 rounded-xl bg-background/80 border border-neutral-200/70 dark:border-border/60 space-y-2.5">
+      <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-neutral-800/40 border border-slate-200/70 dark:border-neutral-800 space-y-2.5">
         <div className="flex items-center justify-between text-xs">
           <div className="space-y-0.5">
-            <div className="text-[11px] text-muted-foreground">Hiện tại</div>
-            <div className="font-medium text-foreground/80">{currentPhaseOrStatus}</div>
+            <div className="text-[11px] text-slate-400">Hiện tại</div>
+            <div className="font-semibold text-slate-800 dark:text-slate-200">{currentPhaseOrStatus}</div>
           </div>
-          <div className="size-6 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 mx-2 text-xs">
+          <div className="size-6 rounded-full bg-slate-200/80 dark:bg-neutral-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0 mx-2 text-xs font-bold">
             →
           </div>
           <div className="space-y-0.5 text-right">
-            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Đề xuất chuyển sang</div>
-            <div className="font-semibold text-indigo-700 dark:text-indigo-300">{newPhaseOrStatus}</div>
+            <div className="text-[11px] text-slate-500 font-medium">Đề xuất chuyển sang</div>
+            <div className="font-bold text-slate-900 dark:text-white">{newPhaseOrStatus}</div>
           </div>
         </div>
 
         {/* Thanh tiến độ */}
         <div className="space-y-1 pt-1">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
             <span>Tiến độ mới</span>
-            <span className="font-mono font-semibold text-foreground">{progressVal}%</span>
+            <span className="font-bold text-slate-900 dark:text-white">{progressVal}%</span>
           </div>
-          <div className="h-2 w-full bg-neutral-100 dark:bg-muted rounded-full overflow-hidden">
+          <div className="h-2 w-full bg-slate-100 dark:bg-neutral-800 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-primary rounded-full transition-all duration-500"
+              className="h-full bg-slate-900 dark:bg-slate-100 rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, Math.max(0, progressVal))}%` }}
             />
           </div>
@@ -3887,13 +3988,13 @@ function EchoTaskUpdateCard({
 
       {/* Ghi chú AI & cho phép sửa */}
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between text-[11px] text-slate-500">
           <span>Ghi chú cập nhật:</span>
           {!isDone && (
             <button
               type="button"
               onClick={() => setIsEditingNote(!isEditingNote)}
-              className="text-primary hover:underline cursor-pointer"
+              className="text-slate-900 dark:text-white font-semibold hover:underline cursor-pointer"
             >
               {isEditingNote ? "Xong" : "Chỉnh sửa"}
             </button>
@@ -3904,11 +4005,11 @@ function EchoTaskUpdateCard({
             value={editNote}
             onChange={(e) => setEditNote(e.target.value)}
             rows={2}
-            className="w-full text-xs p-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full text-xs p-2.5 rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             placeholder="Nhập ghi chú cập nhật..."
           />
         ) : (
-          <div className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/50 italic">
+          <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-neutral-800/40 p-2.5 rounded-xl border border-slate-200/50 dark:border-neutral-800 italic">
             "{editNote || data.note || "Cập nhật tiến độ theo khuyến nghị của AI"}"
           </div>
         )}
@@ -3917,17 +4018,18 @@ function EchoTaskUpdateCard({
       {/* Buttons */}
       <div className="flex items-center gap-2 pt-1">
         {isDone ? (
-          <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 py-1.5 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 w-full justify-center">
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 px-3 rounded-xl w-full justify-center shadow-2xs">
             <CheckCircle2 className="size-4 shrink-0" />
             <span>Đã cập nhật trạng thái vào hệ thống thành công</span>
           </div>
         ) : (
           <>
-            <button
+            <motion.button
               type="button"
               disabled={isUpdating}
               onClick={handleConfirmUpdate}
-              className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              {...tactileProps.button}
+              className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isUpdating ? (
                 <>
@@ -3940,16 +4042,17 @@ function EchoTaskUpdateCard({
                   <span>Xác nhận cập nhật ngay</span>
                 </>
               )}
-            </button>
+            </motion.button>
             {onOpenTask && matchedTask && (
-              <button
+              <motion.button
                 type="button"
                 onClick={handleOpenDetail}
-                className="py-2 px-3 rounded-xl border border-neutral-200 dark:border-border hover:bg-muted text-xs text-foreground transition-colors flex items-center gap-1.5 cursor-pointer"
+                {...tactileProps.button}
+                className="py-2 px-3 rounded-xl border border-slate-200/80 dark:border-neutral-800 hover:bg-slate-50 text-xs text-slate-700 dark:text-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <ExternalLink className="size-3.5" />
                 <span>Xem task</span>
-              </button>
+              </motion.button>
             )}
           </>
         )}
@@ -3967,25 +4070,26 @@ function EchoReferencedDocs({ docs }: { docs: ReferencedDoc[] }) {
 
   return (
     <div className="mt-3 pt-1">
-      <div className="text-xs font-normal text-muted-foreground mb-2">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
         {docs.length} Documents Read
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {(Array.isArray(docs) ? docs : []).map((doc, idx) => (
-          <div
+          <motion.div
             key={idx}
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-neutral-200/90 dark:border-border/80 bg-white/90 dark:bg-card/90 hover:bg-neutral-50 dark:hover:bg-accent/40 hover:border-neutral-300 transition-colors cursor-pointer shadow-2xs"
+            {...tactileProps.card}
+            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
           >
-            <div className="size-6 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
-              <FileText className="size-3 text-muted-foreground" />
+            <div className="size-6 rounded-lg bg-slate-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+              <FileText className="size-3 text-slate-600 dark:text-slate-300" />
             </div>
             <div className="min-w-0 pr-1">
-              <div className="text-xs font-mono font-medium text-foreground truncate">{doc.name}</div>
+              <div className="text-xs font-mono font-semibold text-slate-800 dark:text-slate-200 truncate">{doc.name}</div>
               {doc.status && (
-                <div className="text-[11px] text-muted-foreground truncate">{doc.status}</div>
+                <div className="text-[11px] text-slate-400 truncate">{doc.status}</div>
               )}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -4006,19 +4110,26 @@ function EchoFollowUpSuggestions({
   if (!suggestions || suggestions.length === 0) return null
 
   return (
-    <div className="flex flex-col items-end gap-1.5 pt-3">
+    <motion.div
+      variants={staggerContainerVariants}
+      initial="hidden"
+      animate="visible"
+      className="flex flex-col items-end gap-1.5 pt-3"
+    >
       {suggestions.map((sug, idx) => (
-        <button
+        <motion.button
           key={idx}
+          variants={staggerItemVariants}
           type="button"
           onClick={() => onSend(sug)}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-neutral-200/90 dark:border-border/80 bg-white dark:bg-card hover:bg-neutral-50 dark:hover:bg-accent/50 hover:border-neutral-300 dark:hover:border-neutral-600 text-xs text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-foreground shadow-2xs transition-all cursor-pointer group"
+          {...tactileProps.button}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-neutral-800 hover:border-slate-300 text-xs text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white font-medium shadow-2xs transition-all cursor-pointer group"
         >
           <span>{sug}</span>
-          <CornerDownLeft className="size-3 text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition-colors" />
-        </button>
+          <CornerDownLeft className="size-3 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors" />
+        </motion.button>
       ))}
-    </div>
+    </motion.div>
   )
 }
 
@@ -4785,18 +4896,19 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
       <AnimatePresence>
         {showCommands && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.99 }}
-            transition={{ duration: 0.12, ease: "easeOut" }}
-            className="absolute bottom-full left-0 right-0 mb-2 w-full bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-900/10 overflow-hidden z-50 p-2 select-none"
+            variants={originPopoverVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={springs.popover}
+            className="absolute bottom-full left-0 right-0 mb-2 w-full bg-white dark:bg-card rounded-2xl border border-slate-200/90 dark:border-neutral-800 shadow-xl shadow-slate-900/10 overflow-hidden z-50 p-2 select-none"
           >
-            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
+            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 dark:border-neutral-800 pb-1.5 mb-1">
               <span>Lệnh & Thao tác nhanh</span>
               <button
                 type="button"
                 onClick={() => setShowCommands(false)}
-                className="text-slate-400 hover:text-slate-700 text-[11px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-[11px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
               >
                 Đóng ✕
               </button>
@@ -4810,26 +4922,26 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                     type="button"
                     onClick={() => handleSelectCommandItem(item)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`group w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer ${
+                    className={`group w-full text-left px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
                       isSelected
-                        ? "bg-slate-100 text-slate-900 font-medium"
-                        : "hover:bg-slate-50 text-slate-700"
+                        ? "bg-slate-100 dark:bg-neutral-800 text-slate-900 dark:text-white font-semibold"
+                        : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-700 dark:text-slate-300"
                     }`}
                   >
-                    <div className="size-6 rounded-md bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                    <div className="size-6 rounded-lg bg-slate-50 dark:bg-neutral-800 border border-slate-200/60 dark:border-neutral-700 flex items-center justify-center shrink-0">
                       {item.icon}
                     </div>
                     <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                       {item.name ? (
-                        <span className="font-mono text-[11px] text-blue-600 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded font-semibold shrink-0">
+                        <span className="font-mono text-[11px] text-slate-900 dark:text-white bg-slate-100 dark:bg-neutral-800 border border-slate-200/80 dark:border-neutral-700 px-1.5 py-0.5 rounded-md font-semibold shrink-0">
                           /{item.name}
                         </span>
                       ) : null}
-                      <span className="text-xs font-medium text-slate-800 shrink-0">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 shrink-0">
                         {item.title}
                       </span>
                       {item.actionType === "upload" && !canUploadArtifacts && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-medium shrink-0">
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold shrink-0">
                           <Lock className="size-2.5" /> Chỉ đọc
                         </span>
                       )}
@@ -4852,21 +4964,22 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
       <AnimatePresence>
         {showMentions && artifacts.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.12 }}
-            className="absolute bottom-full left-0 mb-2 w-full sm:w-[380px] bg-white rounded-xl border border-slate-200/90 shadow-lg shadow-slate-900/10 overflow-hidden z-50 p-1.5 select-none"
+            variants={originPopoverVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={springs.popover}
+            className="absolute bottom-full left-0 mb-2 w-full sm:w-[380px] bg-white dark:bg-card rounded-2xl border border-slate-200/90 dark:border-neutral-800 shadow-xl shadow-slate-900/10 overflow-hidden z-50 p-2 select-none"
           >
-            <div className="px-2.5 py-1.5 text-[11px] font-medium text-slate-500 flex items-center justify-between border-b border-slate-100 mb-1">
-              <span className="flex items-center gap-1.5 text-slate-700 font-medium">
+            <div className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 dark:border-neutral-800 mb-1">
+              <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
                 <AtSign className="size-3.5 text-slate-400" />
                 Nhắc tài liệu tham chiếu
               </span>
               <button
                 type="button"
                 onClick={() => setShowMentions(false)}
-                className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-[10px] cursor-pointer"
               >
                 Đóng ✕
               </button>
@@ -4878,14 +4991,14 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                   key={art.id}
                   type="button"
                   onClick={() => handleSelectArtifact(art)}
-                  className="group w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  className="group w-full text-left px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
-                  <FileText className="size-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
+                  <FileText className="size-4 text-slate-400 group-hover:text-slate-800 shrink-0 transition-colors" />
                   <div className="min-w-0 flex-1">
-                    <span className="font-semibold text-xs text-foreground truncate block">
+                    <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate block">
                       @{art.name}
                     </span>
-                    <span className="text-[10.5px] text-muted-foreground truncate block">
+                    <span className="text-[10.5px] text-slate-400 truncate block">
                       {art.summary || art.size}
                     </span>
                   </div>
@@ -4901,14 +5014,15 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
         {showModelMenu && (
           <motion.div
             ref={modelMenuRef}
-            initial={{ opacity: 0, y: 6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.14, ease: "easeOut" }}
-            className="absolute bottom-full left-0 mb-2 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-900/10 p-2 z-50 select-none max-h-[380px] overflow-y-auto"
+            variants={originPopoverVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={springs.popover}
+            className="absolute bottom-full left-0 mb-2 w-72 sm:w-80 bg-white dark:bg-card rounded-2xl border border-slate-200/90 dark:border-neutral-800 shadow-xl shadow-slate-900/10 p-2 z-50 select-none max-h-[380px] overflow-y-auto"
           >
             {/* Model Section */}
-            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400">
+            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               Model
             </div>
             <div className="space-y-0.5 max-h-52 overflow-y-auto pr-0.5">
@@ -4924,35 +5038,35 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                     }}
                     className={cn(
                       "group w-full text-left px-2.5 py-1.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer",
-                      isSelected ? "bg-slate-50 text-slate-900" : "hover:bg-slate-50/80 text-slate-700"
+                      isSelected ? "bg-slate-100 dark:bg-neutral-800 text-slate-900 dark:text-white font-semibold" : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-700 dark:text-slate-300"
                     )}
                   >
                     <div className="min-w-0 flex-1 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className={cn("text-xs font-semibold truncate", isSelected ? "text-slate-900" : "text-slate-800")}>
+                        <span className={cn("text-xs font-semibold truncate", isSelected ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-200")}>
                           {m.name}
                         </span>
                         {m.badge && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
+                      <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5 font-mono">
                         {m.provider} • {m.contextLength ? `${m.contextLength} context` : "200K context"}
                       </div>
                     </div>
-                    {isSelected && <Check className="size-4 text-slate-900 shrink-0 stroke-[2.2]" />}
+                    {isSelected && <Check className="size-4 text-slate-900 dark:text-white shrink-0 stroke-[2.2]" />}
                   </button>
                 )
               })}
             </div>
 
             {/* Divider */}
-            <div className="h-[1px] bg-slate-100 my-1.5 mx-1" />
+            <div className="h-[1px] bg-slate-100 dark:bg-neutral-800 my-1.5 mx-1" />
 
             {/* Mode Section */}
-            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400">
+            <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               Mode
             </div>
             <div className="space-y-0.5">
@@ -4968,18 +5082,18 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                     }}
                     className={cn(
                       "group w-full text-left px-2.5 py-1.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer",
-                      isSelected ? "bg-slate-50 text-slate-900" : "hover:bg-slate-50/80 text-slate-700"
+                      isSelected ? "bg-slate-100 dark:bg-neutral-800 text-slate-900 dark:text-white font-semibold" : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-700 dark:text-slate-300"
                     )}
                   >
                     <div className="min-w-0 flex-1 pr-2">
-                      <span className={cn("text-xs font-semibold block", isSelected ? "text-slate-900" : "text-slate-800")}>
+                      <span className={cn("text-xs font-semibold block", isSelected ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-200")}>
                         {mode.label}
                       </span>
                       <span className="text-[11px] text-slate-400 font-normal block mt-0.5">
                         {mode.desc}
                       </span>
                     </div>
-                    {isSelected && <Check className="size-4 text-slate-900 shrink-0 stroke-[2.2]" />}
+                    {isSelected && <Check className="size-4 text-slate-900 dark:text-white shrink-0 stroke-[2.2]" />}
                   </button>
                 )
               })}
@@ -4991,13 +5105,13 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
       {/* Main JolyUI Interactive Container: Exact Match to Task Detail */}
       <div 
         onClick={() => textareaRef.current?.focus()}
-        className="relative rounded-2xl border border-slate-200/90 bg-white p-2.5 shadow-xs transition-all duration-200 focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-100/80 cursor-text"
+        className="relative rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card p-2.5 shadow-xs transition-all duration-200 focus-within:border-slate-300 dark:focus-within:border-neutral-700 focus-within:ring-2 focus-within:ring-slate-900/10 cursor-text"
       >
         {/* Active Document Context Chip when an artifact is open */}
         {activeArtifact && (
-          <div className="flex items-center justify-between px-2.5 py-1 mb-1.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-900/40 text-xs text-indigo-700 dark:text-indigo-300">
+          <div className="flex items-center justify-between px-2.5 py-1 mb-1.5 rounded-xl bg-slate-100 dark:bg-neutral-800 border border-slate-200/80 dark:border-neutral-700 text-xs text-slate-800 dark:text-slate-200">
             <div className="flex items-center gap-1.5 min-w-0">
-              <FileText className="size-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <FileText className="size-3.5 text-slate-700 dark:text-slate-300 shrink-0" />
               <span className="font-semibold truncate">Hỏi trực tiếp về tài liệu: {activeArtifact.name}</span>
             </div>
             {onClearActiveArtifact && (
@@ -5007,7 +5121,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                   e.stopPropagation()
                   onClearActiveArtifact()
                 }}
-                className="size-4 rounded hover:bg-indigo-200/50 dark:hover:bg-indigo-900/50 flex items-center justify-center text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-200 cursor-pointer"
+                className="size-4 rounded hover:bg-slate-200 dark:hover:bg-neutral-700 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
                 title="Bỏ gắn ngữ cảnh tài liệu"
               >
                 <X className="size-3" />
@@ -5074,67 +5188,71 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           aria-expanded={showCommands || showMentions}
           aria-haspopup="listbox"
           placeholder={activeArtifact ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...` : "Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"}
-          className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
+          className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
 
         {/* Actions Toolbar: Exact Match to Image 1 */}
-        <div className="flex items-center justify-between gap-2 p-0 pt-1.5 border-t border-slate-100/80 select-none">
+        <div className="flex items-center justify-between gap-2 p-0 pt-1.5 border-t border-slate-100 dark:border-neutral-800 select-none">
           {/* Left Action Buttons: + Button, Model • Mode Button, Sparkles Button */}
           <div className="flex items-center gap-1 select-none relative">
             {/* 1. Plus Button (+) */}
-            <button
+            <motion.button
               type="button"
               onClick={onUploadFile}
-              className="size-7 rounded-full flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              {...tactileProps.iconButton}
+              className="size-7 rounded-full flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
               title="Thêm tệp hoặc ảnh thiết kế (.md, .pdf, .json, ảnh...)"
             >
               <Plus className="size-4 stroke-[2.2]" />
-            </button>
+            </motion.button>
 
-            {/* 2. Model & Mode Trigger Button (Image 1: Claude Sonnet 5 • Auto ∨) */}
-            <button
+            {/* 2. Model & Mode Trigger Button */}
+            <motion.button
               type="button"
               onClick={() => setShowModelMenu((v) => !v)}
+              {...tactileProps.button}
               className={cn(
                 "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-all cursor-pointer border",
                 showModelMenu
-                  ? "bg-slate-100 border-slate-300 text-slate-900 font-semibold"
-                  : "bg-transparent border-transparent hover:bg-slate-100/80 text-slate-600 hover:text-slate-900"
+                  ? "bg-slate-100 dark:bg-neutral-800 border-slate-300 dark:border-neutral-700 text-slate-900 dark:text-white font-semibold"
+                  : "bg-transparent border-transparent hover:bg-slate-100/80 dark:hover:bg-neutral-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
               title="Chọn mô hình AI và chế độ suy luận"
             >
-              <span className="truncate max-w-[130px] sm:max-w-[200px]">
+              <span className="truncate max-w-[130px] sm:max-w-[200px] font-semibold text-slate-800 dark:text-slate-200">
                 {currentModelObj?.name || currentModel}
               </span>
-              <span className="text-slate-300">•</span>
+              <span className="text-slate-300 dark:text-neutral-600">•</span>
               <span className="text-slate-500 capitalize">{activeModeObj?.label || "Auto"}</span>
               <ChevronDown className={cn("size-3.5 text-slate-400 transition-transform", showModelMenu && "rotate-180")} />
-            </button>
+            </motion.button>
 
             {/* 3. Sparkles Helper Button (✨) */}
-            <button
+            <motion.button
               type="button"
               onClick={() => setShowCommands((v) => !v)}
+              {...tactileProps.iconButton}
               className={cn(
                 "size-7 rounded-full flex items-center justify-center transition-colors cursor-pointer shrink-0",
                 showCommands
-                  ? "text-purple-600 bg-purple-50"
-                  : "text-slate-500 hover:text-purple-600 hover:bg-slate-100"
+                  ? "text-slate-900 bg-slate-100 dark:bg-neutral-800"
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
               )}
               title="Lệnh nhanh & Công cụ AI (/)"
             >
               <Sparkles className="size-3.5" />
-            </button>
+            </motion.button>
 
             {/* 4. Artifacts Library Button */}
-            <button
+            <motion.button
               type="button"
               onClick={onOpenArtifacts}
-              className="size-7 rounded-full flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/80 transition-colors cursor-pointer shrink-0"
+              {...tactileProps.iconButton}
+              className="size-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
               title="Mở thư viện tài liệu Artifacts"
             >
               <FolderOpen className="size-3.5" />
-            </button>
+            </motion.button>
           </div>
 
           {/* Right Action: Instructions Hint & Send Button */}
@@ -5142,43 +5260,43 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
             {/* Keyboard Shortcuts Hint */}
             <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 select-none">
               <span className="inline-flex items-center gap-1">
-                <kbd className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
+                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
                 <span className="text-[10px] text-slate-400">gửi</span>
               </span>
-              <span className="text-slate-300">•</span>
+              <span className="text-slate-300 dark:text-neutral-600">•</span>
               <span className="inline-flex items-center gap-1">
-                <kbd className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[10px] leading-none px-1.5 py-0.5 rounded">Shift</kbd>
+                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[10px] leading-none px-1.5 py-0.5 rounded">Shift</kbd>
                 <span className="text-slate-400 text-[10px]">+</span>
-                <kbd className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
+                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
                 <span className="text-[10px] text-slate-400">xuống dòng</span>
               </span>
             </div>
 
             {/* Send / Stop Button */}
             {isStreaming ? (
-              <Button
+              <motion.button
                 type="button"
-                size="sm"
-                variant="outline"
                 onClick={onStop}
-                className="h-8 px-3 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer"
+                {...tactileProps.button}
+                className="h-8 px-3 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl cursor-pointer shadow-2xs"
               >
                 Dừng
-              </Button>
+              </motion.button>
             ) : (
-              <button
+              <motion.button
                 type="button"
                 onClick={handleSend}
                 disabled={!text.trim()}
-                className={`h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
+                {...tactileProps.button}
+                className={`size-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                   text.trim()
-                    ? "bg-slate-900 text-white hover:bg-slate-800 hover:scale-105 active:scale-95 shadow-xs"
+                    ? "bg-slate-900 text-white hover:bg-slate-800 shadow-xs"
                     : "bg-slate-100 text-slate-300 cursor-not-allowed"
                 }`}
                 title="Gửi trao đổi"
               >
-                <ArrowUp className="h-4 w-4 stroke-[2.5]" />
-              </button>
+                <ArrowUp className="size-4 stroke-[2.5]" />
+              </motion.button>
             )}
           </div>
         </div>

@@ -8,8 +8,9 @@
  */
 
 import React from "react"
+import { motion } from "framer-motion"
 import { AlertTriangle, RotateCcw, ShieldAlert, WifiOff, Key } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { springs, tactileProps } from "@/lib/motion"
 
 export interface VietnameseErrorInfo {
   title: string
@@ -109,30 +110,30 @@ export function EchoErrorCard({ error, onRetry, isRetrying = false, className = 
   const errorInfo = mapErrorToVietnamese(error)
 
   const getIcon = () => {
-    if (errorInfo.title.includes("kết nối")) return <WifiOff className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
-    if (errorInfo.title.includes("cấu hình")) return <Key className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
-    if (errorInfo.title.includes("hết hạn")) return <ShieldAlert className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
-    return <AlertTriangle className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
+    if (errorInfo.title.includes("kết nối")) return <WifiOff className="size-4 text-rose-600 shrink-0" />
+    if (errorInfo.title.includes("cấu hình")) return <Key className="size-4 text-amber-600 shrink-0" />
+    if (errorInfo.title.includes("hết hạn")) return <ShieldAlert className="size-4 text-rose-600 shrink-0" />
+    return <AlertTriangle className="size-4 text-rose-600 shrink-0" />
   }
 
   return (
     <div
       role="alert"
-      className={`rounded-xl border border-rose-200/80 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20 p-3.5 text-xs sm:text-sm text-foreground space-y-2.5 transition-all ${className}`}
+      className={`rounded-2xl border border-rose-200/90 bg-rose-50/70 p-4 text-xs sm:text-sm text-slate-800 space-y-3 shadow-2xs ${className}`}
     >
-      <div className="flex items-start gap-2.5">
-        <div className="size-7 rounded-lg bg-rose-100 dark:bg-rose-900/40 border border-rose-200 dark:border-rose-800/60 flex items-center justify-center shrink-0 mt-0.5">
+      <div className="flex items-start gap-3">
+        <div className="size-8 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
           {getIcon()}
         </div>
         <div className="space-y-1 min-w-0 flex-1">
-          <h4 className="font-semibold text-rose-900 dark:text-rose-200 text-[13px] sm:text-sm flex items-center gap-1.5">
+          <h4 className="font-bold text-rose-900 text-[13.5px] sm:text-sm flex items-center gap-1.5">
             {errorInfo.title}
           </h4>
-          <p className="text-muted-foreground leading-relaxed text-xs">
+          <p className="text-slate-600 leading-relaxed text-xs">
             {errorInfo.message}
           </p>
           {errorInfo.adminNote && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-mono bg-amber-50/70 dark:bg-amber-950/40 p-2 rounded border border-amber-200/60 dark:border-amber-900/40">
+            <p className="text-[11px] text-amber-800 font-mono bg-amber-50/90 p-2.5 rounded-xl border border-amber-200/80">
               💡 {errorInfo.adminNote}
             </p>
           )}
@@ -141,20 +142,20 @@ export function EchoErrorCard({ error, onRetry, isRetrying = false, className = 
 
       {errorInfo.canRetry && onRetry && (
         <div className="flex items-center justify-end pt-1">
-          <Button
+          <motion.button
             type="button"
-            size="sm"
-            variant="outline"
             onClick={onRetry}
             disabled={isRetrying}
-            className="h-7 px-3 text-xs bg-white dark:bg-card border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 cursor-pointer gap-1.5 shadow-2xs"
+            {...tactileProps.button}
+            className="h-8 px-3.5 text-xs bg-white border border-rose-200 text-rose-700 hover:bg-rose-100/80 rounded-xl font-semibold cursor-pointer flex items-center gap-1.5 shadow-2xs"
             aria-label="Thử lại câu hỏi"
           >
-            <RotateCcw className={`size-3.5 ${isRetrying ? "animate-spin" : ""}`} />
+            <RotateCcw className={`size-3.5 stroke-[2.2] ${isRetrying ? "animate-spin" : ""}`} />
             <span>Thử lại ngay</span>
-          </Button>
+          </motion.button>
         </div>
       )}
     </div>
   )
 }
+

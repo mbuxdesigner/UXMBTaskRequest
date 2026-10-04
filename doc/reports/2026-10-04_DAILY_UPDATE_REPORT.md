@@ -22,11 +22,13 @@
 > 7. **Bộ Định tuyến Ngữ cảnh Động Agentic (Agentic Dynamic Context Router & Knowledge Retrieval):**
 >    - Chấm dứt cơ chế "nhồi bừa toàn bộ" (Naive Context Dumping) 100+ tasks và lịch họp khi người dùng chỉ hỏi về quy trình hoặc sản phẩm.
 >    - Kiến trúc 2 giai đoạn: **Intent Classification** (bắt trúng từ khóa sản phẩm số: tiền gửi, tiết kiệm, eKYC, thẻ, khoản vay...) + **Knowledge Bucket Retrieval** (chuẩn hóa tiếng Việt NFD, mở rộng từ đồng nghĩa ngữ nghĩa, trích xuất chính xác tài liệu liên quan).
-> 8. **Minh bạch hóa Agent Activity Trace Trung thực:** Đồng bộ `loadedDocNames`, chỉ hiển thị badge tài liệu khi có tài liệu thực tế được nạp vào context; chỉ hiển thị điểm thảo luận khi câu hỏi liên quan đến task.
-> 9. **Lộ trình 3 Cấp độ Mở rộng Kho Tri thức Ngân hàng Số:** Định hướng mở rộng từ In-Memory Metadata Router (Level 1) $\rightarrow$ Semantic Vector RAG (Level 2) $\rightarrow$ Multi-Agent Specialist Framework (Level 3).
-> 10. **Hệ thống Kiểm thử Tự động Chuyên sâu:** Xây dựng bộ test `tests/test-ai-chats-e2e-and-audit.mjs` với **148 test cases** đạt tỷ lệ thành công 100%.  
-> **Nhánh thực hiện:** `fix/ai-chats-audit`  
-> **Trạng thái:** Hoàn tất 100% triển khai, Build Production PASS (0 lỗi mới, 19.03s), 148/148 Tests PASS.
+> 8. **Minh bạch hóa Agent Activity Trace Trung thực:** Đồng bộ `loadedDocNames`, chỉ hiển thị badge tài liệu khi có tài liệu thực tế được nạp vào context; chỉ hiển thị điểm thảo luận khi câu hỏi liên quan đến task. Khắc phục triệt để lỗi runtime `ReferenceError: loadedDocNames is not defined`.
+> 9. **Bộ lọc Từ dừng Tiếng Việt & Cô lập Ngữ cảnh Tài liệu Đính kèm:** Loại bỏ từ dừng (`VIETNAMESE_STOP_WORDS`), cô lập context khi có tài liệu đính kèm (`artifacts: []`), nâng `max_tokens` lên 2048, giải quyết triệt để lỗi AI bị nghẽn context trả về 1 ký tự ("D").
+> 10. **Tương tác Xúc giác Đàn hồi (Tactile Micro-interactions) & ReUI Dark Mode:** Tích hợp bộ tương tác `tactileProps` (`scale: 0.97/1.02`), đồng bộ bảng màu Dark Mode chuẩn ReUI (`dark:bg-neutral-800`, `dark:border-neutral-700`).
+> 11. **Lộ trình 3 Cấp độ Mở rộng Kho Tri thức Ngân hàng Số:** Định hướng mở rộng từ In-Memory Metadata Router (Level 1) $\rightarrow$ Semantic Vector RAG (Level 2) $\rightarrow$ Multi-Agent Specialist Framework (Level 3).
+> 12. **Hệ thống Kiểm thử Tự động Chuyên sâu:** Xây dựng bộ test `tests/test-ai-chats-e2e-and-audit.mjs` với **148 test cases** đạt tỷ lệ thành công 100%.  
+> **Nhánh thực hiện:** `fix/ai-chats-audit` $\rightarrow$ Merged to `develop`  
+> **Trạng thái:** Hoàn tất 100% triển khai, Build Production PASS (0 lỗi mới, 13.03s), 148/148 Tests PASS.
 
 ---
 
@@ -111,14 +113,16 @@ Tại `api/ai-gateway.ts`:
 
 | Đường dẫn tệp tin | Loại thay đổi | Chi tiết kỹ thuật |
 | :--- | :--- | :--- |
-| `src/config/aiPrompts.ts` | Đại tu lớn | Cập nhật `CORE_SYSTEM_PROMPT`, nâng cấp `detectUserIntent` (thêm `isProductSpec`), đại tu `searchArtifactsByQuery` (chuẩn hóa tiếng Việt NFD, phrase matching, semantic map), tối ưu `buildEnrichedContext` (loại bỏ dump task và thông báo rò rỉ biến). |
-| `src/pages/AIChatPage.tsx` | Nâng cấp lớn | Bổ sung `loadedDocNames` vào `ChatTraceData`, truyền prop vào `AgentActivityTrace`, tích hợp các tính năng Copy Markdown/TSV cho Figma, Sửa prompt, Tạo lại, Dừng stream, và Thử lại khi có lỗi mạng. |
-| `src/components/planner/AgentActivityTrace.tsx` | Nâng cấp | Thêm prop `loadedDocNames`, hiển thị badge tài liệu thực tế, chỉ đếm thảo luận khi có task trong context, xóa bỏ badge hardcode cũ. |
+| `src/config/aiPrompts.ts` | Đại tu lớn | Cập nhật `CORE_SYSTEM_PROMPT`, nâng cấp `detectUserIntent` (thêm `isProductSpec`), đại tu `searchArtifactsByQuery` (bộ lọc từ dừng `VIETNAMESE_STOP_WORDS`, chuẩn hóa tiếng Việt NFD, phrase matching, semantic map), tối ưu `buildEnrichedContext` (cô lập customContext, loại bỏ dump task và thông báo rò rỉ biến). |
+| `src/pages/AIChatPage.tsx` | Nâng cấp lớn | Bổ sung `loadedDocNames` vào `ChatTraceData`, truyền prop vào `AgentActivityTrace`, tích hợp các tính năng Copy Markdown/TSV cho Figma, Sửa prompt, Tạo lại, Dừng stream, Thử lại khi có lỗi mạng, và gắn micro-interactions `tactileProps`. |
+| `src/components/planner/AgentActivityTrace.tsx` | Nâng cấp & Vá lỗi | Destructure `loadedDocNames = []` khắc phục lỗi ReferenceError, hiển thị badge tài liệu thực tế, chỉ đếm thảo luận khi có task trong context, xóa bỏ badge hardcode cũ. |
+| `src/components/chat/EchoArtifactSplitViewer.tsx` | Nâng cấp UI | Tinh chỉnh giao diện Split Viewer, đồng bộ theme Dark Mode và tương tác xúc giác. |
+| `src/components/chat/EchoErrorCard.tsx` | Nâng cấp UI | Thẻ thông báo lỗi tiếng Việt thân thiện kèm nút Thử lại (Retry) với hiệu ứng `tactileProps`. |
 | `src/lib/piiMasker.ts` | Tạo mới | Module che thông tin nhạy cảm: email, số điện thoại, CCCD/CMND bằng Regex chuẩn Việt Nam. |
 | `src/lib/figmaExportUtils.ts` | Tạo mới | Bộ công cụ format Markdown sạch và xuất bảng dữ liệu sang TSV phục vụ Figma/Excel. |
 | `api/ai-gateway.ts` | Nâng cấp lớn | Tích hợp xác thực Session Token OTP, Rate Limiting 20 req/phút/IP, kiểm tra biến môi trường server an toàn. |
 | `tests/test-ai-chats-e2e-and-audit.mjs` | Bổ sung lớn | Bộ test tự động 4 tầng gồm 148 test cases kiểm thử PII, Gateway Auth, Rate Limit, Context Clipping, Figma Export, Dynamic Router và Audit bảo mật. |
-| `doc/features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md` | Bổ sung | Thêm mục 11 (Agentic Dynamic Router), mục 12 (Persona & Tone of Voice), mục 13 (Honest Activity Trace), và mục 14 (Lộ trình 3 cấp độ mở rộng kho tài liệu). |
+| `doc/features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md` | Bổ sung | Thêm mục 11 (Agentic Dynamic Router), mục 12 (Persona & Tone of Voice), mục 13 (Honest Activity Trace), mục 14 (Lộ trình 3 cấp độ mở rộng kho tài liệu), và mục 15 (Tối ưu hóa ngữ cảnh chuyên sâu & Trải nghiệm vi mô). |
 | `doc/00_OVERVIEW_AND_ONBOARDING.md` | Cập nhật | Bổ sung báo cáo ngày 03/10 và 04/10/2026 vào danh mục Onboarding trung tâm. |
 | `doc/reports/2026-10-04_DAILY_UPDATE_REPORT.md` | Tạo mới | Báo cáo chi tiết toàn bộ các hạng mục công việc hoàn thành trong ngày 04/10/2026. |
 

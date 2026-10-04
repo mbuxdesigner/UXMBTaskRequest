@@ -81,9 +81,27 @@ Toàn bộ các thay đổi được tổ chức thành các commit độc lập
 - **Trợ năng & Phím tắt:**
   - Xử lý phím `Tab` và `Enter` trong menu Slash Commands; gắn đầy đủ `aria-label`, `role="log"` và nhãn trợ năng ReUI.
 
-### 2.4. Nhóm Tích hợp & Kiểm thử Mở rộng (Commit Hiện tại — Milestone M4)
-- Mở rộng bộ kiểm thử tự động Node.js từ 130 lên **145 bài test** đơn vị và tích hợp trực tiếp trên module thực tế (không dùng dữ liệu tự chứng thực).
+### 2.4. Nhóm Tích hợp & Kiểm thử Mở rộng (Milestone M4)
+- Mở rộng bộ kiểm thử tự động Node.js từ 130 lên **148 bài test** đơn vị và tích hợp trực tiếp trên module thực tế (không dùng dữ liệu tự chứng thực), đạt tỷ lệ 100% PASS.
 - Biên soạn tài liệu bàn giao toàn diện `AI_CHATS_UPGRADE_NOTES.md` và cập nhật chỉ số tại `TEST_READY.md`.
+
+### 2.5. Nhóm Định tuyến Ngữ cảnh Động Agentic & Vá Lỗi Đứt gãy Context (Milestones M5 — M8)
+- **Agentic Dynamic Router & Phân loại Ý định (Intent Classification):**
+  - Chấm dứt cơ chế nhồi bừa context (Naive Context Dumping). Bổ sung cờ `isProductSpec` nhận diện các từ khóa tài chính & sản phẩm số MB (tiền gửi, tiết kiệm, eKYC, thẻ, khoản vay, NFC, QR Pay...).
+  - Chỉ nạp dữ liệu task khi câu hỏi liên quan đến bài toán/tiến độ; chỉ nạp tài liệu khi có khớp thực tế.
+- **Bộ lọc Từ dừng Tiếng Việt (Vietnamese Stop Words Filter):**
+  - Loại bỏ các từ dừng phổ biến ("số", "tắt", "tóm", "tôi", "giúp"...) trong `searchArtifactsByQuery`, triệt tiêu hoàn toàn lỗi false-positive match cùng lúc 5-6 tài liệu hạt nhân.
+  - Áp dụng ngưỡng tin cậy `score >= 10` và giới hạn tối đa 2 tài liệu phù hợp nhất.
+- **Cô lập Ngữ cảnh Tài liệu Đính kèm (Custom Context Isolation):**
+  - Khi người dùng đính kèm/hỏi về 1 tài liệu cụ thể (`attachedDocName` / `customContext`), hệ thống truyền `artifacts: []` vào hàm enrich context, chỉ nạp DUY NHẤT file được chọn, giảm kích thước prompt từ 20.000 tokens xuống ~1.500 tokens, ngăn chặn tràn bộ nhớ ngữ cảnh và khắc phục triệt để lỗi AI chỉ trả lời 1 ký tự ("D").
+- **Chuẩn hóa Persona & Giọng văn Senior Product Designer / UX Writer:**
+  - Viết lại `CORE_SYSTEM_PROMPT`: Cấm tuyệt đối rò rỉ tên biến hệ thống (`DOCUMENT_DATA`, `TASK_DATA_JSON`, `CALENDAR_DATA`); cấm mở đầu bằng câu thanh minh kỹ thuật ("Hiện tại chưa được cung cấp tài liệu..."); vào thẳng giải pháp thiết kế thực tế.
+- **Sửa lỗi Runtime ReferenceError trong `AgentActivityTrace.tsx`:**
+  - Bổ sung `loadedDocNames = []` vào danh sách tham số được destructure trong component `AgentActivityTrace`, ngăn chặn lỗi `ReferenceError: loadedDocNames is not defined`.
+- **Mở rộng Giới hạn Độ dài Phản hồi:**
+  - Nâng `max_tokens` từ 1024 lên 2048 để AI có đủ không gian phân tích và giải thích chi tiết.
+- **Nâng cấp Vi tương tác & Giao diện Tối giản (Monochrome & Tactile Motion):**
+  - Đồng bộ hiệu ứng tactile bấm nút mượt mà, tối ưu tương phản Dark Mode và làm sạch giao diện Composer / Artifact Viewer.
 
 ---
 
