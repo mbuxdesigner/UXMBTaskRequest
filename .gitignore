@@ -33,3 +33,6 @@ ORIGINAL_REQUEST.md
 !/test-ia-cloud-autochunk-and-sanitizer.mjs
 !/test-m1-vercel-pipeline-and-sheet-isolation.mjs
 /*.webp
+
+# Local agent worktree copies (contain env files) - never commit
+.claude/
