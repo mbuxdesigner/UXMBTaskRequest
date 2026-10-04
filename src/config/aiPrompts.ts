@@ -16,6 +16,7 @@ import type { ExecutiveIntelligenceData } from "@/lib/executiveIntelligence"
 import type { UXRequest } from "@/data/mockData"
 import type { UXArtifact } from "@/services/aiArtifactsService"
 import type { PlannerEntry } from "@/services/calendarService"
+import { sanitizeContextText } from "../lib/piiMasker.ts"
 
 export interface PromptMessagePart {
   type: "text" | "image_url"
@@ -331,7 +332,7 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
 }
 
 /**
- * Serialize tài liệu Artifacts với metadata rõ ràng khi bị cắt bớt
+ * Serialize tài liệu Artifacts với metadata rõ ràng khi bị cắt bớt và che thông tin PII
  */
 export function serializeArtifactsContext(artifacts: UXArtifact[], mode: "summary" | "full" = "summary"): string {
   if (!artifacts || artifacts.length === 0) return ""
@@ -340,12 +341,13 @@ export function serializeArtifactsContext(artifacts: UXArtifact[], mode: "summar
   lines.push(`=== DOCUMENT_DATA (${artifacts.length} tài liệu trong context) ===`)
   
   artifacts.forEach((art, idx) => {
-    lines.push(`--- Tài liệu #${idx + 1}: "${art.name}" (${art.fileType}) ---`)
-    if (art.summary) lines.push(`Tóm tắt: ${art.summary}`)
+    lines.push(`--- Tài liệu #${idx + 1}: "${sanitizeContextText(art.name)}" (${art.fileType}) ---`)
+    if (art.summary) lines.push(`Tóm tắt: ${sanitizeContextText(art.summary)}`)
     if (art.tags && art.tags.length > 0) lines.push(`Tags: ${art.tags.join(", ")}`)
     
     if (mode === "full") {
-      const content = art.content || ""
+      const rawContent = art.content || ""
+      const content = sanitizeContextText(rawContent)
       const MAX_LENGTH = 2000
       if (content.length > MAX_LENGTH) {
         lines.push(`[METADATA TRẠNG THÁI: TÀI LIỆU BỊ CẮT BỚT — HIỂN THỊ ${MAX_LENGTH} / ${content.length} KÝ TỰ]`)
@@ -361,6 +363,44 @@ export function serializeArtifactsContext(artifacts: UXArtifact[], mode: "summar
   lines.push(`=== END_DOCUMENT_DATA ===`)
   
   return lines.join("\n")
+}
+
+/**
+ * Serialize danh mục bài toán UX sang chuỗi JSON đã được che giấu thông tin cá nhân (PII)
+ */
+export function serializeTaskContext(tasks: UXRequest[], metricsTodayYMD: string = ""): string {
+  const taskContextRecords = tasks.map((t) => {
+    const dl = t.expected_deadline || (t as any).design_deadline || null
+    const prog = Number(t.progress) || 0
+    const isOverdue = Boolean(dl && metricsTodayYMD && dl < metricsTodayYMD && prog < 100)
+    const lastNote = t.task_updates && t.task_updates.length > 0
+      ? t.task_updates[t.task_updates.length - 1]?.note
+      : null
+
+    return {
+      id: t.request_id || t.id || "",
+      title: sanitizeContextText(t.nickname?.trim() || t.title?.trim() || "Chưa đặt tên"),
+      priority: t.priority || "Lv3",
+      phase: t.current_phase || "Đang xử lý",
+      progress: prog,
+      deadline: dl || "Chưa có",
+      is_overdue: isOverdue,
+      status: t.status || "Chờ xử lý",
+      squad: t.squad_name || t.preferred_squad || (t as any).squad || t.product || "Chưa gán",
+      assignee: sanitizeContextText(t.assigned_designer || "Chưa gán"),
+      figma_url: Boolean(t.figma_url),
+      latest_note: lastNote ? sanitizeContextText(lastNote) : null,
+    }
+  })
+  return JSON.stringify(taskContextRecords)
+}
+
+/**
+ * Serialize danh sách lịch trình / sự kiện sang định dạng text đã được che giấu thông tin cá nhân (PII)
+ */
+export function serializeScheduleContext(events: PlannerEntry[]): string {
+  if (!events || events.length === 0) return ""
+  return events.map(e => `- "${sanitizeContextText(e.title || "")}" (${e.time || "cả ngày"})`).join("\n")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -389,17 +429,18 @@ export function buildEnrichedContext(options: {
 
   // 2. Thông tin User & Phạm vi quyền
   if (options.userName) {
+    const sanitizedUserName = sanitizeContextText(options.userName)
     const scopeDesc = options.userRole === "Admin"
       ? "Toàn bộ bài toán của team."
       : options.userRole === "Design Owner"
       ? "Các bài toán thuộc sản phẩm và Squad được phân công cho Design Owner."
       : "Chỉ các bài toán được phân công cho Designer hiện tại."
-    parts.push(`Người dùng: ${options.userName} (${options.userRole || "Designer"})\nPhạm vi dữ liệu được phép sử dụng: ${scopeDesc}`)
+    parts.push(`Người dùng: ${sanitizedUserName} (${options.userRole || "Designer"})\nPhạm vi dữ liệu được phép sử dụng: ${scopeDesc}`)
   }
 
   // 3. CALENDAR_DATA (nếu có lịch họp)
   if (includeCalendarContext && options.intelligence?.todayEvents && options.intelligence.todayEvents.length > 0) {
-    const evLines = options.intelligence.todayEvents.map(e => `- "${e.title}" (${e.time || "cả ngày"})`).join("\n")
+    const evLines = serializeScheduleContext(options.intelligence.todayEvents)
     parts.push(`=== CALENDAR_DATA ===\nSố cuộc họp hôm nay: ${options.intelligence.todayMeetingCount}\nThời gian Deep Work khả dụng: ${options.intelligence.deepWorkHoursAvailable} giờ\nDanh sách sự kiện:\n${evLines}\n=== END_CALENDAR_DATA ===`)
   }
 
@@ -419,31 +460,8 @@ export function buildEnrichedContext(options: {
       `=== END_TASK_DATA_METRICS ===`
     )
 
-    // 5. TASK_DATA_JSON (Nguồn duy nhất cho danh mục task, loại bỏ danh sách text lặp lại)
-    const taskContextRecords = effectiveTasks.map((t) => {
-      const dl = t.expected_deadline || (t as any).design_deadline || null
-      const prog = Number(t.progress) || 0
-      const isOverdue = Boolean(dl && dl < metrics.todayYMD && prog < 100)
-      const lastNote = t.task_updates && t.task_updates.length > 0
-        ? t.task_updates[t.task_updates.length - 1]?.note
-        : null
-
-      return {
-        id: t.request_id || t.id || "",
-        title: t.nickname?.trim() || t.title?.trim() || "Chưa đặt tên",
-        priority: t.priority || "Lv3",
-        phase: t.current_phase || "Đang xử lý",
-        progress: prog,
-        deadline: dl || "Chưa có",
-        is_overdue: isOverdue,
-        status: t.status || "Chờ xử lý",
-        squad: t.squad_name || t.preferred_squad || (t as any).squad || t.product || "Chưa gán",
-        assignee: t.assigned_designer || "Chưa gán",
-        figma_url: Boolean(t.figma_url),
-        latest_note: lastNote,
-      }
-    })
-    parts.push(`=== TASK_DATA_JSON ===\n${JSON.stringify(taskContextRecords)}\n=== END_TASK_DATA_JSON ===`)
+    // 5. TASK_DATA_JSON (Nguồn duy nhất cho danh mục task, đã lọc bỏ PII)
+    parts.push(`=== TASK_DATA_JSON ===\n${serializeTaskContext(effectiveTasks, metrics.todayYMD)}\n=== END_TASK_DATA_JSON ===`)
   }
 
   // 6. Tài liệu Artifacts
@@ -471,7 +489,9 @@ export function serializeContext(intel: ExecutiveIntelligenceData): string {
   const metrics = computeTaskMetrics(tasks, now)
 
   lines.push(`=== CURRENT_TIME ===\nThời điểm hiện tại: ${metrics.currentTime}\nNgày hiện tại (YMD): ${metrics.todayYMD}\n=== END_CURRENT_TIME ===`)
-  lines.push(`Người dùng: ${intel.userName || "Designer"} (${intel.userEmail || "ux@mbbank.com.vn"})`)
+  const sanitizedUserName = sanitizeContextText(intel.userName || "Designer")
+  const sanitizedUserEmail = intel.userEmail ? sanitizeContextText(intel.userEmail) : "[EMAIL_USER]"
+  lines.push(`Người dùng: ${sanitizedUserName} (${sanitizedUserEmail})`)
 
   if (intel.todayMeetingCount > 0) {
     lines.push(`=== CALENDAR_DATA ===\nSố cuộc họp: ${intel.todayMeetingCount} (${intel.todayMeetingDurationMinutes} phút) | Thời gian Deep Work: ${intel.deepWorkHoursAvailable}h\n=== END_CALENDAR_DATA ===`)
@@ -486,19 +506,7 @@ export function serializeContext(intel: ExecutiveIntelligenceData): string {
     `=== END_TASK_DATA_METRICS ===`
   )
 
-  const taskRecords = tasks.map((t) => ({
-    id: t.request_id || t.id || "",
-    title: t.nickname?.trim() || t.title?.trim() || "Chưa đặt tên",
-    priority: t.priority || "Lv3",
-    phase: t.current_phase || "Đang làm",
-    progress: Number(t.progress) || 0,
-    deadline: t.expected_deadline || (t as any).design_deadline || "Chưa có",
-    is_overdue: Boolean(t.expected_deadline && t.expected_deadline < metrics.todayYMD && (Number(t.progress) || 0) < 100),
-    status: t.status || "Đang xử lý",
-    squad: t.squad_name || t.preferred_squad || (t as any).squad || t.product || "Chưa gán",
-    assignee: t.assigned_designer || "Chưa gán",
-  }))
-  lines.push(`=== TASK_DATA_JSON ===\n${JSON.stringify(taskRecords)}\n=== END_TASK_DATA_JSON ===`)
+  lines.push(`=== TASK_DATA_JSON ===\n${serializeTaskContext(tasks, metrics.todayYMD)}\n=== END_TASK_DATA_JSON ===`)
 
   return lines.join("\n")
 }
@@ -601,7 +609,8 @@ export function buildChatPrompt(
   }
 
   if (contextText) {
-    systemChunks.push(`\n## DỮ LIỆU ĐƯỢC CUNG CẤP CHO PHIÊN LÀM VIỆC:\n${contextText}`)
+    const sanitizedContext = sanitizeContextText(contextText)
+    systemChunks.push(`\n## DỮ LIỆU ĐƯỢC CUNG CẤP CHO PHIÊN LÀM VIỆC:\n${sanitizedContext}`)
   }
 
   return [
@@ -615,14 +624,14 @@ export function buildTaskSummaryPrompt(task: UXRequest): PromptMessage[] {
   const deadline = task.design_deadline || task.expected_deadline || "Chưa có"
   const taskContext = `
 - Mã bài toán: ${task.request_id || task.id || "N/A"}
-- Tiêu đề: "${task.nickname?.trim() || task.title?.trim() || "Chưa đặt tên"}"
+- Tiêu đề: "${sanitizeContextText(task.nickname?.trim() || task.title?.trim() || "Chưa đặt tên")}"
 - Squad: ${squad}
 - Mức độ ưu tiên: ${task.priority || "Lv3"}
 - Khâu hiện tại: ${task.current_phase || "Chưa rõ"}
 - Tiến độ: ${task.progress || 0}%
-- Người phụ trách: ${task.assigned_designer || "Chưa phân công"}
+- Người phụ trách: ${sanitizeContextText(task.assigned_designer || "Chưa phân công")}
 - Hạn hoàn thành: ${deadline}
-- Mô tả: ${task.description || "Không có mô tả"}
+- Mô tả: ${sanitizeContextText(task.description || "Không có mô tả")}
 `
 
   return [

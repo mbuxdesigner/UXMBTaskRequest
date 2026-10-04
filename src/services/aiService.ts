@@ -31,7 +31,8 @@ const STORAGE_AI_ENABLED_KEY = "ux_mb_ai_enabled"
 export const STORAGE_GEMINI_KEY = "ux_mb_gemini_api_key"
 export const STORAGE_AI_GATEWAY_KEY = "ux_mb_ai_gateway" // "auto" | "google_ai_studio" | "openrouter"
 
-export const INITIAL_GEMINI_KEY = (typeof import.meta !== "undefined" && import.meta.env?.VITE_GEMINI_API_KEY) || ""
+export const INITIAL_GEMINI_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : "") || ""
 
 export function getStoredGeminiKey(): string {
   if (typeof window === "undefined") return ""
@@ -55,6 +56,25 @@ export function getStoredAIGateway(): "auto" | "google_ai_studio" | "openrouter"
 export function saveAIGateway(gateway: "auto" | "google_ai_studio" | "openrouter"): void {
   if (typeof window === "undefined") return
   localStorage.setItem(STORAGE_AI_GATEWAY_KEY, gateway)
+}
+
+/**
+ * Trích xuất session token từ localStorage hoặc sessionStorage nếu người dùng đã đăng nhập
+ */
+export function getStoredSessionToken(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw =
+      localStorage.getItem("ux_portal_session_auth") ||
+      sessionStorage.getItem("ux_portal_session_auth")
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed.sessionToken === "string" && parsed.sessionToken.trim()) {
+        return parsed.sessionToken.trim()
+      }
+    }
+  } catch {}
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,8 +219,9 @@ export const POPULAR_AI_MODELS: AIModelOption[] = [
   },
 ]
 
-// Key mặc định ban đầu đọc an toàn từ biến môi trường hoặc để trống cho Quản trị viên cấu hình trong Admin Portal
-const INITIAL_DEFAULT_KEY = (typeof import.meta !== "undefined" && import.meta.env?.VITE_OPENROUTER_API_KEY) || ""
+// Key mặc định ban đầu đọc an toàn từ biến môi trường (chỉ ở chế độ local development)
+const INITIAL_DEFAULT_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY || "") : "") || ""
 
 export const FREE_REQUESTS_PER_KEY_PER_DAY = 50
 const STORAGE_AI_DAILY_USAGE_KEY = "ux_mb_ai_daily_usage"
@@ -438,6 +459,50 @@ export function setAIEnabled(enabled: boolean): void {
  */
 export async function testAIConnection(apiKey?: string, model: string = DEFAULT_AI_MODEL): Promise<{ success: boolean; message: string; latencyMs: number }> {
   const startTime = Date.now()
+  const isDev = Boolean(typeof import.meta !== "undefined" && import.meta.env?.DEV)
+
+  // Trong production, luôn kiểm tra qua Edge Gateway có đính kèm session token, tuyệt đối không gọi direct OpenRouter
+  if (!isDev) {
+    const sessionToken = getStoredSessionToken()
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`
+
+    try {
+      const res = await fetch("/api/ai-gateway", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: "Ping" }],
+          max_tokens: 5,
+        }),
+      })
+      const latencyMs = Date.now() - startTime
+
+      if (res.ok) {
+        return { success: true, message: `Kết nối gateway thành công (${latencyMs}ms)`, latencyMs }
+      }
+
+      const errData = await res.json().catch(() => ({}))
+      const errMsg = errData?.error?.message || errData?.error || `HTTP ${res.status}`
+      if (res.status === 503 || errData?.code === "MISSING_SERVER_API_KEY") {
+        return {
+          success: false,
+          message:
+            "Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường.",
+          latencyMs,
+        }
+      }
+      return { success: false, message: `Lỗi kết nối gateway (${res.status}): ${errMsg}`, latencyMs }
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Không thể kết nối gateway: ${err?.message || "Network Error"}`,
+        latencyMs: Date.now() - startTime,
+      }
+    }
+  }
+
   const keyToUse = apiKey?.trim() || getStoredAIKeys().find(k => k.status === "active")?.key || INITIAL_DEFAULT_KEY
 
   if (!keyToUse) {
@@ -605,6 +670,7 @@ export async function streamAICompletion(
     recordAIRequestUsage()
 
     let usedModel: string = model || DEFAULT_AI_MODEL
+    const isDev = Boolean(typeof import.meta !== "undefined" && import.meta.env?.DEV)
 
     try {
       let response: Response | null = null
@@ -670,12 +736,21 @@ export async function streamAICompletion(
         }
       }
 
-      // 1. Thử gọi qua Edge Proxy: /api/ai-gateway (chỉ khi không phải local dev và chưa có response)
-      if (!response && !isLocalDev) {
+      // 1. Gọi qua Edge Gateway: /api/ai-gateway
+      // Trong Production (!isDev), BẮT BUỘC 100% phải gọi qua gateway và đính kèm session token
+      if (!response && (!isLocalDev || !isDev)) {
+        const sessionToken = getStoredSessionToken()
+        const gatewayHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+        }
+        if (sessionToken) {
+          gatewayHeaders["Authorization"] = `Bearer ${sessionToken}`
+        }
+
         try {
-          response = await fetch("/api/ai-gateway", {
+          const gRes = await fetch("/api/ai-gateway", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: gatewayHeaders,
             body: JSON.stringify({
               messages,
               model: targetModel,
@@ -688,18 +763,63 @@ export async function streamAICompletion(
             signal: controller.signal,
           })
 
-          const ctype = response?.headers.get("content-type") || ""
-          if (!ctype.includes("text/event-stream") && !ctype.includes("application/json")) {
-            response = null
+          if (gRes.ok) {
+            response = gRes
+          } else {
+            const errText = await gRes.text()
+            let errJson: any = null
+            try {
+              errJson = JSON.parse(errText)
+            } catch {}
+
+            const errCode = errJson?.code || errJson?.error?.code
+            const errMsg = errJson?.error?.message || errJson?.error || errJson?.message
+
+            if (gRes.status === 503 || errCode === "MISSING_SERVER_API_KEY") {
+              const missingKeyMsg =
+                "Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường."
+              const err = new Error(missingKeyMsg)
+              ;(err as any).code = "MISSING_SERVER_API_KEY"
+              ;(err as any).status = 503
+              throw err
+            }
+
+            if (gRes.status === 401) {
+              const authMsg = errMsg || "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
+              const err = new Error(authMsg)
+              ;(err as any).code = "UNAUTHORIZED"
+              ;(err as any).status = 401
+              throw err
+            }
+
+            if (gRes.status === 429) {
+              const rateLimitMsg =
+                errMsg || "Quá giới hạn tần suất yêu cầu (tối đa 20 yêu cầu/phút). Vui lòng thử lại sau giây lát."
+              const err = new Error(rateLimitMsg)
+              ;(err as any).code = "RATE_LIMITED"
+              ;(err as any).status = 429
+              throw err
+            }
+
+            // Trong production (!isDev), tuyệt đối không gọi direct sang openrouter.ai
+            if (!isDev) {
+              const generalMsg = errMsg || `AI Gateway trả về mã lỗi HTTP ${gRes.status}`
+              const err = new Error(generalMsg)
+              ;(err as any).status = gRes.status
+              throw err
+            }
           }
-        } catch {
-          response = null
+        } catch (gatewayErr: any) {
+          // Nếu đã ném lỗi có status / code xác thực / cấu hình hoặc đang ở production, re-throw ngay
+          if (gatewayErr?.code || gatewayErr?.status || !isDev) {
+            throw gatewayErr
+          }
+          console.warn("[AIService] Gateway call failed in local dev, attempting direct fallback:", gatewayErr)
         }
       }
 
-      // 2. Direct call sang OpenRouter. Model miễn phí thường phải xếp hàng,
-      // vì vậy cần đủ thời gian chờ thay vì rơi vào fallback sau vài giây.
-      if (!response || !response.ok) {
+      // 2. Direct call sang OpenRouter (CHỈ ÁP DỤNG TRONG LOCAL DEVELOPMENT VÀ KHI CHƯA CÓ RESPONSE)
+      if ((!response || !response.ok) && isDev) {
         if (!activeKey) {
           throw new Error("Chưa cấu hình API Key cho OpenRouter hoặc Google AI Studio.")
         }
@@ -834,7 +954,25 @@ export async function streamAICompletion(
       })
     } catch (err: any) {
       if (err.name === "AbortError" || isCancelled) return
-      console.warn("[AIService] Remote API unavailable or rate limited. Seamlessly falling back to intelligent local synthesis:", err)
+
+      const isMissingServerKey =
+        err?.code === "MISSING_SERVER_API_KEY" ||
+        err?.status === 503 ||
+        err?.message?.includes("OPENROUTER_API_KEY")
+
+      const isAuthOrRateLimit =
+        err?.code === "UNAUTHORIZED" ||
+        err?.code === "RATE_LIMITED" ||
+        err?.status === 401 ||
+        err?.status === 429
+
+      if (isMissingServerKey || isAuthOrRateLimit || !isDev) {
+        console.error("[AIService] Server / Gateway configuration error (suppressing fake offline fallback):", err)
+        safeCallbacks.onError?.(err)
+        return
+      }
+
+      console.warn("[AIService] Remote API unavailable in dev. Seamlessly falling back to intelligent local synthesis:", err)
       simulateSmartFallbackStream(messages, safeCallbacks, () => isCancelled, {
         source: "local-fallback",
         model: usedModel,
