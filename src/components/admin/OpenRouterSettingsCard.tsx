@@ -26,6 +26,11 @@ import {
   isAIEnabled,
   setAIEnabled,
   testAIConnection,
+  testGeminiConnection,
+  getStoredGeminiKey,
+  saveGeminiKey,
+  getStoredAIGateway,
+  saveAIGateway,
   POPULAR_AI_MODELS,
   type AIKeyEntry,
 } from "@/services/aiService"
@@ -51,10 +56,25 @@ export function OpenRouterSettingsCard({
     latencyMs: number
   } | null>(null)
 
+  // Google AI Studio Direct Gateway State
+  const [geminiKeyInput, setGeminiKeyInput] = useState("")
+  const [savedGeminiKey, setSavedGeminiKey] = useState("")
+  const [aiGateway, setAiGateway] = useState<"auto" | "google_ai_studio" | "openrouter">("auto")
+  const [testingGemini, setTestingGemini] = useState(false)
+  const [geminiTestResult, setGeminiTestResult] = useState<{
+    success: boolean
+    message: string
+    latencyMs: number
+  } | null>(null)
+
   useEffect(() => {
     setEnabled(isAIEnabled())
     setKeys(getStoredAIKeys())
     setSelectedModel(getStoredAIModel())
+    const gKey = getStoredGeminiKey()
+    setSavedGeminiKey(gKey)
+    setGeminiKeyInput(gKey)
+    setAiGateway(getStoredAIGateway())
   }, [])
 
   const handleToggleEnable = (e: React.MouseEvent) => {
@@ -115,6 +135,43 @@ export function OpenRouterSettingsCard({
     }
   }
 
+  const handleSaveGeminiKey = () => {
+    const trimmed = geminiKeyInput.trim()
+    saveGeminiKey(trimmed)
+    setSavedGeminiKey(trimmed)
+    toast.success("Đã lưu Google AI Studio API Key thành công!")
+  }
+
+  const handleGatewayChange = (gw: "auto" | "google_ai_studio" | "openrouter") => {
+    setAiGateway(gw)
+    saveAIGateway(gw)
+    const label = gw === "auto" ? "Tự động điều phối" : gw === "google_ai_studio" ? "Google AI Studio (Trực tiếp)" : "OpenRouter Gateway"
+    toast.success(`Đã chuyển cổng kết nối: ${label}`)
+  }
+
+  const handleTestGeminiConnection = async () => {
+    setTestingGemini(true)
+    setGeminiTestResult(null)
+    try {
+      const res = await testGeminiConnection(geminiKeyInput.trim())
+      setGeminiTestResult(res)
+      if (res.success) {
+        toast.success(`Google AI Studio Online! Độ trễ: ${res.latencyMs}ms`)
+      } else {
+        toast.error(`Kiểm tra Google AI thất bại: ${res.message}`)
+      }
+    } catch (err: any) {
+      setGeminiTestResult({
+        success: false,
+        message: err?.message || "Lỗi không xác định",
+        latencyMs: 0,
+      })
+      toast.error("Không thể kết nối tới Google AI Studio!")
+    } finally {
+      setTestingGemini(false)
+    }
+  }
+
   const maskKey = (k: string) => {
     if (!k || k.length < 12) return "••••••••••••"
     return `${k.substring(0, 8)}...${k.substring(k.length - 4)}`
@@ -134,7 +191,7 @@ export function OpenRouterSettingsCard({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm text-slate-900">
-                OpenRouter AI Gateway (LLM Engine)
+                Cổng Kết Nối AI (OpenRouter & Google AI Studio Direct)
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
@@ -148,12 +205,12 @@ export function OpenRouterSettingsCard({
                     enabled ? "bg-indigo-500" : "bg-slate-400"
                   }`}
                 />
-                {enabled ? "Active · Key Pool Ready" : "Disabled"}
+                {enabled ? (savedGeminiKey ? "Google AI & OpenRouter Ready" : "OpenRouter Ready") : "Disabled"}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5 truncate">
               {enabled
-                ? `Cung cấp trí tuệ nhân tạo cho Bản tin điều hành & Chat Copilot · ${keys.length} API Key(s) xoay vòng`
+                ? `Hỗ trợ cả Google AI Studio (Vision nhận diện ảnh) & OpenRouter Pool (${keys.length} keys)`
                 : "Đã tạm dừng toàn bộ các tính năng AI trên cổng UX Portal"}
             </p>
           </div>
@@ -197,12 +254,174 @@ export function OpenRouterSettingsCard({
       {/* Expanded configuration content */}
       {isExpanded && (
         <div className="bg-slate-50/70 border-t border-slate-100 p-5 space-y-5 animate-in fade-in duration-150">
+          {/* Gateway Routing Mode Selector */}
+          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Chế độ điều phối Cổng AI Gateway:</span>
+              </span>
+              <span className="text-[11px] font-mono text-slate-500">
+                Đang dùng: <strong>{aiGateway === "auto" ? "Tự động" : aiGateway === "google_ai_studio" ? "Google AI Studio" : "OpenRouter"}</strong>
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleGatewayChange("auto")}
+                className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all cursor-pointer ${
+                  aiGateway === "auto"
+                    ? "border-blue-500 bg-blue-50 text-blue-800 font-semibold shadow-2xs"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span>⚡ Tự động (Khuyên dùng)</span>
+                  {aiGateway === "auto" && <span className="text-[10px] text-blue-600 font-bold">✓</span>}
+                </div>
+                <p className="text-[10px] text-slate-500 font-normal leading-relaxed">
+                  Dùng Google AI Studio khi chọn Gemini hoặc đọc ảnh, dùng OpenRouter cho các model khác.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGatewayChange("google_ai_studio")}
+                className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all cursor-pointer ${
+                  aiGateway === "google_ai_studio"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold shadow-2xs"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span>🌐 Google AI Studio Trực tiếp</span>
+                  {aiGateway === "google_ai_studio" && <span className="text-[10px] text-emerald-600 font-bold">✓</span>}
+                </div>
+                <p className="text-[10px] text-slate-500 font-normal leading-relaxed">
+                  Gọi thẳng máy chủ Google, 1.500 RPD miễn phí, tối ưu nhận diện ảnh & tốc độ cực cao.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGatewayChange("openrouter")}
+                className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all cursor-pointer ${
+                  aiGateway === "openrouter"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-800 font-semibold shadow-2xs"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span>🔀 OpenRouter Gateway Pool</span>
+                  {aiGateway === "openrouter" && <span className="text-[10px] text-indigo-600 font-bold">✓</span>}
+                </div>
+                <p className="text-[10px] text-slate-500 font-normal leading-relaxed">
+                  Điều phối qua OpenRouter với danh sách nhiều key xoay vòng tự động.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* DEDICATED GOOGLE AI STUDIO DIRECT GATEWAY CARD */}
+          <div className="bg-gradient-to-br from-blue-50/90 via-sky-50/50 to-indigo-50/70 p-4 rounded-xl border border-blue-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="size-6 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                  G
+                </div>
+                <span className="text-xs font-bold text-slate-900">
+                  Cổng kết nối Google AI Studio (Miễn phí chính thức từ Google)
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold">
+                  1.500 requests/ngày Free
+                </span>
+              </div>
+              <a
+                href="https://aistudio.google.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1 hover:underline"
+              >
+                <span>Lấy API Key miễn phí tại aistudio.google.com</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Google AI Studio cung cấp <strong>15 RPM</strong> (lượt/phút) và <strong>1.500 RPD</strong> (lượt/ngày) hoàn toàn miễn phí. Hỗ trợ <strong>thị giác máy tính Vision</strong> xuất sắc để đọc ảnh chụp màn hình UI, biểu đồ flow và OCR văn bản tiếng Việt.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+              <div className="sm:col-span-2">
+                <Input
+                  type="password"
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  placeholder="AIzaSy... (Dán Google AI Studio API Key vào đây)"
+                  className="text-xs font-mono rounded-lg border-blue-200 bg-white shadow-2xs h-9"
+                />
+              </div>
+              <div>
+                <Button
+                  type="button"
+                  onClick={handleSaveGeminiKey}
+                  className="w-full rounded-lg text-xs font-medium cursor-pointer bg-blue-600 hover:bg-blue-700 text-white h-9 shadow-xs"
+                >
+                  <Key className="w-3.5 h-3.5 mr-1" />
+                  <span>{savedGeminiKey ? "Cập nhật Key" : "Lưu Google Key"}</span>
+                </Button>
+              </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestGeminiConnection}
+                  disabled={testingGemini || !geminiKeyInput.trim()}
+                  className="w-full rounded-lg text-xs font-medium gap-1.5 cursor-pointer bg-white border-blue-200 hover:bg-blue-50 text-blue-800 h-9"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${
+                      testingGemini ? "animate-spin text-slate-900" : "text-blue-600"
+                    }`}
+                  />
+                  <span>{testingGemini ? "Đang thử..." : "Test kết nối Google"}</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Test result status badge for Google AI Studio */}
+            {geminiTestResult && (
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                  geminiTestResult.success
+                    ? "bg-emerald-50/90 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50/90 border-rose-200 text-rose-800"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {geminiTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span className="font-medium">{geminiTestResult.message}</span>
+                </div>
+                {geminiTestResult.latencyMs > 0 && (
+                  <span className="font-mono text-[11px] opacity-80 font-bold">
+                    {geminiTestResult.latencyMs}ms
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Row 1: Model Selection & Test Button */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2">
               <label className="text-xs font-medium text-slate-700 block mb-1 flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Mô hình AI Mặc định (Tuyển tập các Model 100% Free xịn nhất):</span>
+                <span>Mô hình AI Mặc định (Bao gồm Google AI Studio Direct & OpenRouter Free):</span>
               </label>
               <DropdownMenu
                 className="w-full bg-white"

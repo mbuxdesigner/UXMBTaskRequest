@@ -1650,10 +1650,28 @@ export default function DesignerPlannerPage() {
   }
 
   const summaryProjects = useMemo(() => {
-    if (activeTasks.length > 0) return activeTasks.slice(0, 3)
-    if (myTasks.length > 0) return myTasks.slice(0, 3)
-    return []
-  }, [activeTasks, myTasks])
+    const list = activeTasks.length > 0 ? activeTasks : myTasks
+    if (list.length === 0) return []
+    return [...list].sort((a, b) => {
+      // 1. Quá hạn / rủi ro lên đầu
+      const riskA = riskByTaskId[a.request_id] === "overdue" ? 3 : riskByTaskId[a.request_id] === "at_risk" ? 2 : 0
+      const riskB = riskByTaskId[b.request_id] === "overdue" ? 3 : riskByTaskId[b.request_id] === "at_risk" ? 2 : 0
+      if (riskA !== riskB) return riskB - riskA
+
+      // 2. Mức độ ưu tiên lv1 > lv2 > lv3
+      const pRank: Record<string, number> = { lv1: 3, lv2: 2, lv3: 1 }
+      const pA = pRank[(a.priority || "").toLowerCase()] || 0
+      const pB = pRank[(b.priority || "").toLowerCase()] || 0
+      if (pA !== pB) return pB - pA
+
+      // 3. Tiến độ đang thực hiện
+      const progA = Number(a.progress) || 0
+      const progB = Number(b.progress) || 0
+      if (progA !== progB) return progB - progA
+
+      return 0
+    })
+  }, [activeTasks, myTasks, riskByTaskId])
 
   const riskProjects = useMemo(() => {
     return activeTasks.filter((t) => riskByTaskId[t.request_id] === "overdue" || riskByTaskId[t.request_id] === "at_risk")
@@ -2053,7 +2071,9 @@ export default function DesignerPlannerPage() {
                       summaryProjects={summaryProjects.length > 0 ? summaryProjects : FALLBACK_TRACE_TASKS}
                       riskProjects={riskProjects}
                       goLiveTasks={goLiveTasks}
-                      dominantPhaseText={dominantPhaseText || "giai đoạn Wireframe"}
+                      dominantPhaseText={dominantPhaseText || "chuẩn hóa Design Specs và bàn giao Tech (Ready for Dev)"}
+                      todayEvents={todayEvents}
+                      discussionCount={executiveIntelligence?.totalChatCount}
                       isRefreshing={true}
                       onComplete={handleTraceComplete}
                       onOpenTask={openTask}
@@ -2067,6 +2087,8 @@ export default function DesignerPlannerPage() {
                         riskProjects={riskProjects}
                         goLiveTasks={goLiveTasks}
                         dominantPhaseText={dominantPhaseText}
+                        todayEvents={todayEvents}
+                        discussionCount={executiveIntelligence?.totalChatCount}
                         mode="inspector"
                         onCloseInspector={() => setIsViewingAiTrace(false)}
                         onOpenTask={openTask}
@@ -2150,10 +2172,10 @@ export default function DesignerPlannerPage() {
                               ? "border-purple-400 bg-purple-50 text-purple-700 font-semibold"
                               : "border-neutral-200/80 bg-neutral-50/70 text-neutral-600 hover:border-neutral-300 hover:bg-neutral-100/70"
                           )}
-                          title="Xem lại chi tiết các nguồn dự án và tiêu chí AI đã quét"
+                          title="Xem chi tiết dữ liệu công việc thực tế được nạp vào prompt và kết quả nhận từ AI"
                         >
                           <ListChecks className="h-2.5 w-2.5 text-neutral-500" />
-                          <span>{isViewingAiTrace ? "Ẩn nhật ký đọc" : "Nhật ký AI đã đọc"}</span>
+                          <span>{isViewingAiTrace ? "Ẩn ngữ cảnh Prompt" : "Nhật ký AI đã đọc (Ngữ cảnh Prompt)"}</span>
                         </button>
                       </div>
                     </div>
@@ -4271,6 +4293,8 @@ export default function DesignerPlannerPage() {
                 riskProjects={riskProjects}
                 goLiveTasks={goLiveTasks}
                 dominantPhaseText={dominantPhaseText}
+                todayEvents={todayEvents}
+                discussionCount={executiveIntelligence?.totalChatCount}
                 mode="inspector"
                 onOpenTask={(id) => {
                   setIsBriefingExpanded(false)

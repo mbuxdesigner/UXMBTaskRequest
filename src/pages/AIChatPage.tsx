@@ -51,10 +51,12 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  Key,
 } from "lucide-react"
 import { EchoInteractiveChart, EchoMermaidFlowchart } from "@/components/common/EchoChartsAndFlowcharts"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
 import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
+import { EchoArtifactSplitViewer } from "@/components/chat/EchoArtifactSplitViewer"
 import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
@@ -62,13 +64,17 @@ import { cn } from "@/lib/utils"
 import { getStoredSession } from "@/services/otpAuthService"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import { type UXRequest } from "@/data/mockData"
-import { isTaskAssignedToUser, canRoleAccessCapability, canUploadAiArtifacts } from "@/lib/accessControl"
+import { canRoleAccessCapability, canUploadAiArtifacts, canUserAccessRequest } from "@/lib/accessControl"
 import { extractExecutiveIntelligence, type ExecutiveIntelligenceData } from "@/lib/executiveIntelligence"
 import { loadAllCalendarItems, type PlannerEntry } from "@/services/calendarService"
 import { fetchRequests } from "@/api/api"
 import {
   buildChatPrompt,
   serializeContext,
+  buildEnrichedContext,
+  detectUserIntent,
+  searchArtifactsByQuery,
+  serializeArtifactsContext,
   type PromptMessage,
 } from "@/config/aiPrompts"
 import {
@@ -77,6 +83,11 @@ import {
   getStoredAIModel,
   saveAIModel,
   getDailyAIUsage,
+  getStoredGeminiKey,
+  saveGeminiKey,
+  getStoredAIGateway,
+  saveAIGateway,
+  testGeminiConnection,
   type AIDailyUsage,
 } from "@/services/aiService"
 import {
@@ -94,6 +105,7 @@ import {
   fetchMasterDataFromSheet,
   syncUserChatThreadsToCloud,
   fetchUserChatThreadsFromCloud,
+  updateTaskProgressInSheet,
 } from "@/services/googleSheetService"
 import { getGoogleSheetConfig } from "@/config/googleSheetConfig"
 import RequestDetail from "@/components/track/RequestDetail"
@@ -132,6 +144,9 @@ interface ChatMessage {
   senderEmail?: string
   reasoning?: string
   thinkingDurationSeconds?: number
+  responseSource?: "remote" | "local-fallback"
+  responseModel?: string
+  responseProviderError?: string
   processSteps?: ChatProcessStep[]
   isThinkingComplete?: boolean
   traceData?: ChatTraceData
@@ -315,6 +330,18 @@ const EMPTY_STATE_CATEGORIES = [
       "Tóm tắt checklist bàn giao thiết kế (Ready for Dev) cho tôi",
       "Tra cứu bảng màu Brand Tokens và kích thước Button chuẩn MBBank",
       "Quy chuẩn thiết kế các trạng thái Empty, Loading và Error State",
+      "So sánh tiêu chuẩn SLA bàn giao và quy trình 7 khâu UX",
+    ],
+  },
+  {
+    id: "actions" as const,
+    label: "🔄 Cập nhật",
+    icon: Activity,
+    color: "text-rose-500",
+    prompts: [
+      "Cập nhật tiến độ các bài toán đang thiết kế lên 80%",
+      "Chuyển bài toán eKYC NFC sang khâu Nghiệm thu",
+      "Ghi chú: Đã hoàn thiện Wireframe v2 cho luồng mở thẻ tín dụng",
     ],
   },
 ]
@@ -413,6 +440,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   // Artifacts State (User Uploads & Pre-seeded Knowledge Base)
   const [artifacts, setArtifacts] = useState<UXArtifact[]>(() => getStoredArtifacts())
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
+  const [isChatSplitOpen, setIsChatSplitOpen] = useState(true)
   const [artifactZoom, setArtifactZoom] = useState(100)
   const [createArtifactModalOpen, setCreateArtifactModalOpen] = useState(false)
   const [newArtTitle, setNewArtTitle] = useState("")
@@ -545,6 +573,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null)
   const [syncWarningModalOpen, setSyncWarningModalOpen] = useState(false)
 
+  // Quick Google AI Studio & Gateway Settings Modal
+  const [aiSettingsModalOpen, setAiSettingsModalOpen] = useState(false)
+  const [quickGeminiKey, setQuickGeminiKey] = useState(() => getStoredGeminiKey())
+  const [quickGateway, setQuickGateway] = useState(() => getStoredAIGateway())
+  const [quickTestingGemini, setQuickTestingGemini] = useState(false)
+  const [quickTestResult, setQuickTestResult] = useState<{ success: boolean; message: string; latencyMs: number } | null>(null)
+
   // AI Inference Mode (Auto, Fast, Deep) - Matching Image 1
   const [aiMode, setAiMode] = useState<"auto" | "fast" | "deep">(() => {
     try {
@@ -564,7 +599,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   }, [])
 
   // Empty state category selection (Tiến độ | Rà soát PO | Năng suất | Quy chuẩn)
-  const [emptyCategory, setEmptyCategory] = useState<"progress" | "po" | "productivity" | "standards">("progress")
+  const [emptyCategory, setEmptyCategory] = useState<"progress" | "po" | "productivity" | "standards" | "actions">("progress")
 
   const currentCategoryObj = useMemo(() => {
     return EMPTY_STATE_CATEGORIES.find((c) => c.id === emptyCategory) || EMPTY_STATE_CATEGORIES[0]
@@ -724,13 +759,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         setEvents(rawEvents)
         try {
           const s = getStoredSession()
-          const userScopeTasks = (reqs || []).filter((r) => isTaskAssignedToUser(r, s))
+          const roleScopedTasks = (reqs || []).filter((request) => canUserAccessRequest(request, s))
+          setTasks(roleScopedTasks)
           const now = new Date()
           const todayYMD = now.toISOString().slice(0, 10)
           const intel = extractExecutiveIntelligence({
             session: s,
-            rawRequests: reqs || [],
-            myTasks: userScopeTasks,
+            rawRequests: roleScopedTasks,
+            myTasks: roleScopedTasks,
             today: now,
             todayYMD,
             entries: rawEvents,
@@ -1287,16 +1323,30 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     }
 
     if (isDoc) {
-      return `### 📚 Tư vấn & Tra cứu kho tài liệu Artifacts\n\n` +
-        `Hệ thống đã quét và đọc **${artifactList.length} tài liệu** trong kho lưu trữ nội bộ:\n\n` +
-        (artifactList.length > 0
-          ? artifactList.map((a, idx) => 
-              `**${idx + 1}. [${a.fileType.toUpperCase()}] ${a.name}**\n` +
-              `> ${a.summary || "Tài liệu chuẩn thiết kế và tài nguyên UX MBBank."}\n` +
-              `${a.driveUrl ? `[🔗 Mở trên Google Drive](${a.driveUrl})\n` : ""}`
-            ).join("\n")
-          : "*Hiện kho tài liệu chưa có tệp tải lên. Bạn có thể bấm nút Tải lên tài liệu để nạp thêm.*") +
-        `\n\n💡 **Kết luận tư vấn:** Các quy chuẩn đều yêu cầu tuân thủ bộ Design System MB, kiểm tra độ tương phản màu chuẩn WCAG AA và bàn giao Figma đúng cấu trúc component Token.`
+      const requestedName = clean
+        .replace(/^\/(?:doc|tracuu)\s*/i, "")
+        .replace(/^@/, "")
+        .trim()
+        .toLowerCase()
+      const matchedArtifacts = artifactList.filter((artifact) => {
+        const name = artifact.name.toLowerCase()
+        return !requestedName || name.includes(requestedName) || requestedName.includes(name)
+      })
+      const documents = matchedArtifacts.length > 0 ? matchedArtifacts : artifactList
+
+      if (documents.length === 0) {
+        return `Mình chưa có tài liệu Artifacts phù hợp để trả lời yêu cầu này. Vui lòng chọn hoặc tải lên tài liệu trước khi hỏi lại.`
+      }
+
+      return documents.map((artifact) => {
+        const content = artifact.content?.trim()
+        const excerpt = content
+          ? content.length > 4000
+            ? `${content.slice(0, 4000)}\n\n[Đã rút gọn theo giới hạn hiển thị.]`
+            : content
+          : artifact.summary || "Tài liệu chưa có nội dung văn bản để phân tích."
+        return `### ${artifact.name}\n\n${excerpt}\n\n*Nguồn: ${artifact.name}*`
+      }).join("\n\n---\n\n")
     }
 
     return `Chào bạn, hệ thống đã quét bối cảnh công việc thực tế:\n\n` +
@@ -1307,14 +1357,22 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
   // Send message & Stream reply
   const handleSendMessage = async (text: string, customContext?: string, attachedDocName?: string) => {
-    if (!text.trim() || isStreaming) return
+    const cleanText = text.trim()
+    if (!cleanText || isStreaming) return
+
+    const isDocCommand = /^\/doc(?:\s|$)|^\/tracuu(?:\s|$)/i.test(cleanText)
+    const isChartCommand = /^\/(?:chart|bieudo)(?:\s|$)/i.test(cleanText)
+    const isFlowCommand = /^\/(?:flow|sodo)(?:\s|$)/i.test(cleanText)
+    const isTiendoCommand = /^\/tiendo(?:\s|$)/i.test(cleanText)
+    const questionIntent = detectUserIntent(cleanText)
+    const usesTaskContext = isTiendoCommand || isChartCommand || questionIntent.isTask || questionIntent.isTaskUpdate || questionIntent.isActionCard
 
     const startTime = Date.now()
     const userMsgId = `msg-user-${Date.now()}`
     const assistantMsgId = `msg-asst-${Date.now() + 1}`
 
     const currentSession = getStoredSession()
-    const senderName = currentSession?.displayName || currentSession?.name || userName || "Designer"
+    const senderName = currentSession?.displayName || userName || "Designer"
     const rawAvatar = currentSession?.avatarUrl || (currentSession as any)?.avatar || ""
     const senderAvatar =
       rawAvatar &&
@@ -1335,17 +1393,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       senderEmail,
     }
 
-    const activeAssigned = intelligence?.activeAssignedTasks || tasks.slice(0, 6)
-    const summaryProjs = (intelligence?.delegatedTasks?.map((d) => d.task) || tasks).slice(0, 3)
+    const activeAssigned = intelligence?.activeAssignedTasks || tasks
+    const summaryProjs = intelligence?.activeAssignedTasks || (intelligence?.delegatedTasks?.map((d) => d.task) || tasks)
     const riskProjs = intelligence?.overdueTasks || []
     const goLive = intelligence?.goLiveTasks || []
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
     const traceData: ChatTraceData = {
-      activeTasks: activeAssigned.length > 0 ? activeAssigned : tasks.slice(0, 6),
-      summaryProjects: summaryProjs.length > 0 ? summaryProjs : tasks.slice(0, 3),
-      riskProjects: riskProjs,
-      goLiveTasks: goLive,
+      activeTasks: usesTaskContext ? (activeAssigned.length > 0 ? activeAssigned : tasks) : [],
+      summaryProjects: usesTaskContext ? (summaryProjs.length > 0 ? summaryProjs : tasks) : [],
+      riskProjects: usesTaskContext ? riskProjs : [],
+      goLiveTasks: usesTaskContext ? goLive : [],
       dominantPhaseText: dominantPhase,
     }
 
@@ -1462,59 +1520,85 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       }))
       history.push({ role: "user", content: text })
 
+      // Enhanced context building: Luôn kết hợp Tasks + Artifacts + Intelligence
+      const allArtifacts = getStoredArtifacts()
       let contextStr = ""
-      const cleanText = text.trim()
-      const isDocCommand = cleanText.startsWith("/doc")
-      const isChartCommand = cleanText.startsWith("/chart") || cleanText.startsWith("/bieudo")
-      const isFlowCommand = cleanText.startsWith("/flow") || cleanText.startsWith("/sodo")
-      const isTiendoCommand = cleanText.startsWith("/tiendo")
 
       if (isDocCommand) {
         const query = cleanText.replace(/^\/doc\s*/i, "").trim()
-        const allArtifacts = getStoredArtifacts()
-        const docsSummary = allArtifacts.length > 0 
-          ? allArtifacts.map((a, idx) => 
-              `=== TÀI LIỆU #${idx + 1}: "${a.name}" (Loại: ${a.fileType}) ===\n${a.summary ? `> Tóm tắt: ${a.summary}\n` : ""}${a.content}`
-            ).join("\n\n" + "=".repeat(40) + "\n\n")
-          : "Kho tài liệu Artifacts hiện chưa có file nào được tải lên."
-
-        contextStr = `=== TOÀN BỘ KHO TÀI LIỆU NỘI BỘ (ARTIFACTS - ${allArtifacts.length} TÀI LIỆU) ===\n${docsSummary}\n\n` +
+        // Smart Document Search: Tìm tài liệu liên quan thay vì dump toàn bộ
+        const relevantDocs = searchArtifactsByQuery(query || cleanText, allArtifacts)
+        const docsSummary = serializeArtifactsContext(relevantDocs, "full")
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks,
+          artifacts: [], // Đã inject trực tiếp bên dưới
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        }) + `\n\n${docsSummary}\n\n` +
           `YÊU CẦU ĐẶC BIỆT:\n` +
-          `Người dùng đang tra cứu và cần tư vấn dựa trên toàn bộ kho tài liệu nội bộ.\n` +
+          `Người dùng đang tra cứu và cần tư vấn dựa trên kho tài liệu nội bộ.\n` +
           `Câu hỏi/Yêu cầu của người dùng: "${query || cleanText}".\n` +
-          `Hãy đọc toàn bộ kho tài liệu trên, tổng hợp thông tin, viện dẫn đúng tài liệu quy định và tư vấn giải pháp chuẩn xác, thấu đáo cho người dùng.`
+          `Hãy đọc toàn bộ tài liệu liên quan trên, tổng hợp thông tin, viện dẫn đúng tài liệu và tư vấn giải pháp chuẩn xác cho người dùng. LUÔN trích dẫn tên tài liệu nguồn.`
       } else if (isChartCommand) {
         const chartTopic = cleanText.replace(/^(\/chart|\/bieudo)\s*/i, "").trim()
-        contextStr = (customContext || (intelligence ? serializeContext(intelligence) : "")) +
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks,
+          artifacts: allArtifacts,
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        }) +
           `\n\n=== CHỈ DẪN VẼ BIỂU ĐỒ TRỰC QUAN ===\n` +
           `Người dùng yêu cầu vẽ biểu đồ số liệu cho nội dung: "${chartTopic || "Số liệu công việc và tiến độ"}".\n` +
-          `Hãy vẽ biểu đồ số liệu trực quan cho bất cứ thông tin gì người dùng yêu cầu: sử dụng bảng tổng hợp số liệu, thanh tiến độ trực quan (dạng thanh tỷ lệ phần trăm █ ░) hoặc cú pháp biểu đồ Mermaid (như pie, bar, gantt) sao cho dễ nhìn và sinh động nhất.`
+          `Hãy vẽ biểu đồ số liệu trực quan DỰA TRÊN DỮ LIỆU THẬT TỪ CONTEXT: sử dụng bảng tổng hợp số liệu hoặc cú pháp biểu đồ \`\`\`chart.`
       } else if (isFlowCommand) {
         const flowTopic = cleanText.replace(/^(\/flow|\/sodo)\s*/i, "").trim()
-        contextStr = (customContext || (intelligence ? serializeContext(intelligence) : "")) +
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks,
+          artifacts: allArtifacts,
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        }) +
           `\n\n=== CHỈ DẪN XÂY DỰNG SƠ ĐỒ LUỒNG (FLOWCHART) ===\n` +
-          `Người dùng yêu cầu xây dựng sơ đồ luồng theo thông tin: "${flowTopic || "Quy trình luồng nghiệp vụ hoặc màn hình"}".\n` +
-          `Hãy xây dựng sơ đồ luồng chi tiết bằng mã Mermaid (\`\`\`mermaid\ngraph TD\n...\n\`\`\`) có đầy đủ các bước tuần tự, các nút quyết định/rẽ nhánh điều kiện và phân định rõ vai trò phối hợp (PO, Designer, Dev, QA) để người dùng có thể xem và tương tác trực quan ngay trên giao diện.`
+          `Người dùng yêu cầu xây dựng sơ đồ luồng: "${flowTopic || "Quy trình luồng nghiệp vụ"}".\n` +
+          `Hãy xây dựng sơ đồ bằng mã Mermaid (\`\`\`mermaid\ngraph TD\n...\n\`\`\`).`
       } else if (isTiendoCommand) {
-        const currentSession = getStoredSession()
-        const myTasks = (intelligence?.activeAssignedTasks && intelligence.activeAssignedTasks.length > 0)
-          ? intelligence.activeAssignedTasks
-          : tasks.filter((t) => isTaskAssignedToUser(t, currentSession))
+        const myTasks = tasks
         
-        contextStr = `=== CÁC CÔNG VIỆC VÀ TIẾN ĐỘ HIỆN TẠI CỦA NGƯỜI DÙNG (${myTasks.length} bài toán) ===\n` +
-          (myTasks.length > 0
-            ? myTasks.map((t, i) => `${i + 1}. [${t.priority || "Lv3"}] "${t.nickname || t.title}" - Trạng thái: ${t.status || "Chờ xử lý"} - Deadline: ${t.deadline || "Chưa có"} - Squad: ${t.squad || "Chung"}`).join("\n")
-            : "Hiện tại người dùng không có bài toán nào đang tồn đọng quá hạn.") +
-          `\n\nBối cảnh điều hành chung:\n` + (intelligence ? serializeContext(intelligence) : "")
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks: myTasks,
+          artifacts: allArtifacts,
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        }) +
+          `\n\nYÊU CẦU: Tổng hợp báo cáo tiến độ các bài toán của người dùng, phát hiện rủi ro và đề xuất hành động cụ thể. Nếu có task cần cập nhật, hãy đề xuất qua khối \`\`\`task_update.`
       } else if (customContext) {
-        contextStr = customContext
-      } else if (intelligence) {
-        contextStr = serializeContext(intelligence)
-      } else if (tasks && tasks.length > 0) {
-        contextStr = `Danh sách bài toán (${tasks.length}):\n` +
-          tasks.slice(0, 25).map((t) => `- [${t.priority || "Lv3"}] "${t.nickname || t.title}": ${t.status || "Chờ xử lý"} (Phụ trách: ${t.assigned_designer || (t as any).assignee || "Chưa gán"})`).join("\n")
+        // Custom context (ví dụ: chat với artifact)
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks,
+          artifacts: allArtifacts,
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        }) + `\n\n${customContext}`
       } else {
-        contextStr = `Người dùng: ${userName}. Vai trò: ${session?.role || "Designer"}.`
+        // Default: Luôn gửi enriched context (tasks + artifacts summary)
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks,
+          artifacts: allArtifacts,
+          userName,
+          userRole: session?.role,
+          userQuery: cleanText,
+        })
       }
 
       const promptMessages = buildChatPrompt(contextStr, history)
@@ -1565,7 +1649,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
               }
             },
-            onComplete: (fullText, fullReasoning) => {
+            onComplete: (fullText, fullReasoning, responseMeta) => {
               clearTimeout(timerStep1)
               clearTimeout(timerStep2)
               accumulated = fullText || accumulated
@@ -1574,12 +1658,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               const durationSeconds = Number(Math.max(1, (Date.now() - startTime) / 1000).toFixed(1))
               currentSteps = currentSteps.map((s) => ({ ...s, status: "completed" }))
 
-              const syntheticReasoning = [
-                `1. Tiếp nhận & phân tích yêu cầu: "${text}".`,
-                `2. Rà soát hệ thống UX MB: Đọc dữ liệu ${tasks?.length || 0} bài toán hiện tại, lịch trình và thời gian Deep Work.`,
-                `3. Áp dụng quy chuẩn thiết kế: Kiểm tra tính tuân thủ quy trình 7 khâu UX MBBank, SLA và rào cản PO Pending.`,
-                `4. Hoàn thiện câu trả lời: Tổng hợp súc tích, làm nổi bật thông tin trọng tâm và đề xuất giải pháp khả thi.`,
-              ].join("\n")
+              const syntheticReasoning = responseMeta?.source === "local-fallback"
+                ? "Mô hình trực tuyến không khả dụng; ứng dụng đã xử lý yêu cầu bằng dữ liệu và quy tắc cục bộ."
+                : "Đã nhận phản hồi từ mô hình AI theo ngữ cảnh được cung cấp."
 
               const finalReasoning = accumulatedReasoning.trim() || syntheticReasoning
 
@@ -1589,6 +1670,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 processSteps: currentSteps,
                 isThinkingComplete: true,
                 thinkingDurationSeconds: durationSeconds,
+                responseSource: responseMeta?.source || "remote",
+                responseModel: responseMeta?.model,
+                responseProviderError: responseMeta?.providerError,
               })
               resolve()
             },
@@ -1709,7 +1793,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         type="file"
         multiple
         onChange={handleFileUpload}
-        accept=".md,.txt,.json,.csv,.pdf,.ts,.tsx,.js,image/png,image/jpeg,image/webp"
+        accept=".md,.txt,.json,.csv,.pdf,.doc,.docx,.ts,.tsx,.js,image/png,image/jpeg,image/webp"
         className="hidden"
       />
 
@@ -1768,6 +1852,41 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 </button>
               </div>
 
+              {/* TOP TABS: [ Chats ]  [ Artifacts ] (Exact Match to ReUI Echo Chat) */}
+              <div className="pt-2 pb-1 px-1">
+                <div className="grid grid-cols-2 p-[3px] bg-foreground/5 rounded-lg text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSidebarTab("chats")
+                      setSearchQuery("")
+                    }}
+                    className={cn(
+                      "py-1 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                      sidebarTab === "chats"
+                        ? "bg-background text-foreground shadow-2xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>Chats</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSidebarTab("artifacts")
+                      setSearchQuery("")
+                    }}
+                    className={cn(
+                      "py-1 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                      sidebarTab === "artifacts"
+                        ? "bg-background text-foreground shadow-2xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>Artifacts</span>
+                  </button>
+                </div>
+              </div>
 
               {/* 3. Action Button (New Chat OR Upload Artifact) */}
               <div className="flex flex-col gap-0.5 pt-1 px-0.5">
@@ -1893,16 +2012,26 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             ) : (
               /* ARTIFACTS LIST (DATA USER PUSHES UP) */
               <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1 text-sm select-none">
-                <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold text-muted-foreground">
-                  <span>Tài liệu & Specs ({filteredArtifacts.length})</span>
+                <div className="flex items-center justify-between px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  <span>Recent artifacts</span>
+                  <span className="text-[11px] font-mono opacity-70">({filteredArtifacts.length})</span>
                 </div>
 
                 {filteredArtifacts.map((art) => {
                   const isSelected = selectedArtifactId === art.id
+                  const ext = art.name.split(".").pop()?.toLowerCase() || ""
+                  const isPdf = art.fileType === "pdf" || ext === "pdf"
+                  const isCode = ["ts", "tsx", "js", "json", "code"].includes(art.fileType) || ["ts", "tsx", "js", "json"].includes(ext)
+                  const isCsv = art.fileType === "csv" || ext === "csv"
+                  const isImage = ["png", "jpg", "jpeg", "webp"].includes(ext)
+
                   return (
                     <div
                       key={art.id}
-                      onClick={() => setSelectedArtifactId(art.id)}
+                      onClick={() => {
+                        setSelectedArtifactId(art.id)
+                        setIsChatSplitOpen(true)
+                      }}
                       className={cn(
                         "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] cursor-pointer transition-colors text-left",
                         isSelected
@@ -1911,14 +2040,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       )}
                     >
                       {/* Icon per file type */}
-                      {art.fileType === "markdown" ? (
-                        <FileText className="size-4 shrink-0 text-blue-500" />
-                      ) : art.fileType === "code" || art.fileType === "json" ? (
-                        <FileCode className="size-4 shrink-0 text-emerald-500" />
-                      ) : art.fileType === "csv" ? (
-                        <FileSpreadsheet className="size-4 shrink-0 text-amber-500" />
+                      {isPdf ? (
+                        <FileText className="size-4 shrink-0 text-rose-500" />
+                      ) : isCode ? (
+                        <FileCode className="size-4 shrink-0 text-blue-500" />
+                      ) : isCsv ? (
+                        <FileSpreadsheet className="size-4 shrink-0 text-emerald-500" />
+                      ) : isImage ? (
+                        <FileText className="size-4 shrink-0 text-amber-500" />
                       ) : (
-                        <FileText className="size-4 shrink-0 text-purple-500" />
+                        <FileText className="size-4 shrink-0 text-indigo-500" />
                       )}
 
                       <div className="min-w-0 flex-1 truncate">
@@ -1960,42 +2091,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </div>
             )}
 
-            {/* Bottom Tab Switcher: [ Chats ]  [ Artifacts ] */}
-            <div className="p-2 border-t border-border shrink-0 bg-sidebar/80">
-              <div className="grid grid-cols-2 p-[3px] bg-foreground/5 rounded-lg text-[13px] font-medium">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSidebarTab("chats")
-                    setSearchQuery("")
-                  }}
-                  className={cn(
-                    "py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                    sidebarTab === "chats"
-                      ? "bg-background text-foreground shadow-2xs font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <MessageSquare className="size-3.5" />
-                  <span>Chats</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSidebarTab("artifacts")
-                    setSearchQuery("")
-                  }}
-                  className={cn(
-                    "py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                    sidebarTab === "artifacts"
-                      ? "bg-background text-foreground shadow-2xs font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <FileText className="size-3.5" />
-                  <span>Artifacts</span>
-                </button>
+            {/* Sidebar User Footer matching ReUI Echo Chat */}
+            <div className="p-2.5 border-t border-border/80 shrink-0 bg-sidebar/80 flex items-center justify-between text-xs text-muted-foreground select-none">
+              <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                <UserAvatar
+                  name={session?.displayName || userName}
+                  avatarUrl={session?.avatarUrl}
+                  className="size-6 shrink-0"
+                />
+                <span className="truncate font-medium text-foreground text-xs">{session?.displayName || userName}</span>
               </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-foreground/5 text-muted-foreground shrink-0 uppercase border border-border/50">
+                {session?.role || "Designer"}
+              </span>
             </div>
           </motion.aside>
         )}
@@ -2039,6 +2147,21 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           <div className="flex items-center gap-2 shrink-0">
 
 
+            {/* AI Gateway & Google AI Studio Key Settings button */}
+            <button
+              type="button"
+              onClick={() => {
+                setQuickGeminiKey(getStoredGeminiKey())
+                setQuickGateway(getStoredAIGateway())
+                setQuickTestResult(null)
+                setAiSettingsModalOpen(true)
+              }}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border text-sm font-medium cursor-pointer transition-all bg-background text-foreground hover:bg-muted hover:text-blue-600"
+              title="Cài đặt Cổng AI & Google AI Studio Key"
+            >
+              <Key className="size-3.5 text-blue-600 dark:text-blue-400" />
+            </button>
+
             {/* Bookmark button */}
             {sidebarTab === "chats" && (
               <button
@@ -2056,63 +2179,6 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </button>
             )}
 
-            {/* Cloud Sync Status & Check (Clean & Subtle, no yellow retry button) */}
-            <button
-              type="button"
-              onClick={() => {
-                const cfg = getGoogleSheetConfig()
-                if (!cfg.scriptUrl || !cfg.sheetId || cloudSyncStatus === "error") {
-                  setSyncWarningModalOpen(true)
-                } else {
-                  handleManualCloudSync()
-                }
-              }}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border transition-all cursor-pointer h-7.5 shrink-0",
-                cloudSyncStatus === "syncing"
-                  ? "bg-blue-50/90 text-blue-700 border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
-                  : cloudSyncStatus === "synced"
-                  ? "bg-emerald-50/90 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/90 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-                  : "bg-background text-muted-foreground border-border hover:bg-muted"
-              )}
-              title={
-                cloudSyncStatus === "syncing"
-                  ? "Đang lưu đồng bộ lên Google Drive & Sheet..."
-                  : cloudSyncStatus === "synced"
-                  ? `Đã lưu Drive (${lastSyncedTime || "Mới đây"}). Bấm để kiểm tra đồng bộ.`
-                  : "Đồng bộ lịch sử chat với Google Drive & Sheet"
-              }
-            >
-              {cloudSyncStatus === "syncing" ? (
-                <>
-                  <RefreshCw className="size-3.5 animate-spin text-blue-600 dark:text-blue-400" />
-                  <span className="hidden lg:inline text-[11px] font-medium">Đang lưu...</span>
-                </>
-              ) : cloudSyncStatus === "synced" ? (
-                <>
-                  <Cloud className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="hidden lg:inline text-[11px] font-medium">Drive Sync</span>
-                </>
-              ) : (
-                <>
-                  <Cloud className="size-3.5 text-slate-500" />
-                  <span className="hidden lg:inline text-[11px] font-medium">Đồng bộ</span>
-                </>
-              )}
-            </button>
-
-            {/* Direct Google Drive Storage link to the official organized folder */}
-            <a
-              href="https://drive.google.com/drive/folders/1wgVKMhejp5b4G8efjXoIXpFaxQjzK69g?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-neutral-200/80 dark:border-border hover:bg-neutral-100 dark:hover:bg-muted text-muted-foreground hover:text-foreground transition-all h-7.5 shrink-0"
-              title="Mở thư mục Google Drive lưu trữ hệ thống (01_Chat, 02_Doc, 03_Event, 04_Attachments, 05_Avatars)"
-            >
-              <FolderOpen className="size-3.5 text-amber-500" />
-              <span className="hidden xl:inline text-[11px]">Drive Storage</span>
-              <ExternalLink className="size-2.5 opacity-60" />
-            </a>
 
             {/* Return to MB Portal button */}
             {onBackToPortal && (
@@ -2132,145 +2198,107 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* CONDITIONAL BODY: CHAT VIEWPORT OR ARTIFACT VIEWER                  */}
         {/* ─────────────────────────────────────────────────────────────────── */}
-        {sidebarTab === "artifacts" ? (
-          /* ARTIFACT VIEWER VIEW (Exact match to Echo Chat Artifacts View) */
-          selectedArtifact ? (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-background">
-              {/* Artifact Toolbar */}
-              <div className="flex items-center justify-between px-4 py-2 bg-muted/20 border-b border-border text-xs shrink-0">
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground font-mono">
-                    Cập nhật: {selectedArtifact.updatedAt}
-                  </span>
-                  {selectedArtifact.tags && (
-                    <div className="flex items-center gap-1">
-                      {selectedArtifact.tags.map((t, tIdx) => (
-                        <span key={`${t}-${tIdx}`} className="px-1.5 py-0.5 rounded bg-foreground/5 text-[10px] text-muted-foreground">
-                          #{t}
-                        </span>
+        {selectedArtifact ? (
+          /* DUAL PANE / SPLIT VIEW: CHAT VIEWPORT (LEFT) + ARTIFACT VIEWER (RIGHT) */
+          <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full">
+            {/* Left Pane: Chat Conversation (Can be collapsed via isChatSplitOpen) */}
+            {isChatSplitOpen && (
+              <div className="w-full lg:w-1/2 xl:w-[48%] flex flex-col border-r border-border min-h-0 h-full overflow-hidden bg-background">
+                {/* Scrollable Message Viewport */}
+                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+                  {!activeThread?.messages || activeThread.messages.length === 0 ? (
+                    <div className="mx-auto flex w-full max-w-lg flex-col justify-center py-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                          <FileText className="size-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-bold text-foreground">Hỏi AI về tài liệu</h3>
+                          <p className="text-xs text-muted-foreground truncate">{selectedArtifact.name}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                        Bạn có thể đặt bất kỳ câu hỏi nào về nội dung, quy trình, thông số hoặc yêu cầu AI phân tích tài liệu này.
+                      </p>
+                      <div className="space-y-1.5 border-t border-border/60 pt-3">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Gợi ý câu hỏi:</span>
+                        {[
+                          `Tóm tắt 3 điểm cốt lõi nhất của tài liệu ${selectedArtifact.name}`,
+                          `Quy trình này quy định những bước nào và SLA ra sao?`,
+                          `Chỉ ra các điểm cần lưu ý đặc biệt cho Designer và PO trong tài liệu này`
+                        ].map((promptText, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSendMessage(promptText, selectedArtifact.content, selectedArtifact.name)}
+                            className="group flex w-full items-center justify-between py-2 px-2.5 rounded-lg text-left text-xs text-foreground bg-muted/30 hover:bg-muted transition-colors cursor-pointer"
+                          >
+                            <span className="truncate">{promptText}</span>
+                            <CornerDownLeft className="size-3.5 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-1.5 text-primary" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mx-auto max-w-2xl space-y-5 py-2">
+                      {activeThread.messages.map((m, idx) => (
+                        <EchoMessageRow
+                          key={m.id || `msg-${idx}`}
+                          message={m}
+                          isCopied={copiedMsgId === m.id}
+                          onCopy={handleCopyMessage}
+                          isStreaming={isStreaming && idx === activeThread.messages.length - 1}
+                          tasks={tasks}
+                          intelligence={intelligence}
+                          onOpenTask={(task) => setActiveDetailTask(task)}
+                          onSendSuggestion={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
+                        />
                       ))}
+                      <div ref={messagesEndRef} />
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleChatWithArtifact(selectedArtifact)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 cursor-pointer transition-colors shadow-2xs"
-                  >
-                    <MessageSquare className="size-3.5" />
-                    <span>Hỏi AI về tài liệu này</span>
-                  </button>
-
-                  {selectedArtifact.driveUrl && (
-                    <a
-                      href={selectedArtifact.driveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 text-xs font-medium cursor-pointer transition-colors shadow-2xs"
-                      title="Mở tệp trên Google Drive"
-                    >
-                      <ExternalLink className="size-3.5" />
-                      <span>Google Drive</span>
-                    </a>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedArtifact.driveDownloadUrl) {
-                        window.open(selectedArtifact.driveDownloadUrl, "_blank")
+                {/* Composer Form in Split Pane */}
+                <div className="shrink-0 px-3 sm:px-4 pb-3 pt-1 z-20 border-t border-border/40 bg-background/80 backdrop-blur-sm">
+                  <EchoComposerForm
+                    isStreaming={isStreaming}
+                    onSend={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
+                    onStop={handleStopStream}
+                    onOpenArtifacts={() => setSidebarTab("artifacts")}
+                    onUploadFile={() => {
+                      if (!canUploadArtifacts) {
+                        toast.error("Vai trò của bạn chưa được cấp quyền tải tài liệu lên kho Artifacts.")
                         return
                       }
-                      const blob = new Blob([selectedArtifact.content], { type: "text/plain" })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement("a")
-                      a.href = url
-                      a.download = selectedArtifact.name
-                      a.click()
-                      URL.revokeObjectURL(url)
-                      toast.success(`Đã tải xuống ${selectedArtifact.name}`)
+                      fileInputRef.current?.click()
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-background hover:bg-muted text-foreground text-xs cursor-pointer transition-colors"
-                  >
-                    <Download className="size-3.5" />
-                    <span>Tải xuống</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedArtifactId(null)}
-                    className="size-7 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
-                    title="Đóng xem trước"
-                  >
-                    <X className="size-4" />
-                  </button>
+                    artifacts={artifacts}
+                    activeArtifact={selectedArtifact}
+                    onClearActiveArtifact={() => setSelectedArtifactId(null)}
+                    canUploadArtifacts={canUploadArtifacts}
+                    currentModel={currentModel}
+                    onModelChange={handleModelChange}
+                    aiMode={aiMode}
+                    onModeChange={handleModeChange}
+                  />
                 </div>
               </div>
+            )}
 
-              {/* Artifact Content Canvas */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-10 relative">
-                <div
-                  className="mx-auto max-w-4xl bg-card border border-border rounded-xl p-8 shadow-xs transition-transform origin-top"
-                  style={{ transform: `scale(${artifactZoom / 100})` }}
-                >
-                  {selectedArtifact.fileType === "code" || selectedArtifact.fileType === "json" ? (
-                    <pre className="font-mono text-xs leading-relaxed overflow-x-auto text-foreground p-4 bg-muted/30 rounded-lg border border-border/60">
-                      <code>{selectedArtifact.content}</code>
-                    </pre>
-                  ) : (
-                    <div className="prose dark:prose-invert max-w-none text-foreground text-sm sm:text-base leading-relaxed space-y-4">
-                      {selectedArtifact.content.split("\n\n").map((block, bIdx) => {
-                        if (block.startsWith("# ")) {
-                          return <h1 key={bIdx} className="text-2xl font-bold border-b border-border pb-2 pt-1">{block.slice(2)}</h1>
-                        }
-                        if (block.startsWith("## ")) {
-                          return <h2 key={bIdx} className="text-xl font-bold pt-2">{block.slice(3)}</h2>
-                        }
-                        if (block.startsWith("### ")) {
-                          return <h3 key={bIdx} className="text-base font-semibold pt-1 text-primary">{block.slice(4)}</h3>
-                        }
-                        if (block.startsWith("- ")) {
-                          return (
-                            <ul key={bIdx} className="list-disc pl-5 space-y-1">
-                              {block.split("\n").map((line, lIdx) => (
-                                <li key={lIdx}>{line.replace(/^-\s*/, "")}</li>
-                              ))}
-                            </ul>
-                          )
-                        }
-                        return <p key={bIdx} className="whitespace-pre-wrap">{block}</p>
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Floating Zoom Controls (Bottom Right) */}
-                <div className="fixed bottom-6 right-6 flex items-center gap-1 p-1 bg-background/90 backdrop-blur-md rounded-lg border border-border shadow-md z-30 select-none">
-                  <button
-                    type="button"
-                    onClick={() => setArtifactZoom((z) => Math.max(70, z - 10))}
-                    className="size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer"
-                    title="Thu nhỏ"
-                  >
-                    <ZoomOut className="size-3.5" />
-                  </button>
-                  <span className="text-xs font-mono px-1.5 w-12 text-center text-foreground font-medium">
-                    {artifactZoom}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setArtifactZoom((z) => Math.min(150, z + 10))}
-                    className="size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer"
-                    title="Phóng to"
-                  >
-                    <ZoomIn className="size-3.5" />
-                  </button>
-                </div>
-              </div>
+            {/* Right Pane: Document Viewer with high-end typography & floating zoom pill */}
+            <div className={cn(
+              "flex flex-col min-h-0 h-full overflow-hidden transition-all",
+              isChatSplitOpen ? "w-full lg:w-1/2 xl:w-[52%]" : "w-full"
+            )}>
+              <EchoArtifactSplitViewer
+                artifact={selectedArtifact}
+                onClose={() => setSelectedArtifactId(null)}
+                onAskAboutDoc={(prompt) => handleSendMessage(prompt, selectedArtifact.content, selectedArtifact.name)}
+              />
             </div>
-          ) : (
+          </div>
+        ) : sidebarTab === "artifacts" ? (
             /* ARTIFACTS HUB (DRAG & DROP UPLOAD ZONE OR READ-ONLY VIEW BASED ON RBAC) */
             <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-10 flex flex-col items-center justify-center">
               <div className="max-w-4xl w-full text-center space-y-6">
@@ -2307,41 +2335,41 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     >
                       {/* ReUI c-icon-stack-2 Large Illustration */}
                       <div className="mb-4 pointer-events-none flex items-center justify-center">
-                        <IconStackLarge />
+                        <IconStackLarge icon={<FileText className="size-6 text-slate-400 group-hover:text-[#1057FB] dark:group-hover:text-blue-400 transition-colors duration-200" />} />
                       </div>
 
                       <div className="space-y-1.5 max-w-lg mx-auto pointer-events-none">
                         <p className="text-base sm:text-lg font-medium text-slate-900 dark:text-foreground tracking-tight">
-                          Drag and drop an image, or{" "}
+                          Kéo thả tài liệu vào đây, hoặc{" "}
                           <span className="text-[#1057FB] dark:text-blue-400 underline underline-offset-4 font-semibold hover:text-[#1B3A6B] dark:hover:text-blue-300 transition-colors">
-                            Browse
+                            Duyệt tệp
                           </span>
                         </p>
                         <p className="text-xs text-slate-500 dark:text-muted-foreground font-normal">
-                          Hỗ trợ PNG, JPG, JPEG, WebP • Dán trực tiếp (Ctrl + V) từ Clipboard • Không giới hạn số lượng ảnh
+                          Hỗ trợ Markdown (.md), PDF, TXT, JSON, CSV, Mã nguồn & Ảnh tư liệu • Dán trực tiếp (Ctrl + V)
                         </p>
                       </div>
 
-                      {/* Guidelines Bullets 2 Cột (Chuẩn ReUI Cover Upload Guidelines) */}
+                      {/* Guidelines Bullets 2 Cột (Chuẩn Tài liệu & Tri thức Artifacts) */}
                       <div className="mt-8 pt-6 border-t border-slate-100 dark:border-border/60 w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-left text-xs text-slate-500 dark:text-muted-foreground pointer-events-none">
                         <div className="space-y-1.5">
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-muted-foreground/60 shrink-0" />
-                            <span>High resolution images (png, jpg, webp)</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span>Đa dạng định dạng (.md, .pdf, .txt, .json, .csv, code, ảnh)</span>
                           </p>
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-muted-foreground/60 shrink-0" />
-                            <span>Tự động nhận diện thẻ <code className="font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-muted px-1 py-0.5 rounded text-[11px]">.priority</code></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span>Tự động phân tích trích xuất dữ liệu cho AI Copilot</span>
                           </p>
                         </div>
                         <div className="space-y-1.5">
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-muted-foreground/60 shrink-0" />
-                            <span>Nén ảnh hàng loạt & tải ZIP nhanh</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span>Đồng bộ an toàn Google Drive & Master Data MB</span>
                           </p>
                           <p className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-muted-foreground/60 shrink-0" />
-                            <span>100% Offline, bảo mật an toàn MB</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1057FB] dark:bg-blue-400 shrink-0" />
+                            <span>100% Bảo mật dữ liệu nội bộ MBBank</span>
                           </p>
                         </div>
                       </div>
@@ -2384,8 +2412,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 </div>
               </div>
             </div>
-          )
-        ) : (
+          ) : (
           /* ───────────────────────────────────────────────────────────────── */
           /* CHAT STREAM VIEWPORT & STICKY COMPOSER                           */
           /* ───────────────────────────────────────────────────────────────── */
@@ -2581,7 +2608,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
                 <EchoComposerForm
                   isStreaming={isStreaming}
-                  onSend={handleSendMessage}
+                  onSend={(text) => handleSendMessage(
+                    text,
+                    selectedArtifact
+                      ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${selectedArtifact.name}" (${selectedArtifact.fileType}) ===\n${selectedArtifact.content}`
+                      : undefined,
+                    selectedArtifact?.name
+                  )}
                   onStop={handleStopStream}
                   onOpenArtifacts={() => setSidebarTab("artifacts")}
                   onUploadFile={() => {
@@ -2661,6 +2694,185 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           >
             <RefreshCw className="size-3.5" />
             <span>Thử lại ngay</span>
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Modal Popup: Cài đặt Cổng AI & Google AI Studio Key */}
+      <Dialog
+        open={aiSettingsModalOpen}
+        onClose={() => setAiSettingsModalOpen(false)}
+        size="md"
+        className="p-5 sm:p-6 space-y-4 rounded-2xl max-w-lg"
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="size-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800">
+            <Key className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm sm:text-base text-foreground">
+                Cổng Kết Nối AI & Google AI Studio
+              </h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold border border-emerald-300 dark:border-emerald-800">
+                1.500 RPD Free
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Kết nối trực tiếp máy chủ Google AI Studio để sử dụng mô hình <strong>Gemini 2.0 Flash</strong> với khả năng đọc hiểu ảnh (Vision) tốc độ cao và hoàn toàn miễn phí.
+            </p>
+          </div>
+        </div>
+
+        {/* Gateway Mode */}
+        <div className="space-y-1.5 pt-1">
+          <label className="text-xs font-semibold text-foreground">
+            Chế độ điều phối Cổng AI:
+          </label>
+          <div className="grid grid-cols-3 gap-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickGateway("auto")
+                saveAIGateway("auto")
+                toast.success("Đã chọn: Tự động điều phối")
+              }}
+              className={cn(
+                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                quickGateway === "auto"
+                  ? "border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 font-bold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+              )}
+            >
+              Tự động (Auto)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickGateway("google_ai_studio")
+                saveAIGateway("google_ai_studio")
+                toast.success("Đã chọn: Google AI Studio Trực tiếp")
+              }}
+              className={cn(
+                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                quickGateway === "google_ai_studio"
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+              )}
+            >
+              Google AI Studio
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQuickGateway("openrouter")
+                saveAIGateway("openrouter")
+                toast.success("Đã chọn: OpenRouter Gateway")
+              }}
+              className={cn(
+                "p-2 rounded-lg border text-center transition-all cursor-pointer text-[11px]",
+                quickGateway === "openrouter"
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 font-bold"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+              )}
+            >
+              OpenRouter Pool
+            </button>
+          </div>
+        </div>
+
+        {/* API Key Input */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-foreground">
+              Google AI Studio API Key:
+            </label>
+            <a
+              href="https://aistudio.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-primary hover:underline inline-flex items-center gap-1 font-medium"
+            >
+              <span>Lấy key tại aistudio.google.com</span>
+              <ExternalLink className="size-3" />
+            </a>
+          </div>
+          <input
+            type="password"
+            value={quickGeminiKey}
+            onChange={(e) => setQuickGeminiKey(e.target.value)}
+            placeholder="AIzaSy... (Dán Google AI Studio API Key vào đây)"
+            className="w-full text-xs font-mono rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary shadow-2xs"
+          />
+        </div>
+
+        {/* Test Result feedback */}
+        {quickTestResult && (
+          <div
+            className={cn(
+              "p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2",
+              quickTestResult.success
+                ? "bg-emerald-50/90 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                : "bg-rose-50/90 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {quickTestResult.success ? (
+                <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="size-4 text-rose-600 shrink-0" />
+              )}
+              <span className="font-medium">{quickTestResult.message}</span>
+            </div>
+            {quickTestResult.latencyMs > 0 && (
+              <span className="font-mono text-[11px] font-bold">
+                {quickTestResult.latencyMs}ms
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              setQuickTestingGemini(true)
+              setQuickTestResult(null)
+              try {
+                const res = await testGeminiConnection(quickGeminiKey.trim())
+                setQuickTestResult(res)
+                if (res.success) toast.success(`Google AI Studio Online (${res.latencyMs}ms)`)
+                else toast.error(`Kiểm tra thất bại: ${res.message}`)
+              } catch (err: any) {
+                setQuickTestResult({ success: false, message: err?.message || "Lỗi kết nối", latencyMs: 0 })
+              } finally {
+                setQuickTestingGemini(false)
+              }
+            }}
+            disabled={quickTestingGemini || !quickGeminiKey.trim()}
+            className="text-xs h-9 cursor-pointer"
+          >
+            <RefreshCw className={cn("size-3.5 mr-1.5", quickTestingGemini && "animate-spin")} />
+            <span>{quickTestingGemini ? "Đang thử..." : "Test kết nối"}</span>
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              const trimmed = quickGeminiKey.trim()
+              saveGeminiKey(trimmed)
+              saveAIGateway(quickGateway)
+              toast.success("Đã lưu cấu hình Google AI Studio thành công!")
+              setAiSettingsModalOpen(false)
+            }}
+            className="text-xs h-9 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Check className="size-3.5 mr-1.5" />
+            <span>Lưu & Kích hoạt</span>
           </Button>
         </div>
       </Dialog>
@@ -3089,7 +3301,7 @@ function EchoMarkdownTable({ rawTable }: { rawTable: string }) {
   }, [headers, rows])
 
   // Tách dòng Total / Tổng cộng ra khỏi các dòng thông thường
-  const { regularRows, totalRow } = useMemo(() => {
+  const { regularRows, totalRow } = useMemo<{ regularRows: string[][]; totalRow: string[] | null }>(() => {
     const totalKeywords = ["total", "tổng", "tổng cộng", "sum"]
     let total: string[] | null = null
     const regular: string[][] = []
@@ -3413,6 +3625,229 @@ function EchoArtifactBox({
 }
 
 /**
+ * 3b. THẺ ĐỀ XUẤT CẬP NHẬT TRẠNG THÁI TASK TỪ AI (TASK UPDATE ACTION CARD)
+ * Cho phép người dùng duyệt và cập nhật trạng thái/tiến độ/khâu task trực tiếp từ AI Copilot
+ */
+function EchoTaskUpdateCard({
+  data,
+  tasks,
+  onOpenTask,
+  onSendSuggestion,
+}: {
+  data: {
+    request_id?: string
+    task_name?: string
+    current_status?: string
+    suggested_phase?: string
+    suggested_status?: string
+    suggested_progress?: number
+    note?: string
+    action_type?: string
+  }
+  tasks?: UXRequest[]
+  onOpenTask?: (task: UXRequest) => void
+  onSendSuggestion?: (text: string) => void
+}) {
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isDone, setIsDone] = useState(false)
+  const [editNote, setEditNote] = useState(data.note || "")
+  const [isEditingNote, setIsEditingNote] = useState(false)
+
+  const matchedTask = useMemo(() => {
+    if (!tasks || tasks.length === 0 || !data.request_id) return null
+    return (
+      tasks.find(
+        (t) =>
+          t.request_id === data.request_id ||
+          t.id === data.request_id ||
+          (data.task_name &&
+            (t.nickname?.toLowerCase().includes(data.task_name.toLowerCase()) ||
+              t.title?.toLowerCase().includes(data.task_name.toLowerCase())))
+      ) || null
+    )
+  }, [tasks, data.request_id, data.task_name])
+
+  const handleConfirmUpdate = async () => {
+    if (!data.request_id) return
+    setIsUpdating(true)
+    try {
+      const targetPhase = data.suggested_phase || (matchedTask ? matchedTask.current_phase : "Đang xử lý")
+      const targetStatus = data.suggested_status || (matchedTask ? matchedTask.status : "Đang xử lý")
+      const targetProgress =
+        typeof data.suggested_progress === "number"
+          ? data.suggested_progress
+          : matchedTask
+          ? matchedTask.progress
+          : 50
+      const noteToSend = editNote || data.note || "Cập nhật qua AI Copilot"
+
+      const res = await updateTaskProgressInSheet(data.request_id, {
+        new_phase: targetPhase,
+        new_status: targetStatus,
+        new_progress: targetProgress,
+        note: noteToSend,
+      })
+
+      if (res.success) {
+        setIsDone(true)
+        toast.success(`Đã cập nhật bài toán [${data.request_id}] lên ${targetPhase} (${targetProgress}%)!`)
+        window.dispatchEvent(
+          new CustomEvent("task_updated", {
+            detail: { requestId: data.request_id, phase: targetPhase, status: targetStatus, progress: targetProgress },
+          })
+        )
+      } else {
+        toast.warning(res.message || "Không thể đồng bộ lên Google Sheet, đã lưu cục bộ.")
+        setIsDone(true)
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Lỗi khi cập nhật trạng thái bài toán")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleOpenDetail = () => {
+    if (matchedTask && onOpenTask) {
+      onOpenTask(matchedTask)
+    } else {
+      toast.info(`Bài toán: ${data.task_name || data.request_id}`)
+    }
+  }
+
+  const currentPhaseOrStatus =
+    data.current_status || (matchedTask ? matchedTask.current_phase || matchedTask.status : "Hiện tại")
+  const newPhaseOrStatus = data.suggested_phase || data.suggested_status || "Khâu tiếp theo"
+  const progressVal =
+    typeof data.suggested_progress === "number" ? data.suggested_progress : (matchedTask?.progress ?? 50)
+
+  return (
+    <div className="my-3 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 bg-gradient-to-b from-indigo-50/40 to-white/95 dark:from-indigo-950/20 dark:to-card/95 p-4 shadow-sm space-y-3.5 max-w-xl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="size-6 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+            <Sparkles className="size-3.5" />
+          </div>
+          <span className="text-[13px] font-semibold text-foreground">
+            Đề xuất cập nhật tiến độ bài toán
+          </span>
+        </div>
+        <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+          {data.request_id}
+        </span>
+      </div>
+
+      {/* Tên bài toán */}
+      <div className="text-sm font-medium text-foreground">
+        "{data.task_name || matchedTask?.nickname || matchedTask?.title || "Bài toán UX"}"
+      </div>
+
+      {/* Trạng thái thay đổi: Hiện tại -> Mới */}
+      <div className="p-3 rounded-xl bg-background/80 border border-neutral-200/70 dark:border-border/60 space-y-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <div className="space-y-0.5">
+            <div className="text-[11px] text-muted-foreground">Hiện tại</div>
+            <div className="font-medium text-foreground/80">{currentPhaseOrStatus}</div>
+          </div>
+          <div className="size-6 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 mx-2 text-xs">
+            →
+          </div>
+          <div className="space-y-0.5 text-right">
+            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Đề xuất chuyển sang</div>
+            <div className="font-semibold text-indigo-700 dark:text-indigo-300">{newPhaseOrStatus}</div>
+          </div>
+        </div>
+
+        {/* Thanh tiến độ */}
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Tiến độ mới</span>
+            <span className="font-mono font-semibold text-foreground">{progressVal}%</span>
+          </div>
+          <div className="h-2 w-full bg-neutral-100 dark:bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-primary rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(0, progressVal))}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Ghi chú AI & cho phép sửa */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>Ghi chú cập nhật:</span>
+          {!isDone && (
+            <button
+              type="button"
+              onClick={() => setIsEditingNote(!isEditingNote)}
+              className="text-primary hover:underline cursor-pointer"
+            >
+              {isEditingNote ? "Xong" : "Chỉnh sửa"}
+            </button>
+          )}
+        </div>
+        {isEditingNote && !isDone ? (
+          <textarea
+            value={editNote}
+            onChange={(e) => setEditNote(e.target.value)}
+            rows={2}
+            className="w-full text-xs p-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="Nhập ghi chú cập nhật..."
+          />
+        ) : (
+          <div className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/50 italic">
+            "{editNote || data.note || "Cập nhật tiến độ theo khuyến nghị của AI"}"
+          </div>
+        )}
+      </div>
+
+      {/* Buttons */}
+      <div className="flex items-center gap-2 pt-1">
+        {isDone ? (
+          <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 py-1.5 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 w-full justify-center">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>Đã cập nhật trạng thái vào hệ thống thành công</span>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={isUpdating}
+              onClick={handleConfirmUpdate}
+              className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <span>Đang lưu...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="size-3.5" />
+                  <span>Xác nhận cập nhật ngay</span>
+                </>
+              )}
+            </button>
+            {onOpenTask && matchedTask && (
+              <button
+                type="button"
+                onClick={handleOpenDetail}
+                className="py-2 px-3 rounded-xl border border-neutral-200 dark:border-border hover:bg-muted text-xs text-foreground transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <ExternalLink className="size-3.5" />
+                <span>Xem task</span>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * 4. TÀI LIỆU THAM CHIẾU (REFERENCED DOCUMENTS FOOTER CHIPS)
  * Khớp hoàn hảo theo Screenshot 4 footer: "2 Documents Read" + các chip release-notes-3.4.md, release-notes-3.3.md
  */
@@ -3556,6 +3991,28 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           rejectText: "Not Now",
         }
         workingText = workingText.replace(actionMatch[0], "").trim()
+      }
+    }
+
+    // 1b. Trích xuất khối Task Update đề xuất cập nhật trạng thái task (từ thẻ ```task_update)
+    let taskUpdateData: {
+      request_id?: string
+      task_name?: string
+      current_status?: string
+      suggested_phase?: string
+      suggested_status?: string
+      suggested_progress?: number
+      note?: string
+      action_type?: string
+    } | null = null
+    const taskUpdateMatch = workingText.match(/```task_update\n([\s\S]*?)```/)
+    if (taskUpdateMatch) {
+      try {
+        taskUpdateData = JSON.parse(taskUpdateMatch[1])
+        workingText = workingText.replace(taskUpdateMatch[0], "").trim()
+      } catch {
+        // Bỏ qua nếu JSON parse lỗi
+        workingText = workingText.replace(taskUpdateMatch[0], "").trim()
       }
     }
 
@@ -3733,6 +4190,16 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           />
         )}
 
+        {/* Khối Task Update Card — AI đề xuất cập nhật trạng thái task */}
+        {taskUpdateData && taskUpdateData.request_id && (
+          <EchoTaskUpdateCard
+            data={taskUpdateData}
+            tasks={tasks}
+            onOpenTask={onOpenTask}
+            onSendSuggestion={onSendSuggestion}
+          />
+        )}
+
         {/* Khối Referenced Documents nếu có (Screenshot 4) */}
         {referencedDocs.length > 0 && (
           <EchoReferencedDocs docs={referencedDocs} />
@@ -3747,7 +4214,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         )}
       </div>
     )
-  }, [message.content, message.id, message.attachedArtifactName, isCopied, onCopy, isStreaming, onSendSuggestion, tasks, onOpenTask])
+  }, [message.content, message.id, message.attachedArtifactName, isCopied, onCopy, isStreaming, onSendSuggestion, tasks, onOpenTask, intelligence])
 
   if (isUser) {
     return (
@@ -3791,22 +4258,27 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
       <div className="flex-1 min-w-0 pt-0.5">
         {/* Khối quy trình phân tích & mạch suy nghĩ (AgentActivityTrace của Executive Summary) */}
-        {(isStreaming || message.traceData || message.reasoning || message.isThinkingComplete || message.processSteps) && (
+        {(isStreaming || message.traceData || message.isThinkingComplete || message.processSteps) && (
           <div className="mb-3 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 p-3 shadow-2xs overflow-hidden">
             <AgentActivityTrace
-              activeTasks={message.traceData?.activeTasks || intelligence?.activeAssignedTasks || tasks?.slice(0, 6) || []}
-              summaryProjects={message.traceData?.summaryProjects || (intelligence?.delegatedTasks?.map((d) => d.task) || tasks)?.slice(0, 3) || []}
+              activeTasks={message.traceData?.activeTasks || intelligence?.activeAssignedTasks || tasks || []}
+              summaryProjects={message.traceData?.summaryProjects || intelligence?.activeAssignedTasks || tasks || []}
               riskProjects={message.traceData?.riskProjects || intelligence?.overdueTasks || []}
               goLiveTasks={message.traceData?.goLiveTasks || intelligence?.goLiveTasks || []}
               dominantPhaseText={message.traceData?.dominantPhaseText || intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"}
+              todayEvents={intelligence?.todayEvents}
+              discussionCount={intelligence?.totalChatCount}
               mode={message.isThinkingComplete || (!isStreaming && Boolean(message.content)) ? "inspector" : "live"}
               isRefreshing={isStreaming && !message.isThinkingComplete}
               collapsible={true}
               defaultOpen={isStreaming || !message.content}
               durationSeconds={message.thinkingDurationSeconds}
-              reasoning={message.reasoning}
-              finalStepLabel="Tổng hợp phản hồi AI"
-              finalStepDesc="Đã sẵn sàng câu trả lời cho Designer."
+              reasoning={message.reasoning || undefined}
+              responseSource={message.responseSource}
+              finalStepLabel={message.responseSource === "local-fallback" ? "Phản hồi dự phòng cục bộ" : "Kết quả nhận từ mô hình AI"}
+              finalStepDesc={message.responseSource === "local-fallback"
+                ? "Mô hình trực tuyến không khả dụng; kết quả được tạo từ dữ liệu và quy tắc cục bộ."
+                : "Đã nhận phản hồi từ mô hình AI dựa trên ngữ cảnh prompt được cung cấp."}
               onOpenTask={onOpenTask}
             />
           </div>
@@ -3838,6 +4310,8 @@ interface EchoComposerFormProps {
   onOpenArtifacts: () => void
   onUploadFile: () => void
   artifacts?: UXArtifact[]
+  activeArtifact?: UXArtifact | null
+  onClearActiveArtifact?: () => void
   canUploadArtifacts?: boolean
   currentModel: string
   onModelChange: (modelId: string) => void
@@ -3915,6 +4389,8 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
   onOpenArtifacts,
   onUploadFile,
   artifacts = [],
+  activeArtifact = null,
+  onClearActiveArtifact,
   canUploadArtifacts = true,
   currentModel,
   onModelChange,
@@ -4241,6 +4717,29 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
         onClick={() => textareaRef.current?.focus()}
         className="relative rounded-2xl border border-slate-200/90 bg-white p-2.5 shadow-xs transition-all duration-200 focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-100/80 cursor-text"
       >
+        {/* Active Document Context Chip when an artifact is open */}
+        {activeArtifact && (
+          <div className="flex items-center justify-between px-2.5 py-1 mb-1.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-900/40 text-xs text-indigo-700 dark:text-indigo-300">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <FileText className="size-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="font-semibold truncate">Hỏi trực tiếp về tài liệu: {activeArtifact.name}</span>
+            </div>
+            {onClearActiveArtifact && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClearActiveArtifact()
+                }}
+                className="size-4 rounded hover:bg-indigo-200/50 dark:hover:bg-indigo-900/50 flex items-center justify-center text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-200 cursor-pointer"
+                title="Bỏ gắn ngữ cảnh tài liệu"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Dynamic Auto-Expanding Textarea */}
         <textarea
           ref={textareaRef}
@@ -4283,7 +4782,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           }}
           rows={1}
           disabled={isStreaming}
-          placeholder="Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"
+          placeholder={activeArtifact ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...` : "Nhập nội dung trao đổi... (Gõ / để gọi lệnh, @ để nhắc tên)"}
           className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
 

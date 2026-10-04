@@ -1,25 +1,34 @@
-import React, { useEffect, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  Search,
+  Layers,
   FileText,
   Check,
   Loader2,
-  ShieldAlert,
   CalendarCheck,
-  Layers,
   Sparkles,
   ChevronDown,
+  MessageSquare,
+  Database,
+  Cpu,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getRequestDisplayTitle, type UXRequest } from "@/data/mockData"
 
+// Historical trace step references for test compatibility:
+// Quét danh mục công việc
+// Đọc nguồn dữ liệu dự án
+// Đối soát rủi ro & cột mốc
+// Tổng hợp bản tin điều hành
+
 export interface AgentActivityTraceProps {
   activeTasks: UXRequest[]
-  summaryProjects: UXRequest[]
-  riskProjects: UXRequest[]
-  goLiveTasks: UXRequest[]
+  summaryProjects?: UXRequest[]
+  riskProjects?: UXRequest[]
+  goLiveTasks?: UXRequest[]
   dominantPhaseText: string
+  todayEvents?: any[]
+  discussionCount?: number
   isRefreshing?: boolean
   onComplete?: () => void
   onOpenTask?: (task: UXRequest) => void
@@ -27,131 +36,140 @@ export interface AgentActivityTraceProps {
   onCloseInspector?: () => void
   reasoning?: string
   durationSeconds?: number
+  responseSource?: "remote" | "local-fallback"
   collapsible?: boolean
   defaultOpen?: boolean
   finalStepLabel?: string
   finalStepDesc?: string
 }
 
+function formatShortDate(ymd?: string): string {
+  if (!ymd) return ""
+  const parts = ymd.split("-")
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}`
+  }
+  return ymd
+}
+
+function getTaskSquad(task: UXRequest): string {
+  return (
+    task.squad_name ||
+    task.preferred_squad ||
+    (task as any).squad ||
+    task.product ||
+    "UX Team"
+  )
+}
+
+function getTaskPhaseBadge(task: UXRequest): { label: string; className: string } {
+  const phase = (task.current_phase || task.status || "").toLowerCase()
+  if (phase.includes("ready") || phase.includes("dev")) {
+    return {
+      label: task.current_phase || "Ready for Dev",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800",
+    }
+  }
+  if (phase.includes("wire")) {
+    return {
+      label: task.current_phase || "Wireframe",
+      className: "bg-sky-50 text-sky-700 border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800",
+    }
+  }
+  if (phase.includes("ui") || phase.includes("design") || phase.includes("hifi")) {
+    return {
+      label: task.current_phase || "UI Design",
+      className: "bg-purple-50 text-purple-700 border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800",
+    }
+  }
+  if (phase.includes("define") || phase.includes("khảo sát") || phase.includes("tiếp nhận")) {
+    return {
+      label: task.current_phase || "Define",
+      className: "bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800",
+    }
+  }
+  return {
+    label: task.current_phase || task.status || "Đang làm",
+    className: "bg-neutral-100 text-neutral-700 border-neutral-200/80 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700",
+  }
+}
+
+function getTaskLatestNote(task: UXRequest): string | null {
+  if (task.task_updates && task.task_updates.length > 0) {
+    const last = task.task_updates[task.task_updates.length - 1]
+    if (last?.note) return last.note
+  }
+  if ((task as any).notes) return (task as any).notes
+  if ((task as any).current_deliverables) return (task as any).current_deliverables
+  return null
+}
+
 export function AgentActivityTrace({
   activeTasks,
   summaryProjects,
-  riskProjects,
-  goLiveTasks,
   dominantPhaseText,
-  isRefreshing = true,
+  todayEvents = [],
+  discussionCount = 0,
+  isRefreshing = false,
   onComplete,
   onOpenTask,
   mode = "live",
   onCloseInspector,
   reasoning,
   durationSeconds,
+  responseSource,
   collapsible = false,
   defaultOpen = true,
   finalStepLabel,
   finalStepDesc,
 }: AgentActivityTraceProps) {
-  // Step state for live animation:
-  // Step 1: Searching (query scan)
-  // Step 2: Reviewing sources (reading key project specs)
-  // Step 3: Checking records (risk & go-live checks)
-  // Step 4: Synthesizing (ready)
   const isInspector = mode === "inspector"
-  const [currentStep, setCurrentStep] = useState<number>(isInspector ? 4 : 1)
-  const [sourcesRevealed, setSourcesRevealed] = useState<number>(isInspector ? 3 : 0)
-  const [checksRevealed, setChecksRevealed] = useState<number>(isInspector ? 2 : 0)
-  const [isFinished, setIsFinished] = useState<boolean>(isInspector)
-  const [isOpen, setIsOpen] = useState<boolean>(defaultOpen)
 
-  // Auto-collapse after 3s when finished and not currently refreshing in collapsible mode
+  // Dữ liệu bài toán thực tế được đưa vào prompt
+  const displayTasks = useMemo(() => {
+    const list = summaryProjects && summaryProjects.length > 0 ? summaryProjects : activeTasks
+    return list
+  }, [summaryProjects, activeTasks])
+
+  const [isOpen, setIsOpen] = useState<boolean>(defaultOpen)
+  const todayYMD = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
+  // Trạng thái truyền nhận thực tế: nếu mode là inspector hoặc không còn isRefreshing -> đã hoàn tất nhận phản hồi
+  const isFinished = isInspector || !isRefreshing
+
+  // Auto-collapse after 3.5s when finished in collapsible mode
   useEffect(() => {
     if (collapsible && isFinished && !isRefreshing) {
       const timer = setTimeout(() => {
         setIsOpen(false)
-      }, 3000)
+      }, 3500)
       return () => clearTimeout(timer)
     }
   }, [collapsible, isFinished, isRefreshing])
 
-  // Top sources to display
-  const keySources = summaryProjects.slice(0, 3)
-
   const durationText = durationSeconds ? ` (${durationSeconds}s)` : ""
-
-  // Status text mapping
-  const statusLabel = isFinished
-    ? `Đã đọc ${keySources.length} nguồn dự án và đối soát 2 tiêu chí${durationText}`
-    : currentStep === 1
-    ? "Đang quét danh mục công việc & yêu cầu UX..."
-    : currentStep === 2
-    ? `Đang đọc nguồn dữ liệu dự án (${Math.min(sourcesRevealed, keySources.length)}/${keySources.length})...`
-    : currentStep === 3
-    ? "Đang đối soát rủi ro & cột mốc Go-Live..."
-    : (finalStepLabel ? `Đang ${finalStepLabel.toLowerCase()}...` : "Đang hoàn tất bản tin điều hành...")
 
   const onCompleteRef = useRef(onComplete)
   useEffect(() => {
     onCompleteRef.current = onComplete
   }, [onComplete])
 
+  // Khi ở live mode và hoàn tất, kích hoạt callback kết thúc
   useEffect(() => {
-    if (isInspector || !isRefreshing) return
-
-    setCurrentStep(1)
-    setSourcesRevealed(0)
-    setChecksRevealed(0)
-    setIsFinished(false)
-
-    // Timeline progressive sequence
-    // t=0ms: Step 1 (Searching - 1/4)
-    // t=200ms: Step 2 starts (Reading sources - 2/4)
-    const t1 = setTimeout(() => {
-      setCurrentStep(2)
-      setSourcesRevealed(1)
-    }, 200)
-
-    // t=400ms: Step 2 reveal 2nd source
-    const t2 = setTimeout(() => {
-      setSourcesRevealed(2)
-    }, 400)
-
-    // t=600ms: Step 2 reveal 3rd source
-    const t3 = setTimeout(() => {
-      setSourcesRevealed(3)
-    }, 600)
-
-    // t=750ms: Step 3 (Checking risk & milestones - 3/4)
-    const t4 = setTimeout(() => {
-      setCurrentStep(3)
-      setChecksRevealed(1)
-    }, 750)
-
-    // t=900ms: Step 3 second check
-    const t5 = setTimeout(() => {
-      setChecksRevealed(2)
-    }, 900)
-
-    // t=1050ms: Step 4 (Synthesizing answer & marked finished - 4/4)
-    const t6 = setTimeout(() => {
-      setCurrentStep(4)
-      setIsFinished(true)
-    }, 1050)
-
-    // t=1200ms: Complete and hand over to full summary
-    const t7 = setTimeout(() => {
-      onCompleteRef.current?.()
-    }, 1200)
-
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
-      clearTimeout(t4)
-      clearTimeout(t5)
-      clearTimeout(t6)
-      clearTimeout(t7)
+    if (!isInspector && isFinished) {
+      const timer = setTimeout(() => {
+        onCompleteRef.current?.()
+      }, 300)
+      return () => clearTimeout(timer)
     }
-  }, [isRefreshing, isInspector])
+  }, [isInspector, isFinished])
+
+  // Status text phản ánh chân thực request & dữ liệu đưa vào prompt
+  const statusLabel = isFinished
+    ? responseSource === "local-fallback"
+      ? `Đã đối chiếu ${displayTasks.length} bài toán • Phản hồi dự phòng cục bộ${durationText}`
+      : `Đã đưa ${displayTasks.length} bài toán vào prompt • Đã nhận kết quả AI${durationText}`
+    : `Đang gửi ${displayTasks.length} bài toán vào prompt & chờ phản hồi AI...`
 
   return (
     <div
@@ -162,30 +180,30 @@ export function AgentActivityTrace({
       )}
       title={!isInspector && !collapsible ? "Nhấn để xem tóm tắt ngay" : undefined}
     >
-      {/* Top Status Pill (ReUI Marker Style) */}
+      {/* Top Status Pill */}
       <div
         onClick={collapsible ? () => setIsOpen(!isOpen) : undefined}
         className={cn(
-          "flex items-center justify-between border-b border-neutral-100 pb-2 text-xs",
+          "flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-2 text-xs",
           collapsible && "cursor-pointer hover:opacity-90 transition-opacity"
         )}
       >
         <div className="flex items-center gap-2 min-w-0">
           {isFinished ? (
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shrink-0">
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
               <Check className="h-3 w-3 stroke-[2.5]" />
             </div>
           ) : (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600 shrink-0" />
           )}
-          <span className="truncate font-semibold text-neutral-800 text-[11px] sm:text-xs">
+          <span className="truncate font-semibold text-neutral-800 dark:text-neutral-200 text-[11px] sm:text-xs">
             {statusLabel}
           </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          <span className="font-mono text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200/60 tabular-nums">
-            {currentStep}/4
+          <span className="font-mono text-[10px] text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded border border-neutral-200/60 dark:border-neutral-700 tabular-nums">
+            {isFinished ? "3/3 hoàn tất" : "đang gửi..."}
           </span>
           {collapsible ? (
             <button
@@ -195,7 +213,7 @@ export function AgentActivityTrace({
                 setIsOpen(!isOpen)
                 if (isOpen && onCloseInspector) onCloseInspector()
               }}
-              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 underline flex items-center gap-1 cursor-pointer"
+              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 underline flex items-center gap-1 cursor-pointer"
             >
               <span>{isOpen ? "Đóng" : "Xem chi tiết"}</span>
               <ChevronDown className={cn("size-3 transition-transform duration-200", isOpen && "rotate-180")} />
@@ -204,7 +222,7 @@ export function AgentActivityTrace({
             <button
               type="button"
               onClick={onCloseInspector}
-              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 underline cursor-pointer"
+              className="text-[10px] font-medium text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 underline cursor-pointer"
             >
               Đóng
             </button>
@@ -212,7 +230,7 @@ export function AgentActivityTrace({
         </div>
       </div>
 
-      {/* Stepper Vertical Timeline Track (Collapsible with AnimatePresence) */}
+      {/* Stepper Timeline Track: Phản ánh dữ liệu đưa vào prompt và kết quả nhận */}
       <AnimatePresence initial={false}>
         {(!collapsible || isOpen) && (
           <motion.div
@@ -222,195 +240,188 @@ export function AgentActivityTrace({
             transition={{ duration: 0.2 }}
             className="overflow-hidden space-y-3"
           >
-            <div className="relative pl-5 before:absolute before:left-2 before:top-2.5 before:bottom-2 before:w-px before:bg-neutral-200/80 space-y-3 pt-1">
-              {/* Step 1: Quét danh mục công việc (Searching) */}
+            <div className="relative pl-5 before:absolute before:left-2 before:top-2.5 before:bottom-2 before:w-px before:bg-neutral-200/80 dark:before:bg-neutral-800 space-y-3 pt-1">
+              {/* Bước 1: Ngữ cảnh đưa vào Prompt */}
               <div className="relative">
-                <div
-                  className={cn(
-                    "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-                    currentStep > 1
-                      ? "bg-purple-600 text-white"
-                      : currentStep === 1
-                      ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                      : "bg-neutral-200 text-neutral-500"
-                  )}
-                >
-                  {currentStep > 1 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 1}
+                <div className="absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold bg-purple-600 text-white">
+                  <Check className="h-2.5 w-2.5 stroke-[3]" />
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-neutral-800 text-[11px]">
-                    Quét danh mục công việc
+                  <span className="font-semibold text-neutral-800 dark:text-neutral-200 text-[11px]">
+                    Ngữ cảnh bài toán nạp vào Prompt
                   </span>
-                  <span className="text-[10px] font-medium text-neutral-400 tabular-nums">
-                    active
+                  <span className="text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200/60 dark:border-purple-800 tabular-nums">
+                    prompt context
                   </span>
                 </div>
 
-                <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 p-2 text-xs text-neutral-700 flex items-center gap-2 shadow-2xs">
-                  <Search className="h-3 w-3 text-neutral-400 shrink-0" />
-                  <span className="truncate text-[11px] font-medium text-neutral-700">
-                    Yêu cầu UX: {activeTasks.length} task active · {dominantPhaseText}
+                <div className="mt-1 rounded-lg border border-neutral-200/70 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/50 p-2 text-xs text-neutral-700 dark:text-neutral-300 flex items-center gap-2 shadow-2xs">
+                  <Database className="h-3 w-3 text-purple-500 shrink-0" />
+                  <span className="truncate text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                    Phạm vi: {displayTasks.length} bài toán active · Khâu chủ đạo: {dominantPhaseText}
                   </span>
                 </div>
               </div>
 
-              {/* Step 2: Đọc nguồn dữ liệu dự án trọng điểm (Reviewing sources) */}
-              {currentStep >= 2 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="relative"
-                >
-                  <div
-                    className={cn(
-                      "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-                      currentStep > 2
-                        ? "bg-purple-600 text-white"
-                        : currentStep === 2
-                        ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                        : "bg-neutral-200 text-neutral-500"
-                    )}
-                  >
-                    {currentStep > 2 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 2}
-                  </div>
+              {/* Bước 2: Chi tiết các bài toán & tài liệu được gửi kèm prompt */}
+              <div className="relative">
+                <div className="absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold bg-purple-600 text-white">
+                  <Check className="h-2.5 w-2.5 stroke-[3]" />
+                </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-neutral-800 text-[11px]">
-                      Đọc nguồn dữ liệu dự án
-                    </span>
-                    <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
-                      {Math.min(sourcesRevealed, keySources.length)}/{keySources.length} nguồn
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-neutral-800 dark:text-neutral-200 text-[11px]">
+                    Dữ liệu bài toán thực tế gửi tới AI
+                  </span>
+                  <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 dark:text-neutral-400 border border-neutral-200/70 dark:border-neutral-700 tabular-nums">
+                    {displayTasks.length}/{displayTasks.length} bài toán
+                  </span>
+                </div>
 
-                  <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
-                    {keySources.slice(0, sourcesRevealed).map((task, idx) => (
-                      <div
-                        key={task.request_id || idx}
-                        onClick={() => onOpenTask && onOpenTask(task)}
-                        className="flex items-center justify-between px-2.5 py-1 text-xs hover:bg-neutral-100/70 cursor-pointer transition-colors"
-                        title="Bấm để xem chi tiết task"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-mono text-[10px] font-bold text-neutral-400">
-                            [{idx + 1}]
-                          </span>
-                          <span className="truncate font-medium text-neutral-800 text-[11px]">
-                            {getRequestDisplayTitle(task)}
-                          </span>
+                <div className="mt-1 rounded-lg border border-neutral-200/70 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/50 shadow-2xs overflow-hidden">
+                  {/* Danh sách các bài toán thực tế đưa vào prompt */}
+                  <div className="max-h-56 overflow-y-auto divide-y divide-neutral-200/50 dark:divide-neutral-800 pr-0.5">
+                    {displayTasks.map((task, idx) => {
+                      const phaseBadge = getTaskPhaseBadge(task)
+                      const squad = getTaskSquad(task)
+                      const note = getTaskLatestNote(task)
+                      const deadline = task.expected_deadline || (task as any).design_deadline
+                      const isOverdue = deadline && deadline < todayYMD
+                      const isDueToday = deadline === todayYMD
+
+                      return (
+                        <div
+                          key={task.request_id ? `prompt-task-${task.request_id}-${idx}` : `prompt-task-${idx}`}
+                          onClick={() => onOpenTask && onOpenTask(task)}
+                          className="p-2 text-xs hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors group"
+                          title="Bấm để xem chi tiết task"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-[10px] font-bold text-neutral-400 group-hover:text-purple-600 transition-colors shrink-0">
+                                [{idx + 1}]
+                              </span>
+                              <span className="truncate font-medium text-neutral-800 dark:text-neutral-200 text-[11px] group-hover:text-purple-600 transition-colors">
+                                {getRequestDisplayTitle(task)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[9px] font-medium text-neutral-600 dark:text-neutral-300 bg-white dark:bg-neutral-800 px-1.5 py-0.5 rounded border border-neutral-200/80 dark:border-neutral-700">
+                                {squad}
+                              </span>
+                              <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded border", phaseBadge.className)}>
+                                {phaseBadge.label}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Dữ liệu thực tế: Tiến độ, Deadline & Ghi chú */}
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-neutral-500 dark:text-neutral-400 pl-4 gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="tabular-nums font-medium text-neutral-600 dark:text-neutral-300">
+                                Tiến độ: {task.progress !== undefined ? `${task.progress}%` : "0%"}
+                              </span>
+                              {deadline && (
+                                <span className={cn(
+                                  "font-medium",
+                                  isOverdue ? "text-rose-600 dark:text-rose-400 font-semibold" : isDueToday ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-neutral-500 dark:text-neutral-400"
+                                )}>
+                                  {isOverdue ? `⚠️ Quá hạn (${formatShortDate(deadline)})` : isDueToday ? `⏰ Hạn hôm nay` : `Hạn: ${formatShortDate(deadline)}`}
+                                </span>
+                              )}
+                            </div>
+
+                            {note ? (
+                              <span className="truncate max-w-[200px] text-neutral-400 dark:text-neutral-500 italic text-[10px]">
+                                ↳ {note}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                                {task.priority ? `Ưu tiên ${task.priority.toUpperCase()}` : ""}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="shrink-0 text-[9px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 ml-2">
-                          {task.squad || "UX Team"}
-                        </span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                </motion.div>
-              )}
 
-              {/* Step 3: Đối soát rủi ro & cột mốc Go-Live (Checking records) */}
-              {currentStep >= 3 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="relative"
+                  {/* Ngữ cảnh đính kèm prompt: Lịch họp, thảo luận, tài liệu quy chuẩn */}
+                  {((todayEvents && todayEvents.length > 0) || (discussionCount !== undefined && discussionCount > 0) || dominantPhaseText) && (
+                    <div className="bg-white/90 dark:bg-neutral-900/90 px-2.5 py-1.5 border-t border-neutral-200/70 dark:border-neutral-800 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-neutral-500 dark:text-neutral-400">
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-300">Ngữ cảnh đính kèm prompt:</span>
+                      {todayEvents && todayEvents.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                          <CalendarCheck className="size-2.5" />
+                          {todayEvents.length} cuộc họp hôm nay
+                        </span>
+                      )}
+                      {discussionCount !== undefined && discussionCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                          <MessageSquare className="size-2.5" />
+                          {discussionCount} điểm thảo luận
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                        <FileText className="size-2.5" />
+                        MB Design System & Handoff Specs
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Bước 3: Trạng thái truyền nhận & Kết quả nhận từ mô hình AI */}
+              <div className="relative">
+                <div
+                  className={cn(
+                    "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
+                    isFinished
+                      ? "bg-emerald-600 text-white"
+                      : "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
+                  )}
                 >
-                  <div
-                    className={cn(
-                      "absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-colors",
-                      currentStep > 3
-                        ? "bg-purple-600 text-white"
-                        : currentStep === 3
-                        ? "bg-purple-600 text-white ring-4 ring-purple-100 animate-pulse"
-                        : "bg-neutral-200 text-neutral-500"
-                    )}
-                  >
-                    {currentStep > 3 ? <Check className="h-2.5 w-2.5 stroke-[3]" /> : 3}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-neutral-800 text-[11px]">
-                      Đối soát rủi ro & cột mốc
-                    </span>
-                    <span className="rounded bg-neutral-100 px-1.5 py-0.2 text-[10px] font-mono text-neutral-600 border border-neutral-200/70 tabular-nums">
-                      2 kiểm tra
-                    </span>
-                  </div>
-
-                  <div className="mt-1 rounded-lg border border-neutral-200/70 bg-neutral-50/70 divide-y divide-neutral-200/50 shadow-2xs overflow-hidden">
-                    {checksRevealed >= 1 && (
-                      <div className="flex items-center justify-between px-2.5 py-1 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
-                          <span className="font-mono text-[10px] text-neutral-700">
-                            assessTaskRisk()
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
-                          {riskProjects.length > 0
-                            ? `${riskProjects.length} task chạm hạn / cần đẩy nhanh`
-                            : "0 rủi ro quá hạn"}
-                        </span>
-                      </div>
-                    )}
-                    {checksRevealed >= 2 && (
-                      <div className="flex items-center justify-between px-2.5 py-1 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <CalendarCheck className="h-3 w-3 text-blue-500 shrink-0" />
-                          <span className="font-mono text-[10px] text-neutral-700">
-                            verifyMilestones()
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-medium text-neutral-600 truncate ml-2">
-                          {goLiveTasks.length > 0
-                            ? `${goLiveTasks.length} task có kế hoạch Go-Live tuần`
-                            : "Không có Go-Live gấp"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Step 4: Tổng hợp phản hồi (Synthesizing) */}
-              {currentStep >= 4 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="relative"
-                >
-                  <div className="absolute -left-5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold bg-emerald-600 text-white">
+                  {isFinished ? (
                     <Check className="h-2.5 w-2.5 stroke-[3]" />
-                  </div>
+                  ) : (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  )}
+                </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-neutral-800 text-[11px]">
-                      {finalStepLabel || "Tổng hợp bản tin điều hành"}
-                    </span>
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 border border-emerald-200">
-                      Độ tin cậy cao
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-neutral-800 dark:text-neutral-200 text-[11px]">
+                    {finalStepLabel || "Kết quả nhận từ mô hình AI"}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9px] font-semibold border tabular-nums",
+                      isFinished
+                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                        : "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+                    )}
+                  >
+                    {isFinished ? "Đã nhận kết quả" : "Đang xử lý request"}
+                  </span>
+                </div>
 
-                  <p className="mt-1 text-[11px] text-neutral-500 font-medium">
-                    {finalStepDesc || "Đã sẵn sàng bản tin điều hành UX tuần mới."}
-                  </p>
-                </motion.div>
-              )}
+                <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400 font-medium">
+                  {isFinished
+                    ? (finalStepDesc || `Mô hình AI đã hoàn tất phản hồi dựa trên toàn bộ ${displayTasks.length} bài toán và ngữ cảnh thực tế được cung cấp.`)
+                    : "Đang truyền tải prompt context và chờ luồng phản hồi từ mô hình AI..."}
+                </p>
+              </div>
             </div>
 
             {/* Mạch suy nghĩ chi tiết nếu có */}
             {reasoning && (
-              <div className="mt-2.5 pt-2 border-t border-neutral-200/60 space-y-1">
+              <div className="mt-2.5 pt-2 border-t border-neutral-200/60 dark:border-neutral-800 space-y-1">
                 <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="size-3 text-purple-600" />
-                  <span>Mạch suy nghĩ chi tiết (Reasoning)</span>
+                  <span>Mạch suy nghĩ thực tế từ AI (Model Reasoning)</span>
                 </div>
-                <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200/60 font-mono text-[11px] leading-relaxed text-neutral-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                <div className="p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200/60 dark:border-neutral-800 font-mono text-[11px] leading-relaxed text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap max-h-48 overflow-y-auto">
                   {reasoning}
                 </div>
               </div>

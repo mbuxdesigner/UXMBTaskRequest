@@ -4892,14 +4892,14 @@ function handleGetUnifiedOperationalData(data) {
 /**
  * ==============================================================================
  * 14. LƯU & TẢI ĐOẠN CHAT NGƯỜI DÙNG LÊN GOOGLE DRIVE & GOOGLE SHEET
- * Folder: UX_AI_Chat_History
+ * Folder: 01_AI_Chat_History (Drive) — nguồn dữ liệu duy nhất để tải lại lịch sử chat
  * File name: chat_threads_<sanitized_email>.json
- * Index Sheet: AI_CHAT_THREADS (lưu thông tin tóm tắt & liên kết file Drive)
+ * Log Sheet: AI_CHAT_MESSAGES (mỗi tin nhắn 1 dòng, toàn văn nội dung)
  * ==============================================================================
  */
 
 /**
- * Lưu các đoạn chat của người dùng vào Google Drive & tóm tắt vào Google Sheet
+ * Lưu các đoạn chat của người dùng vào Google Drive & ghi log từng tin nhắn vào Sheet AI_CHAT_MESSAGES
  */
 function handleSaveChatThreads(data) {
   try {
@@ -4929,59 +4929,17 @@ function handleSaveChatThreads(data) {
       }
     }
 
-    // Cập nhật hoặc ghi nhận tóm tắt vào Sheet AI_CHAT_THREADS
+    // Ghi chi tiết từng tin nhắn (đầy đủ nội dung câu hỏi/trả lời) vào Sheet AI_CHAT_MESSAGES
+    let messageLogStats = null;
     try {
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
-      let sheet = ss.getSheetByName("AI_CHAT_THREADS");
-      if (!sheet) {
-        sheet = ss.insertSheet("AI_CHAT_THREADS");
-        const headers = ["User_Email", "Display_Name", "Total_Threads", "Active_Thread_Title", "Total_Messages", "Drive_File_Id", "Updated_At", "Drive_Link"];
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        sheet.getRange(1, 1, 1, headers.length).setBackground("#0F172A").setFontColor("#FFFFFF").setFontWeight("bold");
-        sheet.setFrozenRows(1);
-        sheet.setColumnWidth(1, 220);
-        sheet.setColumnWidth(2, 180);
-        sheet.setColumnWidth(3, 110);
-        sheet.setColumnWidth(4, 260);
-        sheet.setColumnWidth(5, 120);
-        sheet.setColumnWidth(6, 260);
-        sheet.setColumnWidth(7, 160);
-        sheet.setColumnWidth(8, 300);
-      }
-
-      const parsedThreads = Array.isArray(threads) ? threads : JSON.parse(threadsJson || "[]");
-      const totalThreads = parsedThreads.length;
-      let totalMessages = 0;
-      for (let i = 0; i < parsedThreads.length; i++) {
-        if (parsedThreads[i] && Array.isArray(parsedThreads[i].messages)) {
-          totalMessages += parsedThreads[i].messages.length;
-        }
-      }
-      const activeThreadTitle = totalThreads > 0 ? (parsedThreads[0].title || "Cuộc trò chuyện") : "Chưa có";
-      const displayName = String(data.user_name || data.displayName || rawEmail.split("@")[0]);
-      const nowStr = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-      const fileUrl = "https://drive.google.com/file/d/" + file.getId() + "/view";
-
-      let foundRow = -1;
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        const emailValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-        for (let j = 0; j < emailValues.length; j++) {
-          if (String(emailValues[j][0]).toLowerCase().trim() === rawEmail) {
-            foundRow = j + 2;
-            break;
-          }
-        }
-      }
-
-      const rowValues = [rawEmail, displayName, totalThreads, activeThreadTitle, totalMessages, file.getId(), nowStr, fileUrl];
-      if (foundRow > 1) {
-        sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-      } else {
-        sheet.appendRow(rowValues);
-      }
-    } catch (sheetErr) {
-      console.warn("AI_CHAT_THREADS sheet update warning: " + sheetErr.toString());
+      const parsedForLog = Array.isArray(threads) ? threads : JSON.parse(threadsJson || "[]");
+      messageLogStats = syncChatMessagesLogSheet_(
+        rawEmail,
+        String(data.user_name || data.displayName || rawEmail.split("@")[0]),
+        parsedForLog
+      );
+    } catch (logErr) {
+      console.warn("AI_CHAT_MESSAGES sheet update warning: " + logErr.toString());
     }
 
     return createJsonResponse({
@@ -4989,6 +4947,7 @@ function handleSaveChatThreads(data) {
       message: "Đồng bộ lịch sử chat lên Google Drive thành công!",
       file_id: file.getId(),
       folder_name: folder.getName(),
+      message_log: messageLogStats,
       updated_at: new Date().toISOString()
     });
   } catch (err) {
@@ -4996,6 +4955,108 @@ function handleSaveChatThreads(data) {
       status: "error",
       message: "Lỗi đồng bộ lịch sử chat: " + err.toString()
     });
+  }
+}
+
+/**
+ * Ghi log từng tin nhắn chat thành 1 dòng riêng trong Sheet AI_CHAT_MESSAGES.
+ * - Upsert theo Message_Id: tin nhắn mới được thêm, tin nhắn đã có nhưng nội dung thay đổi
+ *   (ví dụ câu trả lời AI đang stream khi đồng bộ) sẽ được cập nhật lại.
+ * - Lưu toàn văn nội dung (giới hạn ô của Google Sheet là 50.000 ký tự).
+ */
+function syncChatMessagesLogSheet_(email, displayName, threads) {
+  const SHEET_NAME = "AI_CHAT_MESSAGES";
+  const MAX_CELL = 49000;
+  const headers = ["Message_Id", "User_Email", "Display_Name", "Thread_Id", "Thread_Title", "Role", "Content", "Content_Length", "Model", "Message_Time", "Synced_At"];
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_NAME);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+        .setBackground("#0F172A").setFontColor("#FFFFFF").setFontWeight("bold");
+      sheet.setFrozenRows(1);
+      const widths = [200, 220, 160, 200, 260, 90, 600, 110, 200, 160, 160];
+      for (let w = 0; w < widths.length; w++) sheet.setColumnWidth(w + 1, widths[w]);
+      sheet.getRange("G:G").setWrap(true).setVerticalAlignment("top");
+      sheet.getRange("A:A").setNumberFormat("@");
+      sheet.getRange("D:D").setNumberFormat("@");
+      sheet.getRange("J:J").setNumberFormat("@");
+    }
+
+    // Chống công thức bị Sheet thực thi (=, +, -, @)
+    const safeText = function (v) {
+      let s = String(v == null ? "" : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return s;
+    };
+
+    // Map Message_Id -> { row, content } cho user hiện tại
+    const existing = {};
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const vals = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+      for (let i = 0; i < vals.length; i++) {
+        if (String(vals[i][1]).toLowerCase().trim() === email) {
+          existing[String(vals[i][0])] = { row: i + 2, content: String(vals[i][6]) };
+        }
+      }
+    }
+
+    const nowStr = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+    const toAppend = [];
+    let updated = 0;
+
+    for (let t = 0; t < threads.length; t++) {
+      const th = threads[t];
+      if (!th || !Array.isArray(th.messages)) continue;
+      for (let m = 0; m < th.messages.length; m++) {
+        const msg = th.messages[m];
+        if (!msg) continue;
+        const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
+        if (!rawContent.trim()) continue;
+        const msgId = String(msg.id || (th.id + "_" + m));
+        let content = rawContent;
+        if (content.length > MAX_CELL) {
+          content = content.substring(0, MAX_CELL) + "\n[...ĐÃ CẮT: bản đầy đủ " + rawContent.length + " ký tự nằm trong file Drive JSON]";
+        }
+        content = safeText(content);
+
+        const row = [
+          msgId,
+          email,
+          displayName,
+          String(th.id || ""),
+          safeText(th.title || ""),
+          msg.role === "assistant" ? "AI" : "Người dùng",
+          content,
+          rawContent.length,
+          String(msg.modelUsed || ""),
+          String(msg.timestamp || ""),
+          nowStr
+        ];
+
+        const ex = existing[msgId];
+        const cmp = content.replace(/^'/, "");
+        if (!ex) {
+          toAppend.push(row);
+          existing[msgId] = { row: -1, content: cmp };
+        } else if (ex.row > 1 && ex.content.replace(/^'/, "") !== cmp) {
+          sheet.getRange(ex.row, 1, 1, row.length).setValues([row]);
+          updated++;
+        }
+      }
+    }
+
+    if (toAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, toAppend.length, headers.length).setValues(toAppend);
+    }
+    return { appended: toAppend.length, updated: updated };
+  } finally {
+    lock.releaseLock();
   }
 }
 

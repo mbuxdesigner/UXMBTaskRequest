@@ -615,11 +615,6 @@ export function canUserAccessRequest(r: UXRequest | null | undefined, session: U
       return true
     }
 
-    // Nếu Design Owner chưa được cấu hình sản phẩm hay squad nào thì cho phép xem bài toán để tránh màn hình trống
-    if (scope.products.length === 0 && scope.squads.length === 0) {
-      return true
-    }
-
     return false
   }
 

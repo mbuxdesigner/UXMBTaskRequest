@@ -114,11 +114,11 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
   }
 
   return (
-    <div className="my-3 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-[#1C1C1E]/95 shadow-md overflow-hidden backdrop-blur-md">
+    <div className="my-3 rounded-2xl border border-slate-200/90 bg-white shadow-md overflow-hidden backdrop-blur-md">
       {/* Header toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-900/50 select-none">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 select-none">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="size-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-900/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+          <div className="size-8 rounded-lg bg-blue-50 border border-blue-200/60 flex items-center justify-center text-blue-600 shrink-0">
             {chartType === "pie" || chartType === "donut" ? (
               <PieChartIcon className="size-4.5" />
             ) : chartType === "line" || chartType === "area" ? (
@@ -129,15 +129,15 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-100 truncate">
+              <h4 className="text-[13.5px] font-semibold text-slate-800 truncate">
                 {title}
               </h4>
-              <span className="text-[10px] font-medium font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700">
+              <span className="text-[10px] font-medium font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
                 {chartType}
               </span>
             </div>
             {description && (
-              <p className="text-[11.5px] text-slate-400 dark:text-neutral-400 truncate">
+              <p className="text-[11.5px] text-slate-400 truncate">
                 {description}
               </p>
             )}
@@ -146,14 +146,14 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
 
         {/* View toggle & Copy actions */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-neutral-800 p-0.5 border border-slate-200 dark:border-neutral-700 text-xs">
+          <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-xs">
             <button
               type="button"
               onClick={() => setViewMode("chart")}
               className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                 viewMode === "chart"
-                  ? "bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-800 dark:text-neutral-400"
+                  ? "bg-white text-blue-600 shadow-2xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
               <BarChart3 className="size-3" />
@@ -164,8 +164,8 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
               onClick={() => setViewMode("table")}
               className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                 viewMode === "table"
-                  ? "bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-800 dark:text-neutral-400"
+                  ? "bg-white text-blue-600 shadow-2xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
               <TableIcon className="size-3" />
@@ -176,7 +176,7 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
           <button
             type="button"
             onClick={handleCopy}
-            className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            className="size-7 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
             title="Sao chép dữ liệu JSON"
           >
             {isCopied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
@@ -193,12 +193,12 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
                 <PieChart>
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: "#ffffff",
                       borderRadius: "10px",
-                      border: "none",
-                      color: "#fff",
+                      border: "1px solid #e2e8f0",
+                      color: "#1e293b",
                       fontSize: "12px",
-                      boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+                      boxShadow: "0 10px 25px rgba(15,23,42,0.12)",
                     }}
                   />
                   <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: "11px" }} />
@@ -228,10 +228,10 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: "#ffffff",
                       borderRadius: "10px",
-                      border: "none",
-                      color: "#fff",
+                      border: "1px solid #e2e8f0",
+                      color: "#1e293b",
                       fontSize: "12px",
                     }}
                   />
@@ -255,10 +255,10 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: "#ffffff",
                       borderRadius: "10px",
-                      border: "none",
-                      color: "#fff",
+                      border: "1px solid #e2e8f0",
+                      color: "#1e293b",
                       fontSize: "12px",
                     }}
                   />
@@ -282,10 +282,10 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: "#ffffff",
                       borderRadius: "10px",
-                      border: "none",
-                      color: "#fff",
+                      border: "1px solid #e2e8f0",
+                      color: "#1e293b",
                       fontSize: "12px",
                     }}
                   />
@@ -303,28 +303,28 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-64 rounded-xl border border-slate-200/80 dark:border-neutral-800">
+          <div className="overflow-x-auto max-h-64 rounded-xl border border-slate-200/80">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-neutral-800/80 border-b border-slate-200/80 dark:border-neutral-700">
-                  <th className="px-3 py-2 font-semibold text-slate-700 dark:text-neutral-300">
+                <tr className="bg-slate-50 border-b border-slate-200/80">
+                  <th className="px-3 py-2 font-semibold text-slate-700">
                     {xAxisKey}
                   </th>
                   {dataKeys.map((k) => (
-                    <th key={k} className="px-3 py-2 font-semibold text-slate-700 dark:text-neutral-300 text-right">
+                    <th key={k} className="px-3 py-2 font-semibold text-slate-700 text-right">
                       {k} {parsed.unit ? `(${parsed.unit})` : ""}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
+              <tbody className="divide-y divide-slate-100">
                 {data.map((row, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-slate-50/50 dark:hover:bg-neutral-800/40 transition-colors">
-                    <td className="px-3 py-2 font-medium text-slate-800 dark:text-neutral-200">
+                  <tr key={rIdx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-3 py-2 font-medium text-slate-800">
                       {String(row[xAxisKey] ?? "")}
                     </td>
                     {dataKeys.map((k) => (
-                      <td key={k} className="px-3 py-2 text-right font-mono text-slate-600 dark:text-neutral-400">
+                      <td key={k} className="px-3 py-2 text-right font-mono text-slate-600">
                         {String(row[k] ?? "")}
                       </td>
                     ))}
@@ -399,17 +399,17 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
   }
 
   return (
-    <div className="my-3 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-[#1C1C1E]/95 shadow-md overflow-hidden backdrop-blur-md">
+    <div className="my-3 rounded-2xl border border-slate-200/90 bg-white shadow-md overflow-hidden backdrop-blur-md">
       {/* Header Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-900/50 select-none">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 select-none">
         <div className="flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+          <div className="size-8 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-600 shrink-0">
             <GitBranch className="size-4.5" />
           </div>
           <div>
-            <h4 className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <h4 className="text-[13.5px] font-semibold text-slate-800 flex items-center gap-2">
               Sơ đồ luồng quy trình (Flowchart)
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-medium">
+              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-100/70 text-emerald-700 font-medium">
                 Mermaid
               </span>
             </h4>

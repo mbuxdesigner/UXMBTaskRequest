@@ -45,27 +45,18 @@ function getCorsHeaders(origin: string | null | undefined): Record<string, strin
 /**
  * Extracts and sanitizes key pool from environment variables and client payload
  */
-function buildKeyPool(clientKeys?: string[]): string[] {
+function buildKeyPool(): string[] {
   const pool: string[] = []
+  const runtimeProcess = (globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> }
+  }).process
 
-  // 1. Check Server Environment Keys
-  if (typeof process !== "undefined" && process.env) {
-    const envKey = process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY
-    if (envKey) {
-      envKey.split(",").forEach(k => {
-        const clean = k.trim()
-        if (clean && !pool.includes(clean)) pool.push(clean)
-      })
-    }
-  }
-
-  // 2. Add Client Keys from request (e.g. from Admin UI key pool)
-  if (Array.isArray(clientKeys)) {
-    clientKeys.forEach(k => {
-      if (typeof k === "string") {
-        const clean = k.trim()
-        if (clean && !pool.includes(clean)) pool.push(clean)
-      }
+  // 1. Check server environment keys only
+  const envKey = runtimeProcess?.env?.OPENROUTER_API_KEY || runtimeProcess?.env?.VITE_OPENROUTER_API_KEY
+  if (envKey) {
+    envKey.split(",").forEach((k: string) => {
+      const clean = k.trim()
+      if (clean && !pool.includes(clean)) pool.push(clean)
     })
   }
 
@@ -121,7 +112,6 @@ export default async function handler(req: Request): Promise<Response> {
       stream = false,
       temperature = 0.7,
       max_tokens = 1024,
-      keyPool: clientKeys,
     } = body
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -131,7 +121,7 @@ export default async function handler(req: Request): Promise<Response> {
       )
     }
 
-    const availableKeys = buildKeyPool(clientKeys)
+    const availableKeys = buildKeyPool()
     if (availableKeys.length === 0) {
       return new Response(
         JSON.stringify({

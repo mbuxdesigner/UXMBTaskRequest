@@ -31,6 +31,114 @@ const STORAGE_ARTIFACTS_KEY = "ux_mb_ai_artifacts"
 // Danh mục tài liệu chuẩn ban đầu của UX MBBank
 export const SEED_UX_ARTIFACTS: UXArtifact[] = [
   {
+    id: "art-nhom-1-san-pham-tien-gui",
+    name: "Nhom-1-San-pham-tien-gui.md",
+    fileType: "markdown",
+    size: "1.4 KB",
+    updatedAt: "Vừa xong",
+    tags: ["Sản phẩm", "Tiền gửi", "Savings"],
+    summary: "Đặc tả UX nhóm sản phẩm tiền gửi: TK Siêu Lãi Ngày, Chứng chỉ tiền gửi với thông số cốt lõi và tính chất sản phẩm.",
+    content: `# NHÓM 1: SẢN PHẨM TIỀN GỬI (Savings Products)
+
+Nhóm sản phẩm cốt lõi mang lại nguồn vốn cho ngân hàng, hiển thị đầy đủ các thông số về Lãi suất, Số tiền bắt đầu, Thông điệp và Nút hành động trực tiếp.
+
+1.1. TK Siêu Lãi Ngày
+
+- Định vị UX: Sản phẩm tiền gửi sinh lời. Nhắm tới nhóm khách hàng muốn tối ưu hóa tiền nhàn rỗi ngắn ngày mà không bị giam vốn.
+- Thông số cốt lõi:
+  ◦ Lãi suất: %/năm (tính lãi và cộng dồn gốc theo ngày).
+  ◦ Số tiền tối thiểu: Từ 20.000.000 đ.
+- Tính chất sản phẩm
+  ◦ *Thông tin chính*:
+    ▪ Nhận lãi cộng dồn vào tài khoản mỗi ngày.
+    ▪ Nạp/rút linh hoạt 24/7 chỉ trong 3 giây.
+    ▪ Không lo giam vốn, không yêu cầu kỳ hạn gửi.
+    ▪ Phù hợp làm quỹ dự phòng khẩn cấp hoặc tích trữ vốn ngắn hạn.
+
+---
+
+1.2. Chứng chỉ tiền gửi
+
+- Định vị UX: sản phẩm dành cho khách hàng có nhu cầu gửi ngắn hạn vài ngày đến 6 tháng, lãi suất tất toán sớm được tính theo số ngày nắm giữ. Thích hợp cho khách hàng có dòng tiền nhàn rỗi trong khoảng thời gian ngắn hạn vài tháng từ ngày đến 6 tháng
+- Thông số cốt lõi:
+`,
+  },
+  {
+    id: "art-huong-dan-git-local",
+    name: "Huong-dan-lay-code-chay-local-va-Git.md",
+    fileType: "markdown",
+    size: "2.1 KB",
+    updatedAt: "Vừa xong",
+    tags: ["Git", "Local Dev", "Hướng dẫn"],
+    summary: "Hướng dẫn lấy code, chạy local và đẩy code lên Git chuẩn theo quy trình phát triển.",
+    content: `# Hướng dẫn lấy code, chạy local và đẩy code lên Git
+
+Xác định dự án nằm ở đâu:
+
+\`\`\`
+D:\\Working\\TaskUXTeam\\Deploy App
+\`\`\`
+
+Nhánh làm việc là gì:
+
+\`\`\`
+develop
+\`\`\`
+
+## 1. Mở terminal PowerShell trong VS Code
+
+Trong VS Code:
+- Chọn **Terminal** → **New Terminal**
+- Hoặc nhấn **Ctrl** + \` \`
+- Nếu terminal chưa phải PowerShell, nhấn dấu ▼ cạnh nút + và chọn **PowerShell**
+
+Di chuyển vào thư mục dự án:
+
+\`\`\`powershell
+cd "D:\\Working\\TaskUXTeam\\Deploy App"
+\`\`\`
+
+## 2. Lấy code mới nhất từ nhánh \`develop\`
+- Kiểm tra nhánh hiện tại:
+\`\`\`powershell
+git branch
+\`\`\`
+- Chuyển sang nhánh \`develop\` nếu đang ở nhánh khác:
+\`\`\`powershell
+git checkout develop
+\`\`\`
+- Kéo code mới nhất về máy:
+\`\`\`powershell
+git pull origin develop
+\`\`\`
+
+## 3. Chạy dự án ở môi trường Local
+- Cài đặt các gói phụ thuộc (nếu có bổ sung thư viện mới):
+\`\`\`powershell
+npm install
+\`\`\`
+- Khởi động server phát triển:
+\`\`\`powershell
+npm run dev
+\`\`\`
+
+## 4. Đẩy code lên Git
+- Kiểm tra các file đã thay đổi:
+\`\`\`powershell
+git status
+\`\`\`
+- Đóng gói và tạo commit:
+\`\`\`powershell
+git add .
+git commit -m "feat: cập nhật giao diện Notion style cho file viewer"
+\`\`\`
+- Đẩy lên nhánh làm việc:
+\`\`\`powershell
+git push origin develop
+\`\`\`
+`,
+  },
+  {
     id: "art-quy-trinh-7-khau",
     name: "Quy-trinh-7-khau-UX-MBBank.md",
     fileType: "markdown",
@@ -215,6 +323,13 @@ export function getStoredArtifacts(): UXArtifact[] {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((item: UXArtifact) => item.id))
+        const missingSeeds = SEED_UX_ARTIFACTS.filter((seed) => !existingIds.has(seed.id))
+        if (missingSeeds.length > 0) {
+          const merged = [...missingSeeds, ...parsed]
+          localStorage.setItem(STORAGE_ARTIFACTS_KEY, JSON.stringify(merged))
+          return merged
+        }
         return parsed
       }
     }

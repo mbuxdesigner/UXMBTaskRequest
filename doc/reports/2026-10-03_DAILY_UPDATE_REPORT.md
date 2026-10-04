@@ -150,3 +150,24 @@ Khắc phục hoàn toàn tình trạng câu trả lời đơn điệu khi chưa
 1. **Triển khai Backend Google Apps Script:** Cập nhật phiên bản mới của `google-apps-script-backend.js` lên Apps Script Project của MB UX Team và chạy hàm `initDriveFolderStructure()` một lần để khởi tạo thư mục trên Drive thực tế.
 2. **Đồng bộ hóa Khóa OpenRouter thực tế:** Nhập OpenRouter API Key vào trang Quản trị (`#quanly`) để kích hoạt hoàn toàn kết nối LLM trực tuyến cho người dùng có quyền.
 3. **Tiếp tục theo dõi phản hồi người dùng:** Tiếp nhận thêm góp ý từ các Designer về tốc độ phản hồi và độ chính xác của các đề xuất từ trợ lý.
+
+---
+
+## 8. Bổ sung hiệu chỉnh AI Chat sau kiểm thử thực tế
+
+Sau khi kiểm thử các câu hỏi về task, biểu đồ và Artifacts trên môi trường local, đã bổ sung các hiệu chỉnh sau:
+
+1. **Loại bỏ dữ liệu mẫu khỏi fallback nghiệp vụ:** Các câu trả lời fallback không còn được phép trả về task, Designer, Squad, mã request hoặc tài liệu hardcode. Khi không có dữ liệu phù hợp, AI phải thông báo rõ giới hạn dữ liệu.
+2. **Context task có cấu trúc:** `buildEnrichedContext()` bổ sung khối `TASK_DATA_JSON`, giúp fallback đọc chính xác mã task, tên, Squad, Designer, khâu, tiến độ, deadline và trạng thái thay vì phân tích chuỗi tự do.
+3. **Biểu đồ theo đúng ý định người dùng:** Các câu hỏi có từ khóa biểu đồ/thống kê được ưu tiên xử lý trước nhánh liệt kê task. Khi người dùng hỏi theo Designer, hệ thống nhóm theo Designer; nếu hỏi theo Squad hoặc trạng thái thì nhóm theo trường tương ứng.
+4. **Phạm vi dữ liệu theo role:** Context được lọc trước khi gửi AI: Admin xem toàn team, Design Owner xem sản phẩm/Squad được phân công, Designer xem task của bản thân.
+5. **Artifact context:** Khi người dùng chọn tài liệu trong kho Artifacts, Composer gửi kèm tên và nội dung tài liệu thực tế. Fallback tài liệu không còn tự sinh `release-notes-3.4.md` hoặc nội dung tiếng Anh không tồn tại.
+6. **Activity Trace trung thực hơn:** Không hiển thị chain-of-thought hoặc khẳng định model đã chạy các hàm nội bộ nếu đó chỉ là trạng thái giao diện. Prompt yêu cầu trả lời kết luận/căn cứ/đề xuất, không sinh thẻ `<think>`.
+7. **Giao diện biểu đồ sáng:** Chart, tooltip, bảng số liệu và flowchart được chuẩn hóa theo theme sáng của AI Chat.
+
+### Xác minh
+
+- Diagnostics không có lỗi tại `aiService.ts`, `aiPrompts.ts` và `AIChatPage.tsx`.
+- `npm.cmd run build`: **PASS**, hoàn tất trong khoảng 1.69 giây.
+- Đã xác minh bundle local được tạo lại sau các thay đổi.
+- Chưa xác nhận kết nối OpenRouter API key và triển khai production trong báo cáo này; cần kiểm thử riêng sau khi cấu hình gateway thực tế.

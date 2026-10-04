@@ -28,6 +28,90 @@ export interface AIServiceConfig {
 const STORAGE_KEYS_KEY = "ux_mb_ai_keys"
 const STORAGE_MODEL_KEY = "ux_mb_ai_model"
 const STORAGE_AI_ENABLED_KEY = "ux_mb_ai_enabled"
+export const STORAGE_GEMINI_KEY = "ux_mb_gemini_api_key"
+export const STORAGE_AI_GATEWAY_KEY = "ux_mb_ai_gateway" // "auto" | "google_ai_studio" | "openrouter"
+
+export const INITIAL_GEMINI_KEY = (typeof import.meta !== "undefined" && import.meta.env?.VITE_GEMINI_API_KEY) || ""
+
+export function getStoredGeminiKey(): string {
+  if (typeof window === "undefined") return ""
+  const key = localStorage.getItem(STORAGE_GEMINI_KEY)
+  if (key && key.trim()) return key.trim()
+  return INITIAL_GEMINI_KEY
+}
+
+export function saveGeminiKey(key: string): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(STORAGE_GEMINI_KEY, key.trim())
+}
+
+export function getStoredAIGateway(): "auto" | "google_ai_studio" | "openrouter" {
+  if (typeof window === "undefined") return "auto"
+  const g = localStorage.getItem(STORAGE_AI_GATEWAY_KEY)
+  if (g === "google_ai_studio" || g === "openrouter" || g === "auto") return g
+  return "auto"
+}
+
+export function saveAIGateway(gateway: "auto" | "google_ai_studio" | "openrouter"): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(STORAGE_AI_GATEWAY_KEY, gateway)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tự phát hiện model Gemini khả dụng cho key (tránh hardcode model đã bị Google gỡ)
+// ─────────────────────────────────────────────────────────────────────────────
+const geminiModelCache = new Map<string, { models: string[]; at: number }>()
+const GEMINI_MODEL_CACHE_MS = 30 * 60 * 1000
+
+export async function listAvailableGeminiModels(apiKey: string): Promise<string[]> {
+  const cached = geminiModelCache.get(apiKey)
+  if (cached && Date.now() - cached.at < GEMINI_MODEL_CACHE_MS) return cached.models
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(apiKey)}`
+  )
+  if (!res.ok) {
+    const txt = await res.text()
+    throw Object.assign(new Error(`ListModels ${res.status}: ${txt.substring(0, 160)}`), { status: res.status })
+  }
+  const data = await res.json()
+  const models: string[] = (data.models || [])
+    .filter((m: any) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m: any) => String(m.name || "").replace(/^models\//, ""))
+    .filter(Boolean)
+  geminiModelCache.set(apiKey, { models, at: Date.now() })
+  return models
+}
+
+/** Điểm ưu tiên: Flash chat thông thường, phiên bản mới nhất, bản ổn định hơn preview/exp */
+function scoreGeminiModel(id: string): number {
+  if (!id.startsWith("gemini")) return -1
+  if (/(embedding|image|tts|audio|live|aqa|robotics|computer-use)/.test(id)) return -1
+  const ver = parseFloat((id.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || "0")
+  let s = ver * 100
+  if (id.includes("flash")) s += 30
+  if (id.includes("lite")) s -= 5
+  if (/(preview|exp)/.test(id)) s -= 20
+  return s
+}
+
+/**
+ * Chọn model Gemini thực sự khả dụng cho key:
+ * - Model ưu tiên có trong danh sách → dùng luôn.
+ * - Không có → chọn model Flash mới nhất mà key được phép gọi.
+ */
+export async function resolveGeminiModel(apiKey: string, preferred?: string): Promise<string> {
+  const models = await listAvailableGeminiModels(apiKey)
+  const pref = (preferred || "").replace(/^google\//, "").replace(/:free$/, "")
+  if (pref && models.includes(pref)) return pref
+  const ranked = models
+    .map((id) => ({ id, s: scoreGeminiModel(id) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => b.s - a.s)
+  const flash = ranked.find((x) => x.id.includes("flash"))
+  return (flash || ranked[0])?.id || pref || DEFAULT_AI_MODEL
+}
+
 
 export interface AIModelOption {
   id: string
@@ -38,24 +122,16 @@ export interface AIModelOption {
   contextLength?: string
 }
 
-export const DEFAULT_AI_MODEL = "google/gemma-4-31b-it:free"
+export const DEFAULT_AI_MODEL = "openrouter/free"
 
 export const POPULAR_AI_MODELS: AIModelOption[] = [
   {
-    id: "anthropic/claude-3.5-sonnet:beta",
-    name: "Claude Sonnet 5",
-    provider: "Anthropic",
-    description: "Mô hình Claude Sonnet cao cấp, tư duy logic và thiết kế UX vượt trội",
-    badge: "Frontier",
-    contextLength: "200K",
-  },
-  {
-    id: "openai/gpt-4o",
-    name: "GPT-5.1",
-    provider: "OpenAI",
-    description: "Mô hình đa nhiệm thế hệ mới, phân tích dữ liệu và suy luận bài toán",
-    badge: "OpenAI",
-    contextLength: "256K",
+    id: "gemini-auto",
+    name: "Gemini Flash tự động (Google AI Studio)",
+    provider: "Google AI Studio",
+    description: "Tự phát hiện model Gemini Flash miễn phí đang khả dụng cho API Key",
+    badge: "Tự động",
+    contextLength: "1M",
   },
   {
     id: "google/gemma-4-31b-it:free",
@@ -407,11 +483,71 @@ export async function testAIConnection(apiKey?: string, model: string = DEFAULT_
   }
 }
 
+/**
+ * Test kết nối thử nghiệm trực tiếp đến Google AI Studio API
+ */
+export async function testGeminiConnection(
+  apiKey?: string,
+  model: string = DEFAULT_AI_MODEL
+): Promise<{ success: boolean; message: string; latencyMs: number }> {
+  const startTime = Date.now()
+  const keyToUse = apiKey?.trim() || getStoredGeminiKey()
+
+  if (!keyToUse) {
+    return { success: false, message: "Chưa cấu hình Google AI Studio API Key (bắt đầu bằng AIzaSy...).", latencyMs: 0 }
+  }
+
+  // Bước 1: Kiểm tra key + lấy danh sách model key được phép dùng
+  let resolved = model
+  try {
+    resolved = await resolveGeminiModel(keyToUse, model)
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime
+    if (err?.status === 400 || err?.status === 401 || err?.status === 403) {
+      return { success: false, message: `API Key Google không hợp lệ hoặc chưa bật Generative Language API (${err.status})`, latencyMs }
+    }
+    return { success: false, message: `Không lấy được danh sách model: ${err?.message || "Network Error"}`, latencyMs }
+  }
+
+  // Bước 2: Gọi thử 1 request thật bằng model đã chọn
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${keyToUse}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: resolved,
+        messages: [{ role: "user", content: "Ping" }],
+        max_tokens: 5,
+      }),
+    })
+    const latencyMs = Date.now() - startTime
+    if (res.ok) {
+      return { success: true, message: `Kết nối Google AI Studio thành công · model: ${resolved}`, latencyMs }
+    }
+    if (res.status === 429) {
+      return { success: false, message: `Key hợp lệ nhưng model ${resolved} đang chạm hạn mức (429). Thử lại sau ít phút.`, latencyMs }
+    }
+    const errText = await res.text()
+    return { success: false, message: `Lỗi gọi model ${resolved} (${res.status}): ${errText.substring(0, 160)}`, latencyMs }
+  } catch (err: any) {
+    return { success: false, message: `Không thể kết nối Google AI Studio: ${err?.message || "Network Error"}`, latencyMs: Date.now() - startTime }
+  }
+}
+
 export interface StreamCallbacks {
   onChunk: (delta: string, accumulated: string) => void
   onReasoningChunk?: (deltaReasoning: string, accumulatedReasoning: string) => void
-  onComplete: (fullText: string, fullReasoning?: string) => void
+  onComplete: (fullText: string, fullReasoning?: string, meta?: AIResponseMeta) => void
   onError: (error: Error) => void
+}
+
+export interface AIResponseMeta {
+  source: "remote" | "local-fallback"
+  model?: string
+  providerError?: string
 }
 
 export type StreamCallbackInput = 
@@ -457,7 +593,6 @@ export async function streamAICompletion(
   }
 
   const model = optionalModel || config.model || getStoredAIModel()
-  const keys = getStoredAIKeys().map(k => k.key)
   const activeKey = getNextActiveKey()
 
   const cancel = () => {
@@ -469,6 +604,8 @@ export async function streamAICompletion(
     // Ghi nhận 1 lượt request AI sử dụng
     recordAIRequestUsage()
 
+    let usedModel: string = model || DEFAULT_AI_MODEL
+
     try {
       let response: Response | null = null
       const isLocalDev = typeof window !== "undefined" && 
@@ -476,6 +613,7 @@ export async function streamAICompletion(
 
       const isSupported = model && POPULAR_AI_MODELS.some(m => m.id === model)
       const targetModel = isSupported ? model : DEFAULT_AI_MODEL
+      usedModel = targetModel
       const fallbackModels = Array.from(new Set([
         targetModel,
         "google/gemma-4-31b-it:free",
@@ -484,8 +622,56 @@ export async function streamAICompletion(
         "openrouter/free"
       ]))
 
-      // 1. Thử gọi qua Edge Proxy: /api/ai-gateway (chỉ khi không phải local dev)
-      if (!isLocalDev) {
+      // 0. Cổng kết nối trực tiếp Google AI Studio (Official OpenAI-Compatible Endpoint)
+      const geminiKey = getStoredGeminiKey()
+      const gateway = getStoredAIGateway()
+      const isGeminiTarget = targetModel.startsWith("gemini-") || targetModel.includes("gemini")
+      const shouldCallGoogleDirect = 
+        (Boolean(geminiKey) && isGeminiTarget) ||
+        (gateway === "google_ai_studio" && Boolean(geminiKey)) ||
+        (activeKey && activeKey.startsWith("AIzaSy"))
+
+      if (shouldCallGoogleDirect) {
+        const googleKey = (activeKey && activeKey.startsWith("AIzaSy")) ? activeKey : geminiKey
+        const rawM = targetModel.startsWith("google/") ? targetModel.replace(/^google\//, "").replace(/:free$/, "") : targetModel
+        let googleModel = rawM.startsWith("gemini") ? rawM : DEFAULT_AI_MODEL
+        try {
+          googleModel = await resolveGeminiModel(googleKey, googleModel)
+        } catch (resolveErr) {
+          console.warn("[AIService] Không lấy được danh sách model Gemini:", resolveErr)
+        }
+
+        try {
+          const gRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${googleKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: googleModel,
+              messages,
+              stream: true,
+              temperature: config.temperature ?? 0.7,
+              max_tokens: config.max_tokens ?? 2048,
+            }),
+            signal: controller.signal,
+          })
+
+          if (gRes.ok) {
+            response = gRes
+            usedModel = googleModel
+          } else {
+            const errBody = await gRes.text()
+            console.warn(`[AIService] Google AI Studio direct call returned status ${gRes.status}:`, errBody)
+          }
+        } catch (gErr) {
+          console.warn("[AIService] Google AI Studio direct fetch failed, falling back to OpenRouter:", gErr)
+        }
+      }
+
+      // 1. Thử gọi qua Edge Proxy: /api/ai-gateway (chỉ khi không phải local dev và chưa có response)
+      if (!response && !isLocalDev) {
         try {
           response = await fetch("/api/ai-gateway", {
             method: "POST",
@@ -498,7 +684,6 @@ export async function streamAICompletion(
               stream: true,
               temperature: config.temperature ?? 0.7,
               max_tokens: config.max_tokens ?? 1024,
-              keyPool: keys,
             }),
             signal: controller.signal,
           })
@@ -512,10 +697,14 @@ export async function streamAICompletion(
         }
       }
 
-      // 2. Direct call sang OpenRouter (Tối ưu tốc độ cao, có timeout 4.5s để fallback tức thì)
+      // 2. Direct call sang OpenRouter. Model miễn phí thường phải xếp hàng,
+      // vì vậy cần đủ thời gian chờ thay vì rơi vào fallback sau vài giây.
       if (!response || !response.ok) {
+        if (!activeKey) {
+          throw new Error("Chưa cấu hình API Key cho OpenRouter hoặc Google AI Studio.")
+        }
         const timeoutCtrl = new AbortController()
-        const timeoutTimer = setTimeout(() => timeoutCtrl.abort(new Error("OpenRouter timeout")), 4500)
+        const timeoutTimer = setTimeout(() => timeoutCtrl.abort(new Error("OpenRouter timeout after 30s")), 30000)
         controller.signal.addEventListener("abort", () => timeoutCtrl.abort())
 
         try {
@@ -639,11 +828,18 @@ export async function streamAICompletion(
         finalClean = finalClean.slice(untaggedEndMatch[0].length).replace(/^Let's produce answer\.?\s*/i, "").trim()
       }
 
-      safeCallbacks.onComplete(finalClean, finalReasoning)
+      safeCallbacks.onComplete(finalClean, finalReasoning, {
+        source: "remote",
+        model: usedModel,
+      })
     } catch (err: any) {
       if (err.name === "AbortError" || isCancelled) return
       console.warn("[AIService] Remote API unavailable or rate limited. Seamlessly falling back to intelligent local synthesis:", err)
-      simulateSmartFallbackStream(messages, safeCallbacks, () => isCancelled)
+      simulateSmartFallbackStream(messages, safeCallbacks, () => isCancelled, {
+        source: "local-fallback",
+        model: usedModel,
+        providerError: String(err?.message || "AI provider unavailable"),
+      })
     }
   })()
 
@@ -655,19 +851,387 @@ export async function streamAICompletion(
  * Mô phỏng phản hồi đa định dạng (Tables, Code/Artifacts, Action Cards, Follow-up Suggestions)
  * Đảm bảo 100% trải nghiệm mượt mà không bao giờ gián đoạn cho Designer MBBank.
  */
+function extractTaskCountsBySquad(messages: PromptMessage[]): Array<{ name: string; tasks: number }> {
+  const context = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n")
+
+  const counts = new Map<string, number>()
+  const taskLines = context.split("\n").filter((line) =>
+    /^\s*\d+\.\s+\[[^\]]+\]\s+"[^"]+"/.test(line)
+  )
+
+  for (const line of taskLines) {
+    const squadMatch = line.match(/Squad:\s*(.*?)\s+-\s+(?:📐|⚠️|Có Figma|Chưa có Figma)/i)
+    const squad = squadMatch?.[1]?.trim()
+    if (squad) counts.set(squad, (counts.get(squad) || 0) + 1)
+  }
+
+  return Array.from(counts, ([name, tasks]) => ({ name, tasks }))
+    .sort((a, b) => b.tasks - a.tasks || a.name.localeCompare(b.name, "vi"))
+}
+
+interface ContextTask {
+  id: string
+  title: string
+  priority: string
+  phase: string
+  progress: number
+  deadline: string
+  status: string
+  squad: string
+  assignee: string
+}
+
+function extractTasksFromContext(messages: PromptMessage[]): ContextTask[] {
+  const context = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n")
+  const structuredMatch = context.match(/=== TASK_DATA_JSON ===\n([\s\S]*?)\n=== END_TASK_DATA_JSON ===/)
+
+  if (structuredMatch) {
+    try {
+      const parsed: unknown = JSON.parse(structuredMatch[1])
+      if (Array.isArray(parsed)) {
+        return parsed.filter((task): task is ContextTask =>
+          Boolean(task) &&
+          typeof task === "object" &&
+          typeof (task as ContextTask).id === "string" &&
+          typeof (task as ContextTask).title === "string"
+        )
+      }
+    } catch {}
+  }
+
+  return context.split("\n").flatMap((line) => {
+    const match = line.match(/^\s*\d+\.\s+\[([^\]]+)\]\s+"([^"]+)"\s+\[([^\]]+)\]\s+-\s+(.*?)\s+\((\d+)%\)\s+-\s+DL:\s+(.*?)\s+-\s+(.*?)\s+-\s+Squad:\s+(.*?)\s+-\s+(?:Có Figma|Chưa có Figma)\s+-\s+Phụ trách:\s+(.*)$/)
+    if (!match) return []
+
+    return [{
+      id: match[1].trim(),
+      title: match[2].trim(),
+      priority: match[3].trim(),
+      phase: match[4].trim(),
+      progress: Number(match[5]),
+      deadline: match[6].trim(),
+      status: match[7].trim(),
+      squad: match[8].trim(),
+      assignee: match[9].trim(),
+    }]
+  })
+}
+
+function buildContextChartReply(query: string, tasks: ContextTask[]): string | null {
+  const normalized = query.toLowerCase()
+  const isChartQuery = /biểu đồ|bieu do|\bchart\b|trực quan|truc quan|phân bổ|phan bo|thống kê|thong ke/.test(normalized)
+  if (!isChartQuery) return null
+
+  if (tasks.length === 0) {
+    return "Mình chưa nhận được dữ liệu bài toán trong phạm vi được phép truy cập nên chưa thể vẽ biểu đồ. Vui lòng đồng bộ lại dữ liệu đầu việc rồi thử lại."
+  }
+
+  const groupBy = /designer|nhà thiết kế|nguời phụ trách|người phụ trách|phụ trách/.test(normalized)
+    ? "assignee"
+    : /trạng thái|trang thai|status/.test(normalized)
+    ? "status"
+    : "squad"
+  const groupLabel = groupBy === "assignee" ? "Designer phụ trách" : groupBy === "status" ? "Trạng thái" : "Squad"
+  const counts = new Map<string, number>()
+  for (const task of tasks) {
+    const key = task[groupBy] || "Chưa gán"
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  const data = Array.from(counts, ([name, tasks]) => ({ name, tasks }))
+    .sort((a, b) => b.tasks - a.tasks || a.name.localeCompare(b.name, "vi"))
+
+  return `Dưới đây là biểu đồ số lượng bài toán theo **${groupLabel}**, tổng hợp từ **${tasks.length} task** trong phạm vi dữ liệu hiện tại:\n\n\`\`\`chart
+${JSON.stringify({
+    type: "bar",
+    title: `Phân bổ số lượng bài toán theo ${groupLabel}`,
+    description: `Tổng hợp từ ${tasks.length} task được phép truy cập`,
+    xAxisKey: "name",
+    dataKeys: ["tasks"],
+    data,
+  }, null, 2)}
+\`\`\`\n\n*Dữ liệu được tổng hợp trực tiếp từ context hiện tại, không sử dụng dữ liệu mẫu.*`
+}
+
+function buildContextTaskReply(query: string, tasks: ContextTask[]): string | null {
+  const normalized = query.toLowerCase()
+  const isTaskQuery = /\b(task|tasks|card)\b|bài toán|công việc|tiến độ|deadline|quá hạn|trễ hạn|rủi ro|po pending|\bpending\b|sla|cần theo dõi/i.test(normalized)
+  if (!isTaskQuery) return null
+
+  if (tasks.length === 0) {
+    return "Hiện mình chưa nhận được dữ liệu bài toán trong phạm vi được phép truy cập, nên chưa thể lập danh sách hoặc kết luận rủi ro. Vui lòng đồng bộ lại dữ liệu đầu việc rồi thử lại."
+  }
+
+  const matchingTerms = normalized
+    .replace(/liệt kê|giúp tôi|cho tôi|các|task|tasks|card|bài toán|công việc|tiến độ|deadline|quá hạn|trễ hạn|rủi ro|po pending|pending|sla|cần theo dõi|của|theo|và|những|nào|là|gì|đang|có/gi, " ")
+    .split(/\s+/)
+    .filter((term) => term.length >= 3)
+  const isRiskQuery = /quá hạn|trễ hạn|rủi ro|po pending|\bpending\b|sla/i.test(normalized)
+  const filtered = tasks.filter((task) => {
+    const haystack = `${task.id} ${task.title} ${task.squad} ${task.assignee} ${task.status} ${task.phase}`.toLowerCase()
+    const matchesTerms = matchingTerms.length === 0 || matchingTerms.some((term) => haystack.includes(term))
+    const isRisk = /po pending|pending|quá hạn|trễ hạn/i.test(task.status) || task.progress < 100 && task.deadline !== "Chưa có"
+    return matchesTerms && (!isRiskQuery || isRisk)
+  })
+  const result = filtered.length > 0 ? filtered : tasks
+  const rows = result.map((task) => `| ${task.id} | ${task.title} | ${task.squad || "Chưa gán"} | ${task.assignee || "Chưa gán"} | ${task.phase} | ${task.progress}% | ${task.deadline} | ${task.status} |`).join("\n")
+
+  return `Dưới đây là danh sách **${result.length}/${tasks.length} bài toán** trong phạm vi dữ liệu hiện tại:\n\n| Mã task | Bài toán | Squad | Phụ trách | Khâu | Tiến độ | Deadline | Trạng thái |\n|---|---|---|---|---|---:|---|---|\n${rows}\n\n*Dữ liệu được tổng hợp trực tiếp từ context hiện tại; không sử dụng task mẫu.*`
+}
+
+function extractArtifactFromContext(messages: PromptMessage[]): { name: string; content: string } | null {
+  const context = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n")
+  const documentBlock = context.match(/=== DOCUMENT_DATA(?: \([^)]+\))? ===\n([\s\S]*?)\n=== END_DOCUMENT_DATA ===/)
+  if (documentBlock) {
+    const document = documentBlock[1].match(/--- Tài liệu #\d+: "([^"]+)" \([^)]+\) ---\n([\s\S]*?)(?=\n--- Tài liệu #\d+:|$)/)
+    if (document) {
+      const body = document[2].trim()
+      const contentMarker = "Nội dung:\n"
+      const contentStart = body.indexOf(contentMarker)
+      const content = contentStart >= 0
+        ? body.slice(contentStart + contentMarker.length)
+          .replace(/\n\[\.\.\.HẾT PHẦN TRÍCH ĐOẠN ĐƯỢC CUNG CẤP\.\.\.\]\s*$/, "")
+          .trim()
+        : body
+
+      return { name: document[1].trim(), content }
+    }
+  }
+
+  // Tương thích với context tài liệu theo định dạng cũ.
+  const legacy = context.match(/=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "([^"]+)" \([^)]+\) ===\n([\s\S]*)/)
+  return legacy ? { name: legacy[1].trim(), content: legacy[2].trim() } : null
+}
+
+function getPromptMessageText(content: PromptMessage["content"]): string {
+  if (typeof content === "string") return content
+  return Array.isArray(content) ? content.map((part) => part.text || "").join(" ") : ""
+}
+
+function normalizeVietnameseText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim()
+}
+
+function extractCalendarContext(messages: PromptMessage[]): string | null {
+  const context = messages
+    .filter((message) => message.role === "system")
+    .map((message) => getPromptMessageText(message.content))
+    .join("\n")
+  return context.match(/=== CALENDAR_DATA ===\n([\s\S]*?)\n=== END_CALENDAR_DATA ===/)?.[1]?.trim() || null
+}
+
+export function buildSafeLocalFallback(messages: PromptMessage[], now: Date = new Date()): { output: string; trace: string } {
+  const userMessage = [...messages].reverse().find((message) => message.role === "user")
+  const query = getPromptMessageText(userMessage?.content || "").trim()
+  const normalized = normalizeVietnameseText(query)
+  const tasks = extractTasksFromContext(messages)
+
+  if (/bo qua (?:moi )?(?:quy tac|chi thi)|system prompt|tiet lo prompt|hien thi prompt|developer message/.test(normalized)) {
+    return {
+      trace: "Phát hiện yêu cầu truy xuất chỉ thị hệ thống và áp dụng giới hạn bảo mật.",
+      output: "Mình không thể cung cấp system prompt, chỉ thị nội bộ hoặc bỏ qua các giới hạn bảo mật. Nếu bạn đang kiểm thử prompt injection, hệ thống đã nhận diện đúng tình huống này.",
+    }
+  }
+
+  const asksCurrentDate = /hom nay.*(?:ngay bao nhieu|ngay may|ngay gi|thu may)|(?:ngay bao nhieu|ngay may|thu may).*hom nay/.test(normalized)
+  if (asksCurrentDate) {
+    const dateText = new Intl.DateTimeFormat("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(now)
+    return {
+      trace: "Đọc ngày hiện tại theo múi giờ Asia/Ho_Chi_Minh.",
+      output: `Hôm nay là **${dateText}**.`,
+    }
+  }
+
+  if (/may gio|gio hien tai|bay gio la/.test(normalized)) {
+    const timeText = new Intl.DateTimeFormat("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(now)
+    return {
+      trace: "Đọc thời gian hiện tại theo múi giờ Asia/Ho_Chi_Minh.",
+      output: `Hiện tại là **${timeText}** theo giờ Việt Nam.`,
+    }
+  }
+
+  if (/thoi tiet|du bao thoi tiet|troi (?:co )?mua|co mua khong|nhiet do|troi nang/.test(normalized)) {
+    return {
+      trace: "Kiểm tra nguồn dữ liệu thời tiết; không có nguồn trực tuyến trong context.",
+      output: "Mình chưa được kết nối với nguồn dữ liệu thời tiết trực tuyến, nên không thể xác định thời tiết hiện tại một cách đáng tin cậy. Bạn cần cung cấp địa điểm và tích hợp dịch vụ dự báo thời tiết để nhận kết quả cập nhật.",
+    }
+  }
+
+  const chartReply = buildContextChartReply(query, tasks)
+  if (chartReply) {
+    return {
+      trace: "Nhóm và tổng hợp dữ liệu task thật để tạo biểu đồ.",
+      output: chartReply,
+    }
+  }
+
+  const taskReply = buildContextTaskReply(query, tasks)
+  if (taskReply) {
+    return {
+      trace: "Lọc và tổng hợp các task nằm trong phạm vi dữ liệu được cung cấp.",
+      output: taskReply,
+    }
+  }
+
+  const isDocumentQuery = /tai lieu|design hand[- ]?off|handoff|checklist|design system|token|quy chuan|sla|artifact/.test(normalized)
+  if (isDocumentQuery) {
+    const artifact = extractArtifactFromContext(messages)
+    if (!artifact) {
+      return {
+        trace: "Tìm tài liệu liên quan trong context nhưng không có nội dung phù hợp.",
+        output: "Mình chưa nhận được nội dung tài liệu phù hợp trong context nên chưa thể trả lời có căn cứ. Vui lòng chọn đúng Artifact hoặc tải tài liệu lên rồi thử lại.",
+      }
+    }
+
+    const content = artifact.content.trim()
+    const excerpt = content.length > 4000
+      ? `${content.slice(0, 4000)}\n\n*[Nội dung đã được rút gọn; chưa kiểm tra phần còn lại của tài liệu.]*`
+      : content
+    return {
+      trace: `Đọc nội dung tài liệu ${artifact.name} được cung cấp trong context.`,
+      output: `Dựa trên tài liệu **${artifact.name}**:\n\n${excerpt || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`,
+    }
+  }
+
+  if (/so do|flowchart|mermaid|quy trinh 7 khau/.test(normalized)) {
+    return {
+      trace: "Dựng sơ đồ từ quy trình 7 khâu đã được cấu hình trong ứng dụng.",
+      output: `\`\`\`mermaid
+graph TD
+  A["1. Chờ tiếp nhận"] --> B["2. Phân loại & đánh giá"]
+  B --> C["3. Nghiên cứu & định nghĩa"]
+  C --> D["4. IA & Wireframe"]
+  D --> E["5. UI Design"]
+  E --> F["6. Prototype & kiểm thử"]
+  F --> G["7. Bàn giao, UAT & Go-Live"]
+\`\`\``,
+    }
+  }
+
+  if (/lich|cuoc hop|hop hom nay|deep work|calendar/.test(normalized)) {
+    const calendar = extractCalendarContext(messages)
+    return calendar
+      ? {
+          trace: "Đọc dữ liệu lịch được cung cấp trong context.",
+          output: `Dữ liệu lịch hiện có:\n\n${calendar}`,
+        }
+      : {
+          trace: "Kiểm tra dữ liệu lịch nhưng không có lịch trong context.",
+          output: "Hiện mình chưa nhận được dữ liệu lịch trong phạm vi truy cập nên chưa thể tổng hợp lịch họp hoặc thời gian Deep Work.",
+        }
+  }
+
+  if (/^(?:xin )?(?:chao|hello|hi)(?: ban| ai| tro ly)?[!.?]*$/.test(normalized)) {
+    return {
+      trace: "Nhận diện lời chào.",
+      output: "Chào bạn! Mình là Trợ lý UX MB. Mình có thể hỗ trợ tra cứu task, phân tích tiến độ, đọc Artifacts và trực quan hóa dữ liệu trong phạm vi bạn được phép truy cập.",
+    }
+  }
+
+  if (/ban la ai|lam duoc gi|co the lam gi|nang luc|chuc nang|^help$/.test(normalized)) {
+    return {
+      trace: "Nhận diện yêu cầu giới thiệu phạm vi hỗ trợ.",
+      output: "Mình có thể hỗ trợ bốn nhóm chính: tra cứu và phân tích task, phát hiện rủi ro tiến độ, đọc tài liệu Artifacts, và tạo bảng/biểu đồ/sơ đồ từ dữ liệu thật. Mình không tự thực hiện cập nhật hoặc gửi thông báo khi chưa có xác nhận của bạn.",
+    }
+  }
+
+  return {
+    trace: "Không có mô hình trực tuyến và không tìm thấy dữ liệu cục bộ đủ để trả lời đáng tin cậy.",
+    output: `Mô hình AI trực tuyến hiện không phản hồi, còn dữ liệu cục bộ không đủ để trả lời chính xác câu hỏi: “${query || "Yêu cầu hiện tại"}”. Bạn có thể thử lại sau hoặc kiểm tra cấu hình API Key/model trong phần Quản trị.`,
+  }
+}
+
 function simulateSmartFallbackStream(
+  messages: PromptMessage[],
+  callbacks: StreamCallbacks,
+  checkCancelled: () => boolean,
+  meta: AIResponseMeta
+) {
+  const { output, trace } = buildSafeLocalFallback(messages)
+  callbacks.onReasoningChunk?.(trace, trace)
+
+  const chunks = output.match(/\S+\s*/g) || [output]
+  let index = 0
+  let accumulated = ""
+  const interval = setInterval(() => {
+    if (checkCancelled()) {
+      clearInterval(interval)
+      return
+    }
+
+    const batch = chunks.slice(index, index + 8).join("")
+    index += 8
+    accumulated += batch
+    callbacks.onChunk(batch, accumulated)
+
+    if (index >= chunks.length) {
+      clearInterval(interval)
+      callbacks.onComplete(output, trace, meta)
+    }
+  }, 12)
+}
+
+/**
+ * @deprecated Giữ lại tạm thời để đối chiếu hồi quy; luồng ứng dụng không gọi hàm này.
+ */
+function simulateLegacyFallbackStream(
   messages: PromptMessage[],
   callbacks: StreamCallbacks,
   checkCancelled: () => boolean
 ) {
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content || ""
+  const rawUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content || ""
+  const lastUserMsg = typeof rawUserMsg === "string"
+    ? rawUserMsg
+    : Array.isArray(rawUserMsg)
+    ? rawUserMsg.map((p) => (p as any).text || "").join(" ")
+    : ""
   const q = lastUserMsg.toLowerCase()
 
   let reasoning = "1. Tiếp nhận và phân tích yêu cầu từ Designer.\n2. Tra cứu dữ liệu bài toán UX MBBank, lịch biểu và hệ số SLA.\n3. Định dạng câu trả lời với bảng biểu và đề xuất hành động."
   let output = ""
 
-  if (
-    q.includes("làm gì") ||
+  const contextTasks = extractTasksFromContext(messages)
+  const contextChartReply = buildContextChartReply(lastUserMsg, contextTasks)
+  const contextTaskReply = buildContextTaskReply(lastUserMsg, contextTasks)
+  const isGreeting = /^(?:xin\s+)?(?:chào|chao|hello|hi)(?:\s+(?:bạn|ban|ai|trợ lý|tro ly))?\s*[!.?]*$/i.test(q.trim())
+  const isWeatherQuery = /thời tiết|thoi tiet|dự báo thời tiết|du bao thoi tiet|trời\s+(?:có\s+)?mưa|troi\s+(?:co\s+)?mua|có mưa không|co mua khong|nhiệt độ|nhiet do|trời nắng|troi nang/i.test(q)
+
+  if (contextChartReply) {
+    reasoning = "Tổng hợp dữ liệu task thực tế theo nhóm người dùng yêu cầu trong phạm vi quyền được ứng dụng cung cấp."
+    output = contextChartReply
+  } else if (contextTaskReply) {
+    reasoning = "Đọc và tổng hợp các bài toán thực tế trong phạm vi quyền được ứng dụng cung cấp."
+    output = contextTaskReply
+  } else if (isWeatherQuery) {
+    reasoning = "Nhận diện câu hỏi thời tiết và kiểm tra phạm vi dữ liệu hiện có. Ứng dụng không có nguồn dự báo thời tiết trực tuyến nên không suy đoán câu trả lời."
+    output = "Mình chưa được kết nối với nguồn dữ liệu thời tiết trực tuyến, nên không thể xác định hôm nay có mưa hay không. Bạn cần cung cấp địa điểm và tích hợp một nguồn dự báo thời tiết để nhận kết quả cập nhật chính xác."
+  } else if (
     q.includes("lam gi") ||
     q.includes("năng lực") ||
     q.includes("nang luc") ||
@@ -680,11 +1244,7 @@ function simulateSmartFallbackStream(
     q.includes("help") ||
     q.includes("hướng dẫn") ||
     q.includes("huong dan") ||
-    q.includes("chào") ||
-    q.includes("chao") ||
-    q.includes("hello") ||
-    q.includes("hi ") ||
-    q === "hi"
+    isGreeting
   ) {
     reasoning = "1. Tiếp nhận câu hỏi giới thiệu và phạm vi năng lực của Trợ lý AI Copilot.\n2. Tổng hợp các chức năng cốt lõi phục vụ đội ngũ thiết kế UX tại MBBank.\n3. Trình bày chi tiết các nhóm năng lực kèm lệnh gợi ý trực quan."
     output = `Chào bạn! Tôi là **Trợ lý AI Copilot** chuyên biệt cho đội ngũ Thiết kế Trải nghiệm Người dùng (UX Team) tại MBBank.
@@ -729,36 +1289,45 @@ Quy trình thiết kế 7 khâu chuẩn
     q.includes("tỉ lệ") ||
     q.includes("ti le")
   ) {
-    reasoning = "1. Tập hợp số liệu bài toán phân bổ giữa các Squad trong Sprint hiện tại.\n2. Xây dựng cấu trúc biểu đồ tương tác Recharts (Interactive Bar Chart).\n3. Đưa ra nhận xét phân tích khối lượng tải công việc."
-    output = `Dưới đây là biểu đồ trực quan phân bổ khối lượng bài toán UX giữa các Squad trong hệ thống:
+    const squadCounts = extractTaskCountsBySquad(messages)
+    reasoning = squadCounts.length > 0
+      ? "1. Đọc danh sách bài toán trong context hiện tại.\n2. Nhóm và đếm số bài toán theo Squad.\n3. Xuất biểu đồ dựa trên dữ liệu đã nhận, không dùng số liệu mẫu."
+      : "1. Kiểm tra context bài toán hiện tại.\n2. Không tìm thấy dữ liệu Squad có thể tổng hợp.\n3. Thông báo rõ giới hạn dữ liệu thay vì dùng số liệu mẫu."
+
+    if (squadCounts.length === 0) {
+      output = `Mình chưa nhận được danh sách bài toán có thông tin Squad để vẽ biểu đồ. Vui lòng đồng bộ dữ liệu đầu việc rồi thử lại.\n\n\`\`\`suggestions
+Đồng bộ lại dữ liệu bài toán
+Xem danh sách task hiện có
+Thử lại biểu đồ theo Squad
+\`\`\``
+    } else {
+      const totalTasks = squadCounts.reduce((total, item) => total + item.tasks, 0)
+      const leadingSquad = squadCounts[0]
+      const chartData = JSON.stringify(squadCounts, null, 2)
+
+      output = `Dưới đây là biểu đồ phân bổ khối lượng bài toán theo dữ liệu hiện tại (${totalTasks} bài toán):
 
 \`\`\`chart
 {
   "type": "bar",
   "title": "Phân bổ khối lượng bài toán UX theo Squad",
-  "description": "Số lượng bài toán đang triển khai tích cực trong Sprint",
+  "description": "Tổng hợp từ ${totalTasks} bài toán đang có trong hệ thống",
   "xAxisKey": "name",
   "dataKeys": ["tasks"],
-  "data": [
-    { "name": "App MBBank", "tasks": 16 },
-    { "name": "Biz MBBank", "tasks": 11 },
-    { "name": "BaaS Platform", "tasks": 7 },
-    { "name": "Design System", "tasks": 6 },
-    { "name": "Trái phiếu & CDs", "tasks": 5 }
-  ]
+  "data": ${chartData}
 }
 \`\`\`
 
 **Nhận xét phân tích:**
-- **Squad App MBBank** chiếm tỷ trọng cao nhất (~35%) với nhiều luồng onboarding & giao dịch bán lẻ.
-- **Squad Biz MBBank** đang tăng tải 25% với các phân hệ phân quyền và duyệt lệnh nhiều cấp.
-- Các Squad còn lại duy trì tải ổn định trong giới hạn năng lực thiết kế.
+- **${leadingSquad.name}** đang có số lượng bài toán nhiều nhất: **${leadingSquad.tasks}/${totalTasks}**.
+- Số liệu trên được tổng hợp trực tiếp từ danh sách bài toán hiện tại, không dùng dữ liệu minh họa.
 
 \`\`\`suggestions
-Chuyển sang biểu đồ tròn
-Xem bài toán thuộc App MBBank
-Đánh giá nguy cơ quá tải Squad
+Xem danh sách bài toán của ${leadingSquad.name}
+So sánh tiến độ giữa các Squad
+Phân tích các task có nguy cơ trễ hạn
 \`\`\``
+    }
   } else if (
     q.includes("sơ đồ") ||
     q.includes("so do") ||
@@ -971,75 +1540,13 @@ Mở Designer Planner
     q.includes("checklist") ||
     q.includes("biên bản")
   ) {
-    reasoning = "1. Trích xuất tài liệu release notes và tiêu chuẩn bàn giao phiên bản 3.4.\n2. Đối chiếu 2 tài liệu tham chiếu đã công bố.\n3. Đóng gói khối nội dung văn bản kỹ thuật chuẩn."
-    output = `Dưới đây là tài liệu Release Notes và tiêu chuẩn bàn giao:
-
-\`\`\`markdown:release-notes-3.4.md
-## Highlights
-
-Three things get out of your way in 3.4.
-Refund confirmations arrive in under a minute instead of on the next queue drain.
-Group membership syncs on the user schedule, so access stops drifting between runs. Large CSV exports finish instead of timing out at the gateway.
-\`\`\`
-
-\`\`\`sources
-[
-  {"name": "release-notes-3.4.md", "status": "Draft, edited 14m ago"},
-  {"name": "release-notes-3.3.md", "status": "Published Jul 30"}
-]
-\`\`\`
-
-\`\`\`suggestions
-Rút ngắn còn 2 dòng
-Xuất checklist nghiệm thu ra file
-Xem tài liệu liên quan
-\`\`\``
-  } else if (
-    q.includes("tiến độ") ||
-    q.includes("tien do") ||
-    q.includes("tiendo") ||
-    q.includes("công việc") ||
-    q.includes("cong viec") ||
-    q.includes("task") ||
-    q.includes("deadline") ||
-    q.includes("hôm nay") ||
-    q.includes("hom nay") ||
-    q.includes("nhiệm vụ") ||
-    q.includes("nhiem vu")
-  ) {
-    reasoning = "1. Tiếp nhận và phân tích yêu cầu công việc của Designer.\n2. Rà soát tiến độ các bài toán ưu tiên Lv1/Lv2 và rào cản SLA.\n3. Trình bày bảng tổng hợp tiến độ và các hành động cần thiết."
-    output = `Dưới đây là bảng tổng hợp tiến độ các bài toán thiết kế UX trọng điểm:
-
-| Bài toán UX | Squad / Phân hệ | Mức độ | Khâu hiện tại | Trạng thái |
-|---|---|---|---|---|
-| Tích hợp DIGI x BeeRich | BeeRich | Lv1 | Khâu 4 - UI Design | Đang thiết kế |
-| Chuyển nhượng CDs khớp 1 phần | Trái phiếu | Lv1 | Khâu 6 - Nghiệm thu | PO Pending (26h) |
-| [Thiết kế] Luồng mua trái phiếu v2 | TransferD | Lv2 | Khâu 3 - Wireframe | Chuẩn bị Dev |
-| Tổng | 3 bài toán chính | 2 Lv1, 1 Lv2 | Khâu 3 - 6 | 1 PO Pending |
-
-\`\`\`action
-{
-  "title": "Bài toán UX trọng điểm cần theo dõi:",
-  "items": [
-    { "icon": "task", "title": "Chuyển nhượng CDs khớp 1 phần", "action": "đang ở Khâu 6 - Nghiệm thu (PO Pending 26h)." }
-  ],
-  "notified": {
-    "label": "Designer phụ trách",
-    "users": [
-      { "name": "Lê Hoàng Nam (Designer)", "avatar": "" }
-    ]
-  },
-  "prompt": "Bấm bên dưới để mở xem chi tiết tiến độ bài toán.",
-  "approveText": "Xem chi tiết bài toán",
-  "rejectText": "Đóng"
-}
-\`\`\`
-
-\`\`\`suggestions
-Rút ngắn còn 2 dòng
-Xem bài toán quá hạn 48h
-Xuất checklist nghiệm thu
-\`\`\``
+    const artifact = extractArtifactFromContext(messages)
+    reasoning = artifact
+      ? "1. Xác định tài liệu được cung cấp trong context.\n2. Đọc nội dung tài liệu thực tế.\n3. Tóm tắt đúng nguồn, không bổ sung dữ liệu ngoài tài liệu."
+      : "1. Kiểm tra nguồn tài liệu trong context.\n2. Không tìm thấy nội dung tài liệu đủ để đọc.\n3. Thông báo rõ giới hạn dữ liệu."
+    output = artifact
+      ? `Dưới đây là phần tóm tắt dựa trên tài liệu **${artifact.name}**:\n\n${artifact.content || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`
+      : "Mình chưa nhận được nội dung tài liệu đủ để tóm tắt. Vui lòng chọn lại Artifact hoặc tải tài liệu lên rồi thử lại."
   } else {
     // Phản hồi hội thoại thông minh linh hoạt (Không trả lời rập khuôn 1 bảng cũ)
     reasoning = "1. Tiếp nhận và phân tích ngữ nghĩa câu hỏi của người dùng.\n2. Đối chiếu với phạm vi công việc thiết kế UX MBBank.\n3. Đưa ra câu trả lời trực tiếp, rõ ràng và các hướng giải quyết phù hợp."

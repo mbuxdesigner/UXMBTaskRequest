@@ -2174,8 +2174,11 @@ export default function QuanLyPage() {
   const [leaveSyncInterval, setLeaveSyncInterval] = useState<string>(() => {
     return getLeaveSheetConfig().autoSyncInterval || "5"
   })
-  const [leaveTesting, setLeaveTesting] = useState<boolean>(false)
-  const [expandedGateway, setExpandedGateway] = useState<string | null>("team_leaves")
+  const [expandedGateway, setExpandedGateway] = useState<string | null>(() => {
+    const hash = window.location.hash
+    if (hash.includes("gateway=leaves")) return "team_leaves"
+    return "openrouter_ai"
+  })
 
   const handleTestLeaveConnection = async () => {
     setLeaveTesting(true)

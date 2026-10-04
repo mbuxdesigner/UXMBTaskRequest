@@ -258,10 +258,18 @@ Cơ chế backend Google Apps Script:
 
 Nhằm đảm bảo trải nghiệm tương tác tự nhiên và sinh động ngay cả khi chưa kết nối API Key trực tiếp, `simulateSmartFallbackStream` trong `src/services/aiService.ts` phân tích câu hỏi của người dùng và điều hướng thông minh sang 7 kịch bản:
 1. **Năng lực Trợ lý:** Trình bày 5 trụ cột chức năng và gợi ý prompt tương tác.
-2. **Biểu đồ Trực quan:** Xuất cấu trúc JSON chuẩn Recharts hiển thị tiến độ và phân bổ bài toán.
+2. **Biểu đồ Trực quan:** Xuất cấu trúc JSON chuẩn Recharts hiển thị tiến độ và phân bổ bài toán theo dữ liệu task thật; ưu tiên nhóm theo Designer, Squad hoặc trạng thái đúng theo câu hỏi.
 3. **Sơ đồ Quy trình:** Trực quan hóa quy trình 7 khâu UX bằng sơ đồ Mermaid tương tác.
-4. **Rà soát Điểm nghẽn:** Phân tích các bài toán PO Pending quá hạn và xuất Thẻ Hành động mở modal `RequestDetail`.
-5. **Quy chuẩn Design System:** Tra cứu bảng mã màu MB Blue `#1057FB`, tokens và typography.
-6. **Lọc theo Squad:** Trích xuất bảng dữ liệu bài toán theo từng squad/phân hệ cụ thể.
-7. **Đàm thoại Ngữ cảnh:** Tư vấn giải pháp thiết kế linh hoạt, loại bỏ tình trạng phản hồi lặp lại một mẫu duy nhất.
+4. **Rà soát Điểm nghẽn:** Phân tích các bài toán PO Pending quá hạn trong context được lọc theo role; không dùng mã task hoặc Action Card mẫu.
+5. **Quy chuẩn Design System:** Tra cứu bảng mã màu MB Blue `#1057FB`, tokens và typography từ Artifacts được cung cấp.
+6. **Lọc theo Squad/Designer:** Trích xuất bảng dữ liệu bài toán theo từng squad, Designer, trạng thái hoặc phạm vi quyền cụ thể.
+7. **Đàm thoại Ngữ cảnh:** Tư vấn giải pháp thiết kế linh hoạt, loại bỏ phản hồi lặp và không bịa dữ liệu khi context không đủ.
+
+### Nguyên tắc vận hành fallback
+
+- Context task được truyền thêm dưới dạng `TASK_DATA_JSON` để tránh sai lệch khi phân tích chuỗi text.
+- Nếu câu hỏi yêu cầu biểu đồ, hệ thống xử lý intent biểu đồ trước intent liệt kê task.
+- Nếu không có dữ liệu trong phạm vi quyền, AI phải nói rõ chưa có dữ liệu; tuyệt đối không dùng số liệu, task, Designer hoặc tài liệu minh họa.
+- Khi một Artifact được chọn, câu hỏi được gắn với đúng tên và nội dung Artifact đó.
+- Activity Trace chỉ phản ánh trạng thái xử lý do ứng dụng xác định; không hiển thị chain-of-thought hoặc thẻ `<think>` của model.
 
