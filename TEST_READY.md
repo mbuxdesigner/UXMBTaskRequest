@@ -5,13 +5,13 @@
 > **Runner Entrypoint**: `node tests/test-ai-chats-e2e-and-audit.mjs`  
 > **Subsystem**: AI Chats & Intelligent Copilot (`uxmb-task-request`)  
 > **Requirements Covered**: R1, R2, R3, R4 (ORIGINAL_REQUEST.md 2026-10-04T03:51:06Z, PROJECT.md, TEST_INFRA.md & Parent Directives)  
-> **Coverage**: 100% across Tiers 1–4, Direct Module Integrations & Static Codebase Audit (123 automated test assertions, 0 failures, Exit Code 0)  
+> **Coverage**: 100% across Tiers 1–4, Direct Module Integrations & Static Codebase Audit (130 automated test assertions, 0 failures, Exit Code 0)  
 
 ---
 
 ## 1. Test Suite Execution Summary
 
-The comprehensive 4-tier automated test suite runner `tests/test-ai-chats-e2e-and-audit.mjs` has been constructed, validated, and verified at `tests/test-ai-chats-e2e-and-audit.mjs`. It executes via native Node.js ESM in ~70ms with deterministic assertion success, zero browser flakiness, and zero external network dependencies.
+The comprehensive 4-tier automated test suite runner `tests/test-ai-chats-e2e-and-audit.mjs` has been constructed, validated, and verified at `tests/test-ai-chats-e2e-and-audit.mjs`. It executes via native Node.js ESM in ~100ms with deterministic assertion success, zero browser flakiness, and zero external network dependencies.
 
 ```
 ================================================================================
@@ -21,15 +21,15 @@ Tier 1 (Feature Coverage):            51/51 Passed (100.0%)
 Tier 2 (Boundary & Corner Cases):     49/49 Passed (100.0%)
 Tier 3 (Cross-Feature Combinations):   6/6 Passed (100.0%)
 Tier 4 (Real-World Scenarios):         6/6 Passed (100.0%)
-Direct Module Integrations:            6/6 Passed (100.0%)
+Direct Module Integrations:            13/13 Passed (100.0%)
 Static Audit (Codebase Integrity):     5/5 Passed (100.0%)
 --------------------------------------------------------------------------------
-TOTAL TESTS EXECUTED:   123
-TOTAL TESTS PASSED:     123 (100.0%)
+TOTAL TESTS EXECUTED:   130
+TOTAL TESTS PASSED:     130 (100.0%)
 TOTAL TESTS FAILED:     0
-TOTAL EXECUTION TIME:   ~70ms
+TOTAL EXECUTION TIME:   ~100ms
 ================================================================================
-🎉 ALL 123 TESTS PASSED CLEANLY (Exit Code 0)
+🎉 ALL 130 TESTS PASSED CLEANLY (Exit Code 0)
 ```
 
 ---
@@ -38,12 +38,12 @@ TOTAL EXECUTION TIME:   ~70ms
 
 ### Tier 1: Feature Coverage (51 Test Cases)
 - [x] **F1: API Key Client Bundle Safety & 503 Missing Key Error Handling** (6 tests)
-  - `T1.F1.01`: Client bundle guard: in production mode (`DEV === false`), `INITIAL_DEFAULT_KEY` evaluates to empty string `""`.
-  - `T1.F1.02`: Client bundle guard: in development mode (`DEV === true`), `INITIAL_DEFAULT_KEY` adopts client env key.
-  - `T1.F1.03`: Production routing: production mode blocks direct call to `openrouter.ai` and routes exclusively via `/api/ai-gateway`.
+  - `T1.F1.01`: Client bundle guard: in production mode (`DEV === false`), `INITIAL_GEMINI_KEY` and `getNextActiveKey` in `src/services/aiService.ts` evaluate to empty string `""`; verified static DEV guard in source and zero env keys in `dist/assets`.
+  - `T1.F1.02`: Client bundle guard: in development mode (`DEV === true`), verifies `src/services/aiService.ts` contains DEV fallback reading `VITE_OPENROUTER_API_KEY` and `VITE_GEMINI_API_KEY`, and exports storage key constants.
+  - `T1.F1.03`: Production routing: verifies `aiService.ts:testAIConnection` in production mode routes exclusively to `/api/ai-gateway` (POST) and blocks direct call fallback to `openrouter.ai`.
   - `T1.F1.04`: Missing server key detection: returns HTTP 503 with code `MISSING_SERVER_API_KEY`.
   - `T1.F1.05`: Friendly Vietnamese error message returned for missing server key without silent fake offline replies.
-  - `T1.F1.06`: Gemini API key is guarded with `DEV` environment flag.
+  - `T1.F1.06`: Gemini API key is guarded with `DEV` environment flag (`INITIAL_GEMINI_KEY === ""` in production/node environment, verified DEV guard in source).
 - [x] **F2: Gateway Caller Auth & Feature Flag `AI_GATEWAY_AUTH_REQUIRED`** (8 tests)
   - `T1.F2.01`: Gateway auth: flag `'false'` permits request without session token (safe dev default).
   - `T1.F2.02`: Gateway auth: flag unset/undefined permits request without session token.
@@ -133,13 +133,20 @@ TOTAL EXECUTION TIME:   ~70ms
 
 ---
 
-### Direct Module Integrations (6 Test Cases)
+### Direct Module Integrations (13 Test Cases)
 - [x] `INT-PII-01`: `src/lib/piiMasker.ts` `maskPii` correctly masks email and phone numbers.
 - [x] `INT-PII-02`: `src/lib/piiMasker.ts` `unmaskPii` accurately restores masked text back to original.
 - [x] `INT-PII-03`: `src/lib/piiMasker.ts` `sanitizeContextText` cleanses PII without exposing reverse mapping.
+- [x] `INT-PII-04`: `src/lib/piiMasker.ts` international phone (+84 spaces/dashes/parentheses), spaced CCCD, CMND before 'đ' words masked properly, and currency preserved.
 - [x] `INT-GW-01`: `api/ai-gateway.ts` `validateSessionToken` accepts `ST_[a-f0-9]{16}` and rejects invalid formats.
 - [x] `INT-GW-02`: `api/ai-gateway.ts` `checkRateLimit` enforces 20 req/min sliding window limit.
 - [x] `INT-GW-03`: `api/ai-gateway.ts` `checkRateLimit` isolates distinct identifiers in memory.
+- [x] `INT-GW-04`: `api/ai-gateway.ts` `verifySessionToken` accepts registered genuine session (`registerValidSession`).
+- [x] `INT-GW-05`: `api/ai-gateway.ts` `verifySessionToken` rejects unissued forged tokens even with valid `ST_` regex format (anti-forgery).
+- [x] `INT-GW-06`: `api/ai-gateway.ts` `verifySessionToken` rejects malformed and non-hex tokens fast-path.
+- [x] `INT-GW-07`: `api/ai-gateway.ts` `clearSessionCache` invalidates previously cached trusted sessions.
+- [x] `INT-GW-08`: `api/ai-gateway.ts` default handler enforces genuine caller auth via HTTP Request when flag enabled (401 for forged, passes genuine and local dev).
+- [x] `INT-GW-09`: `api/ai-gateway.ts` `verifySessionToken` checks Google Apps Script backend when un-cached, hits in-memory cache within TTL.
 
 ---
 
@@ -159,9 +166,9 @@ TOTAL EXECUTION TIME:   ~70ms
 node tests/test-ai-chats-e2e-and-audit.mjs
 
 # Expected Output:
-# Execution Time: ~0.07s
-# Total Tests Run: 123
-# Passed: 123
+# Execution Time: ~0.10s
+# Total Tests Run: 130
+# Passed: 130
 # Failed: 0
 # Exit Code: 0
 ```

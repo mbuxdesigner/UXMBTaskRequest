@@ -79,28 +79,29 @@ export function maskPii(text: string, options?: MaskPiiOptions): PiiMaskResult {
     return getOrCreateToken(match, "STAFF_ID", () => ++staffIdIndex)
   })
 
-  // 3. CHE SỐ ĐIỆN THOẠI VIỆT NAM (10 số, đầu 03, 05, 07, 08, 09; hỗ trợ +84, 84, dấu cách, dấu chấm, gạch ngang)
-  const phoneRegex = /(?:(?:\+84|84|0)(?:3[2-9]|5[25689]|7[06-9]|8[1-9]|9\d)(?:[.\-\s]?\d){7})\b/g
+  // 3. CHE SỐ ĐIỆN THOẠI VIỆT NAM & QUỐC TẾ (10 số di động, đầu 03, 05, 07, 08, 09; hỗ trợ +84, 0084, 84, dấu ngoặc, dấu cách, dấu chấm, gạch ngang)
+  // Bảo vệ không che nhầm số tiền lớn qua negative lookahead tiền tệ và lookbehind ký hiệu tiền tệ
+  const phoneRegex = /(?<![\$₫])(?:(?:\((?:0[35789]\d{1,2})\)[.\-\s]?(?:[.\-\s]?\d){6,7})|(?:(?:\+84|0084|\(\+84\)|\(0084\)|\(84\)|\b84)[.\-\s]?(?:\(?0\)?\s*)?[35789](?:[.\-\s]?\d){8})|(?:\b0|\(0\))[.\-\s]?[35789](?:[.\-\s]?\d){8})\b(?!\s*(?:VND|VNĐ|đồng|dong|đ(?![a-zA-Zà-ỹÀ-Ỹ])))/gi
   result = result.replace(phoneRegex, (match) => {
     return getOrCreateToken(match, "PHONE", () => ++phoneIndex)
   })
 
   // 4. CHE CCCD (12 chữ số) VÀ CMND (9 chữ số)
-  // 4a. Số định danh có tiền tố ngữ cảnh (CCCD, CMND, Số định danh, Căn cước: 9-12 chữ số)
-  const labeledIdRegex = /(?:(?:CCCD|CMND|Số định danh|Định danh|Căn cước|Chứng minh)\s*[:#-]?\s*)(\d{9,12})\b/gi
+  // 4a. Số định danh có tiền tố ngữ cảnh (CCCD, CMND, Số định danh, Căn cước: 9-12 chữ số; hỗ trợ dấu cách/gạch nối và từ nối 'là')
+  const labeledIdRegex = /(?:(?:CCCD|CMND|Số định danh|Định danh|Căn cước|Chứng minh)\s*(?:[:#-]|là)?\s*)((?:\d[.\-\s]?){8,11}\d)\b/gi
   result = result.replace(labeledIdRegex, (fullMatch, numGroup) => {
     const token = getOrCreateToken(numGroup, "ID", () => ++idIndex)
     return fullMatch.replace(numGroup, token)
   })
 
-  // 4b. CCCD 12 chữ số đứng độc lập
-  const cccd12Regex = /\b\d{12}\b/g
+  // 4b. CCCD 12 chữ số đứng độc lập (bảo vệ không che nhầm số tiền hạn mức/ngân sách lớn)
+  const cccd12Regex = /(?<![\$₫])\b(?<!\d)\d{12}(?!\d)(?!\s*(?:VND|VNĐ|đồng|dong|đ(?![a-zA-Zà-ỹÀ-Ỹ])))\b/gi
   result = result.replace(cccd12Regex, (match) => {
     return getOrCreateToken(match, "ID", () => ++idIndex)
   })
 
-  // 4c. CMND 9 chữ số đứng độc lập (không đi liền sau ký hiệu tiền tệ)
-  const cmnd9Regex = /(?<![\$₫])\b(?<!\d)\d{9}(?!\d)(?!\s*(?:VND|VNĐ|đồng|đ))\b/gi
+  // 4c. CMND 9 chữ số đứng độc lập (không đi liền sau ký hiệu tiền tệ hoặc trước đơn vị tiền tệ; tránh chặn nhầm các từ tiếng Việt bắt đầu bằng 'đ' như được, đã, để)
+  const cmnd9Regex = /(?<![\$₫])\b(?<!\d)\d{9}(?!\d)(?!\s*(?:VND|VNĐ|đồng|dong|đ(?![a-zA-Zà-ỹÀ-Ỹ])))\b/gi
   result = result.replace(cmnd9Regex, (match) => {
     // Tránh che nhầm các số đã được tokenize
     if (match.startsWith("[") || match.endsWith("]")) return match

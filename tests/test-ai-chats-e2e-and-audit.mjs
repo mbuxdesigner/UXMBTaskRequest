@@ -42,7 +42,23 @@ const failures = []
 function runTest(tier, id, description, testFn) {
   totalTests++
   try {
-    testFn()
+    const result = testFn()
+    if (result && typeof result.then === "function") {
+      return result
+        .then(() => {
+          passedTests++
+          console.log(`  ✓ [${tier} | ${id}] ${description}`)
+        })
+        .catch((err) => {
+          failedTests++
+          failures.push({ tier, id, description, error: err })
+          console.error(`  ✗ [${tier} | ${id}] ${description}`)
+          console.error(`    FAILURE: ${err.message}`)
+          if (err.stack) {
+            console.error(`    Stack: ${err.stack.split("\n").slice(1, 4).join("\n")}`)
+          }
+        })
+    }
     passedTests++
     console.log(`  ✓ [${tier} | ${id}] ${description}`)
   } catch (err) {
@@ -55,6 +71,9 @@ function runTest(tier, id, description, testFn) {
     }
   }
 }
+
+const aiServicePath = path.join(projectRoot, "src", "services", "aiService.ts")
+const aiServiceModule = fs.existsSync(aiServicePath) ? await import("../src/services/aiService.ts") : null
 
 // ==============================================================================
 // CORE REFERENCE ALGORITHMS & ORACLES (Exact Specifications per PROJECT.md)
@@ -467,22 +486,73 @@ console.log("\n--- TIER 1: FEATURE COVERAGE (ISOLATED FUNCTIONAL TESTS) ---")
 
 // F1: API key client bundle safety & 503 missing key error handling
 runTest("Tier 1", "F1-01", "Client bundle guard: in production mode (DEV=false), default API key is empty string", () => {
-  const evalKeyInProd = (mockDev) => (mockDev ? "sk-secret-key" : "")
-  assert.equal(evalKeyInProd(false), "")
+  assert.ok(aiServiceModule, "aiService.ts module must load successfully")
+  assert.equal(aiServiceModule.INITIAL_GEMINI_KEY, "", "INITIAL_GEMINI_KEY must evaluate to empty string in production/node environment")
+  assert.equal(aiServiceModule.getNextActiveKey(), "", "getNextActiveKey must evaluate to empty string in production/node environment")
+
+  const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
+  assert.ok(
+    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY || "") : ""'),
+    "OpenRouter key must be guarded by import.meta.env.DEV"
+  )
+  assert.ok(
+    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : ""'),
+    "Gemini key must be guarded by import.meta.env.DEV"
+  )
+
+  const distAssetsDir = path.join(projectRoot, "dist", "assets")
+  if (fs.existsSync(distAssetsDir)) {
+    const aiServiceAssets = fs.readdirSync(distAssetsDir).filter(f => f.startsWith("aiService-") && f.endsWith(".js"))
+    for (const file of aiServiceAssets) {
+      const content = fs.readFileSync(path.join(distAssetsDir, file), "utf-8")
+      assert.ok(!content.includes("VITE_OPENROUTER_API_KEY"), "Production dist bundle must not contain VITE_OPENROUTER_API_KEY")
+      assert.ok(!content.includes("VITE_GEMINI_API_KEY"), "Production dist bundle must not contain VITE_GEMINI_API_KEY")
+    }
+  }
 })
 
 runTest("Tier 1", "F1-02", "Client bundle guard: in dev mode (DEV=true), default API key adopts local env key", () => {
-  const evalKeyInDev = (mockDev, envKey) => (mockDev ? (envKey || "") : "")
-  assert.equal(evalKeyInDev(true, "sk-dev-key"), "sk-dev-key")
+  const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
+  assert.ok(
+    aiServiceSource.includes('import.meta.env.VITE_OPENROUTER_API_KEY || ""'),
+    "Dev mode fallback must read VITE_OPENROUTER_API_KEY"
+  )
+  assert.ok(
+    aiServiceSource.includes('import.meta.env.VITE_GEMINI_API_KEY || ""'),
+    "Dev mode fallback must read VITE_GEMINI_API_KEY"
+  )
+  assert.equal(aiServiceModule.STORAGE_GEMINI_KEY, "ux_mb_gemini_api_key")
+  assert.equal(aiServiceModule.STORAGE_AI_GATEWAY_KEY, "ux_mb_ai_gateway")
 })
 
-runTest("Tier 1", "F1-03", "Production routing: production mode blocks direct call and routes via /api/ai-gateway", () => {
-  function resolveApiEndpoint(isDev, hasCustomEndpoint) {
-    if (!isDev) return "/api/ai-gateway"
-    return hasCustomEndpoint ? "https://openrouter.ai/api/v1/chat/completions" : "/api/ai-gateway"
+await runTest("Tier 1", "F1-03", "Production routing: production mode blocks direct call and routes via /api/ai-gateway", async () => {
+  assert.ok(aiServiceModule, "aiService.ts module must load successfully")
+  const originalFetch = globalThis.fetch
+  let interceptedUrl = null
+  let interceptedMethod = null
+  globalThis.fetch = async (url, opts) => {
+    interceptedUrl = url
+    interceptedMethod = opts?.method
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
-  assert.equal(resolveApiEndpoint(false, true), "/api/ai-gateway")
-  assert.equal(resolveApiEndpoint(false, false), "/api/ai-gateway")
+  try {
+    const res = await aiServiceModule.testAIConnection()
+    assert.equal(interceptedUrl, "/api/ai-gateway", "Production testAIConnection must route exclusively to /api/ai-gateway")
+    assert.equal(interceptedMethod, "POST")
+    assert.equal(res.success, true)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
+  assert.ok(
+    aiServiceSource.includes("if (!isDev) {") && (aiServiceSource.includes("AI Gateway") || aiServiceSource.includes("/api/ai-gateway")),
+    "aiService must terminate on gateway failure in production without falling back to direct OpenRouter"
+  )
+  assert.ok(
+    aiServiceSource.includes("(!response || !response.ok) && isDev"),
+    "Direct OpenRouter call must be strictly gated by isDev"
+  )
 })
 
 runTest("Tier 1", "F1-04", "Missing server key detection: returns 503 and MISSING_SERVER_API_KEY code", () => {
@@ -511,9 +581,13 @@ runTest("Tier 1", "F1-05", "Friendly Vietnamese error message for missing server
 })
 
 runTest("Tier 1", "F1-06", "Gemini API key is also guarded with DEV environment flag", () => {
-  const evalGeminiKey = (mockDev, val) => (mockDev ? (val || "") : "")
-  assert.equal(evalGeminiKey(false, "AIzaSySecret"), "")
-  assert.equal(evalGeminiKey(true, "AIzaSySecret"), "AIzaSySecret")
+  assert.ok(aiServiceModule, "aiService.ts module must load successfully")
+  assert.equal(aiServiceModule.INITIAL_GEMINI_KEY, "")
+  const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
+  assert.ok(
+    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : ""'),
+    "Gemini key must be guarded with import.meta.env.DEV"
+  )
 })
 
 // F2: Gateway caller auth with session token & feature flag AI_GATEWAY_AUTH_REQUIRED
@@ -1601,6 +1675,25 @@ if (fs.existsSync(piiMaskerPath)) {
     assert.ok(!sanitized.includes("0912345678"))
     assert.ok(sanitized.includes("[PHONE_1]"))
   })
+
+  runTest("Integration", "INT-PII-04", "src/lib/piiMasker.ts: international phone, spaced CCCD, and CMND before 'đ' words masked properly", () => {
+    const samples = [
+      { text: "Gọi +84 912 345 678 để tư vấn", match: "[PHONE_1]" },
+      { text: "SĐT (+84) 912345678 hotline", match: "[PHONE_1]" },
+      { text: "Hotline (0912) 345 678 hỗ trợ", match: "[PHONE_1]" },
+      { text: "SĐT 09.87.65.43.21 gấp", match: "[PHONE_1]" },
+      { text: "Số định danh là 123456789 được ghi nhận", match: "[ID_1]" },
+      { text: "CCCD: 001 092 001 234 hoàn tất", match: "[ID_1]" },
+    ]
+    for (const s of samples) {
+      const res = piiModule.maskPii(s.text)
+      assert.ok(res.maskedText.includes(s.match), `Failed on: ${s.text}`)
+    }
+    // Verify currency preservation
+    const currencySample = "Hạn mức 100000000000 VND và 123456789 đ"
+    const resCurr = piiModule.maskPii(currencySample)
+    assert.equal(resCurr.maskedText, currencySample)
+  })
 }
 
 // Import api/ai-gateway.ts
@@ -1635,6 +1728,175 @@ if (fs.existsSync(gatewayPath)) {
     }
     assert.equal(gatewayModule.checkRateLimit("client-alpha", now).allowed, false)
     assert.equal(gatewayModule.checkRateLimit("client-beta", now).allowed, true)
+  })
+
+  // INT-GW-04: Genuine registered session token verification
+  await runTest("Integration", "INT-GW-04", "api/ai-gateway.ts: verifySessionToken accepts registered genuine session (registerValidSession)", async () => {
+    gatewayModule.clearSessionCache()
+    gatewayModule.registerValidSession("ST_1234567890abcdef", "Senior UX Designer")
+    const isGenuine = await gatewayModule.verifySessionToken("ST_1234567890abcdef")
+    assert.equal(isGenuine, true, "Registered genuine token must be verified as true")
+    const withWhitespace = await gatewayModule.verifySessionToken("  ST_1234567890abcdef  ")
+    assert.equal(withWhitespace, true, "Whitespace-padded token must be trimmed and verified as true")
+  })
+
+  // INT-GW-05: Anti-forgery enforcement - unissued forged tokens matching ST_ format rejected
+  await runTest("Integration", "INT-GW-05", "api/ai-gateway.ts: verifySessionToken rejects unissued forged tokens even with valid ST_ regex format", async () => {
+    gatewayModule.clearSessionCache()
+    const origFetch = globalThis.fetch
+    globalThis.fetch = async (url) => {
+      if (String(url).includes("action=check_session")) {
+        return new Response(JSON.stringify({ valid: false, status: "error" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+      return origFetch(url)
+    }
+
+    try {
+      // 1. ST_0000000000000000 passes regex but must be rejected by session verification
+      assert.equal(gatewayModule.validateSessionToken("ST_0000000000000000"), true, "Format regex passes")
+      const resZero = await gatewayModule.verifySessionToken("ST_0000000000000000")
+      assert.equal(resZero, false, "Unissued dummy token ST_0000000000000000 must be rejected")
+
+      // 2. ST_deadbeefcafebabe passes regex but must be rejected by session verification
+      assert.equal(gatewayModule.validateSessionToken("ST_deadbeefcafebabe"), true, "Format regex passes")
+      const resBabe = await gatewayModule.verifySessionToken("ST_deadbeefcafebabe")
+      assert.equal(resBabe, false, "Forged token ST_deadbeefcafebabe must be rejected")
+    } finally {
+      globalThis.fetch = origFetch
+    }
+  })
+
+  // INT-GW-06: Malformed / non-hex tokens fast-path rejection
+  await runTest("Integration", "INT-GW-06", "api/ai-gateway.ts: verifySessionToken rejects malformed and non-hex tokens fast-path", async () => {
+    assert.equal(await gatewayModule.verifySessionToken("ST_invalid_format"), false)
+    assert.equal(await gatewayModule.verifySessionToken("ST_12345"), false)
+    assert.equal(await gatewayModule.verifySessionToken("Bearer ST_1234567890abcdef"), false)
+    assert.equal(await gatewayModule.verifySessionToken(""), false)
+    assert.equal(await gatewayModule.verifySessionToken(null), false)
+    assert.equal(await gatewayModule.verifySessionToken(undefined), false)
+  })
+
+  // INT-GW-07: In-memory session cache invalidation
+  await runTest("Integration", "INT-GW-07", "api/ai-gateway.ts: clearSessionCache invalidates previously cached trusted sessions", async () => {
+    gatewayModule.clearSessionCache()
+    gatewayModule.registerValidSession("ST_0123456789abcdef")
+    assert.equal(await gatewayModule.verifySessionToken("ST_0123456789abcdef"), true)
+
+    gatewayModule.clearSessionCache()
+    const origFetch = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({ valid: false }), { status: 200 })
+    try {
+      const afterClear = await gatewayModule.verifySessionToken("ST_0123456789abcdef")
+      assert.equal(afterClear, false, "Token must not be trusted after cache is cleared")
+    } finally {
+      globalThis.fetch = origFetch
+    }
+  })
+
+  // INT-GW-08: Edge HTTP Handler authentication enforcement end-to-end
+  await runTest("Integration", "INT-GW-08", "api/ai-gateway.ts: handler enforces genuine caller auth via HTTP Request when flag enabled", async () => {
+    const origFetch = globalThis.fetch
+    globalThis.fetch = async (url) => {
+      if (String(url).includes("action=check_session")) {
+        return new Response(JSON.stringify({ valid: false, status: "error" }), { status: 200 })
+      }
+      return origFetch(url)
+    }
+
+    try {
+      process.env.AI_GATEWAY_AUTH_REQUIRED = "true"
+      gatewayModule.clearSessionCache()
+
+      // Case A: Forged token -> 401 Unauthorized
+      const reqForged = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", {
+        method: "POST",
+        headers: { "Authorization": "Bearer ST_deadbeefcafebabe" }
+      })
+      const resForged = await gatewayModule.default(reqForged)
+      assert.equal(resForged.status, 401)
+      const forgedData = await resForged.json()
+      assert.equal(forgedData.error.message, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
+
+      // Case B: No token when auth required -> 401 Unauthorized
+      const reqNoAuth = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", { method: "POST" })
+      const resNoAuth = await gatewayModule.default(reqNoAuth)
+      assert.equal(resNoAuth.status, 401)
+
+      // Case C: Genuine registered token -> passes auth (proceeds past 401)
+      gatewayModule.registerValidSession("ST_1234567890abcdef")
+      const reqGenuine = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", {
+        method: "POST",
+        headers: { "Authorization": "Bearer ST_1234567890abcdef" }
+      })
+      const resGenuine = await gatewayModule.default(reqGenuine)
+      assert.notEqual(resGenuine.status, 401, "Genuine token must not receive 401")
+
+      // Case D: Auth required false (local dev safe) -> missing token passes auth
+      process.env.AI_GATEWAY_AUTH_REQUIRED = "false"
+      const reqDev = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", { method: "POST" })
+      const resDev = await gatewayModule.default(reqDev)
+      assert.notEqual(resDev.status, 401, "Local dev request without token must not receive 401")
+
+      // Case E: Auth required false but invalid format sent -> 401
+      const reqBadDev = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", {
+        method: "POST",
+        headers: { "Authorization": "Bearer ST_malformed" }
+      })
+      const resBadDev = await gatewayModule.default(reqBadDev)
+      assert.equal(resBadDev.status, 401, "Malformed format must still be rejected")
+    } finally {
+      globalThis.fetch = origFetch
+      process.env.AI_GATEWAY_AUTH_REQUIRED = "false"
+      gatewayModule.clearSessionCache()
+    }
+  })
+
+  // INT-GW-09: Backend roundtrip via check_session simulated endpoint
+  await runTest("Integration", "INT-GW-09", "api/ai-gateway.ts: verifySessionToken checks Google Apps Script backend when un-cached", async () => {
+    gatewayModule.clearSessionCache()
+    const origFetch = globalThis.fetch
+    let backendCalls = 0
+
+    globalThis.fetch = async (url) => {
+      if (String(url).includes("action=check_session")) {
+        backendCalls++
+        const parsed = new URL(url)
+        const token = parsed.searchParams.get("session_token")
+        if (token === "ST_a1b2c3d4e5f60718") {
+          return new Response(JSON.stringify({ valid: true, role: "Lead Designer" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          })
+        }
+        return new Response(JSON.stringify({ valid: false, status: "error" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      }
+      return origFetch(url)
+    }
+
+    try {
+      // 1. Valid token from backend -> returns true
+      const validRes = await gatewayModule.verifySessionToken("ST_a1b2c3d4e5f60718")
+      assert.equal(validRes, true)
+      assert.equal(backendCalls, 1, "Should call backend on initial check")
+
+      // 2. Second call within TTL -> returns true from cache (backendCalls remains 1)
+      const cachedRes = await gatewayModule.verifySessionToken("ST_a1b2c3d4e5f60718")
+      assert.equal(cachedRes, true)
+      assert.equal(backendCalls, 1, "Second call must hit cache, not backend")
+
+      // 3. Negative token from backend -> returns false
+      const invalidRes = await gatewayModule.verifySessionToken("ST_9999999999999999")
+      assert.equal(invalidRes, false)
+      assert.equal(backendCalls, 2, "Should call backend for new token")
+    } finally {
+      globalThis.fetch = origFetch
+    }
   })
 }
 
@@ -1701,8 +1963,8 @@ if (failedTests > 0) {
     console.error(`  - [${f.tier} | ${f.id}] ${f.description}`)
     console.error(`    Error: ${f.error.message}`)
   })
-  process.exit(1)
+  process.exitCode = 1
 } else {
   console.log("\n🎉 ALL TESTS PASSED CLEANLY (Exit Code 0)")
-  process.exit(0)
+  process.exitCode = 0
 }
