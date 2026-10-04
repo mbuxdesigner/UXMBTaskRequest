@@ -13,10 +13,10 @@
 Tính năng **AI Chats (AI Chat Copilot)** trong cổng thông tin nội bộ `uxmb-task-request` được thiết kế chuyên biệt phục vụ đội ngũ **UX/UI Designer, Design Owner và Product Owner (PO)** tại Ngân hàng TMCP Quân đội (MBBank).
 
 ### 1.1. Mục tiêu Nâng cấp
-1. **Trải nghiệm thao tác 1-chạm & Tương thích Figma:** Loại bỏ hoàn toàn ma sát bôi đen thủ công; cung cấp khả năng sao chép câu trả lời trợ lý dưới dạng văn bản sạch (Clean Text) hoặc bảng định dạng Tab-Separated Values (TSV) để dán trực tiếp vào các layer văn bản và khung Auto-Layout của Figma.
-2. **Chất lượng phản hồi chuẩn MBBank:** Tích hợp bộ quy chuẩn **MB Bank Design Ops Copilot Persona** (mã màu thương hiệu `#1057FB`, `#ED1C24`, font Be Vietnam Pro, quy chuẩn 4 cấp độ bo góc ReUI, quy trình 7 khâu UX và SLA phản hồi PO 24h); xóa bỏ giới hạn cắt cụt cứng 2.000 ký tự để nạp đầy đủ tài liệu đặc tả PRD/Handoff lên đến 16.000 ký tự.
+1. **Trải nghiệm thao tác 1-chạm & Tương thích Figma:** Loại bỏ ma sát bôi đen thủ công; cung cấp khả năng sao chép câu trả lời trợ lý dưới dạng văn bản sạch (Clean Text) hoặc bảng định dạng Tab-Separated Values (TSV) để dán trực tiếp vào các layer văn bản và khung Auto-Layout của Figma.
+2. **Chất lượng phản hồi chuẩn MBBank:** Tích hợp bộ quy chuẩn **MB Bank Design Ops Copilot Persona** (mã màu thương hiệu `#1057FB`, `#ED1C24`, font Be Vietnam Pro, quy chuẩn 4 cấp độ bo góc ReUI, quy trình 7 khâu UX và SLA phản hồi PO 24h); xóa bỏ giới hạn cắt cụt cứng 2.000 ký tự để nạp tài liệu đặc tả PRD/Handoff lên đến 16.000 ký tự.
 3. **Bảo mật & An toàn thông tin cấp Ngân hàng:** Thu hồi toàn bộ khóa API khỏi client bundle production; thiết lập lớp xác thực Session Token thật và giới hạn tần suất (Rate Limiting) tại Gateway Serverless; tích hợp động cơ che giấu thông tin cá nhân (PII Masking) đối với email, số điện thoại, CCCD, CMND và mã nhân viên trước khi gửi ra mô hình ngôn ngữ lớn (LLM).
-4. **Độ ổn định & Khả năng phục hồi:** Xử lý lỗi thân thiện bằng tiếng Việt kèm nút Thử lại (Retry) giữ nguyên ngữ cảnh; khắc phục triệt để hiện tượng rò rỉ luồng stream khi unmount hoặc đổi phiên chat; phòng vệ lỗi phân tích JSON/Markdown không làm vỡ giao diện React.
+4. **Độ ổn định & Khả năng phục hồi:** Xử lý lỗi thân thiện bằng tiếng Việt kèm nút Thử lại (Retry) giữ nguyên ngữ cảnh; khắc phục hiện tượng rò rỉ luồng stream khi unmount hoặc đổi phiên chat; phòng vệ lỗi phân tích JSON/Markdown nhằm hạn chế nguy cơ vỡ giao diện React.
 
 ---
 
@@ -32,6 +32,11 @@ Toàn bộ các thay đổi được tổ chức thành các commit độc lập
   - Tích hợp hàm `verifySessionToken` xác minh token phiên làm việc thật (`ST_[a-f0-9]{16}`) thông qua cơ chế tra soát backend Google Apps Script / cache bộ nhớ TTL 5 phút.
   - Từ chối dứt khoát các token giả mạo (dù đúng định dạng regex `ST_...`) bằng mã lỗi HTTP 401 Unauthorized.
   - Điều khiển bằng biến môi trường `AI_GATEWAY_AUTH_REQUIRED`: mặc định `"false"` an toàn cho môi trường Local Development; bật `"true"` trên production để bắt buộc xác thực.
+- **Đính kèm Session Token từ Client (`src/services/aiService.ts`):**
+  - Hàm `getStoredSessionToken()` (`src/services/aiService.ts:64-78`) trích xuất token phiên (`ST_[a-f0-9]{16}`) từ `localStorage` hoặc `sessionStorage` (`ux_portal_session_auth`).
+  - Trong luồng chat stream `streamAIChat()` (`src/services/aiService.ts:741-764`), client đọc `const sessionToken = getStoredSessionToken()` (dòng 742) và gắn `gatewayHeaders["Authorization"] = \`Bearer ${sessionToken}\`` (dòng 747) trước khi gọi `fetch("/api/ai-gateway", ...)` tại dòng 751-764.
+  - Trong luồng kiểm tra `testAIConnection()` (`src/services/aiService.ts:466-479`), client cũng đọc `sessionToken` (dòng 466) và gắn `headers["Authorization"] = \`Bearer ${sessionToken}\`` (dòng 468) khi kiểm tra qua `/api/ai-gateway` (dòng 471-479).
+  - Bắt lỗi HTTP 401 (`src/services/aiService.ts:787-793`) khi phiên chưa đăng nhập hoặc hết hạn để thông báo rõ ràng cho người dùng.
 - **Giới hạn tần suất trượt (Sliding Window Rate Limiter):**
   - Cài đặt bộ giới hạn 20 yêu cầu/phút trên mỗi định danh người dùng/IP tại Gateway. Khi vượt ngưỡng, trả về mã lỗi HTTP 429 kèm thông điệp tiếng Việt và tiêu đề `Retry-After`.
 - **Động cơ che giấu dữ liệu cá nhân nhạy cảm (`src/lib/piiMasker.ts`):**
@@ -44,9 +49,9 @@ Toàn bộ các thay đổi được tổ chức thành các commit độc lập
   - Điền đầy đủ định danh trợ lý tại `AI_PERSONA`: Màu thương hiệu `#1057FB` (Primary Blue), `#ED1C24` / `#E60000` (MB Star Red), `#072569` (Navy Dark); Font Be Vietnam Pro; Quy chuẩn bo góc ReUI 4 cấp độ (`8px`, `12px`, `16px`, `9999px`, nghiêm cấm `rounded-3xl` cho enterprise modal); Quy trình 7 khâu UX MBBank; Quy tắc cảnh báo PO Pending sau 24h.
   - Tự động ghép nối `AI_PERSONA` vào `systemChunks` trong `buildChatPrompt`.
 - **Ngân sách ngữ cảnh thích ứng (Adaptive Context Budget):**
-  - Xóa bỏ hoàn toàn giới hạn cắt cứng 2.000 ký tự trong `serializeArtifactsContext`.
+  - Xóa bỏ giới hạn cắt cứng 2.000 ký tự trong `serializeArtifactsContext`.
   - Phân bổ ngân sách động: cấp tối đa **16.000 ký tự** cho tài liệu mục tiêu đang chọn (primary/target artifact) và **4.000 ký tự** cho các tài liệu phụ (secondary artifacts).
-  - Bảo toàn 100% nội dung các tài liệu hạt nhân như `Quy-trinh-7-khau-UX-MBBank.md` (4.8 KB) và `Tieu-chuan-Design-Handoff-MB.md` (3.2 KB).
+  - Bảo toàn trọn vẹn nội dung các tài liệu hạt nhân như `Quy-trinh-7-khau-UX-MBBank.md` (4.8 KB) và `Tieu-chuan-Design-Handoff-MB.md` (3.2 KB).
   - Tự động phát metadata trạng thái: `[METADATA TRẠNG THÁI: TOÀN VĂN ĐẦY ĐỦ — ... KÝ TỰ]` khi nằm trong ngân sách, hoặc `[METADATA TRẠNG THÁI: TÀI LIỆU BỊ CẮT BỚT — HIỂN THỊ ... KÝ TỰ]` khi vượt quá 16.000 ký tự.
 - **Phòng vệ Phân tích Cú pháp (Resilient Parsing):**
   - Bổ sung lớp bảo vệ `(data.items || []).map(...)` trong Action Cards, ngăn chặn lỗi crash `TypeError: Cannot read properties of undefined` khi LLM trả về JSON thiếu trường `items`.
@@ -64,11 +69,11 @@ Toàn bộ các thay đổi được tổ chức thành các commit độc lập
 - **Chỉnh sửa Prompt Inline & Cắt Lịch sử Sạch:**
   - Thành phần `EchoUserMessageBubble` hỗ trợ nút Chỉnh sửa (Edit) câu hỏi đã gửi.
   - Tích hợp cơ chế bảo vệ bộ gõ tiếng Việt (Vietnamese IME Guard) thông qua sự kiện `compositionstart` / `compositionend`, ngăn chặn tình trạng gửi nhầm tin nhắn khi đang gõ dấu phím `Enter`.
-  - Logic cắt ngắn lịch sử: khi người dùng sửa câu hỏi tại vị trí `msgIndex`, hệ thống cắt ngắn danh sách tin nhắn tại `slice(0, msgIndex)` và truyền `historyOverride`, ngăn ngừa triệt để hiện tượng nhân đôi bong bóng tin nhắn (duplicate user bubbles) và bảo toàn ngữ cảnh sạch cho LLM.
+  - Logic cắt ngắn lịch sử: khi người dùng sửa câu hỏi tại vị trí `msgIndex`, hệ thống cắt ngắn danh sách tin nhắn tại `slice(0, msgIndex)` và truyền `historyOverride`, ngăn ngừa hiện tượng nhân đôi bong bóng tin nhắn (duplicate user bubbles) và bảo toàn ngữ cảnh sạch cho LLM.
 - **Xử lý Lỗi Tiếng Việt Thân thiện & Nút Thử lại (Retry):**
   - Thành phần `EchoErrorCard` biên dịch mã lỗi kỹ thuật (401, 429, 503, mất mạng) thành giải thích tiếng Việt rõ ràng, cung cấp nút "Thử lại ngay" (Retry) tự động gửi lại prompt với đầy đủ ngữ cảnh chỉ với 1 cú nhấp chuột.
 - **Quản lý Vòng đời Luồng Stream & Dọn dẹp Tài nguyên:**
-  - Gắn sự kiện `abortController.signal.addEventListener("abort", onAbort)` bên trong wrapper Promise của `AIChatPage.tsx`. Khi người dùng bấm nút Dừng (Stop) hoặc chuyển trang, các bộ đếm thời gian `timerStep1`, `timerStep2` được xóa ngay lập tức qua `clearTimeout` và Promise bị từ chối với lỗi `AbortError`, triệt tiêu hoàn toàn hiện tượng promise treo vô tận trong bộ nhớ.
+  - Gắn sự kiện `abortController.signal.addEventListener("abort", onAbort)` bên trong wrapper Promise của `AIChatPage.tsx`. Khi người dùng bấm nút Dừng (Stop) hoặc chuyển trang, các bộ đếm thời gian `timerStep1`, `timerStep2` được xóa ngay lập tức qua `clearTimeout` và Promise bị từ chối với lỗi `AbortError`, tránh hiện tượng promise treo trong bộ nhớ.
   - Khi chuyển cuộc trò chuyện trên Sidebar (`recentList`), hệ thống tự động kích hoạt hủy stream cũ trước khi kích hoạt phiên chat mới.
   - Cải tiến `AIChatCopilot.tsx`: thêm hiệu ứng dọn dẹp khi đóng widget (`isOpen === false`), hủy stream nền và xóa placeholder đang chờ.
 - **Empty State & Bộ gợi ý Prompt Chuẩn MBBank:**
@@ -121,7 +126,7 @@ Báo cáo kiểm định ban đầu (`AUDIT_REPORT.md`) ghi nhận 51 phát hi�
 | **B16** | Mini Copilot (`AIChatCopilot.tsx`) bị mất lịch sử khi đóng widget | **ĐÚNG (True)** | *Đã giải quyết ở M3:* Lưu lịch sử phiên chat vào `localStorage` (`ux_mb_copilot_history`), nâng cấp auto-expanding textarea. |
 | **B17** | Cơ chế Auto-scroll cướp quyền điều khiển cuộn của Designer | **ĐÚNG (True)** | *Đã giải quyết ở M3:* Điều chỉnh hành vi cuộn mượt mà, không giật màn hình. |
 | **B18** | Kho lưu trữ Artifacts không hỗ trợ chỉnh sửa trực tiếp nội dung | **ĐÚNG (True)** | Ghi nhận thuộc lộ trình phát triển tính năng Giai đoạn 3 (Chat-to-Artifact Inline Editor). |
-| **C1** | **Rò rỉ API Key qua Client Bundle và LocalStorage** | **PHÂN ĐỊNH CHI TIẾT** | **Phần ĐÚNG (True):** Khóa `VITE_*` ở client bundle đã được triệt tiêu ở M1 qua cờ `DEV` guard và cấm direct call.<br>**Phần SAI (False Positive):** Nhận định về `token.json` và `.env.production` / `.env.development` trong git repo là **SAI**. `token.json` là tệp chứa design tokens của hệ thống giao diện ReUI (màu sắc, typography, spacing, border-radius), KHÔNG PHẢI file chứa credentials / auth tokens! Các file `.env.production` / `.env.development` được cố ý lưu trong git theo whitelist tường minh trong `.gitignore` (`!.env.production`, `!.env.development`), được kiểm thử tự động bởi `test-m1-vercel-pipeline-and-sheet-isolation.mjs`. Do đó, yêu cầu xóa `token.json` và `.env.*` khỏi git là ngộ nhận kỹ thuật (false positive). |
+| **C1** | **Rò rỉ API Key qua Client Bundle và LocalStorage** | **PHÂN ĐỊNH CHI TIẾT** | **Phần ĐÚNG (True):** Khóa `VITE_*` ở client bundle đã được loại bỏ ở M1 qua cờ `DEV` guard và cấm direct call.<br>**Phần SAI (False Positive):** Nhận định về `token.json` và `.env.production` / `.env.development` trong git repo là **SAI**. `token.json` là tệp chứa design tokens của hệ thống giao diện ReUI (màu sắc, typography, spacing, border-radius), KHÔNG PHẢI file chứa credentials / auth tokens! Các file `.env.production` / `.env.development` được cố ý lưu trong git theo whitelist tường minh trong `.gitignore` (`!.env.production`, `!.env.development`), được kiểm thử tự động bởi `test-m1-vercel-pipeline-and-sheet-isolation.mjs`. Do đó, yêu cầu xóa `token.json` và `.env.*` khỏi git là ngộ nhận kỹ thuật (false positive). |
 | **C2** | Cổng Edge Serverless không có xác thực người gọi | **ĐÚNG (True)** | *Đã giải quyết ở M1:* Thêm kiểm tra session token thật, chống giả mạo, kiểm soát qua cờ `AI_GATEWAY_AUTH_REQUIRED`. |
 | **C3** | Dữ liệu nhạy cảm ngân hàng không được lọc PII | **ĐÚNG (True)** | *Đã giải quyết ở M1:* Động cơ `piiMasker.ts` tự động làm mờ Email, SĐT, CCCD, CMND, Mã nhân viên trước khi gửi ra LLM. |
 | **C4** | Bypass phân quyền `canUseAi` chỉ kiểm tra ở Client | **ĐÚNG (True)** | *Đã giải quyết ở M1:* Gateway bắt buộc xác thực token người gọi và kiểm tra quyền tương ứng. |
@@ -131,7 +136,7 @@ Báo cáo kiểm định ban đầu (`AUDIT_REPORT.md`) ghi nhận 51 phát hi�
 | **C8** | Thiếu Sliding Window & Token Pruning cho Context History | **ĐÚNG (True)** | Đã kiểm soát số lượng tin nhắn trong context và giới hạn adaptive context budget. |
 | **C9** | Re-render toàn bộ trang mỗi 40ms khi nhận SSE Stream | **ĐÚNG (True)** | Đã áp dụng `React.memo` cho `EchoMessageRow` và hạn chế render thừa trên cây cha. |
 | **C10** | File mã nguồn AIChatPage quá lớn (4.898 dòng) và thiếu Type Safety | **ĐÚNG (True)** | Đã bóc tách thành công 4 module con (`EchoAssistantActionBar`, `EchoUserMessageBubble`, `EchoErrorCard`, `figmaExportUtils`); lộ trình Giai đoạn 3 sẽ tái cấu trúc toàn diện. |
-| **C11** | Độ phủ kiểm thử cho AI Chats bằng 0 (Zero Test Coverage) | **ĐÚNG (True)** | *Đã giải quyết triệt để:* Xây dựng và mở rộng test suite `tests/test-ai-chats-e2e-and-audit.mjs` đạt **145 bài test** tự động, bao phủ 100% các tính năng bảo mật, chất lượng và UX. |
+| **C11** | Độ phủ kiểm thử cho AI Chats bằng 0 (Zero Test Coverage) | **ĐÚNG (True)** | *Đã giải quyết:* Xây dựng và mở rộng test suite `tests/test-ai-chats-e2e-and-audit.mjs` đạt **145 bài test** tự động, bao phủ các tính năng bảo mật, chất lượng và tiện ích dữ liệu. |
 | **D1** | Edge Gateway hoàn toàn không có Logging & Observability | **ĐÚNG (True)** | Đã bổ sung cấu trúc phản hồi lỗi chi tiết tại Gateway; lộ trình Giai đoạn 2 sẽ kết nối log sink tập trung. |
 | **D2** | Thiếu hệ thống giám sát và cảnh báo lỗi tập trung (Sentry) | **ĐÚNG (True)** | Thuộc kế hoạch tích hợp giám sát vận hành cấp tổ chức (Giai đoạn 2). |
 | **D3** | Bộ đếm hạn mức Token & Usage chỉ lưu tạm ở LocalStorage | **ĐÚNG (True)** | Đã sửa khởi tạo logic hạn mức; ghi nhận cần bảng Usage Logs trên CSDL trong dài hạn. |
@@ -144,34 +149,93 @@ Báo cáo kiểm định ban đầu (`AUDIT_REPORT.md`) ghi nhận 51 phát hi�
 
 ## 4. HƯỚNG DẪN CẤU HÌNH MÔI TRƯỜNG & TRIỂN KHAI
 
-### 4.1. Cấu hình Khóa API Serverless trên Vercel (`OPENROUTER_API_KEY`)
-- **Mục đích:** Cung cấp khóa bí mật cho hàm Serverless Edge `/api/ai-gateway.ts` kết nối tới cổng OpenRouter.
-- **Cách cấu hình trên Vercel Dashboard:**
-  1. Truy cập dự án `uxmb-task-request` trên Vercel -> Chọn tab **Settings** -> **Environment Variables**.
-  2. Thêm biến môi trường mới:
-     - **Key:** `OPENROUTER_API_KEY`
-     - **Value:** `<sk-or-v1-...>` (Khóa OpenRouter do Quản trị viên cấp)
-     - **Environment:** Chọn đầy đủ `Production`, `Preview`, `Development`.
-  3. Bấm **Save** và thực hiện **Redeploy** dự án để biến môi trường có hiệu lực.
-- **Xử lý khi chưa cấu hình khóa:**
-  - Nếu `OPENROUTER_API_KEY` chưa được đặt trên Vercel, Gateway sẽ phản hồi mã lỗi `503 Service Unavailable` kèm thông báo tiếng Việt: *"Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ. Vui lòng liên hệ Quản trị viên."* Giao diện người dùng sẽ hiển thị Error Card hướng dẫn rõ ràng thay vì treo spinner.
+### 4.1. Việc Bắt buộc Làm Trước Khi Lên Production (Mandatory Production Prerequisites)
+⚠️ **CẢNH BÁO BẢO MẬT & ĐIỀU KIỆN TIÊN QUYẾT BẮT BUỘC:**  
+Trước khi triển khai hoặc phát hành ứng dụng trên môi trường Production (Vercel), Quản trị viên hệ thống **BẮT BUỘC** phải hoàn tất cấu hình đồng thời cả hai biến môi trường máy chủ (Server-side Environment Variables) sau đây trên Vercel Dashboard:
 
-### 4.2. Cấu hình Xác thực Gateway (`AI_GATEWAY_AUTH_REQUIRED`)
-- **Mục đích:** Bật/tắt cơ chế bắt buộc xác thực caller session token tại Edge Gateway.
-- **Giá trị hỗ trợ:**
-  - `AI_GATEWAY_AUTH_REQUIRED="false"` (hoặc để trống/undefined): **Chế độ mặc định an toàn cho Local Dev**. Gateway cho phép request từ client chạy thử nghiệm cục bộ không cần session token, giúp việc phát triển giao diện không bị gián đoạn.
-  - `AI_GATEWAY_AUTH_REQUIRED="true"`: **Chế độ Production Ngân hàng**. Bắt buộc mọi yêu cầu gửi tới `/api/ai-gateway` phải có header `Authorization: Bearer ST_<token>` hợp lệ và đã được backend xác nhận. Các yêu cầu thiếu token hoặc dùng token giả mạo sẽ bị chặn ngay lập tức với mã lỗi `401 Unauthorized`.
+| STT | Biến Môi Trường | Giá trị Bắt buộc trên Production | Phạm vi Môi trường | Mục đích & Rủi ro Nghiêm trọng nếu Chưa Cấu hình |
+| :---: | :--- | :---: | :---: | :--- |
+| 1 | `OPENROUTER_API_KEY` | `<sk-or-v1-...>` (Khóa OpenRouter do MB cấp) | `Production`, `Preview` | Cung cấp khóa API máy chủ bí mật để Gateway `/api/ai-gateway` kết nối tới LLM provider. Nếu thiếu, Gateway sẽ trả về mã lỗi HTTP 503 (`MISSING_SERVER_API_KEY`). |
+| 2 | `AI_GATEWAY_AUTH_REQUIRED` | `true` | `Production` | **ĐIỀU KIỆN TIÊN QUYẾT ĐỂ KHẮC PHỤC CRITICAL FINDING C2.** Kích hoạt bắt buộc xác thực caller session token (`ST_...`) tại Gateway. |
+
+🔴 **LƯU Ý CỐT TỬ VỀ CỜ XÁC THỰC GATEWAY (CRITICAL FINDING C2):**  
+Do cờ xác thực người gọi tại Gateway (`AI_GATEWAY_AUTH_REQUIRED`) được thiết kế mang giá trị mặc định là `"false"` (hoặc khi không được khai báo) nhằm tạo sự thuận tiện cho môi trường phát triển cục bộ (Local Development) và kiểm thử ngoại tuyến:  
+**NẾU `AI_GATEWAY_AUTH_REQUIRED=true` KHÔNG ĐƯỢC CẤU HÌNH TƯỜNG MINH TRÊN BIẾN MÔI TRƯỜNG PRODUCTION CỦA VERCEL, THÌ GATEWAY TRÊN MÔI TRƯỜNG PRODUCTION VẪN SẼ TIẾP TỤC Ở TRẠNG THÁI MỞ TOANG (UNAUTHENTICATED) NHƯ TRƯỚC ĐÂY, VÀ PHÁT HIỆN CRITICAL FINDING C2 TỪ `AUDIT_REPORT.md` SẼ HOÀN TOÀN CHƯA ĐƯỢC KHẮC PHỤC.** Bất kỳ ai có URL endpoint đều có thể gửi yêu cầu nặc danh và tiêu hao ngân sách LLM của tổ chức.
+
+### 4.2. Xác Nhận Cơ Chế Client Gửi Token Xác Thực (`src/services/aiService.ts`)
+Để người vận hành có thể đối soát và kiểm chứng độc lập luồng gửi token từ giao diện người dùng tới Gateway, các điểm mã nguồn client thực hiện đính kèm header `Authorization` được ghi nhận chính xác tại tệp tin `src/services/aiService.ts`:
+- **Trích xuất Session Token (`src/services/aiService.ts:64-78`):**  
+  Hàm `getStoredSessionToken()` trích xuất phiên làm việc từ `localStorage` hoặc `sessionStorage` tại khóa `ux_portal_session_auth`:
+  ```typescript
+  // src/services/aiService.ts:64-78
+  export function getStoredSessionToken(): string | null {
+    if (typeof window === "undefined") return null
+    try {
+      const raw = localStorage.getItem("ux_portal_session_auth") || sessionStorage.getItem("ux_portal_session_auth")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed.sessionToken === "string" && parsed.sessionToken.trim()) {
+          return parsed.sessionToken.trim()
+        }
+      }
+    } catch {}
+    return null
+  }
+  ```
+- **Đính kèm Token trong Luồng Chat Stream (`src/services/aiService.ts:741-764`):**  
+  Trong hàm `streamAIChat()`, khi ứng dụng chạy ở môi trường production (`!isDev` hoặc `!isLocalDev`), client chuẩn bị tiêu đề và gọi Gateway:
+  ```typescript
+  // src/services/aiService.ts:741-754
+  if (!response && (!isLocalDev || !isDev)) {
+    const sessionToken = getStoredSessionToken()
+    const gatewayHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+    if (sessionToken) {
+      gatewayHeaders["Authorization"] = `Bearer ${sessionToken}`
+    }
+
+    try {
+      const gRes = await fetch("/api/ai-gateway", {
+        method: "POST",
+        headers: gatewayHeaders,
+        body: JSON.stringify({ ... }),
+        signal: controller.signal,
+      })
+  ```
+- **Đính kèm Token trong Luồng Kiểm tra Kết nối (`src/services/aiService.ts:466-479`):**  
+  Trong hàm `testAIConnection()`, client kiểm tra `if (!isDev)` và đính kèm `headers["Authorization"] = \`Bearer ${sessionToken}\`` (dòng 466-468) trước khi gọi `fetch("/api/ai-gateway", { method: "POST", headers, ... })` tại dòng 471-479.
+- **Xử lý Khi Chưa Đăng nhập hoặc Token Hết hạn (`src/services/aiService.ts:787-793`):**  
+  Nếu người dùng chưa đăng nhập (không có `sessionToken` trong storage), client sẽ gửi yêu cầu không có header `Authorization`. Khi `AI_GATEWAY_AUTH_REQUIRED=true`, Gateway trả về mã HTTP `401 Unauthorized`. Client bắt mã lỗi này và hiển thị thông báo thân thiện: *"Phiên đăng nhập không hợp lệ hoặc đã hết hạn."*
+
+### 4.3. Các Bước Cấu hình trên Vercel Dashboard
+1. Truy cập vào dự án `uxmb-task-request` trên Vercel -> Chọn tab **Settings** -> **Environment Variables**.
+2. Thêm biến thứ nhất:
+   - **Key:** `OPENROUTER_API_KEY`
+   - **Value:** `<sk-or-v1-...>` (Khóa OpenRouter do Quản trị viên cấp)
+   - **Environment:** Chọn `Production`, `Preview`.
+3. Thêm biến thứ hai:
+   - **Key:** `AI_GATEWAY_AUTH_REQUIRED`
+   - **Value:** `true`
+   - **Environment:** Chọn `Production`.
+4. Bấm **Save** cho từng biến và thực hiện **Redeploy** deployment mới nhất để biến môi trường có hiệu lực trên serverless runtime.
+- **Xử lý khi chưa cấu hình khóa `OPENROUTER_API_KEY`:**  
+  Nếu `OPENROUTER_API_KEY` chưa được đặt trên Vercel, Gateway sẽ phản hồi mã lỗi `503 Service Unavailable` kèm thông báo: *"Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ. Vui lòng liên hệ Quản trị viên."* Giao diện người dùng sẽ hiển thị Error Card hướng dẫn rõ ràng thay vì treo spinner.
+
+### 4.4. Cơ Chế Chế Độ Kép của Cờ `AI_GATEWAY_AUTH_REQUIRED`
+- `AI_GATEWAY_AUTH_REQUIRED="false"` (hoặc để trống/undefined): **Chế độ mặc định an toàn cho Local Dev**. Gateway cho phép request từ client chạy thử nghiệm cục bộ không cần session token, giúp việc phát triển giao diện không bị gián đoạn.
+- `AI_GATEWAY_AUTH_REQUIRED="true"`: **Chế độ Production Ngân hàng**. Bắt buộc mọi yêu cầu gửi tới `/api/ai-gateway` phải có header `Authorization: Bearer ST_<token>` hợp lệ và đã được backend xác nhận. Các yêu cầu thiếu token hoặc dùng token giả mạo sẽ bị chặn ngay lập tức với mã lỗi `401 Unauthorized`.
 
 ---
 
 ## 5. MINH BẠCH GIỚI HẠN KỸ THUẬT (TECHNICAL LIMITATIONS)
 
-Nhằm đảm bảo tính trung thực và minh bạch tuyệt đối theo chuẩn kiểm định ngân hàng, đội ngũ phát triển làm rõ hai giới hạn kỹ thuật hiện tại:
+Nhằm đảm bảo tính trung thực và minh bạch theo chuẩn kiểm định ngân hàng, đội ngũ phát triển làm rõ hai giới hạn kỹ thuật hiện tại:
 
 ### 5.1. Giới hạn Cơ chế Rate Limiting trên Kiến trúc Serverless/Edge
 - Bộ giới hạn tần suất (Rate Limiter) hiện tại trong `api/ai-gateway.ts` hoạt động theo thuật toán **Sliding Window (20 req/phút)** lưu trữ trong bộ nhớ (`in-memory Map`).
 - **Bản chất kỹ thuật:** Do Vercel Edge / Serverless Function chạy trên kiến trúc micro-isolates phân tán toàn cầu, bộ nhớ in-memory được duy trì theo **từng instance/isolate độc lập**, không được đồng bộ tập trung xuyên suốt các vùng địa lý (Regions).
-- **Mức độ bảo vệ:** Đây là **lớp giảm thiểu rủi ro cơ bản (Mitigation Layer)** hiệu quả chống lại các hành vi spam liên tục từ một luồng kết nối vào cùng một serverless worker. Đây **KHÔNG PHẢI** là giải pháp phân tán tuyệt đối (Global Distributed Rate Limiter như Redis / Upstash). Nếu tổ chức cần bảo vệ ngân sách nghiêm ngặt chống tấn công phân tán quy mô lớn, cần kết nối Redis tập trung trong lộ trình nâng cấp hạ tầng tiếp theo.
+- **Mức độ bảo vệ:** Đây là **lớp giảm thiểu rủi ro cơ bản (Mitigation Layer)** hiệu quả chống lại các hành vi spam liên tục từ một luồng kết nối vào cùng một serverless worker. Đây **KHÔNG PHẢI** là giải pháp phân tán hoàn chỉnh (Global Distributed Rate Limiter như Redis / Upstash). Nếu tổ chức cần bảo vệ ngân sách nghiêm ngặt chống tấn công phân tán quy mô lớn, cần kết nối Redis tập trung trong lộ trình nâng cấp hạ tầng tiếp theo.
 
 ### 5.2. Minh bạch về Phạm vi Kiểm thử Tự động vs Kiểm thử Giao diện
 - **Phần ĐÃ CÓ Kiểm thử Tự động Node.js (145 bài test tự động đạt 100% Pass):**
@@ -185,12 +249,12 @@ Nhằm đảm bảo tính trung thực và minh bạch tuyệt đối theo chu�
   - Logic cắt lịch sử khi sửa câu hỏi người dùng (ngăn chặn nhân đôi tin nhắn).
   - Vòng đời hủy stream và dọn dẹp timer của `AbortController`.
   - Quét tĩnh mã nguồn và kiểm định whitelist git.
-- **Phần CHƯA CÓ Kiểm thử Tự động (Là Giao diện Tương tác Thuần — Kiểm thử Thủ công):**
+- **Phần CHƯA CÓ Kiểm thử Tự động (Là Giao diện Tương tác Thuần — Cần Người Dùng Kiểm Tra Thủ Công):**
   - Tương tác kéo thả chuột / dán Clipboard vào vùng Upload ReUI (`c-file-upload-10`).
   - Trải nghiệm mở modal floating của `AIChatCopilot` trên trang Planner.
-  - Thao tác cuộn chuột mượt mà của người dùng khi giao diện đang stream.
+  - Thao tác cuộn chuột của người dùng khi giao diện đang stream.
   - Hiển thị trực quan của component `VisualErrorBoundary` khi vẽ biểu đồ SVG hoặc sơ đồ Mermaid thực tế trên trình duyệt.
-  - *Ghi chú:* Các thành phần UI tương tác trên đã được kiểm chứng hoạt động trực quan trong môi trường phát triển, nhưng được phân định minh bạch là chưa có kịch bản test Node.js tự động.
+  - *Biên giới kiểm thử kỹ thuật:* Các thành phần UI tương tác nói trên chưa kiểm chứng trực quan, chưa có test tự động, cần người dùng kiểm tra thủ công. Hệ thống tuân thủ nguyên tắc kiểm định độc lập: chỉ những hạng mục có kịch bản kiểm thử tự động (automated test suites) mới được khẳng định là đã được xác minh kỹ thuật.
 
 ---
 
@@ -228,10 +292,24 @@ Nếu chỉ cần hoàn tác một nhóm tính năng cụ thể mà vẫn giữ 
 
 ---
 
-## 7. KẾT LUẬN & SẴN SÀNG NGHIỆM THU
+## 7. TỔNG KẾT KỸ THUẬT & CÁC HẠNG MỤC BẮT BUỘC KIỂM TRA THỦ CÔNG
 
-Phân hệ AI Chats của MBBank UX Task Request Portal đã hoàn thành xuất sắc toàn bộ các mục tiêu đặt ra trong bản chỉ đạo:
-- **0 lỗi TypeScript** phát sinh so với baseline.
-- **Bản build Vite production thành công 100%** trong ~1.8 giây, gói `dist/` hoàn toàn sạch bóng các khóa API bí mật.
-- **Bộ kiểm thử tự động 145/145 bài test** đạt kết quả tuyệt đối (Exit Code 0), vận hành độc lập, không phụ thuộc mạng ngoài.
-- Sẵn sàng bàn giao cho Ban Đánh giá và Đội ngũ UX/UI Designer MBBank đưa vào sử dụng chính thức.
+### 7.1. Tóm tắt Hiện trạng Kỹ thuật Đã Được Kiểm thử Tự động
+Phân hệ AI Chats của MBBank UX Task Request Portal trên nhánh `fix/ai-chats-audit` đã hoàn thành triển khai các hạng mục kỹ thuật theo chỉ đạo và được kiểm thử tự động xác nhận:
+- **Biên dịch & Kiểu dữ liệu:** Đạt chuẩn TypeScript, 0 lỗi phát sinh trên các tệp tin được chỉnh sửa so với baseline `92292d1`.
+- **Đóng gói Bundle Production:** Bản build Vite production thành công trong ~1.8 giây; gói `dist/` không chứa các biến khóa bí mật `VITE_OPENROUTER_API_KEY`, `VITE_GEMINI_API_KEY` hay giá trị khóa API.
+- **Bộ kiểm thử tự động Node.js:** Đạt **145/145 bài test** thành công (Exit Code 0), vận hành độc lập không phụ thuộc mạng ngoài, bao phủ: che giấu PII, xác thực gateway caller, rate limiting, ngân sách ngữ cảnh động, định dạng xuất Figma (Clean Text và TSV), phân tích an toàn dữ liệu và dọn dẹp tài nguyên stream abort.
+
+### 7.2. Các Hạng mục Bắt buộc Người Dùng/Vận Hành Phải Kiểm Tra Thủ Công Trước Khi Triển Khai
+Do phạm vi kiểm thử tự động chỉ bao phủ tầng module/service và Node.js runtime, các hạng mục sau **BẮT BUỘC PHẢI ĐƯỢC NGƯỜI DÙNG KIỂM TRA THỦ CÔNG** trên môi trường thực tế trước khi đưa vào sử dụng chính thức:
+
+1. **Cấu hình Biến Môi Trường trên Vercel:**  
+   Bắt buộc thiết lập `OPENROUTER_API_KEY` (khóa máy chủ) và `AI_GATEWAY_AUTH_REQUIRED=true` trên Vercel Production. Cần kiểm tra kỹ biến này vì nếu thiếu, Gateway vẫn mở tự do cho mọi client mà không yêu cầu xác thực phiên.
+2. **Kiểm tra Thủ công Luồng Xác Thực Người Dùng:**  
+   Đăng nhập tài khoản trên web portal thực tế, gửi tin nhắn chat AI và xác nhận cuộc gọi `/api/ai-gateway` đính kèm thành công header `Authorization: Bearer ST_<token>` mà không bị từ chối với lỗi 401.
+3. **Kiểm tra Thủ công Tiện ích Xuất Dữ liệu cho Figma:**  
+   Sử dụng nút *Sao chép cho Figma (Text sạch)* và *Sao chép bảng TSV* từ phản hồi của trợ lý, dán trực tiếp vào phần mềm Figma (Desktop/Web) để kiểm tra các layer văn bản và khung Auto-Layout hiển thị đúng kỳ vọng.
+4. **Kiểm tra Bộ Gõ Tiếng Việt & Phím Tắt Soạn Thảo:**  
+   Gõ thử các ký tự có dấu tiếng Việt (Telex/VNI) trong ô nhập prompt để đảm bảo không bị gửi nhầm khi đang gõ dấu; kiểm tra phím `Enter` (gửi), `Shift+Enter` (xuống dòng) và phím `Tab` điều hướng menu Slash Commands.
+5. **Kiểm tra Trực quan Giao diện & Trạng Thái Lỗi:**  
+   Kiểm tra giao diện Empty State gợi ý prompt khởi đầu MBBank, kiểm tra nút Dừng (Stop) khi đang stream câu trả lời dài, và kiểm tra hiển thị Error Card khi mất kết nối mạng.
