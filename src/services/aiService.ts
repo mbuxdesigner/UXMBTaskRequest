@@ -345,6 +345,23 @@ const INITIAL_DEFAULT_KEY =
 // FREE_REQUESTS_PER_KEY_PER_DAY is exported above (line 49)
 const STORAGE_AI_DAILY_USAGE_KEY = "ux_mb_ai_daily_usage"
 
+export interface ModelGroupQuota {
+  groupId: "gemini" | "openrouter"
+  groupName: string // "Gemini Models" hoặc "Claude and GPT models"
+  provider: string // "Google AI Studio" hoặc "OpenRouter"
+  usedRequests: number
+  totalRequests: number
+  remainingRequests: number
+  percentRemaining: number // % còn lại như trong giao diện Cursor (0-100%)
+  percentUsed: number
+  status: "available" | "rate_limited" | "exhausted" // Còn | Tạm nghỉ (15 RPM) | Hết lượt
+  statusBadge: "Còn" | "Tạm nghỉ (15 RPM)" | "Hết lượt"
+  statusText: string // "Còn 1.486 lượt" | "Đã đạt hạn mức"
+  refreshNotice: string // Thời gian làm mới tự động (ví dụ lúc 00:00)
+  keysCount: number
+  activeKeysCount: number
+}
+
 export interface AIDailyUsage {
   date: string
   usedRequests: number
@@ -354,13 +371,50 @@ export interface AIDailyUsage {
   openRouterKeysCount: number
   googleKeysCount: number
   remainingRequests: number
+  // Tính riêng cho từng nhóm model (chuẩn theo phong cách Cursor UI)
+  gemini: ModelGroupQuota
+  openRouter: ModelGroupQuota
 }
 
 /**
  * Lấy thống kê số lượng request AI đã dùng trong ngày theo danh sách API Keys
  * Hợp nhất: Total Requests = (OpenRouter Keys * 50) + (Google Keys * 1.500)
+ * Đồng thời tính riêng hạn mức cho từng nhóm: Gemini Models vs Claude & GPT Models
  */
 export function getDailyAIUsage(): AIDailyUsage {
+  const dummyGemini: ModelGroupQuota = {
+    groupId: "gemini",
+    groupName: "Gemini Models",
+    provider: "Google AI Studio",
+    usedRequests: 0,
+    totalRequests: 1500,
+    remainingRequests: 1500,
+    percentRemaining: 100,
+    percentUsed: 0,
+    status: "available",
+    statusBadge: "Còn",
+    statusText: "Còn 1.500 lượt",
+    refreshNotice: "Bạn đã dùng một phần hạn mức ngày, tự động làm mới lúc 00:00.",
+    keysCount: 1,
+    activeKeysCount: 1,
+  }
+  const dummyOpenRouter: ModelGroupQuota = {
+    groupId: "openrouter",
+    groupName: "Claude and GPT models",
+    provider: "OpenRouter",
+    usedRequests: 0,
+    totalRequests: 50,
+    remainingRequests: 50,
+    percentRemaining: 100,
+    percentUsed: 0,
+    status: "available",
+    statusBadge: "Còn",
+    statusText: "Còn 50 lượt",
+    refreshNotice: "Bạn đã dùng một phần hạn mức ngày, tự động làm mới lúc 00:00.",
+    keysCount: 1,
+    activeKeysCount: 1,
+  }
+
   if (typeof window === "undefined") {
     return {
       date: "",
@@ -371,6 +425,8 @@ export function getDailyAIUsage(): AIDailyUsage {
       openRouterKeysCount: 1,
       googleKeysCount: 1,
       remainingRequests: 1550,
+      gemini: dummyGemini,
+      openRouter: dummyOpenRouter,
     }
   }
   const openRouterKeys = getStoredAIKeys().filter(k => k.status !== "error")
@@ -386,18 +442,85 @@ export function getDailyAIUsage(): AIDailyUsage {
   const todayStr = new Date().toLocaleDateString("en-CA") // "YYYY-MM-DD" theo local time
 
   let usedRequests = 14
+  let geminiUsed = 8
+  let openRouterUsed = 6
+
   try {
     const raw = localStorage.getItem(STORAGE_AI_DAILY_USAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed.date === todayStr && typeof parsed.count === "number") {
         usedRequests = Number(parsed.count)
+        geminiUsed = typeof parsed.geminiCount === "number" ? Number(parsed.geminiCount) : Math.min(usedRequests, Math.round(usedRequests * 0.6))
+        openRouterUsed = typeof parsed.openRouterCount === "number" ? Number(parsed.openRouterCount) : Math.max(0, usedRequests - geminiUsed)
       }
     }
   } catch {}
 
   const percent = Math.min(100, Math.round((usedRequests / totalRequests) * 100))
   const remainingRequests = Math.max(0, totalRequests - usedRequests)
+
+  // 1. Nhóm Gemini Models (Google AI Studio Direct API)
+  const geminiTotal = Math.max(1500, (googleKeysCount || 1) * GOOGLE_REQUESTS_PER_KEY_PER_DAY)
+  const geminiRemaining = Math.max(0, geminiTotal - geminiUsed)
+  const geminiPercentRemaining = Math.min(100, Math.max(0, Math.round((geminiRemaining / geminiTotal) * 100)))
+  const geminiActiveKeys = googleKeys.filter(k => k.status === "active" || (k.rpmLimitResetAt && k.rpmLimitResetAt <= Date.now()))
+  const isGeminiAllRateLimited = googleKeys.length > 0 && geminiActiveKeys.length === 0
+  const geminiStatus: "available" | "rate_limited" | "exhausted" =
+    geminiRemaining <= 0 ? "exhausted" : isGeminiAllRateLimited ? "rate_limited" : "available"
+
+  const geminiQuota: ModelGroupQuota = {
+    groupId: "gemini",
+    groupName: "Gemini Models",
+    provider: "Google AI Studio",
+    usedRequests: geminiUsed,
+    totalRequests: geminiTotal,
+    remainingRequests: geminiRemaining,
+    percentRemaining: geminiPercentRemaining,
+    percentUsed: 100 - geminiPercentRemaining,
+    status: geminiStatus,
+    statusBadge: geminiStatus === "available" ? "Còn" : geminiStatus === "rate_limited" ? "Tạm nghỉ (15 RPM)" : "Hết lượt",
+    statusText: geminiStatus === "available"
+      ? `Còn ${geminiRemaining.toLocaleString("vi-VN")} lượt`
+      : geminiStatus === "rate_limited"
+      ? "Tạm dừng 15 RPM (Đang tự phục hồi)"
+      : "Đã đạt hạn mức hôm nay",
+    refreshNotice: geminiRemaining <= 0
+      ? "Bạn đã dùng hết hạn mức ngày của Gemini, sẽ tự động làm mới lúc 00:00."
+      : isGeminiAllRateLimited
+      ? "Toàn bộ key Google tạm chạm 15 RPM, tự động phục hồi trong ít phút."
+      : `Đã dùng ${geminiUsed.toLocaleString("vi-VN")}/${geminiTotal.toLocaleString("vi-VN")} lượt, tự động làm mới lúc 00:00.`,
+    keysCount: Math.max(1, googleKeysCount),
+    activeKeysCount: geminiActiveKeys.length,
+  }
+
+  // 2. Nhóm Claude, GPT & OpenRouter Models
+  const openRouterTotal = Math.max(50, (openRouterKeysCount || 1) * OPENROUTER_REQUESTS_PER_KEY_PER_DAY)
+  const openRouterRemaining = Math.max(0, openRouterTotal - openRouterUsed)
+  const openRouterPercentRemaining = Math.min(100, Math.max(0, Math.round((openRouterRemaining / openRouterTotal) * 100)))
+  const openRouterStatus: "available" | "rate_limited" | "exhausted" =
+    openRouterRemaining <= 0 ? "exhausted" : "available"
+
+  const openRouterQuota: ModelGroupQuota = {
+    groupId: "openrouter",
+    groupName: "Claude and GPT models",
+    provider: "OpenRouter",
+    usedRequests: openRouterUsed,
+    totalRequests: openRouterTotal,
+    remainingRequests: openRouterRemaining,
+    percentRemaining: openRouterPercentRemaining,
+    percentUsed: 100 - openRouterPercentRemaining,
+    status: openRouterStatus,
+    statusBadge: openRouterStatus === "available" ? "Còn" : "Hết lượt",
+    statusText: openRouterStatus === "available"
+      ? `Còn ${openRouterRemaining.toLocaleString("vi-VN")} lượt`
+      : "Đã đạt hạn mức hôm nay",
+    refreshNotice: openRouterRemaining <= 0
+      ? "Bạn đã chạm giới hạn 50 lượt/ngày của OpenRouter, sẽ tự động làm mới lúc 00:00."
+      : `Đã dùng ${openRouterUsed.toLocaleString("vi-VN")}/${openRouterTotal.toLocaleString("vi-VN")} lượt, tự động làm mới lúc 00:00.`,
+    keysCount: Math.max(1, openRouterKeysCount),
+    activeKeysCount: openRouterKeys.filter(k => k.status === "active").length,
+  }
 
   return {
     date: todayStr,
@@ -408,43 +531,110 @@ export function getDailyAIUsage(): AIDailyUsage {
     openRouterKeysCount,
     googleKeysCount,
     remainingRequests,
+    gemini: geminiQuota,
+    openRouter: openRouterQuota,
   }
 }
 
 /**
  * Ghi nhận 1 lượt request AI hoàn thành hoặc khởi tạo trong ngày
+ * Hỗ trợ ghi nhận riêng theo từng nhà cung cấp (provider): "gemini" hoặc "openrouter"
  */
-export function recordAIRequestUsage(): AIDailyUsage {
+export function recordAIRequestUsage(provider?: "gemini" | "openrouter"): AIDailyUsage {
   if (typeof window === "undefined") return getDailyAIUsage()
   const todayStr = new Date().toLocaleDateString("en-CA")
   const current = getDailyAIUsage()
   let usedRequests = current.usedRequests
+  let geminiUsed = current.gemini.usedRequests
+  let openRouterUsed = current.openRouter.usedRequests
+
   try {
     const raw = localStorage.getItem(STORAGE_AI_DAILY_USAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed.date === todayStr && typeof parsed.count === "number") {
         usedRequests = Number(parsed.count)
+        geminiUsed = typeof parsed.geminiCount === "number" ? Number(parsed.geminiCount) : geminiUsed
+        openRouterUsed = typeof parsed.openRouterCount === "number" ? Number(parsed.openRouterCount) : openRouterUsed
       }
     }
   } catch {}
 
   usedRequests += 1
+  if (provider === "gemini") {
+    geminiUsed += 1
+  } else if (provider === "openrouter") {
+    openRouterUsed += 1
+  } else {
+    if (current.gemini.remainingRequests > 0) {
+      geminiUsed += 1
+    } else {
+      openRouterUsed += 1
+    }
+  }
+
   try {
     localStorage.setItem(STORAGE_AI_DAILY_USAGE_KEY, JSON.stringify({
       date: todayStr,
       count: usedRequests,
+      geminiCount: geminiUsed,
+      openRouterCount: openRouterUsed,
       lastUpdated: new Date().toISOString(),
     }))
   } catch {}
 
   try {
     window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed", {
-      detail: { usedRequests, date: todayStr }
+      detail: { usedRequests, geminiUsed, openRouterUsed, date: todayStr }
     }))
   } catch {}
 
   return getDailyAIUsage()
+}
+
+/**
+ * Kiểm tra nhanh trạng thái còn hay hết lượt của một model cụ thể
+ */
+export function getModelAvailability(modelId: string): {
+  isAvailable: boolean
+  groupName: string
+  percentRemaining: number
+  remainingRequests: number
+  badgeText: string // "Còn 98%" | "Hết" | "Chờ 60s"
+  badgeVariant: "success" | "warning" | "danger"
+} {
+  const usage = getDailyAIUsage()
+  const isGemini = modelId === "gemini-auto" || modelId.startsWith("gemini-") || modelId.includes("gemini")
+  const group = isGemini ? usage.gemini : usage.openRouter
+
+  if (group.status === "rate_limited") {
+    return {
+      isAvailable: false,
+      groupName: group.groupName,
+      percentRemaining: group.percentRemaining,
+      remainingRequests: group.remainingRequests,
+      badgeText: "Chờ 60s",
+      badgeVariant: "warning",
+    }
+  }
+  if (group.status === "exhausted" || group.remainingRequests <= 0) {
+    return {
+      isAvailable: false,
+      groupName: group.groupName,
+      percentRemaining: 0,
+      remainingRequests: 0,
+      badgeText: "Hết",
+      badgeVariant: "danger",
+    }
+  }
+  return {
+    isAvailable: true,
+    groupName: group.groupName,
+    percentRemaining: group.percentRemaining,
+    remainingRequests: group.remainingRequests,
+    badgeText: `Còn ${group.percentRemaining}%`,
+    badgeVariant: "success",
+  }
 }
 
 /**
@@ -808,8 +998,9 @@ export async function streamAICompletion(
   }
 
   ;(async () => {
-    // Ghi nhận 1 lượt request AI sử dụng
-    recordAIRequestUsage()
+    // Ghi nhận 1 lượt request AI sử dụng (phân loại riêng Google Gemini vs OpenRouter)
+    const isGeminiTargetForUsage = Boolean(model && (model.startsWith("gemini-") || model.includes("gemini")))
+    recordAIRequestUsage(isGeminiTargetForUsage ? "gemini" : "openrouter")
 
     let usedModel: string = model || DEFAULT_AI_MODEL
     const isDev = Boolean(typeof import.meta !== "undefined" && import.meta.env?.DEV)
@@ -1294,33 +1485,6 @@ function buildContextTaskReply(query: string, tasks: ContextTask[]): string | nu
   return `Dưới đây là danh sách **${result.length}/${tasks.length} bài toán** trong phạm vi dữ liệu hiện tại:\n\n| Mã task | Bài toán | Squad | Phụ trách | Khâu | Tiến độ | Deadline | Trạng thái |\n|---|---|---|---|---|---:|---|---|\n${rows}\n\n*Dữ liệu được tổng hợp trực tiếp từ context hiện tại; không sử dụng task mẫu.*`
 }
 
-function extractArtifactFromContext(messages: PromptMessage[]): { name: string; content: string } | null {
-  const context = messages
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
-    .join("\n")
-  const documentBlock = context.match(/=== DOCUMENT_DATA(?: \([^)]+\))? ===\n([\s\S]*?)\n=== END_DOCUMENT_DATA ===/)
-  if (documentBlock) {
-    const document = documentBlock[1].match(/--- Tài liệu #\d+: "([^"]+)" \([^)]+\) ---\n([\s\S]*?)(?=\n--- Tài liệu #\d+:|$)/)
-    if (document) {
-      const body = document[2].trim()
-      const contentMarker = "Nội dung:\n"
-      const contentStart = body.indexOf(contentMarker)
-      const content = contentStart >= 0
-        ? body.slice(contentStart + contentMarker.length)
-          .replace(/\n\[\.\.\.HẾT PHẦN TRÍCH ĐOẠN ĐƯỢC CUNG CẤP\.\.\.\]\s*$/, "")
-          .trim()
-        : body
-
-      return { name: document[1].trim(), content }
-    }
-  }
-
-  // Tương thích với context tài liệu theo định dạng cũ.
-  const legacy = context.match(/=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "([^"]+)" \([^)]+\) ===\n([\s\S]*)/)
-  return legacy ? { name: legacy[1].trim(), content: legacy[2].trim() } : null
-}
-
 function getPromptMessageText(content: PromptMessage["content"]): string {
   if (typeof content === "string") return content
   return Array.isArray(content) ? content.map((part) => part.text || "").join(" ") : ""
@@ -1334,6 +1498,106 @@ function normalizeVietnameseText(value: string): string {
     .replace(/Đ/g, "D")
     .toLowerCase()
     .trim()
+}
+
+export function extractArtifactFromContext(
+  messages: PromptMessage[],
+  userQuery?: string
+): { name: string; content: string; fileType?: string } | null {
+  const context = messages
+    .filter((message) => message.role === "system")
+    .map((message) => getPromptMessageText(message.content))
+    .join("\n")
+
+  const documentBlock = context.match(/=== DOCUMENT_DATA(?: \([^)]+\))? ===\n([\s\S]*?)\n=== END_DOCUMENT_DATA ===/)
+  const docs: Array<{ name: string; content: string; fileType?: string; summary?: string; tags?: string[] }> = []
+
+  if (documentBlock) {
+    const docRegex = /--- Tài liệu #\d+: "([^"]+)" \(([^)]+)\) ---\n([\s\S]*?)(?=\n--- Tài liệu #\d+:|$)/g
+    let match: RegExpExecArray | null
+    while ((match = docRegex.exec(documentBlock[1])) !== null) {
+      const name = match[1].trim()
+      const fileType = match[2].trim()
+      const body = match[3].trim()
+
+      const summaryMatch = body.match(/^Tóm tắt:\s*(.+)$/m)
+      const summary = summaryMatch ? summaryMatch[1].trim() : ""
+
+      const tagsMatch = body.match(/^Tags:\s*(.+)$/m)
+      const tags = tagsMatch ? tagsMatch[1].split(",").map((t) => t.trim()) : []
+
+      const contentMarker = "Nội dung:\n"
+      const contentStart = body.indexOf(contentMarker)
+      const content = contentStart >= 0
+        ? body.slice(contentStart + contentMarker.length)
+          .replace(/\n\[\.\.\.HẾT PHẦN TRÍCH ĐOẠN ĐƯỢC CUNG CẤP\.\.\.\]\s*$/, "")
+          .trim()
+        : body
+
+      docs.push({ name, fileType, content, summary, tags })
+    }
+  }
+
+  // Tương thích với context tài liệu theo định dạng cũ.
+  if (docs.length === 0) {
+    const legacy = context.match(/=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "([^"]+)" \(([^)]+)\) ===\n([\s\S]*)/)
+    if (legacy) {
+      docs.push({ name: legacy[1].trim(), fileType: legacy[2].trim(), content: legacy[3].trim() })
+    } else {
+      const simpleLegacy = context.match(/=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "([^"]+)" ===\n([\s\S]*)/)
+      if (simpleLegacy) {
+        docs.push({ name: simpleLegacy[1].trim(), content: simpleLegacy[2].trim() })
+      }
+    }
+  }
+
+  if (docs.length === 0) return null
+
+  // Nếu không có câu hỏi tra cứu, mặc định chọn tài liệu đầu tiên
+  if (!userQuery || !userQuery.trim()) {
+    return docs[0]
+  }
+
+  const normalizedQuery = normalizeVietnameseText(userQuery)
+  const queryTokens = normalizedQuery.split(/\s+/).filter((t) => t.length > 1)
+
+  let bestDoc = docs[0]
+  let maxScore = -1
+
+  for (const doc of docs) {
+    const normalizedName = normalizeVietnameseText(doc.name)
+    const normalizedSummary = normalizeVietnameseText(doc.summary || "")
+    const normalizedTags = (doc.tags || []).map((t) => normalizeVietnameseText(t)).join(" ")
+    let score = 0
+
+    // Khớp chuyên biệt cho các tài liệu tiêu chuẩn MBBank
+    if (/design hand[- ]?off|handoff|figma|quy chuan ban giao|dev specs|ready for dev/.test(normalizedQuery)) {
+      if (normalizedName.includes("handoff") || normalizedName.includes("figma")) score += 60
+    }
+    if (/token|tokens|mau sac|màu sắc|typography|color|brand color|design system/.test(normalizedQuery)) {
+      if (normalizedName.includes("token") || normalizedName.includes("design-system")) score += 60
+    }
+    if (/po pending|sla|chinh sach sla|24 gio|24h|nghen|tac nghen/.test(normalizedQuery)) {
+      if (normalizedName.includes("sla") || normalizedName.includes("po-pending")) score += 60
+    }
+    if (/7 khau|quy trinh|quy trình|khau 1|khau 2|khau 3|khau 4|khau 5|khau 6|khau 7/.test(normalizedQuery)) {
+      if (normalizedName.includes("7-khau") || normalizedName.includes("quy-trinh")) score += 60
+    }
+
+    // Khớp token đơn trong tên, tags, và tóm tắt
+    for (const token of queryTokens) {
+      if (normalizedName.includes(token)) score += 8
+      if (normalizedTags.includes(token)) score += 5
+      if (normalizedSummary.includes(token)) score += 3
+    }
+
+    if (score > maxScore) {
+      maxScore = score
+      bestDoc = doc
+    }
+  }
+
+  return bestDoc
 }
 
 function extractCalendarContext(messages: PromptMessage[]): string | null {
@@ -1411,7 +1675,7 @@ export function buildSafeLocalFallback(messages: PromptMessage[], now: Date = ne
 
   const isDocumentQuery = /tai lieu|design hand[- ]?off|handoff|checklist|design system|token|quy chuan|sla|artifact/.test(normalized)
   if (isDocumentQuery) {
-    const artifact = extractArtifactFromContext(messages)
+    const artifact = extractArtifactFromContext(messages, query)
     if (!artifact) {
       return {
         trace: "Tìm tài liệu liên quan trong context nhưng không có nội dung phù hợp.",
@@ -1420,12 +1684,33 @@ export function buildSafeLocalFallback(messages: PromptMessage[], now: Date = ne
     }
 
     const content = artifact.content.trim()
+    const isCodeOrJson =
+      artifact.name.endsWith(".json") ||
+      artifact.name.endsWith(".ts") ||
+      artifact.name.endsWith(".tsx") ||
+      artifact.name.endsWith(".js") ||
+      artifact.name.endsWith(".css") ||
+      artifact.name.endsWith(".yaml") ||
+      artifact.name.endsWith(".yml") ||
+      artifact.fileType === "json" ||
+      artifact.fileType === "code" ||
+      (content.startsWith("{") && content.endsWith("}"))
+
+    const lang = artifact.name.endsWith(".json") || (content.startsWith("{") && content.endsWith("}"))
+      ? "json"
+      : artifact.name.split(".").pop() || "code"
+
     const excerpt = content.length > 4000
-      ? `${content.slice(0, 4000)}\n\n*[Nội dung đã được rút gọn; chưa kiểm tra phần còn lại của tài liệu.]*`
+      ? `${content.slice(0, 4000)}\n\n// [...Nội dung đã được rút gọn theo giới hạn hiển thị...]`
       : content
+
+    const formattedExcerpt = isCodeOrJson
+      ? `\`\`\`${lang}:${artifact.name}\n${excerpt}\n\`\`\``
+      : excerpt
+
     return {
       trace: `Đọc nội dung tài liệu ${artifact.name} được cung cấp trong context.`,
-      output: `Dựa trên tài liệu **${artifact.name}**:\n\n${excerpt || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`,
+      output: `Dựa trên tài liệu **${artifact.name}**:\n\n${formattedExcerpt || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`,
     }
   }
 
@@ -1850,13 +2135,36 @@ Mở Designer Planner
     q.includes("checklist") ||
     q.includes("biên bản")
   ) {
-    const artifact = extractArtifactFromContext(messages)
+    const artifact = extractArtifactFromContext(messages, lastUserMsg)
     reasoning = artifact
       ? "1. Xác định tài liệu được cung cấp trong context.\n2. Đọc nội dung tài liệu thực tế.\n3. Tóm tắt đúng nguồn, không bổ sung dữ liệu ngoài tài liệu."
       : "1. Kiểm tra nguồn tài liệu trong context.\n2. Không tìm thấy nội dung tài liệu đủ để đọc.\n3. Thông báo rõ giới hạn dữ liệu."
-    output = artifact
-      ? `Dưới đây là phần tóm tắt dựa trên tài liệu **${artifact.name}**:\n\n${artifact.content || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`
-      : "Mình chưa nhận được nội dung tài liệu đủ để tóm tắt. Vui lòng chọn lại Artifact hoặc tải tài liệu lên rồi thử lại."
+
+    if (artifact) {
+      const content = artifact.content.trim()
+      const isCodeOrJson =
+        artifact.name.endsWith(".json") ||
+        artifact.name.endsWith(".ts") ||
+        artifact.name.endsWith(".tsx") ||
+        artifact.name.endsWith(".js") ||
+        artifact.name.endsWith(".css") ||
+        artifact.fileType === "json" ||
+        artifact.fileType === "code" ||
+        (content.startsWith("{") && content.endsWith("}"))
+
+      const lang = artifact.name.endsWith(".json") || (content.startsWith("{") && content.endsWith("}"))
+        ? "json"
+        : artifact.name.split(".").pop() || "code"
+
+      const excerpt = content.length > 4000
+        ? `${content.slice(0, 4000)}\n\n// [...Nội dung đã được rút gọn theo giới hạn hiển thị...]`
+        : content
+
+      const formatted = isCodeOrJson ? `\`\`\`${lang}:${artifact.name}\n${excerpt}\n\`\`\`` : excerpt
+      output = `Dưới đây là phần tóm tắt dựa trên tài liệu **${artifact.name}**:\n\n${formatted || "Tài liệu chưa có nội dung văn bản để phân tích."}\n\n*Nguồn: ${artifact.name}*`
+    } else {
+      output = "Mình chưa nhận được nội dung tài liệu đủ để tóm tắt. Vui lòng chọn lại Artifact hoặc tải tài liệu lên rồi thử lại."
+    }
   } else {
     // Phản hồi hội thoại thông minh linh hoạt (Không trả lời rập khuôn 1 bảng cũ)
     reasoning = "1. Tiếp nhận và phân tích ngữ nghĩa câu hỏi của người dùng.\n2. Đối chiếu với phạm vi công việc thiết kế UX MBBank.\n3. Đưa ra câu trả lời trực tiếp, rõ ràng và các hướng giải quyết phù hợp."

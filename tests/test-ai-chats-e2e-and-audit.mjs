@@ -2627,6 +2627,96 @@ runTest("Integration", "INT-DUALPOOL-06", "AIChatPage: verify usage breakdown di
   assert.ok(pageSrc.includes("OpenRouter Pool:"), "Must display OpenRouter Pool breakdown")
 })
 
+runTest("Integration", "INT-CODEBLOCK-01", "EchoArtifactBox: verify syntax token highlighting, hex color swatch dots, language badge, line count and copy feedback", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("highlightCodeLine"), "Must define highlightCodeLine tokenizer")
+  assert.ok(pageSrc.includes("isHex"), "Must check for hex color codes in string tokens")
+  assert.ok(pageSrc.includes("style={{ backgroundColor: strContent }}"), "Must render live color swatch dot for hex values")
+  assert.ok(pageSrc.includes("resolvedLang"), "Must resolve language badge (JSON, TSX, etc.)")
+  assert.ok(pageSrc.includes("dòng"), "Must display line count")
+  assert.ok(pageSrc.includes("Đã chép"), "Must provide interactive copy feedback state")
+})
+
+runTest("Integration", "INT-CODEBLOCK-02", "EchoMessageRow: verify un-fenced raw JSON detection and segmentation", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("normalizedSegments"), "Must normalize segments for un-fenced JSON")
+  assert.ok(pageSrc.includes('type: "code"'), "Must convert raw JSON object into code segment")
+  assert.ok(pageSrc.includes('lang: "json"'), "Must assign json lang to raw JSON segment")
+})
+
+runTest("Integration", "INT-CODEBLOCK-03", "aiService: extractArtifactFromContext matches relevant document by semantic query", async () => {
+  const aiService = await import("../src/services/aiService.ts")
+  const mockSystemContext = [
+    {
+      role: "system",
+      content: `=== DOCUMENT_DATA (2 tài liệu trong context) ===
+--- Tài liệu #1: "MBBank-Design-System-Tokens.json" (json) ---
+Tóm tắt: Bảng mã màu thương hiệu và tokens
+Nội dung:
+{ "brand": { "primary": "#1057FB" } }
+--- Tài liệu #2: "Tieu-chuan-Design-Handoff-MB.md" (markdown) ---
+Tóm tắt: Checklist quy chuẩn bàn giao file Figma cho lập trình viên
+Nội dung:
+# Tiêu chuẩn Design Hand-off cho Dev
+1. Auto-layout 100%
+2. Ready for Dev
+=== END_DOCUMENT_DATA ===`
+    }
+  ]
+
+  // Querying about Design Handoff & Figma must match doc #2
+  const docHandoff = aiService.extractArtifactFromContext(mockSystemContext, "Theo tài liệu về Design Hand-off, Figma cần đáp ứng những tiêu chí nào?")
+  assert.ok(docHandoff, "Must find matching artifact")
+  assert.equal(docHandoff.name, "Tieu-chuan-Design-Handoff-MB.md", "Must match Tieu-chuan-Design-Handoff-MB.md for handoff query")
+
+  // Querying about Tokens & Color must match doc #1
+  const docTokens = aiService.extractArtifactFromContext(mockSystemContext, "Tra cứu bảng mã màu tokens Design System")
+  assert.ok(docTokens, "Must find matching artifact")
+  assert.equal(docTokens.name, "MBBank-Design-System-Tokens.json", "Must match MBBank-Design-System-Tokens.json for token/color query")
+})
+
+runTest("Integration", "INT-CODEBLOCK-04", "aiService: buildSafeLocalFallback encloses JSON artifacts in fenced code blocks", async () => {
+  const aiService = await import("../src/services/aiService.ts")
+  const mockSystemContext = [
+    {
+      role: "system",
+      content: `=== DOCUMENT_DATA (1 tài liệu trong context) ===
+--- Tài liệu #1: "MBBank-Design-System-Tokens.json" (json) ---
+Tóm tắt: Bảng mã màu thương hiệu
+Nội dung:
+{
+  "system": "MBBank Design System v3.0",
+  "brand": { "primary": "#1057FB" }
+}
+=== END_DOCUMENT_DATA ===`
+    },
+    {
+      role: "user",
+      content: "Cho tôi xem tokens mã màu của Design System"
+    }
+  ]
+
+  const fallback = aiService.buildSafeLocalFallback(mockSystemContext)
+  assert.ok(fallback.output.includes("```json:MBBank-Design-System-Tokens.json"), "Must wrap JSON artifact in fenced code block with filename")
+  assert.ok(fallback.output.includes('"primary": "#1057FB"'), "Must preserve JSON content")
+})
+
+runTest("Integration", "INT-SEPARATE-QUOTA-01", "aiService: verify Cursor-style separated model quota and getModelAvailability", () => {
+  const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(serviceSrc.includes("export interface ModelGroupQuota"), "Must export ModelGroupQuota interface")
+  assert.ok(serviceSrc.includes("export function getModelAvailability("), "Must export getModelAvailability")
+  assert.ok(serviceSrc.includes('groupName: "Gemini Models"'), "Must define Gemini Models group")
+  assert.ok(serviceSrc.includes('groupName: "Claude and GPT models"'), "Must define Claude and GPT models group")
+})
+
+runTest("Integration", "INT-SEPARATE-QUOTA-02", "AIChatPage: verify separated cards for Gemini Models & Claude/GPT models with CircularQuotaRing", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("function CircularQuotaRing"), "Must define CircularQuotaRing component")
+  assert.ok(pageSrc.includes("Gemini Models"), "Must render Gemini Models card")
+  assert.ok(pageSrc.includes("Claude and GPT models"), "Must render Claude and GPT models card")
+  assert.ok(pageSrc.includes("Daily Limit Remaining"), "Must display Daily Limit Remaining metric")
+})
+
 // ==============================================================================
 
 

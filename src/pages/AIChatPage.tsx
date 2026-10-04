@@ -114,7 +114,9 @@ import {
   getStoredAIGateway,
   saveAIGateway,
   testGeminiConnection,
+  getModelAvailability,
   type AIDailyUsage,
+  type ModelGroupQuota,
 } from "@/services/aiService"
 import {
   getStoredArtifacts,
@@ -403,6 +405,57 @@ export interface AIChatPageProps {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+// Circular Quota Ring matching Cursor UI
+function CircularQuotaRing({
+  percent,
+  size = 32,
+  strokeWidth = 3.5,
+}: {
+  percent: number
+  size?: number
+  strokeWidth?: number
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference
+  const strokeColor =
+    percent > 50
+      ? "stroke-emerald-500"
+      : percent > 15
+      ? "stroke-amber-500"
+      : percent > 0
+      ? "stroke-rose-500"
+      : "stroke-slate-300 dark:stroke-neutral-700"
+
+  return (
+    <div className="relative inline-flex items-center justify-center shrink-0">
+      <svg width={size} height={size} className="rotate-[-90deg]">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-slate-100 dark:text-neutral-800"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className={cn("transition-all duration-500", strokeColor)}
+        />
+      </svg>
+    </div>
+  )
+}
 
 export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const [session, setSession] = useState(() => getStoredSession())
@@ -1383,10 +1436,26 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         const content = artifact.content?.trim()
         const excerpt = content
           ? content.length > 4000
-            ? `${content.slice(0, 4000)}\n\n[Đã rút gọn theo giới hạn hiển thị.]`
+            ? `${content.slice(0, 4000)}\n\n// [...Đã rút gọn theo giới hạn hiển thị...]`
             : content
           : artifact.summary || "Tài liệu chưa có nội dung văn bản để phân tích."
-        return `### ${artifact.name}\n\n${excerpt}\n\n*Nguồn: ${artifact.name}*`
+
+        const isCodeOrJson =
+          artifact.name.endsWith(".json") ||
+          artifact.name.endsWith(".ts") ||
+          artifact.name.endsWith(".tsx") ||
+          artifact.name.endsWith(".js") ||
+          artifact.name.endsWith(".css") ||
+          artifact.fileType === "json" ||
+          artifact.fileType === "code" ||
+          (content && content.startsWith("{") && content.endsWith("}"))
+
+        const lang = artifact.name.endsWith(".json") || (content && content.startsWith("{"))
+          ? "json"
+          : artifact.name.split(".").pop() || "code"
+
+        const formatted = isCodeOrJson ? `\`\`\`${lang}:${artifact.name}\n${excerpt}\n\`\`\`` : excerpt
+        return `### ${artifact.name}\n\n${formatted}\n\n*Nguồn: ${artifact.name}*`
       }).join("\n\n---\n\n")
     }
 
@@ -2922,11 +2991,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             {/* ───────────────────────────────────────────────────────────── */}
             <div className="shrink-0 px-4 sm:px-6 lg:px-8 pb-3.5 pt-1 z-20">
               <div className="mx-auto w-full max-w-4xl lg:max-w-5xl">
-                {/* Real-time MBBank AI Daily Usage Bar */}
+                {/* Real-time MBBank AI Quota Status (Cursor-style Model Group Separation) */}
                 {showUsageNotice && (
-                  <div className="mb-2 rounded-2xl border border-slate-200/80 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-xs overflow-hidden transition-all">
-                    {/* Top Notice Line */}
-                    <div className="flex items-center justify-between px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 select-none">
+                  <div className="mb-2 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-md shadow-xs overflow-hidden transition-all">
+                    {/* Collapsed / Summary Line */}
+                    <div className="flex items-center justify-between px-3.5 py-2 text-xs text-slate-600 dark:text-slate-400 select-none">
                       <div
                         className="flex min-w-0 flex-1 items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                         onClick={() => {
@@ -2940,11 +3009,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         }}
                       >
                         <Sparkles className="size-3.5 shrink-0 text-amber-500" />
-                        <span className="truncate text-xs font-normal">
-                          Đã dùng <span className="font-semibold text-slate-900 dark:text-white">{dailyUsage.usedRequests}/{dailyUsage.totalRequests}</span> lượt AI hôm nay (Còn lại {dailyUsage.remainingRequests} lượt)
-                          <span className="text-slate-300 dark:text-neutral-600 mx-1.5">•</span>
-                          Tự động làm mới lúc 00:00
-                        </span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs truncate">
+                          <span className="inline-flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                            <span className={cn("size-2 rounded-full shrink-0", dailyUsage.gemini?.status === "available" ? "bg-emerald-500" : dailyUsage.gemini?.status === "rate_limited" ? "bg-amber-500" : "bg-rose-500")} />
+                            Gemini: <span className="font-semibold text-slate-900 dark:text-white">{dailyUsage.gemini?.status === "available" ? `Còn ${dailyUsage.gemini.percentRemaining}% (${dailyUsage.gemini.remainingRequests.toLocaleString('vi-VN')} lượt)` : dailyUsage.gemini?.status === "rate_limited" ? "Chờ 15 RPM" : "Đã hết"}</span>
+                          </span>
+                          <span className="text-slate-300 dark:text-neutral-600 hidden sm:inline">•</span>
+                          <span className="inline-flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                            <span className={cn("size-2 rounded-full shrink-0", dailyUsage.openRouter?.status === "available" ? "bg-emerald-500" : "bg-rose-500")} />
+                            Claude & GPT: <span className="font-semibold text-slate-900 dark:text-white">{dailyUsage.openRouter?.status === "available" ? `Còn ${dailyUsage.openRouter.percentRemaining}% (${dailyUsage.openRouter.remainingRequests.toLocaleString('vi-VN')} lượt)` : "Đã hết"}</span>
+                          </span>
+                          <span className="text-slate-300 dark:text-neutral-600 hidden md:inline">•</span>
+                          <span className="text-slate-400 hidden md:inline">Làm mới 00:00</span>
+                        </div>
                         {noticeCollapsed ? (
                           <ChevronDown className="size-3 text-slate-400 ml-0.5 shrink-0" />
                         ) : (
@@ -2962,23 +3039,121 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       </motion.button>
                     </div>
 
-                    {/* Progress Bar & Subtitle Information */}
+                    {/* Detailed Cards (Exact UI Layout from Cursor Reference Image) */}
                     {!noticeCollapsed && (
-                      <div className="px-3.5 pb-2.5 space-y-1.5 pt-0.5 border-t border-slate-100 dark:border-neutral-800">
-                        <div className="h-1.5 w-full bg-slate-100 dark:bg-neutral-800 rounded-full overflow-hidden relative flex">
-                          <div
-                            className="h-full bg-slate-900 dark:bg-slate-100 transition-all duration-300 rounded-full"
-                            style={{ width: `${Math.min(100, Math.max(2, dailyUsage.percent))}%` }}
-                          />
-                          <div
-                            className="h-full flex-1 opacity-40 bg-[repeating-linear-gradient(45deg,#94a3b8,#94a3b8_2px,transparent_2px,transparent_6px)]"
-                          />
+                      <div className="p-3 pt-1 border-t border-slate-100 dark:border-neutral-800 space-y-2.5 bg-slate-50/50 dark:bg-neutral-900/30">
+                        {/* 1. Gemini Models Group Card */}
+                        <div className="rounded-xl border border-slate-200/90 dark:border-neutral-800/90 bg-white dark:bg-card p-3 shadow-xs space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white text-xs">
+                              <span>Gemini Models</span>
+                              <Info className="size-3 text-slate-400" />
+                            </div>
+                            <span className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-semibold border",
+                              dailyUsage.gemini?.status === "available"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40"
+                                : dailyUsage.gemini?.status === "rate_limited"
+                                ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40"
+                                : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40"
+                            )}>
+                              {dailyUsage.gemini?.status === "available" ? "Còn lượt" : dailyUsage.gemini?.status === "rate_limited" ? "Chờ 15 RPM" : "Đã hết"}
+                            </span>
+                          </div>
+
+                          {/* Row 1: Daily Limit Remaining */}
+                          <div className="flex items-start justify-between gap-3 pt-0.5">
+                            <div className="space-y-0.5 pr-2">
+                              <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                Daily Limit Remaining
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
+                                {dailyUsage.gemini?.refreshNotice}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-bold font-mono text-slate-900 dark:text-white">
+                                {dailyUsage.gemini?.percentRemaining}%
+                              </span>
+                              <CircularQuotaRing percent={dailyUsage.gemini?.percentRemaining ?? 100} />
+                            </div>
+                          </div>
+
+                          {/* Row 2: 15 RPM / Pool Rate Limit */}
+                          <div className="flex items-start justify-between gap-3 pt-2 border-t border-slate-100 dark:border-neutral-800/60">
+                            <div className="space-y-0.5 pr-2">
+                              <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                Five Hour Limit / 15 RPM Pool
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
+                                {dailyUsage.gemini?.activeKeysCount}/{dailyUsage.gemini?.keysCount} keys Google AI Studio sẵn sàng • 1.500 RPD mỗi key.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-bold font-mono text-slate-900 dark:text-white">
+                                {Math.round(((dailyUsage.gemini?.activeKeysCount ?? 1) / Math.max(1, dailyUsage.gemini?.keysCount ?? 1)) * 100)}%
+                              </span>
+                              <CircularQuotaRing percent={Math.round(((dailyUsage.gemini?.activeKeysCount ?? 1) / Math.max(1, dailyUsage.gemini?.keysCount ?? 1)) * 100)} />
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 font-mono">
-                          <span>{dailyUsage.percent}% hạn mức ngày ({dailyUsage.usedRequests}/{dailyUsage.totalRequests} lượt)</span>
-                          <span>{dailyUsage.remainingRequests > 0 ? `Còn ${dailyUsage.remainingRequests} lượt khả dụng` : "Đã đạt hạn mức hôm nay"}</span>
+
+                        {/* 2. Claude and GPT models Group Card */}
+                        <div className="rounded-xl border border-slate-200/90 dark:border-neutral-800/90 bg-white dark:bg-card p-3 shadow-xs space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white text-xs">
+                              <span>Claude and GPT models</span>
+                              <Info className="size-3 text-slate-400" />
+                            </div>
+                            <span className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-semibold border",
+                              dailyUsage.openRouter?.status === "available"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40"
+                                : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40"
+                            )}>
+                              {dailyUsage.openRouter?.status === "available" ? "Còn lượt" : "Đã hết"}
+                            </span>
+                          </div>
+
+                          {/* Row 1: Daily Limit Remaining */}
+                          <div className="flex items-start justify-between gap-3 pt-0.5">
+                            <div className="space-y-0.5 pr-2">
+                              <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                Daily Limit Remaining
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
+                                {dailyUsage.openRouter?.refreshNotice}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-bold font-mono text-slate-900 dark:text-white">
+                                {dailyUsage.openRouter?.percentRemaining}%
+                              </span>
+                              <CircularQuotaRing percent={dailyUsage.openRouter?.percentRemaining ?? 100} />
+                            </div>
+                          </div>
+
+                          {/* Row 2: Gateway Status */}
+                          <div className="flex items-start justify-between gap-3 pt-2 border-t border-slate-100 dark:border-neutral-800/60">
+                            <div className="space-y-0.5 pr-2">
+                              <div className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                                Five Hour Limit / Gateway Fallback
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed">
+                                {dailyUsage.openRouter?.activeKeysCount}/{dailyUsage.openRouter?.keysCount} keys OpenRouter kết nối • 50 RPD mỗi key.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-bold font-mono text-slate-900 dark:text-white">
+                                {Math.round(((dailyUsage.openRouter?.activeKeysCount ?? 1) / Math.max(1, dailyUsage.openRouter?.keysCount ?? 1)) * 100)}%
+                              </span>
+                              <CircularQuotaRing percent={Math.round(((dailyUsage.openRouter?.activeKeysCount ?? 1) / Math.max(1, dailyUsage.openRouter?.keysCount ?? 1)) * 100)} />
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-400 font-mono pt-0.5">
+
+                        {/* Integration Compatibility Breakdown */}
+                        <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-400 font-mono px-1 pt-1">
                           <span>Google AI Pool: {dailyUsage.googleKeysCount || 1} keys (~{((dailyUsage.googleKeysCount || 1) * 1500).toLocaleString('vi-VN')} RPD)</span>
                           <span>OpenRouter Pool: {dailyUsage.openRouterKeysCount || 1} keys (~{((dailyUsage.openRouterKeysCount || 1) * 50).toLocaleString('vi-VN')} RPD)</span>
                         </div>
@@ -4305,9 +4480,98 @@ function EchoActionCard({
   )
 }
 
+function highlightCodeLine(line: string, lang?: string) {
+  const isJson =
+    lang?.toLowerCase().includes("json") ||
+    line.trim().startsWith('"') ||
+    line.trim().startsWith("{") ||
+    line.trim().startsWith("}") ||
+    line.trim().startsWith("[") ||
+    line.trim().startsWith("]")
+
+  if (isJson) {
+    const kvMatch = line.match(/^(\s*)("([^"\\]|\\.)*")(\s*:\s*)(.*)$/)
+    if (kvMatch) {
+      const [, indent, keyStr, , colonSpace, rawVal] = kvMatch
+      let valElem: React.ReactNode = rawVal
+
+      const trimmedVal = rawVal.trim()
+      const hasComma = trimmedVal.endsWith(",")
+      const cleanVal = hasComma ? trimmedVal.slice(0, -1).trim() : trimmedVal
+
+      if (cleanVal.startsWith('"') && cleanVal.endsWith('"')) {
+        const strContent = cleanVal.slice(1, -1)
+        const isHex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(strContent)
+        if (isHex) {
+          valElem = (
+            <span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-medium">"{strContent}"</span>
+              <span
+                className="inline-block size-2.5 rounded-full border border-slate-300 dark:border-neutral-600 shadow-xs ml-1.5 mr-0.5 align-middle"
+                style={{ backgroundColor: strContent }}
+                title={`Mã màu: ${strContent}`}
+              />
+              {hasComma && <span className="text-slate-400 dark:text-neutral-500">,</span>}
+            </span>
+          )
+        } else {
+          valElem = (
+            <span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-medium">"{strContent}"</span>
+              {hasComma && <span className="text-slate-400 dark:text-neutral-500">,</span>}
+            </span>
+          )
+        }
+      } else if (/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(cleanVal)) {
+        valElem = (
+          <span>
+            <span className="text-amber-600 dark:text-amber-400 font-semibold">{cleanVal}</span>
+            {hasComma && <span className="text-slate-400 dark:text-neutral-500">,</span>}
+          </span>
+        )
+      } else if (cleanVal === "true" || cleanVal === "false" || cleanVal === "null") {
+        valElem = (
+          <span>
+            <span className="text-purple-600 dark:text-purple-400 font-bold">{cleanVal}</span>
+            {hasComma && <span className="text-slate-400 dark:text-neutral-500">,</span>}
+          </span>
+        )
+      } else {
+        valElem = <span className="text-slate-700 dark:text-slate-200">{rawVal}</span>
+      }
+
+      return (
+        <span className="whitespace-pre">
+          {indent}
+          <span className="text-sky-700 dark:text-sky-400 font-semibold">{keyStr}</span>
+          <span className="text-slate-400 dark:text-neutral-500">{colonSpace}</span>
+          {valElem}
+        </span>
+      )
+    }
+
+    if (line.trim().startsWith("//") || line.trim().startsWith("/*")) {
+      return <span className="whitespace-pre italic text-slate-400 dark:text-neutral-500">{line}</span>
+    }
+
+    if (/^\s*[{}\[\],]\s*$/.test(line)) {
+      return <span className="whitespace-pre text-slate-500 dark:text-neutral-400 font-bold">{line}</span>
+    }
+  }
+
+  if (line.startsWith("#")) {
+    return <span className="whitespace-pre text-slate-900 dark:text-white font-bold">{line}</span>
+  }
+  if (line.trim().startsWith("//") || line.trim().startsWith("/*") || line.trim().startsWith("#")) {
+    return <span className="whitespace-pre italic text-slate-400 dark:text-neutral-500">{line}</span>
+  }
+
+  return <span className="whitespace-pre text-slate-800 dark:text-slate-200">{line}</span>
+}
+
 /**
  * 3. KHỐI ARTIFACT / MÃ NGUỒN CÓ TIÊU ĐỀ TỆP (CODE & ARTIFACT BLOCK WITH FILENAME)
- * Khớp hoàn hảo theo Screenshot 4: Top bar có release-notes-3.4.md và nút Copy
+ * Thiết kế chuẩn Figma & MBBank Design System: Language badge, đếm dòng, nút Copy có phản hồi và syntax tokenization
  */
 function EchoArtifactBox({
   fileName,
@@ -4322,41 +4586,103 @@ function EchoArtifactBox({
   onCopy: (text: string) => void
   isCopied?: boolean
 }) {
+  const [localCopied, setLocalCopied] = useState(false)
   const codeLines = useMemo(() => code.trim().split("\n"), [code])
+
+  const resolvedFileName = useMemo(() => {
+    if (fileName && fileName.trim()) return fileName.trim()
+    const firstLine = codeLines[0]?.trim() || ""
+    if (firstLine.startsWith("//") || firstLine.startsWith("#")) {
+      const potential = firstLine.replace(/^[/#\s]+/, "").trim()
+      if (potential.includes(".")) return potential
+    }
+    const cleanLang = (lang || "").toLowerCase()
+    if (cleanLang === "json") return "Tokens.json"
+    if (cleanLang === "ts" || cleanLang === "typescript") return "script.ts"
+    if (cleanLang === "tsx") return "Component.tsx"
+    if (cleanLang === "js" || cleanLang === "javascript") return "script.js"
+    if (cleanLang === "css") return "styles.css"
+    if (cleanLang === "md" || cleanLang === "markdown") return "document.md"
+    return "code-snippet"
+  }, [fileName, lang, codeLines])
+
+  const resolvedLang = useMemo(() => {
+    if (lang && lang.trim()) return lang.trim().toUpperCase()
+    if (resolvedFileName.includes(".")) {
+      const ext = resolvedFileName.split(".").pop()?.toUpperCase()
+      if (ext) return ext
+    }
+    const firstNonEmpty = code.trim()
+    if (firstNonEmpty.startsWith("{") || firstNonEmpty.startsWith("[")) return "JSON"
+    return "CODE"
+  }, [lang, resolvedFileName, code])
+
+  const handleCopy = () => {
+    onCopy(code)
+    setLocalCopied(true)
+    setTimeout(() => setLocalCopied(false), 2000)
+  }
+
+  const actuallyCopied = isCopied || localCopied
 
   return (
     <div className="rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card shadow-xs overflow-hidden my-3">
-      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/80 dark:bg-neutral-800/50 border-b border-slate-200/80 dark:border-neutral-800 text-xs text-slate-500">
-        <span className="font-mono text-xs text-slate-800 dark:text-slate-200 font-semibold select-all">
-          {fileName || (lang ? lang.toUpperCase() : "release-notes-3.4.md")}
-        </span>
+      {/* Top Header Bar */}
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50/90 dark:bg-neutral-800/60 border-b border-slate-200/80 dark:border-neutral-800 text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          {resolvedLang === "JSON" ? (
+            <FileCode className="size-3.5 text-amber-500 shrink-0" />
+          ) : resolvedFileName.endsWith(".md") ? (
+            <FileText className="size-3.5 text-blue-500 shrink-0" />
+          ) : (
+            <Code className="size-3.5 text-sky-500 shrink-0" />
+          )}
+          <span className="font-mono text-xs text-slate-800 dark:text-slate-200 font-semibold truncate select-all">
+            {resolvedFileName}
+          </span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono tracking-wide bg-slate-200/80 dark:bg-neutral-700 text-slate-700 dark:text-neutral-200 uppercase">
+            {resolvedLang}
+          </span>
+          <span className="text-[11px] text-slate-400 dark:text-neutral-500 select-none hidden sm:inline">
+            • {codeLines.length} dòng
+          </span>
+        </div>
+
         <motion.button
           type="button"
-          onClick={() => onCopy(code)}
+          onClick={handleCopy}
           {...tactileProps.iconButton}
-          className="size-6 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+          className="h-7 px-2.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-neutral-800 text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer text-[11.5px] font-medium"
           title="Sao chép nội dung"
         >
-          {isCopied ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
+          {actuallyCopied ? (
+            <>
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Đã chép</span>
+            </>
+          ) : (
+            <>
+              <Copy className="size-3.5" />
+              <span>Sao chép</span>
+            </>
+          )}
         </motion.button>
       </div>
 
-      <div className="p-3.5 font-mono text-xs overflow-x-auto space-y-1 bg-white dark:bg-card text-slate-800 dark:text-slate-200 leading-relaxed">
-        {codeLines.map((line, lIdx) => (
-          <div key={lIdx} className="flex gap-3">
-            <span className="text-slate-400 select-none w-4 text-right shrink-0">
-              {lIdx + 1}
-            </span>
-            <span
-              className={cn(
-                "whitespace-pre",
-                line.startsWith("#") ? "text-slate-900 dark:text-white font-bold" : "text-slate-800 dark:text-slate-200"
-              )}
-            >
-              {line}
-            </span>
-          </div>
-        ))}
+      {/* Code Editor Body */}
+      <div className="p-3.5 font-mono text-xs overflow-x-auto bg-slate-50/40 dark:bg-neutral-950/60 leading-relaxed max-h-[460px] overflow-y-auto">
+        <div className="min-w-full">
+          {codeLines.map((line, lIdx) => (
+            <div key={lIdx} className="flex hover:bg-slate-100/70 dark:hover:bg-neutral-900/60 rounded px-1 -mx-1 group">
+              <span className="text-slate-400 dark:text-neutral-600 select-none w-8 text-right pr-2 shrink-0 border-r border-slate-200/60 dark:border-neutral-800/80 group-hover:text-slate-600 dark:group-hover:text-neutral-400 text-[11px]">
+                {lIdx + 1}
+              </span>
+              <div className="pl-3 flex-1 overflow-x-hidden">
+                {highlightCodeLine(line, resolvedLang)}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -4878,6 +5204,25 @@ function RenderMarkdownParagraph({ text }: { text: string }) {
         }
 
         // Paragraph
+        const pJoined = b.lines.join("\n")
+        if (pJoined.startsWith("{") && pJoined.endsWith("}") && /"[a-zA-Z0-9_\-.]+"\s*:/.test(pJoined)) {
+          try {
+            JSON.parse(pJoined)
+            return (
+              <EchoArtifactBox
+                key={bIdx}
+                fileName="Tokens.json"
+                lang="json"
+                code={pJoined}
+                onCopy={(codeText) => {
+                  navigator.clipboard?.writeText(codeText)
+                  toast.success("Đã sao chép mã!")
+                }}
+              />
+            )
+          } catch {}
+        }
+
         return (
           <p key={bIdx} className="text-[13.5px] sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
             {b.lines.map((line, lIdx) => (
@@ -5060,9 +5405,106 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
       segments.push({ type: "text", content: remainingText })
     }
 
-    // 6. Trong mỗi segment text, phân tách xem có Markdown Table (|...|) không
-    const finalBlocks: Array<{ type: "text" | "code" | "table"; content: string; lang?: string; fileName?: string }> = []
+    // 5b. Tự động nhận diện khối JSON chưa có backticks (Un-fenced JSON objects) trong các khối text
+    const normalizedSegments: Array<{ type: "text" | "code" | "table"; content: string; lang?: string; fileName?: string }> = []
     for (const seg of segments) {
+      if (seg.type !== "text") {
+        normalizedSegments.push(seg)
+        continue
+      }
+
+      // Quét tìm khối { ... } nhiều dòng có cấu trúc JSON hợp lệ
+      const text = seg.content
+      let cursor = 0
+      let foundAnyJson = false
+
+      while (cursor < text.length) {
+        const braceIdx = text.indexOf("{", cursor)
+        if (braceIdx === -1) {
+          const rest = text.substring(cursor)
+          if (rest.trim()) normalizedSegments.push({ type: "text", content: rest })
+          break
+        }
+
+        const prevChar = braceIdx > 0 ? text[braceIdx - 1] : "\n"
+        if (prevChar !== "\n" && prevChar !== "\r" && prevChar !== " " && prevChar !== "\t" && prevChar !== ":") {
+          cursor = braceIdx + 1
+          continue
+        }
+
+        let depth = 0
+        let closeIdx = -1
+        let inString = false
+        let isEscaped = false
+
+        for (let i = braceIdx; i < text.length; i++) {
+          const c = text[i]
+          if (isEscaped) {
+            isEscaped = false
+            continue
+          }
+          if (c === "\\") {
+            isEscaped = true
+            continue
+          }
+          if (c === '"') {
+            inString = !inString
+            continue
+          }
+          if (!inString) {
+            if (c === "{") depth++
+            else if (c === "}") {
+              depth--
+              if (depth === 0) {
+                closeIdx = i
+                break
+              }
+            }
+          }
+        }
+
+        if (closeIdx !== -1) {
+          const rawCandidate = text.substring(braceIdx, closeIdx + 1).trim()
+          if (rawCandidate.includes("\n") && /"[a-zA-Z0-9_\-.]+"\s*:/.test(rawCandidate)) {
+            try {
+              JSON.parse(rawCandidate)
+              // JSON hợp lệ được tìm thấy!
+              const textBefore = text.substring(cursor, braceIdx)
+              if (textBefore.trim()) {
+                normalizedSegments.push({ type: "text", content: textBefore })
+              }
+
+              // Tìm tên tệp nếu có nhắc đến ở văn bản trước
+              const fileMatch = textBefore.match(/([a-zA-Z0-9_\-.]+\.(?:json|ts|tsx|js|css|yaml|yml))/i)
+              const detectedFileName = fileMatch ? fileMatch[1] : "Tokens.json"
+
+              normalizedSegments.push({
+                type: "code",
+                content: rawCandidate,
+                lang: "json",
+                fileName: detectedFileName,
+              })
+
+              cursor = closeIdx + 1
+              foundAnyJson = true
+              continue
+            } catch {
+              // Bỏ qua nếu parse không thành công
+            }
+          }
+        }
+
+        cursor = braceIdx + 1
+      }
+
+      if (!foundAnyJson && cursor === 0) {
+        normalizedSegments.push(seg)
+      }
+    }
+
+    // 6. Trong mỗi segment text còn lại, phân tách xem có Markdown Table (|...|) không
+    const finalBlocks: Array<{ type: "text" | "code" | "table"; content: string; lang?: string; fileName?: string }> = []
+    for (const seg of normalizedSegments) {
       if (seg.type !== "text") {
         finalBlocks.push(seg)
         continue
@@ -5675,6 +6117,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
             <div className="space-y-0.5 max-h-52 overflow-y-auto pr-0.5">
               {POPULAR_AI_MODELS.map((m) => {
                 const isSelected = m.id === currentModel
+                const avail = getModelAvailability(m.id)
                 return (
                   <button
                     key={m.id}
@@ -5689,15 +6132,25 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
                     )}
                   >
                     <div className="min-w-0 flex-1 pr-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={cn("text-xs font-semibold truncate", isSelected ? "text-slate-900 dark:text-white" : "text-slate-800 dark:text-slate-200")}>
                           {m.name}
                         </span>
                         {m.badge && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-neutral-700 shrink-0">
                             {m.badge}
                           </span>
                         )}
+                        <span className={cn(
+                          "text-[9px] px-1.5 py-0.2 rounded-full font-mono font-medium shrink-0",
+                          avail.badgeVariant === "success"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40"
+                            : avail.badgeVariant === "warning"
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"
+                            : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40"
+                        )}>
+                          {avail.badgeText}
+                        </span>
                       </div>
                       <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5 font-mono">
                         {m.provider} • {m.contextLength ? `${m.contextLength} context` : "200K context"}
