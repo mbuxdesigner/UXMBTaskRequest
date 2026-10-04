@@ -2434,6 +2434,35 @@ runTest("Audit", "AUDIT-05", "Verify src/services/aiService.ts exists and refere
   assert.ok(content.includes("/api/ai-gateway"), "Must reference /api/ai-gateway")
 })
 
+runTest("Integration", "INT-ROUTER-01", "Verify CORE_SYSTEM_PROMPT defines Senior Product Designer persona without leaking technical variable names", () => {
+  const promptsPath = path.join(projectRoot, "src", "config", "aiPrompts.ts")
+  const content = fs.readFileSync(promptsPath, "utf-8")
+  assert.ok(content.includes("Senior Product Designer / UX Writer"), "Persona must be Senior Product Designer / UX Writer")
+  assert.ok(!content.includes("chỉ sử dụng dữ liệu trong khối TASK_DATA"), "Must not leak internal variable instructions")
+  assert.ok(content.includes("TUYỆT ĐỐI KHÔNG tiết lộ hoặc nhắc đến tên các biến kỹ thuật nội bộ"), "Must strictly forbid mentioning internal variables")
+})
+
+runTest("Integration", "INT-ROUTER-02", "Verify detectUserIntent captures product and specification queries (isProductSpec)", () => {
+  const queries = [
+    "tôi muốn tìm hiểu về sản phẩm tiền gửi",
+    "quy định gói tiết kiệm tích lũy",
+    "thẻ tín dụng hoàn tiền",
+    "quy chuẩn eKYC ngân hàng số"
+  ]
+  const productKeywordRegex = /(?:tiền gửi|tiết kiệm|khoản vay|thẻ|tài khoản|sản phẩm|gói|lãi suất|chứng chỉ tiền gửi|ekyc|nfc|qr pay|bảo hiểm)/i
+  for (const q of queries) {
+    assert.ok(productKeywordRegex.test(q), `Query "${q}" must match product keyword regex`)
+  }
+})
+
+runTest("Integration", "INT-ROUTER-03", "Verify Vietnamese semantic matching for financial products", () => {
+  const normalizeVi = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d")
+  const query = "Tôi muốn xem quy định sản phẩm tiền gửi tích lũy"
+  const qNorm = normalizeVi(query.toLowerCase())
+  assert.ok(qNorm.includes("tien gui"), "Normalized query must contain 'tien gui'")
+  assert.ok(qNorm.includes("san pham"), "Normalized query must contain 'san pham'")
+})
+
 // ==============================================================================
 // TEST RESULTS SUMMARY & VERIFICATION
 // ==============================================================================

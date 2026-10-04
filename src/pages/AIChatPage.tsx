@@ -125,6 +125,7 @@ export interface ChatTraceData {
   riskProjects: UXRequest[]
   goLiveTasks: UXRequest[]
   dominantPhaseText: string
+  loadedDocNames?: string[]
 }
 
 export interface ChatProcessStep {
@@ -1394,12 +1395,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const goLive = intelligence?.goLiveTasks || []
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
+    const allArtifacts = getStoredArtifacts()
+    const shouldSearchDocs = isDocCommand || questionIntent.isDoc || questionIntent.isProductSpec || (!usesTaskContext && Boolean(cleanText))
+    const matchedDocs = shouldSearchDocs ? searchArtifactsByQuery(cleanText, allArtifacts) : []
+    const loadedDocNames = matchedDocs.map((d) => d.name)
+
     const traceData: ChatTraceData = {
       activeTasks: usesTaskContext ? (activeAssigned.length > 0 ? activeAssigned : tasks) : [],
       summaryProjects: usesTaskContext ? (summaryProjs.length > 0 ? summaryProjs : tasks) : [],
       riskProjects: usesTaskContext ? riskProjs : [],
       goLiveTasks: usesTaskContext ? goLive : [],
       dominantPhaseText: dominantPhase,
+      loadedDocNames: loadedDocNames.length > 0 ? loadedDocNames : undefined,
     }
 
     const assistantMsg: ChatMessage = {
@@ -4497,13 +4504,14 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         {(isStreaming || message.traceData || message.isThinkingComplete || message.processSteps) && (
           <div className="mb-3 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 p-3 shadow-2xs overflow-hidden">
             <AgentActivityTrace
-              activeTasks={message.traceData?.activeTasks || intelligence?.activeAssignedTasks || tasks || []}
-              summaryProjects={message.traceData?.summaryProjects || intelligence?.activeAssignedTasks || tasks || []}
-              riskProjects={message.traceData?.riskProjects || intelligence?.overdueTasks || []}
-              goLiveTasks={message.traceData?.goLiveTasks || intelligence?.goLiveTasks || []}
+              activeTasks={message.traceData ? message.traceData.activeTasks : (intelligence?.activeAssignedTasks || tasks || [])}
+              summaryProjects={message.traceData ? message.traceData.summaryProjects : (intelligence?.activeAssignedTasks || tasks || [])}
+              riskProjects={message.traceData ? message.traceData.riskProjects : (intelligence?.overdueTasks || [])}
+              goLiveTasks={message.traceData ? message.traceData.goLiveTasks : (intelligence?.goLiveTasks || [])}
               dominantPhaseText={message.traceData?.dominantPhaseText || intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"}
               todayEvents={intelligence?.todayEvents}
-              discussionCount={intelligence?.totalChatCount}
+              discussionCount={message.traceData ? (message.traceData.activeTasks && message.traceData.activeTasks.length > 0 ? intelligence?.totalChatCount : 0) : intelligence?.totalChatCount}
+              loadedDocNames={message.traceData?.loadedDocNames}
               mode={message.isThinkingComplete || (!isStreaming && Boolean(message.content)) ? "inspector" : "live"}
               isRefreshing={isStreaming && !message.isThinkingComplete}
               collapsible={true}

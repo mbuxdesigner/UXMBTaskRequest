@@ -15,6 +15,7 @@ Deploy App/doc/
 ├── 📐 ONBOARDING_DOCUMENTATION_STANDARD.md       <-- QUY CHUẨN SOẠN THẢO TÀI LIỆU ONB: 5 Nguyên tắc, 7 Phần bắt buộc, Rubric chấm điểm
 ├── 🚀 GIT_WORKFLOW_VERCEL_PIPELINE.md            <-- QUY TRÌNH DEPLOY VERCEL: Tách nhánh develop/main, Zero-Downtime, Cô lập Sheet test
 ├── 🛡️ CLOUDFLARE_HARDENING_GUIDE.md             <-- CẨM NANG BẢO VỆ HẠ TẦNG: Cloudflare WAF, Bot Fight Mode, DNS an toàn
+├── 📄 AI_CHAT_ARTIFACT_FORMAT_GUIDE.md        <-- QUY CHUẨN FORMAT TÀI LIỆU NOTION: Bảng quy tắc Markdown, Bullet 3 tầng, Auto-bold nhãn
 ├── 🎨 UI_DESIGN_SYSTEM.md                        <-- TÀI LIỆU THIẾT KẾ TOÀN DIỆN: Tokens (#0F172A), Pills, Badges, ReUI Sonner Toast
 │
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
@@ -32,8 +33,9 @@ Deploy App/doc/
 │   ├── 📋 2026-09-26_DAILY_UPDATE_REPORT.md  <-- Báo cáo Motion runtime, Sonner stack, đồng bộ task và nickname persistence
 │   ├── 📋 2026-09-27_DAILY_UPDATE_REPORT.md  <-- Báo cáo Task ↔ IA, cloud merge, IA canvas refinements và nghiên cứu Designer Planner
 │   ├── 📋 2026-09-28_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner, Schedule Meeting, AI briefing, right sheet và planned work date persistence
-│   ├── 📋 2026-09-29_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner cá nhân, 4-step Agent Trace, Executive Typewriter Streaming & Clickable Link, Thẻ đứng im (CLS=0), Phân quyền sửa Event
-│   └── 📋 2026-09-30_DAILY_UPDATE_REPORT.md  <-- Báo cáo Chuẩn hóa ReUI Empty State (1 & 10), Tinh gọn UI Priority kéo thả, Executive Summary All-in-One 1 lần xuất toàn bộ & Sửa triệt để lỗi đơ luồng tóm tắt 4/4
+│   ├── 📋 2026-09-30_DAILY_UPDATE_REPORT.md  <-- Báo cáo Chuẩn hóa ReUI Empty State (1 & 10), Tinh gọn UI Priority kéo thả, Executive Summary All-in-One 1 lần xuất toàn bộ & Sửa triệt để lỗi đơ luồng tóm tắt 4/4
+│   ├── 📋 2026-10-03_DAILY_UPDATE_REPORT.md  <-- Báo cáo Quy hoạch Google Drive, Dynamic Semantic Fallback Engine 7 kịch bản, Quy chuẩn đọc tài liệu Prompt
+│   └── 📋 2026-10-04_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 04/10: Audit AI Chats, Vá bảo mật Gateway & PII, Figma Copy Toolkit, Agentic Dynamic Router & Context Retrieval, Chuẩn hóa Persona Senior Designer
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
@@ -72,8 +74,11 @@ Deploy App/doc/
 │   ├── ⚙️ 12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md
 │   │   └── Đọc khi: Sửa/Làm mới các thông số vận hành động (SLA ngày, Tải trọng & Ngưỡng quá tải Designer, Ma trận Độ ưu tiên Lv1-Lv5, Trọng số KPI, Cấu hình Đề thi, Banner khẩn cấp GlobalAnnouncementBanner), Tùy biến 14 Mẫu thông báo đa kênh (In-app, Teams, Email, Push) với chip placeholder động, Cơ chế reactive event bus mbbank_system_config_changed, Xuất/Nhập/Khôi phục cấu hình JSON.
 │   │
-│   └── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
-│       └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, ReUI Empty State (1 & 10), Kéo thả task xếp ngày, Agent Activity Trace, Executive Summary All-in-One typewriter streaming & deep-link, KPI cá nhân, Right-Sheet, hoặc cấu hình lịch Admin.
+│   ├── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
+│   │   └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, ReUI Empty State (1 & 10), Kéo thả task xếp ngày, Agent Activity Trace, Executive Summary All-in-One typewriter streaming & deep-link, KPI cá nhân, Right-Sheet, hoặc cấu hình lịch Admin.
+│   │
+│   └── 🤖 14_AI_CHATS_AND_INTELLIGENT_COPILOT.md
+│       └── Đọc khi: Sửa/Làm mới Trợ lý AI Copilot, Agent Activity Trace, Slash Commands (/), Hạn mức AI ngày, Kho UX Artifacts & Viewer tài liệu Notion-style, Quản trị Gemini/OpenRouter Gateway.
 ```
 
 ---

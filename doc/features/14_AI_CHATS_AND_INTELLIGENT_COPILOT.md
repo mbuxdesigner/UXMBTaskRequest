@@ -182,11 +182,24 @@ Kho Artifacts lưu trữ các tài liệu đặc tả, bảng checklist, tiêu c
   - Tự động nạp vào thư viện Artifacts và đồng bộ vào bộ nhớ `localStorage`.
 
 ### 6.2. Bộ tài liệu Seed chuẩn ban đầu
-Hệ thống cung cấp sẵn 4 tài liệu hạt nhân của UX MBBank:
-1. `Quy-trinh-7-khau-UX-MBBank.md`: Quy trình 7 khâu chính thức từ Tiếp nhận đến UAT.
-2. `Tieu-chuan-Design-Handoff-MB.md`: Bộ tiêu chuẩn nghiệm thu thiết kế Ready for Dev.
-3. `Chinh-sach-SLA-va-PO-Pending.md`: Quy định thời gian phản hồi và xử lý bài toán nghẽn PO.
-4. `MBBank-Design-System-Tokens.json`: Bảng mã màu, kiểu chữ và tokens giao diện MB.
+Hệ thống cung cấp sẵn các tài liệu hạt nhân của UX MBBank:
+1. `Nhom-1-San-pham-tien-gui.md`: Đặc tả UX nhóm sản phẩm tiền gửi, lãi suất, tính chất sản phẩm.
+2. `Huong-dan-lay-code-chay-local-va-Git.md`: Hướng dẫn đồng bộ Git, chạy local và quy trình làm việc.
+3. `Quy-trinh-7-khau-UX-MBBank.md`: Quy trình 7 khâu chính thức từ Tiếp nhận đến UAT.
+4. `Tieu-chuan-Design-Handoff-MB.md`: Bộ tiêu chuẩn nghiệm thu thiết kế Ready for Dev.
+5. `Chinh-sach-SLA-va-PO-Pending.md`: Quy định thời gian phản hồi và xử lý bài toán nghẽn PO.
+6. `MBBank-Design-System-Tokens.json`: Bảng mã màu, kiểu chữ và tokens giao diện MB.
+
+### 6.3. Quy chuẩn định dạng Markdown hiển thị Notion-Style (EchoArtifactSplitViewer)
+Để các tài liệu Markdown khi mở trên bảng xem tài liệu Split Viewer hoặc trong tin nhắn hiển thị đẹp, rõ ràng theo chuẩn Notion, nhân sự cần tuân thủ theo hướng dẫn chi tiết tại:
+👉 **[AI_CHAT_ARTIFACT_FORMAT_GUIDE.md](../AI_CHAT_ARTIFACT_FORMAT_GUIDE.md)**
+
+Tóm tắt các quy tắc cốt lõi:
+- **Tiêu đề số tự động (Subheadings):** Viết `1.1. Tên mục` để hệ thống tự biến đổi thành tiêu đề font 18px đậm với khoảng đệm chuẩn.
+- **Danh sách lồng 3 cấp:** Thụt lề 2 spaces chuyển bullet tròn đặc `•` thành tròn rỗng `◦`; thụt lề 4 spaces chuyển thành ô vuông `▪`.
+- **Tự động in đậm tiền tố nhãn (Auto-bold Key-Value):** Cú pháp `Nhãn: Nội dung` tự động in đậm phần trước dấu hai chấm mà không cần gõ `**`.
+- **Inline Code Tag:** Bọc trong dấu \` (backtick) để hiển thị chữ đỏ `#EB5757` trên nền xám nhạt bo góc Notion.
+- **Khối Callout:** Dùng `> Nội dung` để hiển thị khung ghi chú bo góc có icon bóng đèn `💡`.
 
 ---
 
@@ -272,4 +285,140 @@ Nhằm đảm bảo trải nghiệm tương tác tự nhiên và sinh động ng
 - Nếu không có dữ liệu trong phạm vi quyền, AI phải nói rõ chưa có dữ liệu; tuyệt đối không dùng số liệu, task, Designer hoặc tài liệu minh họa.
 - Khi một Artifact được chọn, câu hỏi được gắn với đúng tên và nội dung Artifact đó.
 - Activity Trace chỉ phản ánh trạng thái xử lý do ứng dụng xác định; không hiển thị chain-of-thought hoặc thẻ `<think>` của model.
+
+---
+
+## 🎯 11. BỘ ĐỊNH TUYẾN NGỮ CẢNH ĐỘNG AGENTIC (AGENTIC DYNAMIC CONTEXT ROUTER & RETRIEVAL)
+
+### 11.1. Bối cảnh & Vấn đề của phương pháp cũ (Naive Context Dumping)
+Trước bản nâng cấp ngày 04/10/2026, cơ chế nạp ngữ cảnh (`buildEnrichedContext`) hoạt động theo dạng **"nhồi toàn bộ" (Naive Context Dumping)**:
+- Dù người dùng chỉ hỏi một câu ngắn về quy trình thiết kế hay sản phẩm số (ví dụ: *"tôi muốn tìm hiểu về sản phẩm tiền gửi"*), hệ thống vẫn tự động serialize toàn bộ danh sách 100+ bài toán (`TASK_DATA_JSON`), số liệu rủi ro phân bổ (`ExecutiveIntelligenceData`), danh sách sự kiện lịch họp và 197 điểm thảo luận.
+- **Hệ quả tiêu cực:**
+  1. *Lãng phí Token & Gây chậm trễ:* Chiếm dụng từ 3.000 đến 8.000 token vô nghĩa, làm tăng độ trễ mạng và chi phí suy luận.
+  2. *Nhiễu loạn tư duy LLM (Context Distraction & Hallucination):* Mô hình bị phân tâm giữa dữ liệu task và câu hỏi chuyên môn, dễ bịa đặt hoặc trả lời nhầm lẫn giữa tiến độ công việc và tài liệu sản phẩm.
+  3. *Lộ thông báo kỹ thuật tiêu cực:* Khi không tìm thấy tài liệu khớp với từ khóa, hệ thống lại tự động nhồi chuỗi `=== DOCUMENT_DATA === (Không tìm thấy tài liệu liên quan trong kho Artifacts...)`, khiến AI trả lời thanh minh kiểu máy móc: *"Hiện tại hệ thống chưa được cung cấp tài liệu nội bộ hoặc dữ liệu task (DOCUMENT_DATA / TASK_DATA)..."*.
+
+### 11.2. Kiến trúc Định tuyến 2 Giai đoạn (2-Phase Agentic Routing)
+
+Hệ thống đã chuyển đổi hoàn toàn sang **Kiến trúc Định tuyến Ngữ cảnh 2 Giai đoạn (2-Phase Context Router)**:
+
+```mermaid
+flowchart TD
+    UserQuery["Người dùng gửi câu hỏi / prompt"] --> Phase1["GIAI ĐOẠN 1: Intent Classifier<br>(detectUserIntent)"]
+    
+    Phase1 --> BranchTask{"Có liên quan đến Task / Tiến độ / Lịch họp?"}
+    BranchTask -- "Có (isTask, isCalendar...)" --> LoadTaskData["Nạp TASK_DATA_JSON & CALENDAR_DATA<br>(Đã che PII an toàn)"]
+    BranchTask -- "Không (Hỏi về Quy trình / Sản phẩm / UI)" --> SkipTaskData["Bỏ qua hoàn toàn dữ liệu Task<br>(Tiết kiệm token, tránh nhiễu)"]
+    
+    Phase1 --> BranchDoc{"Có liên quan đến Tài liệu / Sản phẩm?"}
+    BranchDoc -- "isProductSpec / isDoc / Query Chung" --> Phase2["GIAI ĐOẠN 2: Knowledge Bucket Retrieval<br>(searchArtifactsByQuery)"]
+    
+    Phase2 --> ViNorm["Chuẩn hóa tiếng Việt NFD & Bỏ dấu<br>(đ -> d, xoá dấu thanh)"]
+    ViNorm --> SynMap["Mở rộng từ đồng nghĩa Semantic Map<br>(tiền gửi -> savings, lãi suất, chứng chỉ...)"]
+    SynMap --> MatchScore["Tính điểm khớp: Cụm từ (+30) > Tag (+25) > Từ khóa (+10)"]
+    
+    MatchScore --> CheckFound{"Tìm thấy tài liệu có điểm > 0?"}
+    CheckFound -- "Có khớp" --> InjectDoc["Chỉ nạp đúng tài liệu khớp vào Context<br>(Đồng bộ loadedDocNames)"]
+    CheckFound -- "Không khớp" --> CleanSkip["Không chèn chuỗi cảnh báo tiêu cực<br>(Giữ ngữ cảnh sạch hoàn toàn)"]
+    
+    LoadTaskData --> BuildFinal["Tổng hợp Prompt Ngữ cảnh Tinh gọn<br>(buildEnrichedContext)"]
+    SkipTaskData --> BuildFinal
+    InjectDoc --> BuildFinal
+    CleanSkip --> BuildFinal
+    
+    BuildFinal --> LLMCall["Gửi tới LLM qua AI Gateway"]
+```
+
+### 11.3. Chi tiết Giai đoạn 1 — Bộ phân loại ý định (Intent Classifier)
+Hàm `detectUserIntent(query: string)` trong `src/config/aiPrompts.ts` phân tích cú pháp truy vấn thành các cờ nhị phân độc lập:
+- `isTask`: Truy vấn liên quan đến bài toán, việc cần làm, tiến độ, phụ trách (`task`, `việc`, `tiến độ`, `deadline`, `backlog`, `done`...).
+- `isCalendar`: Truy vấn liên quan đến lịch trình cá nhân (`họp`, `lịch`, `deep work`, `sự kiện`, `buổi sáng`, `buổi chiều`...).
+- `isChart`: Yêu cầu biểu đồ trực quan (`biểu đồ`, `chart`, `thống kê`, `tổng hợp`...).
+- `isFlow`: Yêu cầu sơ đồ luồng Mermaid (`flow`, `quy trình`, `luồng`, `sơ đồ`...).
+- `isProductSpec` *(Mới nâng cấp)*: Nhận diện các nghiệp vụ & sản phẩm ngân hàng số: `tiền gửi`, `tiết kiệm`, `khoản vay`, `thẻ`, `tài khoản`, `sản phẩm`, `gói`, `lãi suất`, `chứng chỉ tiền gửi`, `ekyc`, `nfc`, `qr pay`, `bảo hiểm`...
+- `isDoc`: Tra cứu tài liệu, tiêu chuẩn, cẩm nang, checklist (`tài liệu`, `quy chuẩn`, `checklist`, `handoff`, `guideline`, `nghiệm thu`...).
+
+### 11.4. Chi tiết Giai đoạn 2 — Truy xuất Tài liệu Ngữ nghĩa (Knowledge Bucket Retrieval)
+Hàm `searchArtifactsByQuery(query: string, artifacts: UXArtifact[])`:
+1. **Chuẩn hóa tiếng Việt chuyên sâu:** Loại bỏ dấu tổ hợp NFD, chuyển `đ/Đ` thành `d`, đưa về dạng chữ thường.
+2. **Mở rộng ngữ nghĩa ngân hàng (Semantic Expansion Map):**
+   - `"tiền gửi"` / `"tiết kiệm"` / `"sản phẩm"` $\rightarrow$ mở rộng thành `tien-gui`, `savings`, `lãi suất`, `chứng chỉ`, `siêu lãi`... Khớp trực tiếp tài liệu hạt nhân `Nhom-1-San-pham-tien-gui.md`.
+   - `"bàn giao"` / `"handoff"` / `"figma"` $\rightarrow$ mở rộng thành `handoff`, `tiêu chuẩn`, `dev`, `token`... Khớp tài liệu `Tieu-chuan-Design-Handoff-MB.md`.
+   - `"quy trình"` / `"7 khâu"` $\rightarrow$ mở rộng thành `quy-trinh`, `7-khau`, `workflow`... Khớp tài liệu `Quy-trinh-7-khau-UX-MBBank.md`.
+3. **Chấm điểm theo tầng ưu tiên:** Khớp nguyên cụm từ khóa (+30 điểm) > Khớp thẻ phân loại tags (+25 điểm) > Khớp tóm tắt summary (+15 điểm) > Khớp từ khóa đơn (+10 điểm).
+4. **Không nạp rác:** Chỉ giữ lại tài liệu có `score > 0`. Nếu không tìm thấy, trả về mảng rỗng `[]` và **tuyệt đối không chèn câu thông báo kỹ thuật tiêu cực**.
+
+---
+
+## 🎨 12. CHUẨN MỰC PERSONA & TONE OF VOICE (SENIOR PRODUCT DESIGNER / UX WRITER)
+
+### 12.1. Định vị Persona Chuyên gia
+Trợ lý AI được định vị là **Senior Product Designer & UX Writer đồng nghiệp** tại MBBank:
+- Có sự thấu hiểu sâu sắc về hệ thống tài chính số, quy chuẩn 7 khâu UX MB, các rào cản pháp lý/ngân hàng và ngôn ngữ thiết kế ReUI.
+- Giọng văn: Điềm tĩnh, chuyên nghiệp, tự tin, hướng tới giải pháp thực tế, có cấu trúc tư duy thiết kế rõ ràng.
+
+### 12.2. Ba Nguyên tắc Cốt tử về Ứng xử Hệ thống
+
+| STT | Nguyên tắc cấm kỵ | Hành vi bị nghiêm cấm | Cách xử lý chuẩn xác của AI |
+| :---: | :--- | :--- | :--- |
+| **1** | **Chống rò rỉ biến kỹ thuật (Zero System Leakage)** | Nhắc đến tên biến: `DOCUMENT_DATA`, `TASK_DATA_JSON`, `CALENDAR_DATA`, `system prompt`, `context limit`, `token quota`... | Giao tiếp hoàn toàn bằng thuật ngữ thiết kế và nghiệp vụ ngân hàng. Coi dữ liệu nạp vào là kiến thức tự nhiên của chuyên gia. |
+| **2** | **Chống bao biện kỹ thuật (No Defensive Excuse)** | Mở đầu bằng: *"Hiện tại hệ thống chưa được cung cấp tài liệu...", "Tôi không tìm thấy dữ liệu trong database...", "Theo TASK_DATA..."* | **Vào thẳng vấn đề!** Đưa ra câu trả lời trực diện, có tiêu đề và cấu trúc phân tích ngay từ dòng đầu tiên. |
+| **3** | **Tư vấn cấu trúc trải nghiệm tốt nhất (Best-Practice Fallback)** | Im lặng hoặc từ chối trả lời khi chưa có file tài liệu quy chuẩn nội bộ cụ thể trong repo. | Đóng vai trò Senior UX Designer: Phân tích cấu trúc màn hình chuẩn ngân hàng số, gợi ý các trường dữ liệu (data fields), luồng thao tác (happy path & edge cases), và đề xuất microcopy/CTA chuẩn UX. |
+
+### 12.3. Cấu trúc Phản hồi Chuẩn hóa cho Nhà thiết kế
+Mỗi phản hồi về sản phẩm/tính năng số tuân thủ khung chuẩn mực:
+1. **Tổng quan giải pháp & Phân nhóm nghiệp vụ:** Đặt tên rõ ràng các gói sản phẩm, hạn mức và nhóm đối tượng khách hàng mục tiêu.
+2. **Cấu trúc trường thông tin (Data Fields) trên màn hình:** Phân định rõ trường nhập liệu, trường tự động tính toán, nhãn thông số và tooltip giải thích.
+3. **Luồng thao tác (Screen Flow & Journey):** Liệt kê các bước từ Khởi tạo $\rightarrow$ Lựa chọn $\rightarrow$ Xác thực (OTP/Biometric) $\rightarrow$ Hoàn thành.
+4. **Gợi ý Microcopy & Nút bấm (CTA):** Các đoạn thông điệp ngắn gọn, nhân văn, rõ ràng ngữ cảnh theo chuẩn MB Tone of Voice.
+5. **Định dạng tối ưu cho Figma:** Ưu tiên bảng dữ liệu Markdown hoặc danh sách ngắn để Designer copy trực tiếp vào bản thiết kế mà không cần chỉnh sửa định dạng.
+
+---
+
+## 🔍 13. MINH BẠCH HÓA AGENT ACTIVITY TRACE TRUNG THỰC
+
+### 13.1. Vấn đề Trace "ảo" trước đây
+Trước đây, thanh chân trang của khối `AgentActivityTrace` hiển thị cố định:
+- Dòng chữ `197 điểm thảo luận` xuất hiện ngay cả khi câu hỏi chỉ là hỏi đáp tài liệu hoặc quy trình chung.
+- Badge tài liệu luôn hiển thị cứng `MB Design System & Handoff Specs` dù không hề có tài liệu nào được nạp vào prompt.
+
+### 13.2. Cơ chế Đồng bộ Dữ liệu Thực tế (Honest Trace Architecture)
+- Khai báo trường mới `loadedDocNames?: string[]` trong `ChatTraceData`.
+- Tại `AIChatPage.tsx`: Khi người dùng gửi câu hỏi, hệ thống chạy router và lưu chính xác danh sách tài liệu khớp vào `loadedDocNames`.
+- Tại `AgentActivityTrace.tsx`:
+  - **Badge Tài liệu:** Chỉ render badge khi `loadedDocNames` có phần tử (`loadedDocNames.map(...)`). Nếu không có tài liệu nào được nạp, không hiển thị badge ảo.
+  - **Điểm Thảo luận:** Chỉ hiển thị `discussionCount` khi câu hỏi thực sự liên quan đến danh mục bài toán (`activeTasks.length > 0`).
+
+---
+
+## 🚀 14. LỘ TRÌNH 3 CẤP ĐỘ MỞ RỘNG KHO TÀI LIỆU SẢN PHẨM & NGHIỆP VỤ SỐ (KNOWLEDGE BASE SCALING ROADMAP)
+
+Khi đội ngũ UX phát triển và tích lũy hàng trăm tài liệu nghiệp vụ (Sản phẩm Tiền gửi, Khoản vay, Thẻ tín dụng, eKYC, Chuyển tiền quốc tế, Bảo hiểm số...), hệ thống được thiết kế theo lộ trình nâng cấp 3 cấp độ:
+
+```mermaid
+flowchart LR
+    L1["CẤP ĐỘ 1: Hiện tại<br>Metadata & Semantic Router<br>(In-Memory, Zero-Cost)"] --> L2["CẤP ĐỘ 2: Trung hạn<br>Semantic Vector RAG<br>(Embeddings + Hybrid Search)"]
+    L2 --> L3["CẤP ĐỘ 3: Dài hạn<br>Multi-Agent Specialists<br>(Agentic Subagent Teams)"]
+```
+
+### Cấp độ 1: Metadata + Semantic Keyword Router (Đang vận hành — Đạt chuẩn xuất sắc cho < 50 tài liệu)
+- **Cơ chế:** Phân loại bằng Taxonomy Tags, Title, Summary và Semantic Expansion Map viết bằng TypeScript.
+- **Ưu điểm:** Độ trễ bằng 0ms (In-Memory), không tốn chi phí hạ tầng, không phụ thuộc thư viện ngoài, chạy hoàn hảo trên cả Localhost và Vercel Edge.
+- **Phạm vi phù hợp:** Dưới 50 tài liệu chuẩn hóa của phòng UX.
+
+### Cấp độ 2: Semantic Vector RAG & Hybrid Search (Kế hoạch Trung hạn — Dành cho 50 - 500 tài liệu)
+- **Cơ chế:**
+  - Cắt nhỏ tài liệu thành các phân đoạn logic (Chunking theo Heading 2, Heading 3 và Bảng nghiệp vụ).
+  - Sử dụng mô hình tạo Vector nhúng gọn nhẹ (ví dụ: `text-embedding-3-small` hoặc mô hình nhúng cục bộ qua WebAssembly/ONNX).
+  - Tìm kiếm kết hợp **Hybrid Search**: BM25 (khớp chính xác mã sản phẩm/tên gói) + Vector Cosine Similarity (khớp ý nghĩa ngữ cảnh).
+  - Trích xuất Top 3 đoạn văn có độ tương đồng cao nhất để nhồi vào Prompt.
+- **Ưu điểm:** Khả năng hiểu ngữ nghĩa sâu, tìm kiếm chuẩn xác ngay cả khi người dùng dùng từ lóng hoặc từ ngữ không có trong danh mục từ điển.
+
+### Cấp độ 3: Kiến trúc Đa Đặc vụ Chuyên biệt (Multi-Agent Specialist Framework — Dành cho Hệ sinh thái Lớn)
+- **Cơ chế:** Xây dựng các Subagent chuyên trách theo từng domain nghiệp vụ:
+  1. *Design System Specialist Agent:* Chuyên tra cứu token, component specs, spacing và màu sắc.
+  2. *Banking Product Spec Agent:* Chuyên phân tích điều khoản sản phẩm, biểu phí, hạn mức và quy tắc nghiệp vụ tài chính.
+  3. *Design Ops & Workflow Agent:* Chuyên phân tích tiến độ 7 khâu, đôn đốc PO và đối soát SLA.
+- **Orchestrator:** Một Supervisor Agent phân tích câu hỏi người dùng, quyết định triệu hồi đặc vụ nào giải quyết hoặc cho các đặc vụ phối hợp chéo trước khi trả kết quả cuối cùng cho Designer.
+
 

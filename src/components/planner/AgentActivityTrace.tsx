@@ -29,6 +29,7 @@ export interface AgentActivityTraceProps {
   dominantPhaseText: string
   todayEvents?: any[]
   discussionCount?: number
+  loadedDocNames?: string[]
   isRefreshing?: boolean
   onComplete?: () => void
   onOpenTask?: (task: UXRequest) => void
@@ -349,7 +350,10 @@ export function AgentActivityTrace({
                   </div>
 
                   {/* Ngữ cảnh đính kèm prompt: Lịch họp, thảo luận, tài liệu quy chuẩn */}
-                  {((todayEvents && todayEvents.length > 0) || (discussionCount !== undefined && discussionCount > 0) || dominantPhaseText) && (
+                  {((todayEvents && todayEvents.length > 0) ||
+                    (activeTasks && activeTasks.length > 0 && discussionCount !== undefined && discussionCount > 0) ||
+                    (loadedDocNames && loadedDocNames.length > 0) ||
+                    (activeTasks && activeTasks.length > 0)) && (
                     <div className="bg-white/90 dark:bg-neutral-900/90 px-2.5 py-1.5 border-t border-neutral-200/70 dark:border-neutral-800 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-neutral-500 dark:text-neutral-400">
                       <span className="font-semibold text-neutral-700 dark:text-neutral-300">Ngữ cảnh đính kèm prompt:</span>
                       {todayEvents && todayEvents.length > 0 && (
@@ -358,16 +362,20 @@ export function AgentActivityTrace({
                           {todayEvents.length} cuộc họp hôm nay
                         </span>
                       )}
-                      {discussionCount !== undefined && discussionCount > 0 && (
+                      {activeTasks && activeTasks.length > 0 && discussionCount !== undefined && discussionCount > 0 && (
                         <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                           <MessageSquare className="size-2.5" />
                           {discussionCount} điểm thảo luận
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
-                        <FileText className="size-2.5" />
-                        MB Design System & Handoff Specs
-                      </span>
+                      {loadedDocNames && loadedDocNames.length > 0 && (
+                        loadedDocNames.map((name, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-200/60 dark:border-purple-800/60">
+                            <FileText className="size-2.5" />
+                            {name}
+                          </span>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
