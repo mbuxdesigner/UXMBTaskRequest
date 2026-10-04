@@ -7,7 +7,8 @@ import {
   ExternalLink,
   Copy,
   Check,
-  File
+  File,
+  Trash2
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -17,6 +18,8 @@ interface EchoArtifactSplitViewerProps {
   artifact: UXArtifact
   onClose: () => void
   onAskAboutDoc?: (prompt: string) => void
+  onDelete?: () => void
+  canDelete?: boolean
 }
 
 /**
@@ -27,31 +30,31 @@ function getArtifactIcon(fileType: string, ext?: string) {
   if (normalized === "pdf" || fileType === "pdf") {
     return {
       icon: FileText,
-      color: "text-rose-600 dark:text-rose-400",
-      bg: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50",
+      color: "text-rose-500/90 dark:text-rose-400 stroke-[1.5]",
+      bg: "bg-rose-50/60 dark:bg-rose-950/30 border-rose-200/50 dark:border-rose-900/40",
       label: "PDF",
     }
   }
   if (["ts", "tsx", "js", "jsx", "code", "json"].includes(normalized) || fileType === "code" || fileType === "json") {
     return {
       icon: FileCode,
-      color: "text-blue-600 dark:text-blue-400",
-      bg: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50",
+      color: "text-sky-500/90 dark:text-sky-400 stroke-[1.5]",
+      bg: "bg-sky-50/60 dark:bg-sky-950/30 border-sky-200/50 dark:border-sky-900/40",
       label: normalized === "json" ? "JSON" : "CODE",
     }
   }
   if (normalized === "csv" || fileType === "csv") {
     return {
       icon: FileSpreadsheet,
-      color: "text-emerald-600 dark:text-emerald-400",
-      bg: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50",
+      color: "text-emerald-500/90 dark:text-emerald-400 stroke-[1.5]",
+      bg: "bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-900/40",
       label: "CSV",
     }
   }
   return {
     icon: FileText,
-    color: "text-indigo-600 dark:text-indigo-400",
-    bg: "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50",
+    color: "text-slate-500 dark:text-slate-400 stroke-[1.5]",
+    bg: "bg-slate-100/70 dark:bg-slate-800/40 border-slate-200/50 dark:border-slate-700/40",
     label: "DOC",
   }
 }
@@ -150,7 +153,9 @@ function formatInlineText(text: string): React.ReactNode {
 export function EchoArtifactSplitViewer({
   artifact,
   onClose,
-  onAskAboutDoc
+  onAskAboutDoc,
+  onDelete,
+  canDelete = false,
 }: EchoArtifactSplitViewerProps) {
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
@@ -564,7 +569,7 @@ export function EchoArtifactSplitViewer({
         {/* Left: File Icon + Title + Meta */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div className={cn("size-7 rounded-md border flex items-center justify-center shrink-0", iconMeta.bg)}>
-            <IconComponent className={cn("size-3.5", iconMeta.color)} />
+            <IconComponent className={cn("size-3.5 stroke-[1.5]", iconMeta.color)} />
           </div>
 
           <div className="min-w-0 flex-1 truncate">
@@ -599,6 +604,22 @@ export function EchoArtifactSplitViewer({
               <ExternalLink className="size-3.5" />
               <span className="hidden sm:inline">Drive</span>
             </a>
+          )}
+
+          {/* Delete artifact button */}
+          {canDelete && onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Bạn có chắc chắn muốn xóa tài liệu "${artifact.name}" không?`)) {
+                  onDelete()
+                }
+              }}
+              className="size-7 rounded-md hover:bg-rose-50 text-[#787774] hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors"
+              title="Xóa tài liệu này"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
           )}
 
           {/* Close artifact button */}

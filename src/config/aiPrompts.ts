@@ -302,8 +302,19 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
   const q = query.toLowerCase().trim()
   const normalizeVi = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d")
   const qNorm = normalizeVi(q)
-  const keywords = q.split(/\s+/).filter(k => k.length > 1)
-  if (keywords.length === 0) return []
+
+  const VIETNAMESE_STOP_WORDS = new Set([
+    "tôi", "toi", "bạn", "ban", "giúp", "giup", "cho", "của", "cua", "và", "va", "là", "la",
+    "các", "cac", "những", "nhung", "với", "voi", "trong", "về", "ve", "này", "nay", "đó", "do",
+    "số", "so", "một", "mot", "hai", "ba", "bốn", "bon", "năm", "nam", "sáu", "sau", "bảy", "bay",
+    "tám", "tam", "chín", "chin", "mười", "muoi", "có", "co", "được", "duoc", "không", "khong",
+    "hay", "hoặc", "hoac", "tóm", "tom", "tắt", "tat", "hãy", "hay", "gì", "gi", "nào", "nao",
+    "sao", "thế", "the", "như", "nhu", "làm", "lam", "xin", "cần", "can", "muốn", "muon",
+    "xem", "đọc", "doc", "biết", "biet", "hỏi", "hoi", "trả", "tra", "lời", "loi"
+  ])
+
+  const rawKeywords = q.split(/\s+/).filter(k => k.length > 1)
+  const keywords = rawKeywords.filter(k => !VIETNAMESE_STOP_WORDS.has(k) && !VIETNAMESE_STOP_WORDS.has(normalizeVi(k)))
 
   const semanticMap: Record<string, string[]> = {
     "tiền gửi": ["tien-gui", "tien gui", "tiết kiệm", "tiet kiem", "savings", "lãi suất", "lai suat", "sản phẩm", "san pham", "chứng chỉ", "chung chi", "siêu lãi", "sieu lai"],
@@ -338,6 +349,8 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
       expansions.forEach(e => expandedKeywords.add(e))
     }
   }
+
+  if (expandedKeywords.size === 0 && !keywords.length) return []
   
   const scored = artifacts.map(art => {
     let score = 0
@@ -349,23 +362,24 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
     const artTagsNorm = normalizeVi(artTags)
     
     // Khớp nguyên cụm từ khóa (Phrase matching)
-    if (artName.includes(q) || artNameNorm.includes(qNorm)) score += 30
+    if (artName.includes(q) || artNameNorm.includes(qNorm)) score += 35
     if (artTags.includes(q) || artTagsNorm.includes(qNorm)) score += 25
     if (artSummary.includes(q)) score += 15
 
     for (const kw of expandedKeywords) {
       const kwNorm = normalizeVi(kw)
-      if (artName.includes(kw) || artNameNorm.includes(kwNorm)) score += 10
-      if (artTags.includes(kw) || artTagsNorm.includes(kwNorm)) score += 8
-      if (artSummary.includes(kw)) score += 4
-      if (artContent.includes(kw)) score += 1
+      if (artName.includes(kw) || artNameNorm.includes(kwNorm)) score += 15
+      if (artTags.includes(kw) || artTagsNorm.includes(kwNorm)) score += 10
+      if (artSummary.includes(kw)) score += 5
+      if (artContent.includes(kw)) score += 2
     }
     
     return { art, score }
   })
   
-  const matched = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score)
-  return matched.map(s => s.art)
+  // Chỉ lấy tài liệu đạt điểm tin cậy (>= 10) và tối đa 2 tài liệu phù hợp nhất
+  const matched = scored.filter(s => s.score >= 10).sort((a, b) => b.score - a.score)
+  return matched.slice(0, 2).map(s => s.art)
 }
 
 /**

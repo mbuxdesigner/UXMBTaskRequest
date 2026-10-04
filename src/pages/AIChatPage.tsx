@@ -298,9 +298,8 @@ export type EmptyCategoryType = "seven_steps" | "handoff" | "sla_po" | "microcop
 export const EMPTY_STATE_CATEGORIES = [
   {
     id: "seven_steps" as const,
-    label: "📐 7 Khâu UX MBBank",
+    label: "7 Khâu UX MBBank",
     icon: Sparkles,
-    color: "text-blue-600",
     description: "Khảo sát, IA, Wireframe, Usability",
     prompts: [
       "Quy trình 7 khâu UX MBBank gồm những bước nào và tiêu chí nghiệm thu từng khâu?",
@@ -310,9 +309,8 @@ export const EMPTY_STATE_CATEGORIES = [
   },
   {
     id: "handoff" as const,
-    label: "📋 Tiêu chuẩn Handoff",
+    label: "Tiêu chuẩn Handoff",
     icon: BookOpen,
-    color: "text-purple-600",
     description: "Token specs, Redlines, Dev notes",
     prompts: [
       "Tiêu chuẩn tổ chức file Figma Ready for Dev: Token specs, Redlines và Dev notes",
@@ -322,9 +320,8 @@ export const EMPTY_STATE_CATEGORIES = [
   },
   {
     id: "sla_po" as const,
-    label: "⏱️ SLA & PO Alignment",
+    label: "SLA & PO Alignment",
     icon: Clock,
-    color: "text-amber-600",
     description: "24h SLA, bài toán tồn đọng PO Pending",
     prompts: [
       "Rà soát các bài toán đang bị PO Pending quá 24h cần đôn đốc phản hồi",
@@ -334,9 +331,8 @@ export const EMPTY_STATE_CATEGORIES = [
   },
   {
     id: "microcopy" as const,
-    label: "✍️ Microcopy Ngân Hàng",
+    label: "Microcopy Ngân Hàng",
     icon: Activity,
-    color: "text-emerald-600",
     description: "Thông báo lỗi, OTP, Chuyển tiền",
     prompts: [
       "Gợi ý 3 phương án microcopy cho thông báo lỗi giao dịch chuyển tiền ngoài 24/7",
@@ -1396,9 +1392,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
     const allArtifacts = getStoredArtifacts()
-    const shouldSearchDocs = isDocCommand || questionIntent.isDoc || questionIntent.isProductSpec || (!usesTaskContext && Boolean(cleanText))
-    const matchedDocs = shouldSearchDocs ? searchArtifactsByQuery(cleanText, allArtifacts) : []
-    const loadedDocNames = matchedDocs.map((d) => d.name)
+    let loadedDocNames: string[] = []
+    if (attachedDocName) {
+      loadedDocNames = [attachedDocName]
+    } else {
+      const shouldSearchDocs = isDocCommand || questionIntent.isDoc || questionIntent.isProductSpec || (!usesTaskContext && Boolean(cleanText))
+      const matchedDocs = shouldSearchDocs ? searchArtifactsByQuery(cleanText, allArtifacts) : []
+      loadedDocNames = matchedDocs.map((d) => d.name)
+    }
 
     const traceData: ChatTraceData = {
       activeTasks: usesTaskContext ? (activeAssigned.length > 0 ? activeAssigned : tasks) : [],
@@ -1584,15 +1585,15 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         }) +
           `\n\nYÊU CẦU: Tổng hợp báo cáo tiến độ các bài toán của người dùng, phát hiện rủi ro và đề xuất hành động cụ thể. Nếu có task cần cập nhật, hãy đề xuất qua khối \`\`\`task_update.`
       } else if (customContext) {
-        // Custom context (ví dụ: chat với artifact)
+        // Custom context (ví dụ: chat với artifact cụ thể được chọn/đính kèm)
         contextStr = buildEnrichedContext({
           intelligence,
           tasks,
-          artifacts: allArtifacts,
+          artifacts: [], // Không nạp allArtifacts để tránh nhồi các tài liệu khác!
           userName,
           userRole: session?.role,
           userQuery: cleanText,
-        }) + `\n\n${customContext}`
+        }) + `\n\n${customContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời đầy đủ, trực tiếp câu hỏi của người dùng. Trích xuất chính xác nguyên văn các nguyên tắc, điều khoản hoặc quy định được hỏi. Trả lời chi tiết, có cấu trúc rõ ràng.`
       } else {
         // Default: Luôn gửi enriched context (tasks + artifacts summary)
         contextStr = buildEnrichedContext({
@@ -2113,15 +2114,15 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     >
                       {/* Icon per file type */}
                       {isPdf ? (
-                        <FileText className="size-4 shrink-0 text-rose-500" />
+                        <FileText className="size-4 shrink-0 text-rose-500/80 stroke-[1.5]" />
                       ) : isCode ? (
-                        <FileCode className="size-4 shrink-0 text-blue-500" />
+                        <FileCode className="size-4 shrink-0 text-sky-500/80 stroke-[1.5]" />
                       ) : isCsv ? (
-                        <FileSpreadsheet className="size-4 shrink-0 text-emerald-500" />
+                        <FileSpreadsheet className="size-4 shrink-0 text-emerald-500/80 stroke-[1.5]" />
                       ) : isImage ? (
-                        <FileText className="size-4 shrink-0 text-amber-500" />
+                        <FileText className="size-4 shrink-0 text-amber-500/80 stroke-[1.5]" />
                       ) : (
-                        <FileText className="size-4 shrink-0 text-indigo-500" />
+                        <FileText className="size-4 shrink-0 text-slate-500 dark:text-slate-400 stroke-[1.5]" />
                       )}
 
                       <div className="min-w-0 flex-1 truncate">
@@ -2133,11 +2134,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       {canUploadArtifacts && (
                         <button
                           type="button"
-                          onClick={(e) => handleDeleteArtifact(art.id, e)}
-                          className="opacity-0 group-hover:opacity-100 size-5 rounded hover:bg-muted text-muted-foreground hover:text-rose-500 flex items-center justify-center cursor-pointer transition-opacity shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (window.confirm(`Bạn có chắc chắn muốn xóa tài liệu "${art.name}" không?`)) {
+                              handleDeleteArtifact(art.id, e)
+                            }
+                          }}
+                          className="opacity-0 group-hover:opacity-100 size-6 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-muted-foreground hover:text-rose-600 flex items-center justify-center cursor-pointer transition-all shrink-0"
                           title="Xóa tài liệu này"
                         >
-                          <Trash2 className="size-3" />
+                          <Trash2 className="size-3.5" />
                         </button>
                       )}
                     </div>
@@ -2201,7 +2207,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
             {sidebarTab === "artifacts" && selectedArtifact ? (
               <div className="flex items-center gap-2 min-w-0">
-                <FileText className="size-4 text-primary shrink-0" />
+                <FileText className="size-4 text-slate-500 dark:text-slate-400 stroke-[1.5] shrink-0" />
                 <h1 className="min-w-0 truncate text-sm sm:text-base font-semibold text-foreground">
                   {selectedArtifact.name}
                 </h1>
@@ -2366,6 +2372,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               <EchoArtifactSplitViewer
                 artifact={selectedArtifact}
                 onClose={() => setSelectedArtifactId(null)}
+                onDelete={() => handleDeleteArtifact(selectedArtifact.id)}
+                canDelete={canUploadArtifacts}
                 onAskAboutDoc={(prompt) => handleSendMessage(prompt, selectedArtifact.content, selectedArtifact.name)}
               />
             </div>
@@ -2496,18 +2504,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 <div className="mx-auto flex w-full max-w-4xl lg:max-w-5xl flex-col justify-center py-6 sm:py-10">
                   {/* Title & Subtitle */}
                   <div className="flex items-start gap-3.5">
-                    <div className="size-11 rounded-2xl border border-border/80 bg-background shadow-xs flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                    <div className="size-10 rounded-xl border border-border/70 bg-background shadow-2xs flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
                       <img
                         src={aiDefaultLogo}
                         alt="AI MB"
-                        className="size-8 object-contain"
+                        className="size-7 object-contain"
                         onError={(e) => {
                           e.currentTarget.src = "/ai-default.png"
                         }}
                       />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                      <h2 className="text-2xl sm:text-[28px] font-medium leading-tight tracking-tight text-foreground/90">
                         Trợ lý UX MB có thể hỗ trợ gì cho bạn?
                       </h2>
                       <p className="text-muted-foreground text-sm sm:text-base">
@@ -2517,7 +2525,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   </div>
 
                   {/* 4 Category Pill Buttons matching Echo Chat */}
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div
+                    className="mt-5 flex flex-wrap gap-2"
+                    role="tablist"
+                    aria-label="Nhóm câu hỏi gợi ý"
+                  >
                     {EMPTY_STATE_CATEGORIES.map((cat) => {
                       const isSelected = emptyCategory === cat.id
                       const Icon = cat.icon
@@ -2526,14 +2538,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           key={cat.id}
                           type="button"
                           onClick={() => setEmptyCategory(cat.id)}
+                          role="tab"
+                          aria-selected={isSelected}
                           className={cn(
-                            "inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm rounded-full border transition-all cursor-pointer",
+                            "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm rounded-full border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
                             isSelected
-                              ? "border-foreground/30 bg-foreground/10 text-foreground font-semibold shadow-2xs"
-                              : "border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground font-normal"
+                              ? "border-primary/25 bg-primary/[0.07] text-primary font-medium"
+                              : "border-border/80 bg-background text-muted-foreground font-normal hover:border-border hover:bg-muted/50 hover:text-foreground"
                           )}
                         >
-                          <Icon className={cn("size-3.5", isSelected ? cat.color : "text-muted-foreground")} />
+                          <Icon className={cn("size-3.5", isSelected ? "text-primary" : "text-muted-foreground/80")} />
                           <span>{cat.label}</span>
                         </button>
                       )
@@ -2541,13 +2555,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   </div>
 
                   {/* 3 Prompt Suggestions matching the selected category */}
-                  <div className="mt-6 flex flex-col divide-y divide-border border-y border-border">
+                  <div className="mt-6 flex flex-col divide-y divide-border/70 border-y border-border/70">
                     {currentCategoryObj.prompts.map((promptText) => (
                       <button
                         key={promptText}
                         type="button"
                         onClick={() => handleSendMessage(promptText)}
-                        className="group flex w-full items-center justify-between py-3 text-left text-sm sm:text-base text-foreground hover:text-primary transition-colors cursor-pointer"
+                        className="group flex min-h-11 w-full items-center justify-between px-1 py-2.5 text-left text-sm sm:text-[15px] font-normal text-foreground/80 hover:text-primary transition-colors cursor-pointer focus-visible:outline-none focus-visible:bg-muted/40"
                       >
                         <span className="truncate">{promptText}</span>
                         <CornerDownLeft className="size-4 opacity-40 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
@@ -2558,7 +2572,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   {/* Recent chats section (rendered only if real threads exist) */}
                   {displayRecentChats.length > 0 && (
                   <div className="mt-8 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground px-1">
+                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground/90 px-1">
                       <span>Recent chats</span>
                     </div>
 
@@ -2574,13 +2588,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                             <span className="text-muted-foreground/50 font-mono text-xs w-4 shrink-0">
                               {idx + 1}.
                             </span>
-                            <span className="truncate text-foreground group-hover:text-primary font-medium text-[13.5px]">
+                            <span className="truncate text-foreground/80 group-hover:text-primary font-normal text-[13.5px]">
                               {item.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 ml-3">
                             {item.fileBadge && (
-                              <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-border/80 bg-muted/40 text-muted-foreground group-hover:border-primary/40 group-hover:text-foreground transition-colors">
+                              <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded border border-border/60 bg-muted/25 text-muted-foreground/80 group-hover:border-border group-hover:text-muted-foreground transition-colors">
                                 {item.fileBadge}
                               </span>
                             )}

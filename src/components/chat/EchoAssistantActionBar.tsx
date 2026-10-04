@@ -7,6 +7,7 @@
  */
 
 import React, { useState } from "react"
+import { motion } from "framer-motion"
 import {
   Copy,
   Check,
@@ -23,6 +24,7 @@ import {
   exportTableToTSV,
   copyToClipboard,
 } from "@/lib/figmaExportUtils"
+import { springs, tactileProps } from "@/lib/motion"
 
 export interface EchoAssistantActionBarProps {
   messageId: string
@@ -90,114 +92,121 @@ export function EchoAssistantActionBar({
     <div
       role="toolbar"
       aria-label="Thao tác với phản hồi AI"
-      className={`flex items-center flex-wrap gap-1 pt-2 text-xs text-muted-foreground select-none transition-opacity ${className}`}
+      className={`flex items-center flex-wrap gap-1.5 pt-2 text-xs text-slate-500 select-none transition-opacity ${className}`}
     >
       {hasError ? (
-        // When message has error, prominently display Retry button
+        // When message has error, prominently display Soft Pastel Retry button
         onRetry && (
-          <button
+          <motion.button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 font-medium transition-colors cursor-pointer shadow-2xs"
+            {...tactileProps.button}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold text-xs transition-colors cursor-pointer shadow-2xs"
             aria-label="Thử lại câu hỏi"
             title="Thử lại yêu cầu AI"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className="size-3.5 stroke-[2.2]" />
             <span>Thử lại</span>
-          </button>
+          </motion.button>
         )
       ) : (
         <>
           {/* Action 1: Copy for Figma (Clean Text) */}
-          <button
+          <motion.button
             type="button"
             onClick={() => handleCopy("figma")}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            {...tactileProps.button}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
             title="Sao chép văn bản sạch (đã lọc Markdown, dán thẳng vào Text Layer Figma)"
             aria-label="Copy dạng Text sạch cho Figma"
           >
             {copiedType === "figma" ? (
-              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
             ) : (
-              <Copy className="size-3.5" />
+              <Copy className="size-3.5 text-slate-400 group-hover:text-slate-700" />
             )}
             <span className="text-[11.5px] font-medium">Copy cho Figma</span>
-          </button>
+          </motion.button>
 
           {/* Action 2: Copy Raw Markdown */}
-          <button
+          <motion.button
             type="button"
             onClick={() => handleCopy("markdown")}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            {...tactileProps.button}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
             title="Sao chép nguyên văn Markdown gốc"
             aria-label="Copy Markdown gốc"
           >
             {copiedType === "markdown" ? (
-              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
             ) : (
-              <FileText className="size-3.5" />
+              <FileText className="size-3.5 text-slate-400 group-hover:text-slate-700" />
             )}
-            <span className="text-[11.5px]">Markdown</span>
-          </button>
+            <span className="text-[11.5px] font-medium">Markdown</span>
+          </motion.button>
 
           {/* Action 3: Copy TSV Table for Figma Auto-layout if table is present */}
           {hasTable && (
-            <button
+            <motion.button
               type="button"
               onClick={() => handleCopy("tsv")}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              {...tactileProps.button}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
               title="Sao chép bảng dạng TSV để dán tạo Auto-Layout trong Figma"
               aria-label="Copy bảng TSV cho Figma"
             >
               {copiedType === "tsv" ? (
-                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
               ) : (
-                <Table className="size-3.5" />
+                <Table className="size-3.5 text-slate-400 group-hover:text-slate-700" />
               )}
-              <span className="text-[11.5px]">Copy Table TSV</span>
-            </button>
+              <span className="text-[11.5px] font-medium">Copy Table TSV</span>
+            </motion.button>
           )}
 
           {/* Action 4: Regenerate Assistant Response */}
           {onRegenerate && (
-            <button
+            <motion.button
               type="button"
               onClick={onRegenerate}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              {...tactileProps.button}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
               title="Tạo lại phản hồi này với AI"
               aria-label="Tạo lại phản hồi"
             >
-              <RotateCcw className="size-3.5" />
-              <span className="text-[11.5px]">Tạo lại</span>
-            </button>
+              <RotateCcw className="size-3.5 text-slate-400 group-hover:text-slate-700" />
+              <span className="text-[11.5px] font-medium">Tạo lại</span>
+            </motion.button>
           )}
 
           {/* Action 5: Open Split View / Artifact Viewer */}
           {onOpenArtifact && (artifactName || artifactId) && (
-            <button
+            <motion.button
               type="button"
               onClick={onOpenArtifact}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+              {...tactileProps.button}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
               title={`Mở Split View tài liệu ${artifactName || ""}`}
               aria-label="Mở Split View / Artifact"
             >
-              <ExternalLink className="size-3.5" />
-              <span className="text-[11.5px]">Mở Split View</span>
-            </button>
+              <ExternalLink className="size-3.5 text-slate-400 group-hover:text-slate-700" />
+              <span className="text-[11.5px] font-medium">Mở Split View</span>
+            </motion.button>
           )}
 
           {/* Action 6: Save as Artifact if requested */}
           {onSaveAsArtifact && !artifactName && (
-            <button
+            <motion.button
               type="button"
               onClick={() => onSaveAsArtifact("Tài liệu trích xuất từ AI Chat", content)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-emerald-600 transition-colors cursor-pointer"
+              {...tactileProps.button}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-emerald-700 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
               title="Lưu trích đoạn này thành Artifact mới"
               aria-label="Lưu thành Artifact"
             >
-              <Bookmark className="size-3.5" />
-              <span className="text-[11.5px]">Lưu Artifact</span>
-            </button>
+              <Bookmark className="size-3.5 text-slate-400 group-hover:text-emerald-600" />
+              <span className="text-[11.5px] font-medium">Lưu Artifact</span>
+            </motion.button>
           )}
         </>
       )}

@@ -758,7 +758,7 @@ export async function streamAICompletion(
               route: "fallback",
               stream: true,
               temperature: config.temperature ?? 0.7,
-              max_tokens: config.max_tokens ?? 1024,
+              max_tokens: config.max_tokens ?? 2048,
             }),
             signal: controller.signal,
           })
@@ -843,7 +843,7 @@ export async function streamAICompletion(
               messages,
               stream: true,
               temperature: config.temperature ?? 0.7,
-              max_tokens: config.max_tokens ?? 1024,
+              max_tokens: config.max_tokens ?? 2048,
             }),
             signal: timeoutCtrl.signal,
           })

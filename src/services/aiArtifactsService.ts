@@ -314,29 +314,71 @@ Khi trao đổi trong ô thảo luận bài toán:
   },
 ]
 
+const STORAGE_DELETED_ARTIFACTS_KEY = "ux_mb_deleted_artifact_ids"
+
+/**
+ * Lấy danh sách ID các artifact đã bị người dùng xóa
+ */
+export function getDeletedArtifactIds(): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = localStorage.getItem(STORAGE_DELETED_ARTIFACTS_KEY)
+    if (raw) {
+      const arr = JSON.parse(raw)
+      if (Array.isArray(arr)) return new Set(arr)
+    }
+  } catch {}
+  return new Set()
+}
+
+/**
+ * Đánh dấu artifact ID là đã xóa vĩnh viễn
+ */
+export function markArtifactAsDeleted(id: string): void {
+  if (typeof window === "undefined" || !id) return
+  try {
+    const set = getDeletedArtifactIds()
+    set.add(id)
+    localStorage.setItem(STORAGE_DELETED_ARTIFACTS_KEY, JSON.stringify(Array.from(set)))
+  } catch {}
+}
+
 /**
  * Lấy danh sách artifacts từ localStorage (hoặc seed data nếu chưa có)
  */
 export function getStoredArtifacts(): UXArtifact[] {
   try {
+    const deletedIds = getDeletedArtifactIds()
     const raw = localStorage.getItem(STORAGE_ARTIFACTS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const existingIds = new Set(parsed.map((item: UXArtifact) => item.id))
-        const missingSeeds = SEED_UX_ARTIFACTS.filter((seed) => !existingIds.has(seed.id))
+      if (Array.isArray(parsed)) {
+        // Loại bỏ các artifact đã bị đánh dấu xóa
+        const filtered = parsed.filter((item: UXArtifact) => !deletedIds.has(item.id))
+        const existingIds = new Set(filtered.map((item: UXArtifact) => item.id))
+        // Chỉ bổ sung seed nếu seed đó CHƯA TỪNG bị người dùng xóa
+        const missingSeeds = SEED_UX_ARTIFACTS.filter(
+          (seed) => !existingIds.has(seed.id) && !deletedIds.has(seed.id)
+        )
         if (missingSeeds.length > 0) {
-          const merged = [...missingSeeds, ...parsed]
+          const merged = [...missingSeeds, ...filtered]
           localStorage.setItem(STORAGE_ARTIFACTS_KEY, JSON.stringify(merged))
           return merged
         }
-        return parsed
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(STORAGE_ARTIFACTS_KEY, JSON.stringify(filtered))
+        }
+        return filtered
       }
     }
+    // Lần đầu tải: Lấy seed loại trừ các id đã xóa (nếu có)
+    const initial = SEED_UX_ARTIFACTS.filter((seed) => !deletedIds.has(seed.id))
+    localStorage.setItem(STORAGE_ARTIFACTS_KEY, JSON.stringify(initial))
+    return initial
   } catch (err) {
     console.error("[aiArtifactsService] Error loading artifacts:", err)
   }
-  return SEED_UX_ARTIFACTS
+  return SEED_UX_ARTIFACTS.filter((seed) => !getDeletedArtifactIds().has(seed.id))
 }
 
 /**
@@ -367,12 +409,16 @@ export function addArtifact(artifact: Omit<UXArtifact, "id" | "updatedAt">): UXA
 }
 
 /**
- * Xóa một artifact theo ID
+ * Xóa một artifact theo ID (lưu vết để không tự hồi sinh)
  */
 export function deleteArtifact(id: string): UXArtifact[] {
+  markArtifactAsDeleted(id)
   const current = getStoredArtifacts()
   const updated = current.filter((a) => a.id !== id)
   saveStoredArtifacts(updated)
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ux_mb_artifacts_changed", { detail: updated }))
+  }
   return updated
 }
 
@@ -402,13 +448,14 @@ export function mergeCloudArtifacts(cloudArtifacts: UXArtifact[]): UXArtifact[] 
   if (!Array.isArray(cloudArtifacts) || cloudArtifacts.length === 0) {
     return getStoredArtifacts()
   }
+  const deletedIds = getDeletedArtifactIds()
   const current = getStoredArtifacts()
   const localMap = new Map<string, UXArtifact>()
   current.forEach((a) => localMap.set(a.id, a))
 
   let hasNewOrUpdated = false
   cloudArtifacts.forEach((cloudArt) => {
-    if (!cloudArt || !cloudArt.id) return
+    if (!cloudArt || !cloudArt.id || deletedIds.has(cloudArt.id)) return
     const existing = localMap.get(cloudArt.id)
     if (!existing) {
       localMap.set(cloudArt.id, cloudArt)

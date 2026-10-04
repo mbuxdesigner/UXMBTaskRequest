@@ -8,8 +8,10 @@
  */
 
 import React, { useState, useRef, useEffect } from "react"
+import { motion } from "framer-motion"
 import { Pencil, X, Send, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { springs, tactileProps } from "@/lib/motion"
 
 export interface EchoUserMessageBubbleProps {
   message: {
@@ -70,7 +72,7 @@ export function EchoUserMessageBubble({
   if (isEditing) {
     return (
       <div className={`space-y-2 w-full max-w-[85%] ml-auto ${className}`}>
-        <div className="relative rounded-xl border border-primary/40 bg-background shadow-xs overflow-hidden focus-within:ring-2 focus-within:ring-primary/20">
+        <div className="relative rounded-2xl border border-slate-300 bg-white shadow-xs overflow-hidden focus-within:ring-2 focus-within:ring-slate-900/15 focus-within:border-slate-400">
           <textarea
             ref={textareaRef}
             value={draftText}
@@ -93,67 +95,69 @@ export function EchoUserMessageBubble({
               }
             }}
             rows={2}
-            className="w-full p-3 text-[13.5px] sm:text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none leading-relaxed"
+            className="w-full p-3.5 text-[13.5px] sm:text-sm bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none leading-relaxed"
             placeholder="Chỉnh sửa câu hỏi... (Nhấn Enter để gửi lại, Shift+Enter để xuống dòng, Esc để hủy)"
             aria-label="Chỉnh sửa nội dung câu hỏi"
           />
         </div>
 
         <div className="flex items-center justify-end gap-2 text-xs">
-          <span className="text-[11px] text-muted-foreground mr-1 hidden sm:inline">
-            Nhấn <kbd className="font-mono bg-muted px-1 rounded">Enter</kbd> để gửi, <kbd className="font-mono bg-muted px-1 rounded">Esc</kbd> để hủy
+          <span className="text-[11px] text-slate-400 mr-1 hidden sm:inline select-none">
+            Nhấn <kbd className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">Enter</kbd> để gửi, <kbd className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">Esc</kbd> để hủy
           </span>
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={handleCancel}
-            className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            className="h-8 px-3 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl cursor-pointer font-medium"
           >
             Hủy
           </Button>
-          <Button
+          <motion.button
             type="button"
-            size="sm"
             onClick={handleSaveAndResend}
             disabled={!draftText.trim()}
-            className="h-7 px-3 text-xs bg-slate-900 hover:bg-slate-800 text-white cursor-pointer gap-1 shadow-2xs"
+            {...tactileProps.button}
+            className="h-8 px-3.5 text-xs bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="size-3" />
             <span>Gửi lại</span>
-          </Button>
+          </motion.button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className={`group relative space-y-1 max-w-[85%] flex flex-col items-end ${className}`}>
+    <div className={`group relative space-y-1.5 max-w-[85%] flex flex-col items-end ${className}`}>
       {message.attachedArtifactName && (
-        <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-          <FileText className="size-3" />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/80 shadow-2xs">
+          <FileText className="size-3 text-slate-500" />
           <span>{message.attachedArtifactName}</span>
         </span>
       )}
 
       <div className="relative">
-        <div className="rounded-2xl rounded-br-xs bg-muted/70 text-foreground px-3.5 py-2 text-[13.5px] sm:text-sm leading-relaxed select-text">
+        <div className="rounded-2xl rounded-br-xs bg-slate-100 text-slate-800 border border-slate-200/80 px-4 py-2.5 text-[13.5px] sm:text-sm leading-relaxed select-text shadow-2xs">
           {message.content}
         </div>
 
         {/* Hover Edit Prompt Button */}
         {!isStreaming && (
-          <button
+          <motion.button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="absolute -left-7 top-1/2 -translate-y-1/2 size-6 rounded-full bg-background border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-2xs cursor-pointer"
+            {...tactileProps.iconButton}
+            className="absolute -left-7 top-1/2 -translate-y-1/2 size-6.5 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-2xs cursor-pointer"
             title="Chỉnh sửa câu hỏi này"
             aria-label="Chỉnh sửa câu hỏi"
           >
             <Pencil className="size-3" />
-          </button>
+          </motion.button>
         )}
       </div>
     </div>
   )
 }
+
