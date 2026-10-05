@@ -3,8 +3,8 @@
  * AI SERVICE — CLIENT GATEWAY & STREAMING ENGINE (OpenRouter Integration)
  * ══════════════════════════════════════════════════════════════════════════════
  * 
- * Quản lý kết nối, xoay vòng API Keys, gọi completions và xử lý SSE Stream.
- * Tự động fallback direct call khi chạy local dev mà không có edge function.
+ * Gọi completions qua server-managed gateway và xử lý SSE Stream.
+ * Provider keys tuyệt đối không được lưu hoặc sử dụng trong browser.
  */
 
 import type { PromptMessage } from "@/config/aiPrompts"
@@ -48,68 +48,35 @@ export const OPENROUTER_REQUESTS_PER_KEY_PER_DAY = 50
 export const GOOGLE_REQUESTS_PER_KEY_PER_DAY = 1500
 export const FREE_REQUESTS_PER_KEY_PER_DAY = 50 // Backward compatibility
 
-export const INITIAL_GEMINI_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : "") || ""
+export const INITIAL_GEMINI_KEY = ""
 
-export function getStoredGeminiKeys(): GeminiKeyEntry[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(STORAGE_GEMINI_KEYS_KEY)
-    if (!raw) {
-      const legacyKey = localStorage.getItem(STORAGE_GEMINI_KEY) || INITIAL_GEMINI_KEY
-      if (legacyKey && legacyKey.trim()) {
-        const defaultEntry: GeminiKeyEntry = {
-          id: "google-key-main",
-          key: legacyKey.trim(),
-          label: "Google Main Key",
-          status: "active",
-          createdAt: new Date().toISOString(),
-        }
-        localStorage.setItem(STORAGE_GEMINI_KEYS_KEY, JSON.stringify([defaultEntry]))
-        return [defaultEntry]
-      }
-      return []
-    }
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
-}
-
-export function saveGeminiKeys(keys: GeminiKeyEntry[]): void {
+export function purgeClientAIKeys(): void {
   if (typeof window === "undefined") return
   try {
-    localStorage.setItem(STORAGE_GEMINI_KEYS_KEY, JSON.stringify(keys))
-    const firstActive = keys.find(k => k.status !== "error")?.key || ""
-    if (firstActive) {
-      localStorage.setItem(STORAGE_GEMINI_KEY, firstActive)
-    }
-    window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed"))
-    window.dispatchEvent(new CustomEvent("ux_mb_gemini_keys_changed"))
-  } catch (err) {
-    console.error("[AIService] Failed to save Gemini keys:", err)
-  }
+    localStorage.removeItem(STORAGE_KEYS_KEY)
+    localStorage.removeItem(STORAGE_GEMINI_KEY)
+    localStorage.removeItem(STORAGE_GEMINI_KEYS_KEY)
+    localStorage.removeItem(STORAGE_AI_GATEWAY_KEY)
+  } catch {}
+}
+
+// Migration bảo mật: xóa mọi provider key từng được lưu bởi các phiên bản cũ.
+purgeClientAIKeys()
+
+export function getStoredGeminiKeys(): GeminiKeyEntry[] {
+  purgeClientAIKeys()
+  return []
+}
+
+export function saveGeminiKeys(_keys: GeminiKeyEntry[]): void {
+  purgeClientAIKeys()
 }
 
 export function addGeminiKey(rawKey: string, label: string = "Google Key"): GeminiKeyEntry[] {
-  const clean = rawKey.trim()
-  if (!clean) return getStoredGeminiKeys()
-
-  const current = getStoredGeminiKeys()
-  const exists = current.some(k => k.key === clean)
-  if (exists) return current
-
-  const newEntry: GeminiKeyEntry = {
-    id: `gkey-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    key: clean,
-    label: label.trim() || `Google Key #${current.length + 1}`,
-    status: "active",
-    createdAt: new Date().toISOString(),
-  }
-
-  const updated = [newEntry, ...current]
-  saveGeminiKeys(updated)
-  return updated
+  void rawKey
+  void label
+  purgeClientAIKeys()
+  return []
 }
 
 export function removeGeminiKey(id: string): GeminiKeyEntry[] {
@@ -179,36 +146,23 @@ export function markGeminiKeyError(key: string, reason: string): void {
 }
 
 export function getStoredGeminiKey(): string {
-  const next = getNextActiveGeminiKey()
-  if (next) return next
-  if (typeof window === "undefined") return ""
-  return localStorage.getItem(STORAGE_GEMINI_KEY) || INITIAL_GEMINI_KEY
+  purgeClientAIKeys()
+  return ""
 }
 
 export function saveGeminiKey(key: string): void {
-  const clean = key.trim()
-  if (!clean) return
-  const current = getStoredGeminiKeys()
-  const existing = current.find(k => k.key === clean)
-  if (!existing) {
-    addGeminiKey(clean, `Google Key #${current.length + 1}`)
-  } else {
-    localStorage.setItem(STORAGE_GEMINI_KEY, clean)
-    window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed"))
-  }
+  void key
+  purgeClientAIKeys()
 }
 
 export function getStoredAIGateway(): "auto" | "google_ai_studio" | "openrouter" {
-  if (typeof window === "undefined") return "auto"
-  const g = localStorage.getItem(STORAGE_AI_GATEWAY_KEY)
-  if (g === "google_ai_studio" || g === "openrouter" || g === "auto") return g
-  return "auto"
+  purgeClientAIKeys()
+  return "openrouter"
 }
 
 export function saveAIGateway(gateway: "auto" | "google_ai_studio" | "openrouter"): void {
-  if (typeof window === "undefined") return
-  localStorage.setItem(STORAGE_AI_GATEWAY_KEY, gateway)
-  window.dispatchEvent(new CustomEvent("ux_mb_ai_gateway_changed", { detail: { gateway } }))
+  void gateway
+  purgeClientAIKeys()
 }
 
 /**
@@ -230,65 +184,17 @@ export function getStoredSessionToken(): string | null {
   return null
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tự phát hiện model Gemini khả dụng cho key (tránh hardcode model đã bị Google gỡ)
-// ─────────────────────────────────────────────────────────────────────────────
-const geminiModelCache = new Map<string, { models: string[]; at: number }>()
-const GEMINI_MODEL_CACHE_MS = 30 * 60 * 1000
+// Model discovery and provider credentials are server concerns. These exports
+// remain for source compatibility, but never contact a provider from a browser.
+export const DEFAULT_GEMINI_MODEL = "google/gemini-2.0-flash-001"
 
-export async function listAvailableGeminiModels(apiKey: string): Promise<string[]> {
-  const cached = geminiModelCache.get(apiKey)
-  if (cached && Date.now() - cached.at < GEMINI_MODEL_CACHE_MS) return cached.models
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(apiKey)}`
-  )
-  if (!res.ok) {
-    const txt = await res.text()
-    throw Object.assign(new Error(`ListModels ${res.status}: ${txt.substring(0, 160)}`), { status: res.status })
-  }
-  const data = await res.json()
-  const models: string[] = (data.models || [])
-    .filter((m: any) => (m.supportedGenerationMethods || []).includes("generateContent"))
-    .map((m: any) => String(m.name || "").replace(/^models\//, ""))
-    .filter(Boolean)
-  geminiModelCache.set(apiKey, { models, at: Date.now() })
-  return models
+export async function listAvailableGeminiModels(_apiKey = ""): Promise<string[]> {
+  return POPULAR_AI_MODELS.map((model) => model.id).filter((id) => id.includes("gemini"))
 }
 
-/** Điểm ưu tiên: Flash chat thông thường, phiên bản mới nhất, bản ổn định hơn preview/exp */
-function scoreGeminiModel(id: string): number {
-  if (!id.startsWith("gemini")) return -1
-  if (/(embedding|image|tts|audio|live|aqa|robotics|computer-use)/.test(id)) return -1
-  const ver = parseFloat((id.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || "0")
-  let s = ver * 100
-  if (id.includes("flash")) s += 30
-  if (id.includes("lite")) s -= 5
-  if (/(preview|exp)/.test(id)) s -= 20
-  return s
-}
-
-/**
- * Chọn model Gemini thực sự khả dụng cho key:
- * - Model ưu tiên có trong danh sách → dùng luôn.
- * - Không có → chọn model Flash mới nhất mà key được phép gọi.
- */
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
-
-export async function resolveGeminiModel(apiKey: string, preferred?: string): Promise<string> {
-  try {
-    const models = await listAvailableGeminiModels(apiKey)
-    const pref = (preferred || "").replace(/^google\//, "").replace(/:free$/, "")
-    if (pref && models.includes(pref)) return pref
-    const ranked = models
-      .map((id) => ({ id, s: scoreGeminiModel(id) }))
-      .filter((x) => x.s >= 0)
-      .sort((a, b) => b.s - a.s)
-    const flash = ranked.find((x) => x.id.includes("flash"))
-    return (flash || ranked[0])?.id || (pref?.startsWith("gemini") ? pref : DEFAULT_GEMINI_MODEL)
-  } catch {
-    return (preferred?.startsWith("gemini") ? preferred : DEFAULT_GEMINI_MODEL)
-  }
+export async function resolveGeminiModel(_apiKey = "", preferred?: string): Promise<string> {
+  const allowed = await listAvailableGeminiModels()
+  return preferred && allowed.includes(preferred) ? preferred : DEFAULT_GEMINI_MODEL
 }
 
 
@@ -313,11 +219,11 @@ export const POPULAR_AI_MODELS: AIModelOption[] = [
     contextLength: "262K",
   },
   {
-    id: "gemini-auto",
-    name: "Gemini Flash (Google AI Studio Direct)",
-    provider: "Google AI Studio",
-    description: "Kết nối trực tiếp máy chủ Google, đọc hiểu ảnh Vision, miễn phí 1.500 RPD",
-    badge: "Vision Free",
+    id: "google/gemini-2.0-flash-001",
+    name: "Gemini Flash",
+    provider: "OpenRouter Gateway",
+    description: "Đọc hiểu văn bản và hình ảnh qua cổng AI được quản trị tập trung",
+    badge: "Vision",
     contextLength: "1M",
   },
   {
@@ -339,8 +245,7 @@ export const POPULAR_AI_MODELS: AIModelOption[] = [
 ]
 
 // Key mặc định ban đầu đọc an toàn từ biến môi trường (chỉ ở chế độ local development)
-const INITIAL_DEFAULT_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env?.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY || "") : "") || ""
+const INITIAL_DEFAULT_KEY = ""
 
 // FREE_REQUESTS_PER_KEY_PER_DAY is exported above (line 49)
 const STORAGE_AI_DAILY_USAGE_KEY = "ux_mb_ai_daily_usage"
@@ -387,44 +292,44 @@ export function getDailyAIUsage(): AIDailyUsage {
     groupName: "Gemini Models",
     provider: "Google AI Studio",
     usedRequests: 0,
-    totalRequests: 1500,
-    remainingRequests: 1500,
-    percentRemaining: 100,
+    totalRequests: 0,
+    remainingRequests: 0,
+    percentRemaining: 0,
     percentUsed: 0,
     status: "available",
     statusBadge: "Còn",
-    statusText: "Còn 1.500 lượt",
-    refreshNotice: "Bạn đã dùng một phần hạn mức ngày, tự động làm mới lúc 00:00.",
-    keysCount: 1,
-    activeKeysCount: 1,
+    statusText: "Hạn mức do máy chủ quản lý",
+    refreshNotice: "Trình duyệt không lưu API key hoặc suy đoán hạn mức nhà cung cấp.",
+    keysCount: 0,
+    activeKeysCount: 0,
   }
   const dummyOpenRouter: ModelGroupQuota = {
     groupId: "openrouter",
     groupName: "Claude and GPT models",
     provider: "OpenRouter",
     usedRequests: 0,
-    totalRequests: 50,
-    remainingRequests: 50,
-    percentRemaining: 100,
+    totalRequests: 0,
+    remainingRequests: 0,
+    percentRemaining: 0,
     percentUsed: 0,
     status: "available",
     statusBadge: "Còn",
-    statusText: "Còn 50 lượt",
-    refreshNotice: "Bạn đã dùng một phần hạn mức ngày, tự động làm mới lúc 00:00.",
-    keysCount: 1,
-    activeKeysCount: 1,
+    statusText: "Hạn mức do máy chủ quản lý",
+    refreshNotice: "Trình duyệt không lưu API key hoặc suy đoán hạn mức nhà cung cấp.",
+    keysCount: 0,
+    activeKeysCount: 0,
   }
 
   if (typeof window === "undefined") {
     return {
       date: "",
       usedRequests: 0,
-      totalRequests: 1550,
+      totalRequests: 0,
       percent: 0,
-      keysCount: 2,
-      openRouterKeysCount: 1,
-      googleKeysCount: 1,
-      remainingRequests: 1550,
+      keysCount: 0,
+      openRouterKeysCount: 0,
+      googleKeysCount: 0,
+      remainingRequests: 0,
       gemini: dummyGemini,
       openRouter: dummyOpenRouter,
     }
@@ -438,12 +343,12 @@ export function getDailyAIUsage(): AIDailyUsage {
     (openRouterKeysCount * OPENROUTER_REQUESTS_PER_KEY_PER_DAY) +
     (googleKeysCount * GOOGLE_REQUESTS_PER_KEY_PER_DAY)
 
-  const totalRequests = Math.max(50, calculatedTotal || 50)
+  const totalRequests = calculatedTotal
   const todayStr = new Date().toLocaleDateString("en-CA") // "YYYY-MM-DD" theo local time
 
-  let usedRequests = 14
-  let geminiUsed = 8
-  let openRouterUsed = 6
+  let usedRequests = 0
+  let geminiUsed = 0
+  let openRouterUsed = 0
 
   try {
     const raw = localStorage.getItem(STORAGE_AI_DAILY_USAGE_KEY)
@@ -457,17 +362,17 @@ export function getDailyAIUsage(): AIDailyUsage {
     }
   } catch {}
 
-  const percent = Math.min(100, Math.round((usedRequests / totalRequests) * 100))
+  const percent = totalRequests > 0 ? Math.min(100, Math.round((usedRequests / totalRequests) * 100)) : 0
   const remainingRequests = Math.max(0, totalRequests - usedRequests)
 
   // 1. Nhóm Gemini Models (Google AI Studio Direct API)
-  const geminiTotal = Math.max(1500, (googleKeysCount || 1) * GOOGLE_REQUESTS_PER_KEY_PER_DAY)
+  const geminiTotal = googleKeysCount * GOOGLE_REQUESTS_PER_KEY_PER_DAY
   const geminiRemaining = Math.max(0, geminiTotal - geminiUsed)
-  const geminiPercentRemaining = Math.min(100, Math.max(0, Math.round((geminiRemaining / geminiTotal) * 100)))
+  const geminiPercentRemaining = geminiTotal > 0 ? Math.min(100, Math.max(0, Math.round((geminiRemaining / geminiTotal) * 100))) : 0
   const geminiActiveKeys = googleKeys.filter(k => k.status === "active" || (k.rpmLimitResetAt && k.rpmLimitResetAt <= Date.now()))
   const isGeminiAllRateLimited = googleKeys.length > 0 && geminiActiveKeys.length === 0
   const geminiStatus: "available" | "rate_limited" | "exhausted" =
-    geminiRemaining <= 0 ? "exhausted" : isGeminiAllRateLimited ? "rate_limited" : "available"
+    geminiTotal === 0 ? "available" : geminiRemaining <= 0 ? "exhausted" : isGeminiAllRateLimited ? "rate_limited" : "available"
 
   const geminiQuota: ModelGroupQuota = {
     groupId: "gemini",
@@ -480,26 +385,30 @@ export function getDailyAIUsage(): AIDailyUsage {
     percentUsed: 100 - geminiPercentRemaining,
     status: geminiStatus,
     statusBadge: geminiStatus === "available" ? "Còn" : geminiStatus === "rate_limited" ? "Tạm nghỉ (15 RPM)" : "Hết lượt",
-    statusText: geminiStatus === "available"
+    statusText: geminiTotal === 0
+      ? "Hạn mức do máy chủ quản lý"
+      : geminiStatus === "available"
       ? `Còn ${geminiRemaining.toLocaleString("vi-VN")} lượt`
       : geminiStatus === "rate_limited"
       ? "Tạm dừng 15 RPM (Đang tự phục hồi)"
       : "Đã đạt hạn mức hôm nay",
-    refreshNotice: geminiRemaining <= 0
+    refreshNotice: geminiTotal === 0
+      ? "Trình duyệt không lưu API key hoặc suy đoán hạn mức nhà cung cấp."
+      : geminiRemaining <= 0
       ? "Bạn đã dùng hết hạn mức ngày của Gemini, sẽ tự động làm mới lúc 00:00."
       : isGeminiAllRateLimited
       ? "Toàn bộ key Google tạm chạm 15 RPM, tự động phục hồi trong ít phút."
       : `Đã dùng ${geminiUsed.toLocaleString("vi-VN")}/${geminiTotal.toLocaleString("vi-VN")} lượt, tự động làm mới lúc 00:00.`,
-    keysCount: Math.max(1, googleKeysCount),
+    keysCount: googleKeysCount,
     activeKeysCount: geminiActiveKeys.length,
   }
 
   // 2. Nhóm Claude, GPT & OpenRouter Models
-  const openRouterTotal = Math.max(50, (openRouterKeysCount || 1) * OPENROUTER_REQUESTS_PER_KEY_PER_DAY)
+  const openRouterTotal = openRouterKeysCount * OPENROUTER_REQUESTS_PER_KEY_PER_DAY
   const openRouterRemaining = Math.max(0, openRouterTotal - openRouterUsed)
-  const openRouterPercentRemaining = Math.min(100, Math.max(0, Math.round((openRouterRemaining / openRouterTotal) * 100)))
+  const openRouterPercentRemaining = openRouterTotal > 0 ? Math.min(100, Math.max(0, Math.round((openRouterRemaining / openRouterTotal) * 100))) : 0
   const openRouterStatus: "available" | "rate_limited" | "exhausted" =
-    openRouterRemaining <= 0 ? "exhausted" : "available"
+    openRouterTotal === 0 ? "available" : openRouterRemaining <= 0 ? "exhausted" : "available"
 
   const openRouterQuota: ModelGroupQuota = {
     groupId: "openrouter",
@@ -512,13 +421,17 @@ export function getDailyAIUsage(): AIDailyUsage {
     percentUsed: 100 - openRouterPercentRemaining,
     status: openRouterStatus,
     statusBadge: openRouterStatus === "available" ? "Còn" : "Hết lượt",
-    statusText: openRouterStatus === "available"
+    statusText: openRouterTotal === 0
+      ? "Hạn mức do máy chủ quản lý"
+      : openRouterStatus === "available"
       ? `Còn ${openRouterRemaining.toLocaleString("vi-VN")} lượt`
       : "Đã đạt hạn mức hôm nay",
-    refreshNotice: openRouterRemaining <= 0
+    refreshNotice: openRouterTotal === 0
+      ? "Trình duyệt không lưu API key hoặc suy đoán hạn mức nhà cung cấp."
+      : openRouterRemaining <= 0
       ? "Bạn đã chạm giới hạn 50 lượt/ngày của OpenRouter, sẽ tự động làm mới lúc 00:00."
       : `Đã dùng ${openRouterUsed.toLocaleString("vi-VN")}/${openRouterTotal.toLocaleString("vi-VN")} lượt, tự động làm mới lúc 00:00.`,
-    keysCount: Math.max(1, openRouterKeysCount),
+    keysCount: openRouterKeysCount,
     activeKeysCount: openRouterKeys.filter(k => k.status === "active").length,
   }
 
@@ -673,72 +586,34 @@ export function getNextActiveKey(): string {
  * Lấy danh sách API Keys đã lưu trong localStorage
  */
 export function getStoredAIKeys(): AIKeyEntry[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS_KEY)
-    if (!raw) {
-      // Khởi tạo key ban đầu nếu chưa có
-      const defaultEntry: AIKeyEntry = {
-        id: "key-default",
-        key: INITIAL_DEFAULT_KEY,
-        label: "OpenRouter Main Key",
-        status: "active",
-        createdAt: new Date().toISOString(),
-      }
-      localStorage.setItem(STORAGE_KEYS_KEY, JSON.stringify([defaultEntry]))
-      return [defaultEntry]
-    }
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
+  purgeClientAIKeys()
+  return []
 }
 
 /**
  * Lưu danh sách API Keys vào localStorage
  */
-export function saveAIKeys(keys: AIKeyEntry[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEYS_KEY, JSON.stringify(keys))
-    window.dispatchEvent(new CustomEvent("ux_mb_ai_usage_changed"))
-  } catch (err) {
-    console.error("[AIService] Failed to save keys:", err)
-  }
+export function saveAIKeys(_keys: AIKeyEntry[]): void {
+  purgeClientAIKeys()
 }
 
 /**
  * Thêm một key mới vào danh sách
  */
 export function addAIKey(rawKey: string, label: string = "Custom Key"): AIKeyEntry[] {
-  const clean = rawKey.trim()
-  if (!clean) return getStoredAIKeys()
-
-  const current = getStoredAIKeys()
-  const exists = current.some(k => k.key === clean)
-  if (exists) return current
-
-  const newEntry: AIKeyEntry = {
-    id: `key-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    key: clean,
-    label: label.trim() || `Key #${current.length + 1}`,
-    status: "active",
-    createdAt: new Date().toISOString(),
-  }
-
-  const updated = [newEntry, ...current]
-  saveAIKeys(updated)
-  return updated
+  void rawKey
+  void label
+  purgeClientAIKeys()
+  return []
 }
 
 /**
  * Xóa một key khỏi danh sách
  */
 export function removeAIKey(id: string): AIKeyEntry[] {
-  const current = getStoredAIKeys()
-  const updated = current.filter(k => k.id !== id)
-  saveAIKeys(updated)
-  return updated
+  void id
+  purgeClientAIKeys()
+  return []
 }
 
 /**
@@ -786,93 +661,30 @@ export function setAIEnabled(enabled: boolean): void {
  * Test kết nối thử nghiệm đến OpenRouter với 1 API Key cụ thể
  */
 export async function testAIConnection(apiKey?: string, model: string = DEFAULT_AI_MODEL): Promise<{ success: boolean; message: string; latencyMs: number }> {
+  void apiKey
   const startTime = Date.now()
-  const isDev = Boolean(typeof import.meta !== "undefined" && import.meta.env?.DEV)
-
-  // Trong production, luôn kiểm tra qua Edge Gateway có đính kèm session token, tuyệt đối không gọi direct OpenRouter
-  if (!isDev) {
-    const sessionToken = getStoredSessionToken()
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
-    if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`
-
-    try {
-      const res = await fetch("/api/ai-gateway", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: "Ping" }],
-          max_tokens: 5,
-        }),
-      })
-      const latencyMs = Date.now() - startTime
-
-      if (res.ok) {
-        return { success: true, message: `Kết nối gateway thành công (${latencyMs}ms)`, latencyMs }
-      }
-
-      const errData = await res.json().catch(() => ({}))
-      const errMsg = errData?.error?.message || errData?.error || `HTTP ${res.status}`
-      if (res.status === 503 || errData?.code === "MISSING_SERVER_API_KEY") {
-        return {
-          success: false,
-          message:
-            "Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường.",
-          latencyMs,
-        }
-      }
-      return { success: false, message: `Lỗi kết nối gateway (${res.status}): ${errMsg}`, latencyMs }
-    } catch (err: any) {
-      return {
-        success: false,
-        message: `Không thể kết nối gateway: ${err?.message || "Network Error"}`,
-        latencyMs: Date.now() - startTime,
-      }
-    }
-  }
-
-  const keyToUse = apiKey?.trim() || getStoredAIKeys().find(k => k.status === "active")?.key || INITIAL_DEFAULT_KEY
-
-  if (!keyToUse) {
-    return { success: false, message: "Không tìm thấy API Key nào khả dụng.", latencyMs: 0 }
-  }
-
+  const sessionToken = getStoredSessionToken()
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch("/api/ai-gateway", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${keyToUse}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://uxmb-task-request.vercel.app",
-        "X-Title": "UX MB Task Portal AI Test",
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: "Ping" }],
-        max_tokens: 5,
+        max_tokens: 64,
       }),
     })
-
     const latencyMs = Date.now() - startTime
-
     if (res.ok) {
-      return { success: true, message: `Kết nối thành công (${latencyMs}ms)`, latencyMs }
+      return { success: true, message: `Kết nối gateway thành công (${latencyMs}ms)`, latencyMs }
     }
-
-    const errText = await res.text()
-    if (res.status === 401) {
-      return { success: false, message: "API Key không hợp lệ (401 Unauthorized)", latencyMs }
-    }
-    if (res.status === 429) {
-      return { success: false, message: "Key bị giới hạn tần suất (429 Rate Limit)", latencyMs }
-    }
-    if (res.status === 402) {
-      return { success: false, message: "Tài khoản hết số dư / quota (402 Insufficient Quota)", latencyMs }
-    }
-
-    return { success: false, message: `Lỗi kết nối (${res.status}): ${errText.substring(0, 100)}`, latencyMs }
+    const errData = await res.json().catch(() => ({}))
+    const errMsg = errData?.error?.message || errData?.error || `HTTP ${res.status}`
+    return { success: false, message: `Lỗi kết nối gateway (${res.status}): ${errMsg}`, latencyMs }
   } catch (err: any) {
-    return { success: false, message: `Không thể kết nối: ${err?.message || "Network Error"}`, latencyMs: Date.now() - startTime }
+    return { success: false, message: `Không thể kết nối gateway: ${err?.message || "Network Error"}`, latencyMs: Date.now() - startTime }
   }
 }
 
@@ -881,53 +693,9 @@ export async function testAIConnection(apiKey?: string, model: string = DEFAULT_
  */
 export async function testGeminiConnection(
   apiKey?: string,
-  model: string = DEFAULT_GEMINI_MODEL
+  model: string = "google/gemini-2.0-flash-001"
 ): Promise<{ success: boolean; message: string; latencyMs: number }> {
-  const startTime = Date.now()
-  const keyToUse = apiKey?.trim() || getStoredGeminiKey()
-
-  if (!keyToUse) {
-    return { success: false, message: "Chưa cấu hình Google AI Studio API Key (bắt đầu bằng AIzaSy...).", latencyMs: 0 }
-  }
-
-  // Bước 1: Kiểm tra key + lấy danh sách model key được phép dùng
-  let resolved = model
-  try {
-    resolved = await resolveGeminiModel(keyToUse, model)
-  } catch (err: any) {
-    const latencyMs = Date.now() - startTime
-    if (err?.status === 400 || err?.status === 401 || err?.status === 403) {
-      return { success: false, message: `API Key Google không hợp lệ hoặc chưa bật Generative Language API (${err.status})`, latencyMs }
-    }
-    return { success: false, message: `Không lấy được danh sách model: ${err?.message || "Network Error"}`, latencyMs }
-  }
-
-  // Bước 2: Gọi thử 1 request thật bằng model đã chọn
-  try {
-    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${keyToUse}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: resolved,
-        messages: [{ role: "user", content: "Ping" }],
-        max_tokens: 5,
-      }),
-    })
-    const latencyMs = Date.now() - startTime
-    if (res.ok) {
-      return { success: true, message: `Kết nối Google AI Studio thành công · model: ${resolved}`, latencyMs }
-    }
-    if (res.status === 429) {
-      return { success: false, message: `Key hợp lệ nhưng model ${resolved} đang chạm hạn mức (429). Thử lại sau ít phút.`, latencyMs }
-    }
-    const errText = await res.text()
-    return { success: false, message: `Lỗi gọi model ${resolved} (${res.status}): ${errText.substring(0, 160)}`, latencyMs }
-  } catch (err: any) {
-    return { success: false, message: `Không thể kết nối Google AI Studio: ${err?.message || "Network Error"}`, latencyMs: Date.now() - startTime }
-  }
+  return testAIConnection(apiKey, model)
 }
 
 export interface StreamCallbacks {
@@ -990,7 +758,6 @@ export async function streamAICompletion(
   }
 
   const model = optionalModel || config.model || getStoredAIModel()
-  const activeKey = getNextActiveKey()
 
   const cancel = () => {
     isCancelled = true
@@ -1003,13 +770,8 @@ export async function streamAICompletion(
     recordAIRequestUsage(isGeminiTargetForUsage ? "gemini" : "openrouter")
 
     let usedModel: string = model || DEFAULT_AI_MODEL
-    const isDev = Boolean(typeof import.meta !== "undefined" && import.meta.env?.DEV)
-
     try {
       let response: Response | null = null
-      const isLocalDev = typeof window !== "undefined" && 
-        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-
       const isSupported = model && POPULAR_AI_MODELS.some(m => m.id === model)
       const targetModel = isSupported ? model : DEFAULT_AI_MODEL
       usedModel = targetModel
@@ -1021,81 +783,10 @@ export async function streamAICompletion(
         "openrouter/free"
       ]))
 
-      // 0. Cổng kết nối trực tiếp Google AI Studio (Official OpenAI-Compatible Endpoint)
-      const geminiKeys = getStoredGeminiKeys().filter(k => k.status !== "error")
-      const geminiKey = getStoredGeminiKey()
-      const gateway = getStoredAIGateway()
-      const isGeminiTarget = targetModel.startsWith("gemini-") || targetModel.includes("gemini")
-      const hasImageContent = messages.some((m) =>
-        Array.isArray(m.content) && m.content.some((part: any) => part.type === "image_url")
-      )
-      const shouldCallGoogleDirect = 
-        (Boolean(geminiKey) && isGeminiTarget) ||
-        (gateway === "google_ai_studio" && Boolean(geminiKey)) ||
-        (gateway === "auto" && Boolean(geminiKey) && (hasImageContent || isGeminiTarget)) ||
-        (activeKey && activeKey.startsWith("AIzaSy"))
-
-      if (shouldCallGoogleDirect) {
-        const rawM = targetModel.startsWith("google/") ? targetModel.replace(/^google\//, "").replace(/:free$/, "") : targetModel
-        let googleModel = rawM.startsWith("gemini") ? rawM : DEFAULT_GEMINI_MODEL
-
-        // TẦNG 1 (ƯU TIÊN): Xoay vòng danh sách key trong Google AI Studio Key Pool
-        const candidates = geminiKeys.length > 0 ? geminiKeys.map(k => k.key) : (geminiKey ? [geminiKey] : [])
-        let googleSuccess = false
-
-        for (let attempt = 0; attempt < candidates.length; attempt++) {
-          const currentGoogleKey = candidates[attempt]
-          try {
-            googleModel = await resolveGeminiModel(currentGoogleKey, googleModel)
-          } catch (resolveErr) {
-            console.warn("[AIService] Không lấy được danh sách model Gemini:", resolveErr)
-          }
-
-          try {
-            const gRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${currentGoogleKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: googleModel,
-                messages,
-                stream: true,
-                temperature: config.temperature ?? 0.7,
-                max_tokens: config.max_tokens ?? 2048,
-              }),
-              signal: controller.signal,
-            })
-
-            if (gRes.ok) {
-              response = gRes
-              usedModel = googleModel
-              googleSuccess = true
-              break
-            } else if (gRes.status === 429) {
-              console.warn(`[AIService] Google Key (#${attempt + 1}) chạm giới hạn 15 RPM/1.500 RPD (429). Đang chuyển sang key Google tiếp theo trong Pool...`)
-              markGeminiKeyRateLimited(currentGoogleKey, 60_000)
-              continue
-            } else {
-              const errBody = await gRes.text()
-              console.warn(`[AIService] Google AI Studio direct call returned status ${gRes.status}:`, errBody)
-              break
-            }
-          } catch (gErr) {
-            console.warn("[AIService] Google AI Studio direct fetch failed:", gErr)
-            break
-          }
-        }
-
-        if (!googleSuccess && (gateway === "auto" || gateway === "google_ai_studio")) {
-          console.warn("[AIService] Tầng 1 (Google AI Studio) bận/lỗi. Tự động chuyển tiếp sang Tầng 2: OpenRouter Gateway Pool fallback!")
-        }
-      }
-
+      // Mọi request production đi qua Edge Gateway; không đưa provider key vào browser.
       // 1. Gọi qua Edge Gateway: /api/ai-gateway
       // Trong Production (!isDev), BẮT BUỘC 100% phải gọi qua gateway và đính kèm session token
-      if (!response && (!isLocalDev || !isDev)) {
+      if (!response) {
         const sessionToken = getStoredSessionToken()
         const gatewayHeaders: Record<string, string> = {
           "Content-Type": "application/json",
@@ -1158,57 +849,13 @@ export async function streamAICompletion(
               throw err
             }
 
-            // Trong production (!isDev), tuyệt đối không gọi direct sang openrouter.ai
-            if (!isDev) {
-              const generalMsg = errMsg || `AI Gateway trả về mã lỗi HTTP ${gRes.status}`
-              const err = new Error(generalMsg)
-              ;(err as any).status = gRes.status
-              throw err
-            }
+            const generalMsg = errMsg || `AI Gateway trả về mã lỗi HTTP ${gRes.status}`
+            const err = new Error(generalMsg)
+            ;(err as any).status = gRes.status
+            throw err
           }
         } catch (gatewayErr: any) {
-          // Nếu đã ném lỗi có status / code xác thực / cấu hình hoặc đang ở production, re-throw ngay
-          if (gatewayErr?.code || gatewayErr?.status || !isDev) {
-            throw gatewayErr
-          }
-          console.warn("[AIService] Gateway call failed in local dev, attempting direct fallback:", gatewayErr)
-        }
-      }
-
-      // 2. Direct call sang OpenRouter (CHỈ ÁP DỤNG TRONG LOCAL DEVELOPMENT VÀ KHI CHƯA CÓ RESPONSE)
-      if ((!response || !response.ok) && isDev) {
-        if (!activeKey) {
-          throw new Error("Chưa cấu hình API Key cho OpenRouter hoặc Google AI Studio.")
-        }
-        const timeoutCtrl = new AbortController()
-        const timeoutTimer = setTimeout(() => timeoutCtrl.abort(new Error("OpenRouter timeout after 30s")), 30000)
-        controller.signal.addEventListener("abort", () => timeoutCtrl.abort())
-
-        try {
-          response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${activeKey}`,
-              "Content-Type": "application/json",
-              "HTTP-Referer": "https://uxmb-task-request.vercel.app",
-              "X-Title": "UX MB Task Portal AI",
-            },
-            body: JSON.stringify({
-              model: targetModel,
-              models: fallbackModels,
-              route: "fallback",
-              messages,
-              stream: true,
-              temperature: config.temperature ?? 0.7,
-              max_tokens: config.max_tokens ?? 2048,
-            }),
-            signal: timeoutCtrl.signal,
-          })
-          clearTimeout(timeoutTimer)
-        } catch (fetchErr: any) {
-          clearTimeout(timeoutTimer)
-          if (isCancelled) return
-          console.warn("[AIService] Direct fetch timed out or failed:", fetchErr)
+          throw gatewayErr
         }
       }
 

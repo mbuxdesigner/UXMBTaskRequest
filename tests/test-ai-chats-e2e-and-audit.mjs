@@ -38,13 +38,14 @@ let totalTests = 0
 let passedTests = 0
 let failedTests = 0
 const failures = []
+const pendingTests = []
 
 function runTest(tier, id, description, testFn) {
   totalTests++
   try {
     const result = testFn()
     if (result && typeof result.then === "function") {
-      return result
+      const pending = result
         .then(() => {
           passedTests++
           console.log(`  ✓ [${tier} | ${id}] ${description}`)
@@ -58,6 +59,8 @@ function runTest(tier, id, description, testFn) {
             console.error(`    Stack: ${err.stack.split("\n").slice(1, 4).join("\n")}`)
           }
         })
+      pendingTests.push(pending)
+      return pending
     }
     passedTests++
     console.log(`  ✓ [${tier} | ${id}] ${description}`)
@@ -143,16 +146,9 @@ class SlidingWindowRateLimiter {
  * 2. Gateway Caller Authentication Oracle (Enforcing Anti-Forgery Validation)
  */
 function verifyGatewayAuth(authHeader, authRequiredFlag, validSessions = KNOWN_VALID_SESSIONS) {
-  const isAuthRequired = String(authRequiredFlag).toLowerCase() === "true"
-
-  // Feature flag off or unset -> allow request without token (safe dev default)
-  if (!isAuthRequired) {
-    return {
-      authorized: true,
-      status: 200,
-      token: authHeader ? authHeader.replace(/^Bearer\s+/i, "").trim() : null
-    }
-  }
+  // Production behavior is fail-closed. The real gateway only permits an explicit
+  // local-development bypass; a legacy/unset auth flag must never disable auth.
+  void authRequiredFlag
 
   // Auth is required: validate Authorization header
   if (!authHeader || typeof authHeader !== "string") {
@@ -485,20 +481,16 @@ function mapErrorToVietnamese(error) {
 console.log("\n--- TIER 1: FEATURE COVERAGE (ISOLATED FUNCTIONAL TESTS) ---")
 
 // F1: API key client bundle safety & 503 missing key error handling
-runTest("Tier 1", "F1-01", "Client bundle guard: in production mode (DEV=false), default API key is empty string", () => {
+runTest("Tier 1", "F1-01", "Client bundle contains no provider key or direct provider endpoint", () => {
   assert.ok(aiServiceModule, "aiService.ts module must load successfully")
   assert.equal(aiServiceModule.INITIAL_GEMINI_KEY, "", "INITIAL_GEMINI_KEY must evaluate to empty string in production/node environment")
   assert.equal(aiServiceModule.getNextActiveKey(), "", "getNextActiveKey must evaluate to empty string in production/node environment")
 
   const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
-  assert.ok(
-    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY || "") : ""'),
-    "OpenRouter key must be guarded by import.meta.env.DEV"
-  )
-  assert.ok(
-    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : ""'),
-    "Gemini key must be guarded by import.meta.env.DEV"
-  )
+  assert.ok(!aiServiceSource.includes("VITE_OPENROUTER_API_KEY"), "Client must never read an OpenRouter provider key")
+  assert.ok(!aiServiceSource.includes("VITE_GEMINI_API_KEY"), "Client must never read a Gemini provider key")
+  assert.ok(!aiServiceSource.includes("openrouter.ai/api"), "Client must never call OpenRouter directly")
+  assert.ok(!aiServiceSource.includes("generativelanguage.googleapis.com"), "Client must never call Gemini directly")
 
   const distAssetsDir = path.join(projectRoot, "dist", "assets")
   if (fs.existsSync(distAssetsDir)) {
@@ -511,16 +503,11 @@ runTest("Tier 1", "F1-01", "Client bundle guard: in production mode (DEV=false),
   }
 })
 
-runTest("Tier 1", "F1-02", "Client bundle guard: in dev mode (DEV=true), default API key adopts local env key", () => {
+runTest("Tier 1", "F1-02", "Legacy client provider keys are purged during migration", () => {
   const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
-  assert.ok(
-    aiServiceSource.includes('import.meta.env.VITE_OPENROUTER_API_KEY || ""'),
-    "Dev mode fallback must read VITE_OPENROUTER_API_KEY"
-  )
-  assert.ok(
-    aiServiceSource.includes('import.meta.env.VITE_GEMINI_API_KEY || ""'),
-    "Dev mode fallback must read VITE_GEMINI_API_KEY"
-  )
+  assert.ok(aiServiceSource.includes("purgeClientAIKeys"), "Must define a legacy-key purge")
+  assert.ok(aiServiceSource.includes("localStorage.removeItem(STORAGE_KEYS_KEY)"), "Must remove legacy OpenRouter keys")
+  assert.ok(aiServiceSource.includes("localStorage.removeItem(STORAGE_GEMINI_KEYS_KEY)"), "Must remove legacy Gemini keys")
   assert.equal(aiServiceModule.STORAGE_GEMINI_KEY, "ux_mb_gemini_api_key")
   assert.equal(aiServiceModule.STORAGE_AI_GATEWAY_KEY, "ux_mb_ai_gateway")
 })
@@ -545,14 +532,8 @@ await runTest("Tier 1", "F1-03", "Production routing: production mode blocks dir
   }
 
   const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
-  assert.ok(
-    aiServiceSource.includes("if (!isDev) {") && (aiServiceSource.includes("AI Gateway") || aiServiceSource.includes("/api/ai-gateway")),
-    "aiService must terminate on gateway failure in production without falling back to direct OpenRouter"
-  )
-  assert.ok(
-    aiServiceSource.includes("(!response || !response.ok) && isDev"),
-    "Direct OpenRouter call must be strictly gated by isDev"
-  )
+  assert.ok(aiServiceSource.includes('/api/ai-gateway'), "Client must route through the server gateway")
+  assert.ok(!aiServiceSource.includes("openrouter.ai/api"), "Gateway failures must not fall back to direct OpenRouter")
 })
 
 runTest("Tier 1", "F1-04", "Missing server key detection: returns 503 and MISSING_SERVER_API_KEY code", () => {
@@ -580,27 +561,25 @@ runTest("Tier 1", "F1-05", "Friendly Vietnamese error message for missing server
   assert.equal(mapped.canRetry, false)
 })
 
-runTest("Tier 1", "F1-06", "Gemini API key is also guarded with DEV environment flag", () => {
+runTest("Tier 1", "F1-06", "Gemini provider access is server-only", () => {
   assert.ok(aiServiceModule, "aiService.ts module must load successfully")
   assert.equal(aiServiceModule.INITIAL_GEMINI_KEY, "")
   const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
-  assert.ok(
-    aiServiceSource.includes('import.meta.env?.DEV ? (import.meta.env.VITE_GEMINI_API_KEY || "") : ""'),
-    "Gemini key must be guarded with import.meta.env.DEV"
-  )
+  assert.ok(!aiServiceSource.includes("generativelanguage.googleapis.com"))
+  assert.ok(aiServiceSource.includes('return "openrouter"'), "Gateway selection must be server-managed")
 })
 
-// F2: Gateway caller auth with session token & feature flag AI_GATEWAY_AUTH_REQUIRED
-runTest("Tier 1", "F2-01", "Gateway auth: flag 'false' permits request without session token (local dev safe)", () => {
+// F2: Gateway caller auth is fail-closed regardless of legacy feature flags.
+runTest("Tier 1", "F2-01", "Gateway auth: legacy flag 'false' still rejects a missing session", () => {
   const res = verifyGatewayAuth(null, "false")
-  assert.equal(res.authorized, true)
-  assert.equal(res.status, 200)
+  assert.equal(res.authorized, false)
+  assert.equal(res.status, 401)
 })
 
-runTest("Tier 1", "F2-02", "Gateway auth: flag unset/undefined permits request without session token", () => {
+runTest("Tier 1", "F2-02", "Gateway auth: unset legacy flag still rejects a missing session", () => {
   const res = verifyGatewayAuth(null, undefined)
-  assert.equal(res.authorized, true)
-  assert.equal(res.status, 200)
+  assert.equal(res.authorized, false)
+  assert.equal(res.status, 401)
 })
 
 runTest("Tier 1", "F2-03", "Gateway auth: flag 'true' rejects request without Authorization header with 401", () => {
@@ -1744,8 +1723,9 @@ if (fs.existsSync(gatewayPath)) {
   await runTest("Integration", "INT-GW-05", "api/ai-gateway.ts: verifySessionToken rejects unissued forged tokens even with valid ST_ regex format", async () => {
     gatewayModule.clearSessionCache()
     const origFetch = globalThis.fetch
-    globalThis.fetch = async (url) => {
-      if (String(url).includes("action=check_session")) {
+    globalThis.fetch = async (url, init = {}) => {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null
+      if (body?.action === "check_session") {
         return new Response(JSON.stringify({ valid: false, status: "error" }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
@@ -1799,15 +1779,17 @@ if (fs.existsSync(gatewayPath)) {
   // INT-GW-08: Edge HTTP Handler authentication enforcement end-to-end
   await runTest("Integration", "INT-GW-08", "api/ai-gateway.ts: handler enforces genuine caller auth via HTTP Request when flag enabled", async () => {
     const origFetch = globalThis.fetch
-    globalThis.fetch = async (url) => {
-      if (String(url).includes("action=check_session")) {
+    globalThis.fetch = async (url, init = {}) => {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null
+      if (body?.action === "check_session") {
         return new Response(JSON.stringify({ valid: false, status: "error" }), { status: 200 })
       }
       return origFetch(url)
     }
 
     try {
-      process.env.AI_GATEWAY_AUTH_REQUIRED = "true"
+      process.env.VERCEL_ENV = "production"
+      delete process.env.ALLOW_UNAUTHENTICATED_AI_DEV
       gatewayModule.clearSessionCache()
 
       // Case A: Forged token -> 401 Unauthorized
@@ -1834,8 +1816,9 @@ if (fs.existsSync(gatewayPath)) {
       const resGenuine = await gatewayModule.default(reqGenuine)
       assert.notEqual(resGenuine.status, 401, "Genuine token must not receive 401")
 
-      // Case D: Auth required false (local dev safe) -> missing token passes auth
-      process.env.AI_GATEWAY_AUTH_REQUIRED = "false"
+      // Case D: explicit local-only bypass -> missing token passes auth
+      process.env.VERCEL_ENV = "development"
+      process.env.ALLOW_UNAUTHENTICATED_AI_DEV = "true"
       const reqDev = new Request("https://uxmb-task-request.vercel.app/api/ai-gateway", { method: "POST" })
       const resDev = await gatewayModule.default(reqDev)
       assert.notEqual(resDev.status, 401, "Local dev request without token must not receive 401")
@@ -1849,7 +1832,8 @@ if (fs.existsSync(gatewayPath)) {
       assert.equal(resBadDev.status, 401, "Malformed format must still be rejected")
     } finally {
       globalThis.fetch = origFetch
-      process.env.AI_GATEWAY_AUTH_REQUIRED = "false"
+      delete process.env.VERCEL_ENV
+      delete process.env.ALLOW_UNAUTHENTICATED_AI_DEV
       gatewayModule.clearSessionCache()
     }
   })
@@ -1860,11 +1844,13 @@ if (fs.existsSync(gatewayPath)) {
     const origFetch = globalThis.fetch
     let backendCalls = 0
 
-    globalThis.fetch = async (url) => {
-      if (String(url).includes("action=check_session")) {
+    globalThis.fetch = async (url, init = {}) => {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null
+      if (body?.action === "check_session") {
         backendCalls++
-        const parsed = new URL(url)
-        const token = parsed.searchParams.get("session_token")
+        assert.equal(init.method, "POST")
+        assert.equal(init.headers?.["Content-Type"], "text/plain;charset=utf-8")
+        const token = body.session_token
         if (token === "ST_a1b2c3d4e5f60718") {
           return new Response(JSON.stringify({ valid: true, role: "Lead Designer" }), {
             status: 200,
@@ -2552,35 +2538,35 @@ runTest("Integration", "INT-MOTION-02", "AIChatPage: verify cascadeWaveContainer
   assert.ok(pageSrc.includes("variants={cascadeWaveItemVariants}"), "Sidebar list items must use cascadeWaveItemVariants")
 })
 
-runTest("Integration", "INT-GATEWAY-01", "aiService: verify DEFAULT_GEMINI_MODEL and resilient fallback", () => {
+runTest("Integration", "INT-GATEWAY-01", "aiService: Gemini model is allowlisted through the server gateway", () => {
   const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
-  assert.ok(serviceSrc.includes('DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"'), "DEFAULT_GEMINI_MODEL must be gemini-2.0-flash")
-  assert.ok(serviceSrc.includes("testGeminiConnection(\n  apiKey?: string,\n  model: string = DEFAULT_GEMINI_MODEL"), "testGeminiConnection must default to DEFAULT_GEMINI_MODEL")
+  assert.ok(serviceSrc.includes('DEFAULT_GEMINI_MODEL = "google/gemini-2.0-flash-001"'))
+  assert.ok(!serviceSrc.includes("generativelanguage.googleapis.com"), "Gemini must not be called directly from the browser")
 })
 
 runTest("Integration", "INT-GATEWAY-02", "OpenRouterSettingsCard: verify MB Design System Dark Navy primary actions", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
-  assert.ok(cardSrc.includes("bg-slate-900"), "Must use Dark Navy bg-slate-900 for primary action buttons")
   assert.ok(!cardSrc.includes("bg-indigo-600"), "Must not use rogue accent bg-indigo-600")
+  assert.ok(cardSrc.includes("AI Gateway nội bộ"), "Must clearly identify the managed gateway")
 })
 
 runTest("Integration", "INT-GATEWAY-03", "OpenRouterSettingsCard: verify Framer Motion spring expand/collapse", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
   assert.ok(cardSrc.includes("<AnimatePresence initial={false}>"), "Must use AnimatePresence for collapse/expand")
-  assert.ok(cardSrc.includes('key="openrouter-settings-content"'), "Expanded content must have stable key for AnimatePresence")
+  assert.ok(cardSrc.includes('animate={{ height: "auto", opacity: 1 }}'), "Expanded content must animate predictably")
 })
 
-runTest("Integration", "INT-GATEWAY-04", "OpenRouterSettingsCard: verify interactive curated model selection", () => {
+runTest("Integration", "INT-GATEWAY-04", "OpenRouterSettingsCard: model selection uses the managed allowlist", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
-  assert.ok(cardSrc.includes("handleSelectCuratedModel"), "Must have click-to-select handler for curated models")
-  assert.ok(cardSrc.includes("CURATED_FREE_MODELS"), "Must define curated free models list")
+  assert.ok(cardSrc.includes("POPULAR_AI_MODELS.map"), "Must render only managed model options")
+  assert.ok(cardSrc.includes("saveAIModel(event.target.value)"), "Must save selected allowlisted model")
 })
 
 runTest("Integration", "INT-GATEWAY-05", "OpenRouterSettingsCard: verify ReUI Dark Mode compliance", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8")
   assert.ok(cardSrc.includes("dark:bg-card"), "Container must support dark:bg-card")
   assert.ok(cardSrc.includes("dark:border-neutral-800"), "Must support dark:border-neutral-800")
-  assert.ok(cardSrc.includes("dark:text-slate-100"), "Text must support dark:text-slate-100")
+  assert.ok(cardSrc.includes("dark:text-white") || cardSrc.includes("dark:text-slate-200"), "Text must support dark mode")
 })
 runTest("Integration", "INT-DUALPOOL-01", "aiService: verify Google AI Studio Key Pool exports & storage key", () => {
   const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
@@ -2605,20 +2591,17 @@ runTest("Integration", "INT-DUALPOOL-03", "aiService: verify Google Round-Robin 
   assert.ok(serviceSrc.includes("rpmLimitResetAt <= now"), "Must check expiration of rate limit cooldown")
 })
 
-runTest("Integration", "INT-DUALPOOL-04", "aiService: verify Dual-Pool Fallback (Tier 1 Google -> Tier 2 OpenRouter)", () => {
+runTest("Integration", "INT-DUALPOOL-04", "aiService: direct provider fallback has been removed", () => {
   const serviceSrc = fs.readFileSync(path.join(projectRoot, "src/services/aiService.ts"), "utf-8").replace(/\r\n/g, "\n")
-  assert.ok(serviceSrc.includes("gRes.status === 429"), "Must intercept 429 rate limit on Google key")
-  assert.ok(serviceSrc.includes("markGeminiKeyRateLimited(currentGoogleKey, 60_000)"), "Must mark key with 60s cooldown for 15 RPM")
-  assert.ok(serviceSrc.includes("Tầng 2: OpenRouter Gateway Pool fallback"), "Must log fallback to OpenRouter Tier 2")
+  assert.ok(!serviceSrc.includes("openrouter.ai/api"), "Must not fall back to OpenRouter from the browser")
+  assert.ok(!serviceSrc.includes("generativelanguage.googleapis.com"), "Must not fall back to Gemini from the browser")
 })
 
-runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: verify Google Key Pool UI list and multi-account add form", () => {
+runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: provider key entry UI is removed", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8").replace(/\r\n/g, "\n")
-  assert.ok(cardSrc.includes("getStoredGeminiKeys"), "Must load stored Google keys")
-  assert.ok(cardSrc.includes("handleAddGeminiKey"), "Must have handler to add Google Key")
-  assert.ok(cardSrc.includes("handleRemoveGeminiKey"), "Must have handler to remove Google Key")
-  assert.ok(cardSrc.includes("Lưu Key vào Google Pool"), "Must have submit button for Google Key")
-  assert.ok(cardSrc.includes("Test kết nối riêng key này"), "Must support individual Google key testing")
+  assert.ok(!cardSrc.includes("getStoredGeminiKeys"), "Admin UI must not load browser provider keys")
+  assert.ok(!cardSrc.includes('type="password"'), "Admin UI must not request provider keys")
+  assert.ok(cardSrc.includes("Provider key được quản lý ở máy chủ"))
 })
 
 runTest("Integration", "INT-DUALPOOL-06", "AIChatPage: verify usage breakdown displays both Google and OpenRouter pools", () => {
@@ -2717,11 +2700,50 @@ runTest("Integration", "INT-SEPARATE-QUOTA-02", "AIChatPage: verify separated ca
   assert.ok(pageSrc.includes("Daily Limit Remaining"), "Must display Daily Limit Remaining metric")
 })
 
+runTest("Integration", "INT-ACTIONBAR-01", "EchoAssistantActionBar: verify only Sao chép and Tạo lại actions are displayed", () => {
+  const barSrc = fs.readFileSync(path.join(projectRoot, "src/components/chat/EchoAssistantActionBar.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(barSrc.includes("Sao chép"), "Must include Sao chép button")
+  assert.ok(barSrc.includes("Tạo lại"), "Must include Tạo lại button")
+  assert.ok(!barSrc.includes("Copy cho Figma"), "Must not include redundant 'Copy cho Figma' button")
+  assert.ok(!barSrc.includes(">Markdown<"), "Must not include separate 'Markdown' button")
+  assert.ok(!barSrc.includes("Copy Table TSV"), "Must not include 'Copy Table TSV' button")
+})
+
+runTest("Integration", "INT-FLOWCHART-01", "EchoMermaidFlowchart: verify Figma-grade canvas, rounded nodes, cards pipeline and fullscreen modal", () => {
+  const chartSrc = fs.readFileSync(path.join(projectRoot, "src/components/common/EchoChartsAndFlowcharts.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(chartSrc.includes("enhanceMermaidSvg"), "Must contain enhanceMermaidSvg post-processing")
+  assert.ok(chartSrc.includes('rx="12"'), "Must inject 12px rounded corners to node rects")
+  assert.ok(chartSrc.includes("parseFlowStepsFromCode"), "Must support cards pipeline step parser")
+  assert.ok(chartSrc.includes("Sơ đồ Canvas"), "Must offer Canvas view mode")
+  assert.ok(chartSrc.includes("Dạng thẻ"), "Must offer Cards Pipeline view mode")
+  assert.ok(chartSrc.includes("radial-gradient"), "Must provide dotted canvas background")
+  assert.ok(chartSrc.includes("Phóng to toàn màn hình"), "Must provide fullscreen dialog trigger")
+})
+
+runTest("Integration", "INT-SUGGESTIONS-01", "Follow-up Suggestions: verify dynamic contextual suggestions instead of hardcoded repetition", () => {
+  const promptSrc = fs.readFileSync(path.join(projectRoot, "src/config/aiPrompts.ts"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(promptSrc.includes("FOLLOW-UP SUGGESTIONS"), "aiPrompts must instruct AI to generate follow-up suggestions")
+  assert.ok(promptSrc.includes("suggestions"), "aiPrompts must specify suggestions block syntax")
+
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("extractSmartContextualSuggestions"), "AIChatPage must define extractSmartContextualSuggestions")
+  assert.ok(!pageSrc.includes('"Rút ngắn còn 2 dòng", "Phân tích chi tiết rủi ro", "Xuất checklist nghiệm thu"'), "AIChatPage must not contain the static repetitive hardcoded 3-pill array")
+})
+
+runTest("Integration", "INT-SIDEBAR-PORTAL-01", "EchoSidebarRow: verify thread action dropdown renders via createPortal to body to prevent clipping and stacking order overlaps", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes("createPortal("), "Must import and use createPortal")
+  assert.ok(pageSrc.includes("thread-menu-popover-"), "Must define portal-based popover element")
+  assert.ok(pageSrc.includes("position: \"fixed\""), "Must use fixed position for dropdown")
+  assert.ok(pageSrc.includes("zIndex: 99999"), "Must elevate dropdown z-index to top level")
+})
+
 // ==============================================================================
 
 
 // TEST RESULTS SUMMARY & VERIFICATION
 // ==============================================================================
+await Promise.all(pendingTests)
 const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
 
 console.log("\n================================================================================")

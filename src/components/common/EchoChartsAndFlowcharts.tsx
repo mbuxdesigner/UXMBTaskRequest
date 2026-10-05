@@ -30,21 +30,153 @@ import {
   Download,
   Code as CodeIcon,
   Eye,
+  Maximize2,
+  Minimize2,
+  LayoutList,
+  ArrowRight,
+  Sparkles,
+  X,
 } from "lucide-react"
+import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import mermaid from "mermaid"
 
-// Khởi tạo cấu hình Mermaid chuẩn ngân hàng (clean, monochrome & neutral)
+// Khởi tạo cấu hình Mermaid chuẩn Figma & MBBank Design System (hiện đại, bo góc mềm, màu sắc phân cấp rõ nét)
 mermaid.initialize({
   startOnLoad: false,
-  theme: "neutral",
-  securityLevel: "loose",
+  theme: "base",
+  securityLevel: "strict",
+  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  themeVariables: {
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    fontSize: "13px",
+    darkMode: false,
+    primaryColor: "#FFFFFF",
+    primaryBorderColor: "#93C5FD",
+    primaryTextColor: "#0F172A",
+    secondaryColor: "#EFF6FF",
+    secondaryBorderColor: "#3B82F6",
+    secondaryTextColor: "#1E3A8A",
+    tertiaryColor: "#FEF3C7",
+    tertiaryBorderColor: "#F59E0B",
+    tertiaryTextColor: "#92400E",
+    lineColor: "#64748B",
+    edgeLabelBackground: "#FFFFFF",
+    edgeLabelTextColor: "#334155",
+    clusterBkg: "#F8FAFC",
+    clusterBorder: "#CBD5E1",
+    nodeBorder: "#93C5FD",
+    mainBkg: "#FFFFFF",
+  },
   flowchart: {
     useMaxWidth: true,
-    htmlLabels: true,
+    htmlLabels: false,
     curve: "basis",
+    nodeSpacing: 45,
+    rankSpacing: 55,
+    padding: 16,
   },
 })
+
+export function enhanceMermaidSvg(rawSvg: string): string {
+  if (!rawSvg) return rawSvg
+  let enhanced = rawSvg
+
+  // Bo góc mềm cho các thẻ rect của nodes (rx="12" ry="12")
+  enhanced = enhanced.replace(/<rect(?![^>]*\brx=)([^>]*?)>/g, '<rect rx="12" ry="12"$1>')
+
+  // Chèn CSS tùy biến chuẩn Figma / FigJam vào SVG
+  const customCss = `
+<style>
+  .mermaid text {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+  }
+  .mermaid .node rect,
+  .mermaid .node circle,
+  .mermaid .node ellipse,
+  .mermaid .node polygon {
+    stroke-width: 1.5px !important;
+    filter: drop-shadow(0 4px 14px rgba(15, 23, 42, 0.08)) !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .mermaid .node:hover rect,
+  .mermaid .node:hover polygon {
+    stroke: #1057FB !important;
+    stroke-width: 2.2px !important;
+    filter: drop-shadow(0 8px 24px rgba(16, 87, 251, 0.22)) !important;
+    cursor: pointer !important;
+  }
+  .mermaid .edgePath path.path {
+    stroke: #64748B !important;
+    stroke-width: 2px !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+  }
+  .mermaid .edgePath marker path {
+    fill: #64748B !important;
+    stroke: #64748B !important;
+  }
+  .mermaid .edgeLabel {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 9999px !important;
+    padding: 3px 10px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+  }
+  @media (prefers-color-scheme: dark) {
+    .mermaid text { fill: #F8FAFC !important; }
+    .mermaid .node rect { fill: #1E293B !important; stroke: #3B82F6 !important; }
+    .mermaid .edgePath path.path { stroke: #94A3B8 !important; }
+    .mermaid .edgePath marker path { fill: #94A3B8 !important; stroke: #94A3B8 !important; }
+    .mermaid .edgeLabel { background-color: #0F172A !important; border-color: #334155 !important; color: #CBD5E1 !important; }
+  }
+</style>`
+
+  if (enhanced.includes("<defs>")) {
+    enhanced = enhanced.replace("<defs>", `<defs>${customCss}`)
+  } else {
+    enhanced = enhanced.replace(/(<svg[^>]*>)/, `$1${customCss}`)
+  }
+
+  return enhanced
+}
+
+/**
+ * Mermaid output still originates from model-authored text. Keep a small
+ * allow-list style sanitizer at the final DOM boundary as defence in depth.
+ */
+export function sanitizeMermaidSvg(rawSvg: string): string {
+  if (!rawSvg || typeof DOMParser === "undefined") return ""
+
+  const documentNode = new DOMParser().parseFromString(rawSvg, "image/svg+xml")
+  if (documentNode.querySelector("parsererror")) return ""
+
+  documentNode
+    .querySelectorAll("script, foreignObject, iframe, object, embed, link, meta")
+    .forEach((node) => node.remove())
+
+  documentNode.querySelectorAll("*").forEach((node) => {
+    for (const attribute of Array.from(node.attributes)) {
+      const name = attribute.name.toLowerCase()
+      const value = attribute.value.trim().toLowerCase()
+      if (
+        name.startsWith("on") ||
+        ((name === "href" || name === "xlink:href") &&
+          (value.startsWith("javascript:") || value.startsWith("data:text/html")))
+      ) {
+        node.removeAttribute(attribute.name)
+      }
+    }
+  })
+
+  return new XMLSerializer().serializeToString(documentNode.documentElement)
+}
 
 export const MB_CHART_COLORS = [
   "#1057FB", // MB Blue
@@ -211,7 +343,10 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
                     innerRadius={chartType === "donut" ? 50 : 0}
                     outerRadius={80}
                     paddingAngle={3}
-                    label={(entry) => `${entry[xAxisKey]}: ${entry[dataKeys[0]]}${parsed.unit ? ` ${parsed.unit}` : ""}`}
+                    label={(entry) => {
+                      const row = entry as unknown as Record<string, unknown>
+                      return `${String(row[xAxisKey] ?? "")}: ${String(row[dataKeys[0]] ?? "")}${parsed.unit ? ` ${parsed.unit}` : ""}`
+                    }}
                   >
                     {data.map((_, index) => (
                       <Cell
@@ -343,14 +478,48 @@ export function EchoInteractiveChart({ rawJson }: { rawJson: string }) {
 // 2. COMPONENT SƠ ĐỒ LUỒNG QUY TRÌNH (MERMAID FLOWCHART)
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface FlowStepItem {
+  id: string
+  label: string
+  isDecision: boolean
+  isEnd: boolean
+}
+
+function parseFlowStepsFromCode(code: string): FlowStepItem[] {
+  const steps: FlowStepItem[] = []
+  const seen = new Set<string>()
+
+  // Regex trích xuất các node dạng A["Title"], A[Title], A{"Decision"}, A(("End"))
+  const nodeRegex = /([A-Za-z0-9_]+)\s*(?:\[["']?([^\]"']+)["']?\]|\{["']?([^}"']+)["']?\}|\(\(["']?([^)"']+)["']?\)\))/g
+  let m: RegExpExecArray | null
+
+  while ((m = nodeRegex.exec(code)) !== null) {
+    const id = m[1]
+    const label = (m[2] || m[3] || m[4] || id).trim()
+    const isDecision = Boolean(m[3])
+    const isEnd = Boolean(m[4])
+
+    if (!seen.has(id) && label && !label.toLowerCase().includes("style")) {
+      seen.add(id)
+      steps.push({ id, label, isDecision, isEnd })
+    }
+  }
+
+  return steps
+}
+
 export function EchoMermaidFlowchart({ code }: { code: string }) {
   const [svgHtml, setSvgHtml] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
-  const [zoom, setZoom] = useState<number>(1)
-  const [showCode, setShowCode] = useState<boolean>(false)
+  const [zoom, setZoom] = useState<number>(0.9)
+  const [viewMode, setViewMode] = useState<"canvas" | "cards" | "code">("canvas")
   const [isCopied, setIsCopied] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const uniqueId = useId().replace(/:/g, "")
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Phân tích các bước quy trình từ mã nguồn
+  const flowSteps = useMemo(() => parseFlowStepsFromCode(code), [code])
 
   useEffect(() => {
     let isMounted = true
@@ -361,7 +530,10 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
         const id = `mermaid-${uniqueId}-${Date.now()}`
         const { svg } = await mermaid.render(id, code.trim())
         if (isMounted) {
-          setSvgHtml(svg)
+          const enhanced = enhanceMermaidSvg(svg)
+          const sanitized = sanitizeMermaidSvg(enhanced)
+          if (!sanitized) throw new Error("Sơ đồ không vượt qua kiểm tra an toàn")
+          setSvgHtml(sanitized)
         }
       } catch (err: any) {
         if (isMounted) {
@@ -382,7 +554,7 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
   const handleCopyCode = () => {
     navigator.clipboard.writeText(code)
     setIsCopied(true)
-    toast.success("Đã sao chép mã nguồn Mermaid!")
+    toast.success("Đã sao chép cú pháp Mermaid!")
     setTimeout(() => setIsCopied(false), 2000)
   }
 
@@ -392,80 +564,129 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `so-do-luong-${Date.now()}.svg`
+    a.download = `so-do-quy-trinh-${Date.now()}.svg`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success("Đã tải xuống file SVG sơ đồ!")
+    toast.success("Đã tải xuống file SVG sơ đồ vector chất lượng cao!")
   }
 
   return (
-    <div className="my-3 rounded-2xl border border-slate-200/90 bg-white shadow-md overflow-hidden backdrop-blur-md">
-      {/* Header Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 select-none">
-        <div className="flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-600 shrink-0">
+    <div className="my-3 rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-card shadow-sm overflow-hidden backdrop-blur-md">
+      {/* Header Toolbar chuẩn Figma / FigJam */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/70 dark:bg-neutral-850/80 select-none flex-wrap gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="size-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-900/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-2xs">
             <GitBranch className="size-4.5" />
           </div>
           <div>
-            <h4 className="text-[13.5px] font-semibold text-slate-800 flex items-center gap-2">
+            <h4 className="text-[13.5px] font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               Sơ đồ luồng quy trình (Flowchart)
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-100/70 text-emerald-700 font-medium">
-                Mermaid
+              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-blue-100/70 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200/60 dark:border-blue-800/60">
+                Figma Canvas
               </span>
             </h4>
-            <p className="text-[11px] text-slate-400 dark:text-neutral-400">
-              Trực quan hóa luồng màn hình, quy trình 7 khâu & hành trình người dùng
+            <p className="text-[11px] text-slate-500 dark:text-neutral-400">
+              Trực quan hóa luồng quy trình 7 khâu & bàn giao sản phẩm chuẩn MBBank
             </p>
           </div>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1.5">
-          {/* Zoom Controls */}
-          <div className="hidden sm:flex items-center rounded-lg bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 p-0.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Segmented View Mode Toggle */}
+          <div className="flex items-center rounded-lg bg-slate-200/60 dark:bg-neutral-800 p-0.5 border border-slate-200/80 dark:border-neutral-700 text-xs">
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.min(2, Number((z + 0.15).toFixed(2))))}
-              className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
-              title="Phóng to"
+              onClick={() => setViewMode("canvas")}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                viewMode === "canvas"
+                  ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold"
+                  : "text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+              title="Xem dạng sơ đồ trực quan Canvas"
             >
-              <ZoomIn className="size-3.5" />
+              <GitBranch className="size-3" />
+              Sơ đồ Canvas
             </button>
-            <span className="text-[10px] font-mono px-1 text-slate-500">{Math.round(zoom * 100)}%</span>
+            {flowSteps.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                  viewMode === "cards"
+                    ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold"
+                    : "text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+                title="Xem dạng thẻ quy trình từng khâu"
+              >
+                <LayoutList className="size-3" />
+                Dạng thẻ ({flowSteps.length})
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))}
-              className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
-              title="Thu nhỏ"
+              onClick={() => setViewMode("code")}
+              className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                viewMode === "code"
+                  ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold"
+                  : "text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+              title="Xem mã nguồn Mermaid"
             >
-              <ZoomOut className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom(1)}
-              className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
-              title="Về mặc định 100%"
-            >
-              <RotateCcw className="size-3" />
+              <CodeIcon className="size-3" />
+              Mã
             </button>
           </div>
 
-          {/* Toggle Code / Diagram */}
-          <button
-            type="button"
-            onClick={() => setShowCode(!showCode)}
-            className="h-7 px-2 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-          >
-            {showCode ? <Eye className="size-3.5" /> : <CodeIcon className="size-3.5" />}
-            {showCode ? "Sơ đồ" : "Mã"}
-          </button>
+          {/* Zoom Controls for Canvas */}
+          {viewMode === "canvas" && (
+            <div className="hidden sm:flex items-center rounded-lg bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 p-0.5">
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.min(2, Number((z + 0.15).toFixed(2))))}
+                className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
+                title="Phóng to"
+              >
+                <ZoomIn className="size-3.5" />
+              </button>
+              <span className="text-[10px] font-mono px-1.5 text-slate-600 dark:text-neutral-400 font-semibold">{Math.round(zoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))}
+                className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
+                title="Thu nhỏ"
+              >
+                <ZoomOut className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(0.85)}
+                className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
+                title="Về tỉ lệ vừa mắt 85%"
+              >
+                <RotateCcw className="size-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Fullscreen Expand Button */}
+          {viewMode === "canvas" && (
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(true)}
+              className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              title="Phóng to toàn màn hình"
+            >
+              <Maximize2 className="size-3.5" />
+            </button>
+          )}
 
           {/* Download SVG */}
           <button
             type="button"
             onClick={handleDownloadSvg}
-            className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-600 dark:text-neutral-300 hover:text-blue-600 transition-colors cursor-pointer"
-            title="Tải ảnh vector SVG"
+            className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            title="Tải ảnh vector SVG chuẩn thiết kế"
           >
             <Download className="size-3.5" />
           </button>
@@ -474,7 +695,7 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
           <button
             type="button"
             onClick={handleCopyCode}
-            className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-600 dark:text-neutral-300 hover:text-emerald-600 transition-colors cursor-pointer"
+            className="size-7 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-600 dark:text-neutral-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
             title="Sao chép cú pháp Mermaid"
           >
             {isCopied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
@@ -483,29 +704,171 @@ export function EchoMermaidFlowchart({ code }: { code: string }) {
       </div>
 
       {/* Main Diagram Area */}
-      <div className="p-4 overflow-auto min-h-[180px] max-h-[500px] flex items-center justify-center bg-slate-50/30 dark:bg-neutral-900/30">
-        {showCode ? (
-          <pre className="w-full text-xs font-mono p-3 rounded-xl bg-slate-900 text-slate-100 overflow-x-auto">
-            {code}
-          </pre>
+      <div className="relative overflow-hidden">
+        {viewMode === "code" ? (
+          <div className="p-4 bg-slate-950 text-slate-100">
+            <pre className="text-xs font-mono p-3 rounded-xl bg-slate-900 overflow-x-auto leading-relaxed border border-slate-800">
+              {code}
+            </pre>
+          </div>
+        ) : viewMode === "cards" ? (
+          /* Dạng thẻ quy trình tương tác chuẩn Figma */
+          <div className="p-4 bg-slate-50/50 dark:bg-neutral-900/40">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {flowSteps.map((step, sIdx) => {
+                const isDecision = step.isDecision
+                const isEnd = step.isEnd
+                return (
+                  <div
+                    key={step.id}
+                    className={`relative p-3.5 rounded-xl border transition-all hover:shadow-md ${
+                      isDecision
+                        ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/60"
+                        : isEnd
+                        ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/60"
+                        : "bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span
+                        className={`size-6 rounded-lg flex items-center justify-center text-[11px] font-bold font-mono ${
+                          isDecision
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300"
+                            : isEnd
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300"
+                            : "bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300"
+                        }`}
+                      >
+                        {String(sIdx + 1).padStart(2, "0")}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${
+                          isDecision
+                            ? "bg-amber-200/60 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200"
+                            : isEnd
+                            ? "bg-emerald-200/60 text-emerald-900 dark:bg-emerald-900/80 dark:text-emerald-200"
+                            : "bg-slate-100 text-slate-600 dark:bg-neutral-700 dark:text-neutral-300"
+                        }`}
+                      >
+                        {isDecision ? "Kiểm tra / Review" : isEnd ? "Đích đến" : "Bước thực hiện"}
+                      </span>
+                    </div>
+                    <h5 className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+                      {step.label}
+                    </h5>
+                    {sIdx < flowSteps.length - 1 && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-neutral-700/60 flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-neutral-400">
+                        <span>Tiếp nối</span>
+                        <ArrowRight className="size-3" />
+                        <span className="font-medium text-slate-600 dark:text-neutral-300 truncate">
+                          {flowSteps[sIdx + 1]?.label || "Khâu tiếp theo"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : error ? (
-          <div className="text-center p-4">
+          <div className="text-center p-6 bg-slate-50/50 dark:bg-neutral-900/30">
             <p className="text-xs text-rose-500 font-medium mb-1">
-              Đang phân tích cú pháp sơ đồ hoặc sơ đồ chưa hoàn thiện.
+              Đang hoàn thiện cú pháp sơ đồ luồng.
             </p>
-            <pre className="text-[11px] font-mono text-slate-400 max-w-md mx-auto overflow-x-auto text-left bg-slate-100 dark:bg-neutral-800 p-2.5 rounded-lg">
+            <pre className="text-[11px] font-mono text-slate-500 max-w-md mx-auto overflow-x-auto text-left bg-slate-100 dark:bg-neutral-800 p-2.5 rounded-lg border border-slate-200 dark:border-neutral-700">
               {code}
             </pre>
           </div>
         ) : (
-          <div
-            ref={containerRef}
-            style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-            className="transition-transform duration-200 ease-out flex items-center justify-center w-full"
-            dangerouslySetInnerHTML={{ __html: svgHtml }}
-          />
+          /* Canvas Figma / FigJam Dotted Canvas */
+          <div className="p-4 sm:p-6 overflow-auto min-h-[300px] max-h-[580px] flex items-center justify-center bg-[#F8FAFC] dark:bg-[#0B0F19] bg-[radial-gradient(#CBD5E1_1.2px,transparent_1.2px)] dark:bg-[radial-gradient(#1E293B_1.2px,transparent_1.2px)] [background-size:18px_18px] cursor-grab active:cursor-grabbing">
+            <div
+              ref={containerRef}
+              style={{ transform: `scale(${zoom})`, transformOrigin: "center top" }}
+              className="transition-transform duration-200 ease-out flex items-center justify-center w-full max-w-full"
+              dangerouslySetInnerHTML={{ __html: svgHtml }}
+            />
+          </div>
         )}
       </div>
+
+      {/* Fullscreen Dialog Modal */}
+      <Dialog open={isFullscreen} onClose={() => setIsFullscreen(false)} size="full">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl overflow-hidden flex flex-col h-[90vh]">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-850">
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-900/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                <GitBranch className="size-4.5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Toàn cảnh sơ đồ luồng quy trình (Figma Canvas View)
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-neutral-400">
+                  Không gian làm việc trực quan độ nét cao, dễ dàng kiểm tra toàn bộ luồng 7 khâu
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-lg bg-slate-200/70 dark:bg-neutral-800 p-0.5 border border-slate-300 dark:border-neutral-700">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(2.5, Number((z + 0.15).toFixed(2))))}
+                  className="p-1.5 rounded text-slate-700 dark:text-neutral-300 hover:text-slate-900 cursor-pointer"
+                  title="Phóng to"
+                >
+                  <ZoomIn className="size-4" />
+                </button>
+                <span className="text-xs font-mono px-2 text-slate-700 dark:text-neutral-300 font-semibold">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(0.3, Number((z - 0.15).toFixed(2))))}
+                  className="p-1.5 rounded text-slate-700 dark:text-neutral-300 hover:text-slate-900 cursor-pointer"
+                  title="Thu nhỏ"
+                >
+                  <ZoomOut className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoom(1)}
+                  className="p-1.5 rounded text-slate-700 dark:text-neutral-300 hover:text-slate-900 cursor-pointer"
+                  title="100%"
+                >
+                  <RotateCcw className="size-3.5" />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadSvg}
+                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300 hover:text-blue-600 cursor-pointer"
+              >
+                <Download className="size-3.5" />
+                <span>Tải SVG</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(false)}
+                className="size-8 rounded-lg hover:bg-slate-200/80 dark:hover:bg-neutral-800 text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto p-8 flex items-center justify-center bg-[#F8FAFC] dark:bg-[#0B0F19] bg-[radial-gradient(#CBD5E1_1.2px,transparent_1.2px)] dark:bg-[radial-gradient(#1E293B_1.2px,transparent_1.2px)] [background-size:20px_20px]">
+            <div
+              style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+              className="transition-transform duration-200 ease-out"
+              dangerouslySetInnerHTML={{ __html: svgHtml }}
+            />
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }

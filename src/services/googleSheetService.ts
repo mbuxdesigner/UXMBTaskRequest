@@ -113,8 +113,12 @@ async function fetchRemoteRequestRows(
 
   for (let index = 0; index < endpoints.length; index += 1) {
     const url = resolveApiUrl(endpoints[index])
-    url.searchParams.set("action", "get_requests")
     if (cacheBust || index > 0) url.searchParams.set("_t", Date.now().toString())
+
+    const session = getStoredSession()
+    if (!session?.sessionToken) {
+      throw new Error("UNAUTHORIZED: Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
+    }
 
     const controller = new AbortController()
     const isSameOriginGateway =
@@ -123,8 +127,13 @@ async function fetchRemoteRequestRows(
 
     try {
       const response = await fetch(url.toString(), {
-        method: "GET",
-        headers: { Accept: "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8", Accept: "application/json" },
+        body: JSON.stringify({
+          action: "get_requests",
+          session_token: session.sessionToken,
+          client_environment: getAppEnvironment().appEnv,
+        }),
         cache: "no-store",
         signal: controller.signal,
       })
@@ -140,6 +149,10 @@ async function fetchRemoteRequestRows(
         throw new Error(`Invalid JSON response: ${responseText.slice(0, 160)}`)
       }
 
+      if (data.status === "unauthorized" || data.status === "forbidden") {
+        handleSessionExpired()
+        throw new Error(`UNAUTHORIZED: ${data.message || "Phiên đăng nhập không hợp lệ."}`)
+      }
       if (data.status === "success" && Array.isArray(data.requests)) {
         return data.requests
       }
@@ -169,15 +182,28 @@ export function isLastRemoteFetchSuccessful(): boolean {
   return lastRemoteFetchSucceeded !== false
 }
 
-const REQUESTS_CACHE_KEY = "ux_portal_real_requests"
+const REQUESTS_CACHE_KEY_PREFIX = "ux_portal_real_requests"
 const SELECTIONS_CACHE_KEY = "ux_portal_selections_cache"
 export const TASK_VIEWERS_STORE_KEY = "ux_task_viewers_map"
+
+function getRequestsCacheKey(): string {
+  const session = getStoredSession()
+  const identity = String(session?.teamsEmail || session?.personalEmail || "anonymous")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]/g, "_")
+  // Không đọc lại cache legacy dùng chung giữa nhiều tài khoản.
+  try {
+    localStorage.removeItem(REQUESTS_CACHE_KEY_PREFIX)
+  } catch {}
+  return `${REQUESTS_CACHE_KEY_PREFIX}:${identity}`
+}
 
 function getCachedRequestsSnapshot(): UXRequest[] {
   if (cachedRequestsMemory) return cachedRequestsMemory
 
   try {
-    const raw = localStorage.getItem(REQUESTS_CACHE_KEY)
+    const raw = localStorage.getItem(getRequestsCacheKey())
     const parsed = raw ? JSON.parse(raw) : []
     return Array.isArray(parsed) ? parsed : []
   } catch {
@@ -579,7 +605,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
   const envConfig = getAppEnvironment()
   if (!forceRefresh) {
     try {
-      const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
+      const localCached = localStorage.getItem(getRequestsCacheKey())
       if (localCached) {
         const parsed = JSON.parse(localCached)
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -587,7 +613,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
           const cleaned = envFiltered.filter((r) => !isDemoRequest(r))
           if (cleaned.length !== parsed.length) {
             try {
-              localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
+              localStorage.setItem(getRequestsCacheKey(), JSON.stringify(cleaned))
             } catch {}
           }
           if (cleaned.length > 0) {
@@ -627,7 +653,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
         // with an empty list.
         if (normalized.length === 0) {
           try {
-            const localCached = localStorage.getItem(REQUESTS_CACHE_KEY)
+            const localCached = localStorage.getItem(getRequestsCacheKey())
             const localList = localCached ? JSON.parse(localCached) : []
             if (Array.isArray(localList) && localList.length > 0) {
               lastRemoteFetchSucceeded = false
@@ -643,7 +669,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
         markRemoteListHealthy()
         cachedRequestsMemory = normalized
         try {
-          localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+          localStorage.setItem(getRequestsCacheKey(), JSON.stringify(normalized))
           saveGoogleSheetConfig({ lastSyncedAt: new Date().toISOString() })
         } catch (e) {
           console.warn("Could not save requests to localStorage:", e)
@@ -657,7 +683,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
 
     // Fallback to local cache if offline or not configured
     try {
-      const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
+      const cached = localStorage.getItem(getRequestsCacheKey())
       if (cached) {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed)) {
@@ -665,7 +691,7 @@ export async function fetchRequestsFromSheet(forceRefresh = false): Promise<UXRe
           const cleaned = envFiltered.filter((r) => !isDemoRequest(r))
           if (cleaned.length !== parsed.length) {
             try {
-              localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(cleaned))
+              localStorage.setItem(getRequestsCacheKey(), JSON.stringify(cleaned))
             } catch {}
           }
           const normalized = deduplicateTaskIds(cleaned.map(normalizeSheetRequest))
@@ -719,7 +745,7 @@ async function runBackgroundSyncRequests(): Promise<void> {
     lastRemoteFetchSucceeded = true
     markRemoteListHealthy()
     cachedRequestsMemory = normalized
-    localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+    localStorage.setItem(getRequestsCacheKey(), JSON.stringify(normalized))
     broadcastTaskEvent("GLOBAL_REFRESH")
   } catch {
     // Silently ignore background sync errors
@@ -1065,7 +1091,7 @@ export async function updateTaskProgressInSheet(
   // Cập nhật LocalStorage và Memory Cache ngay tức thì
   let updatedReq: UXRequest | undefined
   try {
-    const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
+    const cached = localStorage.getItem(getRequestsCacheKey())
     let existingList: UXRequest[] = cached ? JSON.parse(cached) : []
     const targetIdx = existingList.findIndex((r) => r.request_id === requestId)
 
@@ -1134,7 +1160,7 @@ export async function updateTaskProgressInSheet(
 
       existingList[targetIdx] = updatedReq
       cachedRequestsMemory = existingList
-      localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(existingList))
+      localStorage.setItem(getRequestsCacheKey(), JSON.stringify(existingList))
       // Phát tín hiệu đồng bộ thời gian thực cho toàn bộ các tab và component
       broadcastTaskEvent(
         params.is_comment ? "COMMENT_ADDED" : "TASK_UPDATED",
@@ -1252,7 +1278,7 @@ export async function updateTaskProgressInSheet(
           }
           cachedRequestsMemory = currentList
           try {
-            localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(currentList))
+            localStorage.setItem(getRequestsCacheKey(), JSON.stringify(currentList))
           } catch {}
           broadcastTaskEvent("TASK_UPDATED", requestId, serverUpdated, params.note)
           return {
@@ -1319,7 +1345,7 @@ export async function fetchSingleTaskUpdate(requestId: string): Promise<UXReques
     const config = getGoogleSheetConfig()
     if (!config.scriptUrl || !config.scriptUrl.trim()) {
       try {
-        const cached = localStorage.getItem(REQUESTS_CACHE_KEY)
+        const cached = localStorage.getItem(getRequestsCacheKey())
         if (cached) {
           const list: UXRequest[] = JSON.parse(cached)
           const found = list.find((r) => r.request_id === requestId)
@@ -1357,7 +1383,7 @@ export async function fetchSingleTaskUpdate(requestId: string): Promise<UXReques
           const normalized = normalizeRemoteRequestsPreservingNicknames(data.requests)
           cachedRequestsMemory = normalized
           try {
-            localStorage.setItem(REQUESTS_CACHE_KEY, JSON.stringify(normalized))
+            localStorage.setItem(getRequestsCacheKey(), JSON.stringify(normalized))
           } catch {}
           const found = normalized.find((r: UXRequest) => r.request_id === requestId)
           if (found) {
@@ -2405,6 +2431,7 @@ export async function syncUserChatThreadsToCloud(params: {
         file_id: data.file_id,
       }
     }
+    if (data.status === "unauthorized") handleSessionExpired()
     return {
       success: false,
       message: data.message || "Lỗi khi lưu lịch sử chat lên máy chủ.",
@@ -2464,40 +2491,17 @@ export async function fetchUserChatThreadsFromCloud(
           threads: data.threads,
         }
       }
-    }
-  } catch (e) {
-    console.warn("[fetchUserChatThreadsFromCloud] POST failed, trying GET fallback...", e)
-  }
-
-  // 2. GET Fallback
-  try {
-    const url = resolveApiUrl(scriptUrl)
-    url.searchParams.set("action", "get_chat_threads")
-    url.searchParams.set("user_email", userEmail)
-    url.searchParams.set("t", String(Date.now()))
-
-    const getController = new AbortController()
-    const getTimeout = setTimeout(() => getController.abort(), 15000)
-
-    const getRes = await fetch(url.toString(), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-      signal: getController.signal,
-    })
-    clearTimeout(getTimeout)
-
-    if (getRes.ok) {
-      const data = await getRes.json()
-      if (data.status === "success" && Array.isArray(data.threads)) {
+      if (data.status === "unauthorized" || data.status === "forbidden") {
+        if (data.status === "unauthorized") handleSessionExpired()
         return {
-          success: true,
-          threads: data.threads,
+          success: false,
+          threads: [],
+          message: data.message || "Không có quyền tải lịch sử chat.",
         }
       }
     }
-  } catch (err: any) {
-    console.error("[fetchUserChatThreadsFromCloud] GET failed:", err)
+  } catch (e) {
+    console.warn("[fetchUserChatThreadsFromCloud] Authenticated POST failed.", e)
   }
 
   return {

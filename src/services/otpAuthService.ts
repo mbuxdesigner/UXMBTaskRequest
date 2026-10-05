@@ -1480,13 +1480,15 @@ if (typeof window !== "undefined") {
   window.addEventListener("pagehide", handleExitOrHide)
   // W3C Page Lifecycle API: Hỗ trợ đóng băng app trên Mobile (iOS Safari & Android Chrome)
   window.addEventListener("freeze", handleExitOrHide)
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") {
-      touchSessionActivity(true)
-    } else if (document.visibilityState === "visible") {
-      touchSessionActivity(false)
-    }
-  })
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        touchSessionActivity(true)
+      } else if (document.visibilityState === "visible") {
+        touchSessionActivity(false)
+      }
+    })
+  }
 
   // 3. Thao tác người dùng định kỳ làm tươi lastActiveAt (throttled 30s)
   let lastTouch = 0

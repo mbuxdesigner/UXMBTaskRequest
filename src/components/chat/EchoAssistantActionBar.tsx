@@ -1,8 +1,7 @@
 /**
  * ==============================================================================
- * ECHO ASSISTANT ACTION BAR: FIGMA COPY, REGENERATE, RETRY & ARTIFACT DRAWER
- * Milestone: M3 (Designer Chat UX & Accessibility)
- * Purpose: Provides 1-click actions under Assistant bubbles tailored to designer workflows.
+ * ECHO ASSISTANT ACTION BAR: SAO CHÉP & TẠO LẠI
+ * Tối giản theo quy chuẩn UX: Chỉ hiển thị 2 thao tác chính: Sao chép và Tạo lại
  * ==============================================================================
  */
 
@@ -11,22 +10,12 @@ import { motion } from "framer-motion"
 import {
   Copy,
   Check,
-  FileText,
   RotateCcw,
   RefreshCw,
-  Table,
-  ExternalLink,
-  Bookmark,
-  ThumbsUp,
-  ThumbsDown,
 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  formatMarkdownForFigmaText,
-  exportTableToTSV,
-  copyToClipboard,
-} from "@/lib/figmaExportUtils"
-import { springs, tactileProps } from "@/lib/motion"
+import { copyToClipboard } from "@/lib/figmaExportUtils"
+import { tactileProps } from "@/lib/motion"
 
 export interface EchoAssistantActionBarProps {
   messageId: string
@@ -59,36 +48,16 @@ export function EchoAssistantActionBar({
   onFeedback,
   className = "",
 }: EchoAssistantActionBarProps) {
-  const [copiedType, setCopiedType] = useState<"figma" | "markdown" | "tsv" | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   if (isStreaming) return null
 
-  // Check if content has Markdown table
-  const hasTable = Boolean(
-    content &&
-    content.includes("|") &&
-    /(?:\|[^\n]+\|\r?\n?){2,}/.test(content)
-  )
-
-  const handleCopy = async (type: "figma" | "markdown" | "tsv") => {
-    let payload = content
-    if (type === "figma") {
-      payload = formatMarkdownForFigmaText(content)
-    } else if (type === "tsv") {
-      payload = exportTableToTSV(content)
-    }
-
-    const ok = await copyToClipboard(payload)
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(content)
     if (ok) {
-      setCopiedType(type)
-      if (type === "figma") {
-        toast.success("Đã sao chép văn bản sạch cho Figma!")
-      } else if (type === "tsv") {
-        toast.success("Đã sao chép bảng TSV cho Figma Auto-Layout!")
-      } else {
-        toast.success("Đã sao chép Markdown gốc!")
-      }
-      setTimeout(() => setCopiedType(null), 2000)
+      setIsCopied(true)
+      toast.success("Đã sao chép phản hồi!")
+      setTimeout(() => setIsCopied(false), 2000)
     } else {
       toast.error("Không thể sao chép vào bộ nhớ tạm.")
     }
@@ -98,10 +67,9 @@ export function EchoAssistantActionBar({
     <div
       role="toolbar"
       aria-label="Thao tác với phản hồi AI"
-      className={`flex items-center flex-wrap gap-1.5 pt-2 text-xs text-slate-500 select-none transition-opacity ${className}`}
+      className={`flex items-center flex-wrap gap-2 pt-2 text-xs text-slate-500 select-none transition-opacity ${className}`}
     >
       {hasError ? (
-        // When message has error, prominently display Soft Pastel Retry button
         onRetry && (
           <motion.button
             type="button"
@@ -117,128 +85,40 @@ export function EchoAssistantActionBar({
         )
       ) : (
         <>
-          {/* Action 1: Copy for Figma (Clean Text) */}
+          {/* Nút 1: Sao chép (Copy) */}
           <motion.button
             type="button"
-            onClick={() => handleCopy("figma")}
+            onClick={handleCopy}
             {...tactileProps.button}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
-            title="Sao chép văn bản sạch (đã lọc Markdown, dán thẳng vào Text Layer Figma)"
-            aria-label="Copy dạng Text sạch cho Figma"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 border border-transparent hover:border-slate-200/60 dark:hover:border-neutral-700 transition-colors cursor-pointer"
+            title="Sao chép nội dung phản hồi"
+            aria-label="Sao chép nội dung"
           >
-            {copiedType === "figma" ? (
-              <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
+            {isCopied ? (
+              <>
+                <Check className="size-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
+                <span className="text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400">Đã chép</span>
+              </>
             ) : (
-              <Copy className="size-3.5 text-slate-400 group-hover:text-slate-700" />
+              <>
+                <Copy className="size-3.5 text-slate-400 group-hover:text-slate-700 dark:text-slate-500" />
+                <span className="text-[11.5px] font-medium">Sao chép</span>
+              </>
             )}
-            <span className="text-[11.5px] font-medium">Copy cho Figma</span>
           </motion.button>
 
-          {/* Action 2: Copy Raw Markdown */}
-          <motion.button
-            type="button"
-            onClick={() => handleCopy("markdown")}
-            {...tactileProps.button}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
-            title="Sao chép nguyên văn Markdown gốc"
-            aria-label="Copy Markdown gốc"
-          >
-            {copiedType === "markdown" ? (
-              <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
-            ) : (
-              <FileText className="size-3.5 text-slate-400 group-hover:text-slate-700" />
-            )}
-            <span className="text-[11.5px] font-medium">Markdown</span>
-          </motion.button>
-
-          {/* Action 3: Copy TSV Table for Figma Auto-layout if table is present */}
-          {hasTable && (
-            <motion.button
-              type="button"
-              onClick={() => handleCopy("tsv")}
-              {...tactileProps.button}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
-              title="Sao chép bảng dạng TSV để dán tạo Auto-Layout trong Figma"
-              aria-label="Copy bảng TSV cho Figma"
-            >
-              {copiedType === "tsv" ? (
-                <Check className="size-3.5 text-emerald-600 stroke-[2.2]" />
-              ) : (
-                <Table className="size-3.5 text-slate-400 group-hover:text-slate-700" />
-              )}
-              <span className="text-[11.5px] font-medium">Copy Table TSV</span>
-            </motion.button>
-          )}
-
-          {/* Action 4: Regenerate Assistant Response */}
+          {/* Nút 2: Tạo lại (Regenerate) */}
           {onRegenerate && (
             <motion.button
               type="button"
               onClick={onRegenerate}
               {...tactileProps.button}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 border border-transparent hover:border-slate-200/60 dark:hover:border-neutral-700 transition-colors cursor-pointer"
               title="Tạo lại phản hồi này với AI"
               aria-label="Tạo lại phản hồi"
             >
-              <RotateCcw className="size-3.5 text-slate-400 group-hover:text-slate-700" />
+              <RotateCcw className="size-3.5 text-slate-400 group-hover:text-slate-700 dark:text-slate-500" />
               <span className="text-[11.5px] font-medium">Tạo lại</span>
-            </motion.button>
-          )}
-
-          {onFeedback && (
-            <div className="ml-0.5 inline-flex items-center border-l border-slate-200 pl-1.5">
-              <motion.button
-                type="button"
-                onClick={() => onFeedback("up")}
-                {...tactileProps.iconButton}
-                className={`inline-flex size-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${feedback === "up" ? "bg-emerald-50 text-emerald-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}
-                title="Phản hồi hữu ích"
-                aria-label="Đánh giá phản hồi hữu ích"
-                aria-pressed={feedback === "up"}
-              >
-                <ThumbsUp className="size-3.5" />
-              </motion.button>
-              <motion.button
-                type="button"
-                onClick={() => onFeedback("down")}
-                {...tactileProps.iconButton}
-                className={`inline-flex size-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${feedback === "down" ? "bg-rose-50 text-rose-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}
-                title="Phản hồi chưa hữu ích"
-                aria-label="Đánh giá phản hồi chưa hữu ích"
-                aria-pressed={feedback === "down"}
-              >
-                <ThumbsDown className="size-3.5" />
-              </motion.button>
-            </div>
-          )}
-
-          {/* Action 5: Open Split View / Artifact Viewer */}
-          {onOpenArtifact && (artifactName || artifactId) && (
-            <motion.button
-              type="button"
-              onClick={onOpenArtifact}
-              {...tactileProps.button}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
-              title={`Mở Split View tài liệu ${artifactName || ""}`}
-              aria-label="Mở Split View / Artifact"
-            >
-              <ExternalLink className="size-3.5 text-slate-400 group-hover:text-slate-700" />
-              <span className="text-[11.5px] font-medium">Mở Split View</span>
-            </motion.button>
-          )}
-
-          {/* Action 6: Save as Artifact if requested */}
-          {onSaveAsArtifact && !artifactName && (
-            <motion.button
-              type="button"
-              onClick={() => onSaveAsArtifact("Tài liệu trích xuất từ AI Chat", content)}
-              {...tactileProps.button}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-emerald-700 border border-transparent hover:border-slate-200/60 transition-colors cursor-pointer"
-              title="Lưu trích đoạn này thành Artifact mới"
-              aria-label="Lưu thành Artifact"
-            >
-              <Bookmark className="size-3.5 text-slate-400 group-hover:text-emerald-600" />
-              <span className="text-[11.5px] font-medium">Lưu Artifact</span>
             </motion.button>
           )}
         </>

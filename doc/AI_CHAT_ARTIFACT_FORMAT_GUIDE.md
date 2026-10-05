@@ -1,7 +1,7 @@
 # 📄 HƯỚNG DẪN QUY CHUẨN ĐỊNH DẠNG TÀI LIỆU MARKDOWN (NOTION-STYLE VIEWER)
 ## (HỆ THỐNG HIỂN THỊ TÀI LIỆU AI CHAT & KHO UX ARTIFACTS — MBBANK)
 
-> **Mục tiêu tài liệu:** Hướng dẫn quy tắc định dạng nội dung Markdown (.md) để hiển thị trực quan, phân cấp rõ ràng và chuẩn phong cách Notion trên màn hình **AI Chat Copilot** và bộ xem chi tiết tài liệu [EchoArtifactSplitViewer.tsx](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/chat/EchoArtifactSplitViewer.tsx).
+> **Mục tiêu tài liệu:** Hướng dẫn quy tắc định dạng nội dung Markdown (.md) để hiển thị trực quan, phân cấp rõ ràng và chuẩn phong cách Notion trên màn hình **AI Chat Copilot** và bộ xem chi tiết tài liệu `src/components/chat/EchoArtifactSplitViewer.tsx`.
 
 ---
 
@@ -27,7 +27,7 @@
 ## 📐 2. CHI TIẾT CÁC QUY TẮC HIỂN THỊ
 
 ### 2.1. Phân cấp Danh sách 3 tầng (Nested Bullet Lists)
-Hệ thống [EchoArtifactSplitViewer.tsx](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/chat/EchoArtifactSplitViewer.tsx) được lập trình để tự động biến đổi bullet point theo độ thụt dòng:
+Hệ thống `src/components/chat/EchoArtifactSplitViewer.tsx` được lập trình để tự động biến đổi bullet point theo độ thụt dòng:
 - **Tầng 1 (Indentation = 0):** Hiển thị chấm tròn đặc `•`
 - **Tầng 2 (Indentation = 2 spaces):** Tự động chuyển thành chấm tròn rỗng `◦`
 - **Tầng 3 (Indentation = 4 spaces):** Tự động chuyển thành khối vuông `▪`
@@ -130,7 +130,27 @@ Sao chép đoạn dưới đây khi tạo file tài liệu mới vào hệ thố
 
 ---
 
-## 📂 4. LIÊN HỆ & THAM CHIẾU HỆ THỐNG
-- **Component Render:** [EchoArtifactSplitViewer.tsx](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/chat/EchoArtifactSplitViewer.tsx)
-- **Dữ liệu hạt nhân mẫu (Seed Data):** [aiArtifactsService.ts](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/services/aiArtifactsService.ts)
-- **Tài liệu tính năng AI Copilot:** [14_AI_CHATS_AND_INTELLIGENT_COPILOT.md](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md)
+## 🔐 4. VÒNG ĐỜI PHÊ DUYỆT ARTIFACT
+
+Tài liệu do người dùng tải lên không mặc nhiên trở thành quy định chính thức. Metadata bắt buộc đối với tài liệu quy chuẩn:
+
+| Trường | Giá trị | Ý nghĩa |
+|---|---|---|
+| `approvalStatus` | `draft` | Được đọc khi người dùng chọn trực tiếp, nhưng không dùng làm quy định chính thức |
+| `approvalStatus` | `approved` | Được phép xuất hiện trong kết quả tra cứu quy định/quy chuẩn |
+| `approvalStatus` | `retired` | Ngừng sử dụng cho câu trả lời mới |
+| `version` | Ví dụ `3.1` | Phiên bản tài liệu đang áp dụng |
+| `effectiveDate` | `YYYY-MM-DD` | Ngày bắt đầu hiệu lực |
+| `owner` | Team/người sở hữu | Đầu mối chịu trách nhiệm nội dung |
+
+Quy tắc vận hành:
+
+1. Tài liệu mới phải bắt đầu ở `draft`.
+2. Chỉ owner được chỉ định hoặc Design Ops được chuyển sang `approved`.
+3. Khi có phiên bản thay thế, chuyển bản cũ sang `retired`; không xóa lịch sử nếu còn yêu cầu audit.
+4. Câu trả lời AI phải nêu tài liệu tham chiếu đã nạp; không gọi draft là “quy định MBBank”.
+
+## 📂 5. LIÊN HỆ & THAM CHIẾU HỆ THỐNG
+- **Component Render:** `src/components/chat/EchoArtifactSplitViewer.tsx`
+- **Dữ liệu Artifact:** `src/services/aiArtifactsService.ts`
+- **Tài liệu tính năng AI Copilot:** [14_AI_CHATS_AND_INTELLIGENT_COPILOT.md](features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md)

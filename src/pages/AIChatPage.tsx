@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus,
@@ -19,7 +20,6 @@ import {
   FolderOpen,
   BookOpen,
   Code,
-  Activity,
   X,
   Pin,
   CornerDownLeft,
@@ -34,7 +34,6 @@ import {
   Send,
   ExternalLink,
   MessageSquare,
-  Clock,
   CheckCircle2,
   AtSign,
   Command as CommandIcon,
@@ -53,6 +52,7 @@ import {
   RefreshCw,
   Key,
   Image as ImageIcon,
+  Info,
 } from "lucide-react"
 import { EchoInteractiveChart, EchoMermaidFlowchart } from "@/components/common/EchoChartsAndFlowcharts"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
@@ -122,6 +122,7 @@ import {
   getStoredArtifacts,
   saveStoredArtifacts,
   addArtifact,
+  updateArtifact,
   deleteArtifact,
   formatFileSize,
   mergeCloudArtifacts,
@@ -133,7 +134,6 @@ import {
   fetchMasterDataFromSheet,
   syncUserChatThreadsToCloud,
   fetchUserChatThreadsFromCloud,
-  updateTaskProgressInSheet,
 } from "@/services/googleSheetService"
 import { getGoogleSheetConfig } from "@/config/googleSheetConfig"
 import RequestDetail from "@/components/track/RequestDetail"
@@ -208,6 +208,23 @@ interface ChatThread {
 
 const STORAGE_THREADS_KEY = "ux_mb_ai_chat_threads"
 const STORAGE_ACTIVE_THREAD_ID = "ux_mb_ai_active_thread_id"
+
+function prepareThreadsForPersistence(threads: ChatThread[]): ChatThread[] {
+  return threads
+    .filter((thread) => thread.id !== "draft" && Array.isArray(thread.messages) && thread.messages.length > 0)
+    .slice(0, 100)
+    .map((thread) => ({
+      ...thread,
+      messages: thread.messages.slice(-200).map((message) => ({
+        ...message,
+        // Screenshots can contain account/customer data and are often multi-MB.
+        // They are request-only; Drive URLs are persisted separately as artifacts.
+        attachedImageUrl: message.attachedImageUrl?.startsWith("data:") ? undefined : message.attachedImageUrl,
+        senderEmail: undefined,
+        senderAvatar: undefined,
+      })),
+    }))
+}
 
 // Initial Demo Thread showcase all 4 rich UI formats (Table, Action Card, Code/Artifact, Suggestions, Referenced Docs)
 const INITIAL_DEMO_THREADS: ChatThread[] = [
@@ -329,52 +346,30 @@ export function generateThreadTitle(prompt: string): string {
   return text
 }
 
-// 4 nhóm gợi ý câu hỏi khởi đầu chuẩn MBBank UX Designer cho Empty State
+// Các nhóm gợi ý đang hiển thị: chỉ tra cứu thông tin task và quy định/quy chuẩn.
 export type EmptyCategoryType = "seven_steps" | "handoff" | "sla_po" | "microcopy"
 
 export const EMPTY_STATE_CATEGORIES = [
   {
     id: "seven_steps" as const,
-    label: "7 Khâu UX MBBank",
+    label: "Thông tin Task",
     icon: Sparkles,
-    description: "Khảo sát, IA, Wireframe, Usability",
+    description: "Tra cứu trạng thái, tiến độ và người phụ trách",
     prompts: [
-      "Quy trình 7 khâu UX MBBank gồm những bước nào và tiêu chí nghiệm thu từng khâu?",
-      "Tạo checklist kiểm định Khâu 4 (IA & Wireframe) trước khi gửi PO /sentopo",
-      "Kế hoạch nghiên cứu người dùng và Usability Testing Khâu 6 đạt mục tiêu >85% task completion",
+      "Tổng hợp các task tôi đang phụ trách gồm mã task, trạng thái, tiến độ, deadline và mức độ ưu tiên",
+      "Tra cứu một task theo mã hoặc tên: yêu cầu, khâu hiện tại, người phụ trách, deadline và cập nhật gần nhất",
+      "Task nào của tôi đang quá hạn, PO Pending hoặc có nguy cơ trễ deadline?",
     ],
   },
   {
     id: "handoff" as const,
-    label: "Tiêu chuẩn Handoff",
+    label: "Quy định & Quy chuẩn",
     icon: BookOpen,
-    description: "Token specs, Redlines, Dev notes",
+    description: "Tra cứu quy trình UX và tiêu chuẩn thiết kế",
     prompts: [
-      "Tiêu chuẩn tổ chức file Figma Ready for Dev: Token specs, Redlines và Dev notes",
-      "Tra cứu thông số Tokens ReUI v3: Mã màu Primary Navy, bo góc 12px và 4px/8px Grid",
-      "Quy chuẩn thiết kế 4 trạng thái bắt buộc: Default, Loading shimmer, Error và Empty state",
-    ],
-  },
-  {
-    id: "sla_po" as const,
-    label: "SLA & PO Alignment",
-    icon: Clock,
-    description: "24h SLA, bài toán tồn đọng PO Pending",
-    prompts: [
-      "Rà soát các bài toán đang bị PO Pending quá 24h cần đôn đốc phản hồi",
-      "Báo cáo tiến độ các bài toán được giao của tôi và cảnh báo nguy cơ trễ SLA",
-      "Soạn nội dung nhắc nhở Product Owner phê duyệt phương án thiết kế Wireframe",
-    ],
-  },
-  {
-    id: "microcopy" as const,
-    label: "Microcopy Ngân Hàng",
-    icon: Activity,
-    description: "Thông báo lỗi, OTP, Chuyển tiền",
-    prompts: [
-      "Gợi ý 3 phương án microcopy cho thông báo lỗi giao dịch chuyển tiền ngoài 24/7",
-      "Viết nội dung tin nhắn xác thực Smart OTP và hướng dẫn bảo mật giao dịch",
-      "Microcopy hướng dẫn người dùng quét khuôn mặt NFC trong luồng mở tài khoản eKYC",
+      "Tra cứu quy trình 7 khâu UX MBBank và tiêu chí hoàn thành của từng khâu",
+      "Tra cứu quy định tổ chức file Figma, Ready for Dev, token, redline và dev notes khi handoff",
+      "Tra cứu quy định SLA phản hồi, PO Pending và các trạng thái bắt buộc của thiết kế",
     ],
   },
 ]
@@ -388,7 +383,7 @@ export const ECHO_DEMO_KEYWORDS = [
 export function isEchoTestDemoThread(t: any): boolean {
   if (!t) return false
   const id = (t.id || "").toLowerCase()
-  if (id.startsWith("legacy-echo-") || id.startsWith("demo-echo-")) {
+  if (id.startsWith("legacy-echo-") || id.startsWith("demo-echo-") || id === "thread-showcase-rich-ui") {
     return true
   }
   return false
@@ -545,7 +540,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     } catch (e) {
       console.error("[AIChatPage] Failed to parse saved threads:", e)
     }
-    return INITIAL_DEMO_THREADS
+    return []
   })
 
   // Draft chat state: Clicking New Chat sets activeThreadId to "draft" without generating empty thread
@@ -599,7 +594,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
   // Real-time MBBank Daily AI Usage State & Listeners
   const [dailyUsage, setDailyUsage] = useState<AIDailyUsage>(() => getDailyAIUsage())
-  const [showUsageNotice, setShowUsageNotice] = useState(true)
+  // Quota nhà cung cấp được quản lý ở gateway và không có số liệu đáng tin cậy ở trình duyệt.
+  const [showUsageNotice, setShowUsageNotice] = useState(false)
   const [noticeCollapsed, setNoticeCollapsed] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("ux_mb_ai_notice_collapsed")
@@ -760,7 +756,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       return
     }
 
-    const toSave = threads.filter((t) => t.id !== "draft" && Array.isArray(t.messages) && t.messages.length > 0)
+    const toSave = prepareThreadsForPersistence(threads)
+    localStorage.setItem("ux_mb_ai_cloud_sync_enabled", "true")
     setCloudSyncStatus("syncing")
     toast.loading("Đang đồng bộ lịch sử chat lên Google Drive & Sheet...", { id: "sync-chat" })
 
@@ -791,32 +788,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        const toSave = threads.filter((t) => t.id !== "draft" && Array.isArray(t.messages) && t.messages.length > 0)
+        const toSave = prepareThreadsForPersistence(threads)
         localStorage.setItem(STORAGE_THREADS_KEY, JSON.stringify(toSave))
-
-        // Tự động đồng bộ lên Google Drive nếu đã đăng nhập và có cuộc trò chuyện
-        const currentSession = getStoredSession()
-        const userEmail = (currentSession?.teamsEmail || currentSession?.personalEmail || "").trim().toLowerCase()
-        const userName = currentSession?.displayName || ""
-        if (userEmail && toSave.length > 0) {
-          setCloudSyncStatus("syncing")
-          syncUserChatThreadsToCloud({
-            userEmail,
-            userName,
-            threads: toSave,
-          })
-            .then((res) => {
-              if (res.success) {
-                setCloudSyncStatus("synced")
-                setLastSyncedTime(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }))
-              } else {
-                setCloudSyncStatus("error")
-              }
-            })
-            .catch(() => {
-              setCloudSyncStatus("error")
-            })
-        }
       } catch (err) {
         console.error("[AIChatPage] LocalStorage save error:", err)
       }
@@ -869,7 +842,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     // Tải và hợp nhất lịch sử chat người dùng từ Google Drive (Multi-device Sync)
     const currentSession = getStoredSession()
     const currentUserEmail = (currentSession?.teamsEmail || currentSession?.personalEmail || "").trim().toLowerCase()
-    if (currentUserEmail) {
+    const cloudSyncEnabled = localStorage.getItem("ux_mb_ai_cloud_sync_enabled") === "true"
+    if (currentUserEmail && cloudSyncEnabled) {
       setCloudSyncStatus("syncing")
       fetchUserChatThreadsFromCloud(currentUserEmail)
         .then((res) => {
@@ -1505,7 +1479,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           name: attachedImage.name,
           fileType: "image",
           size: attachedImage.size,
-          content: `# ${attachedImage.name}\n\n![${attachedImage.name}](${attachedImage.dataUrl})\n\n*Ảnh chụp màn hình do ${senderName} dán trực tiếp vào đoạn chat.*`,
+          content: `# ${attachedImage.name}\n\nẢnh chỉ được dùng tạm thời trong yêu cầu hiện tại. Liên kết Drive sẽ được bổ sung sau khi tải lên thành công.`,
           summary: `Ảnh màn hình dán từ clipboard: ${attachedImage.name}`,
           tags: ["Ảnh", "Clipboard", "Chat"],
           isCustomUploaded: true,
@@ -1515,11 +1489,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         // Tải lên Google Drive nền nếu có kết nối
         uploadFileToDrive(attachedImage.file, "UX_AI_Artifacts").then((res) => {
           if (res.fileUrl || res.thumbnailUrl) {
+            const persistedImageUrl = res.thumbnailUrl || res.fileUrl
             updateArtifact(newArt.id, {
               driveUrl: res.fileUrl,
               driveThumbnailUrl: res.thumbnailUrl,
               driveDownloadUrl: res.downloadUrl,
               driveFileId: res.fileId,
+              content: `# ${attachedImage.name}\n\n![${attachedImage.name}](${persistedImageUrl})`,
             })
           }
         }).catch(() => {})
@@ -1591,9 +1567,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       if (matchedDocs.length > 0) activeArtifactIds = matchedDocs.map((document) => document.id)
     }
 
-    const intentLabel = questionIntent.isTaskUpdate
-      ? "task_update"
-      : questionIntent.isTask || resolvedTask
+    const intentLabel = questionIntent.isTask || questionIntent.isTaskUpdate || resolvedTask
       ? "task_analysis"
       : questionIntent.isDoc || questionIntent.isProductSpec
       ? "document_query"
@@ -1815,7 +1789,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           userRole: session?.role,
           userQuery: retrievalQuery,
         }) +
-          `\n\nYÊU CẦU: Tổng hợp báo cáo tiến độ các bài toán của người dùng, phát hiện rủi ro và đề xuất hành động cụ thể. Nếu có task cần cập nhật, hãy đề xuất qua khối \`\`\`task_update.`
+          `\n\nYÊU CẦU: Tổng hợp thông tin task có căn cứ, nêu rõ rủi ro nếu có. Chỉ đọc; không tạo hành động cập nhật, phê duyệt hoặc gửi thông báo.`
       } else if (customContext) {
         // Custom context (ví dụ: chat với artifact cụ thể được chọn/đính kèm)
         contextStr = buildEnrichedContext({
@@ -2649,7 +2623,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 setAiSettingsModalOpen(true)
               }}
               {...tactileProps.iconButton}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 text-xs font-semibold cursor-pointer transition-all bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-2xs"
+              className="hidden"
               title="Cài đặt Cổng AI & Google AI Studio Key"
             >
               <Key className="size-3.5 text-slate-600" />
@@ -2835,11 +2809,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <h2 className="text-2xl sm:text-[28px] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100">
+                      <h2 className="text-2xl sm:text-[28px] font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-100">
                         Trợ lý UX MB có thể hỗ trợ gì cho bạn?
                       </h2>
                       <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
-                        Hỏi đáp về tiến độ bài toán, rà soát PO Pending, phân bổ Deep Work hoặc tra cứu quy chuẩn thiết kế MBBank.
+                        Tra cứu thông tin task và các quy định, quy chuẩn thiết kế MBBank từ nguồn được phép truy cập.
                       </p>
                     </div>
                   </div>
@@ -2864,19 +2838,19 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           className={cn(
                             "relative inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
                             isSelected
-                              ? "text-white font-medium"
+                              ? "text-slate-900 dark:text-slate-100 font-medium border border-slate-300/90 dark:border-neutral-700"
                               : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-card hover:bg-slate-50 shadow-2xs"
                           )}
                         >
                           {isSelected && (
                             <motion.span
                               layoutId="aichat-empty-category-pill"
-                              className="absolute inset-0 rounded-full bg-slate-900 dark:bg-slate-100 shadow-xs"
+                              className="absolute inset-0 rounded-full bg-slate-100 dark:bg-neutral-800"
                               transition={springs.indicator}
                             />
                           )}
-                          <Icon className={cn("size-3.5 relative z-10", isSelected ? "text-white dark:text-slate-900" : "text-slate-500")} />
-                          <span className={cn("relative z-10", isSelected && "text-white dark:text-slate-900")}>{cat.label}</span>
+                          <Icon className={cn("size-3.5 relative z-10", isSelected ? "text-slate-700 dark:text-slate-200" : "text-slate-500")} />
+                          <span className="relative z-10">{cat.label}</span>
                         </motion.button>
                       )
                     })}
@@ -2925,7 +2899,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                             <span className="text-slate-400 font-mono text-xs w-4 shrink-0">
                               {idx + 1}.
                             </span>
-                            <span className="truncate text-slate-800 dark:text-slate-200 group-hover:text-slate-950 dark:group-hover:text-white font-medium text-[13.5px]">
+                            <span className="truncate text-slate-700 dark:text-slate-300 group-hover:text-slate-950 dark:group-hover:text-white font-normal text-[13.5px]">
                               {item.title}
                             </span>
                           </div>
@@ -3260,7 +3234,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
       {/* Modal Popup: Cài đặt Cổng AI & Google AI Studio Key */}
       <Dialog
-        open={aiSettingsModalOpen}
+        open={false}
         onClose={() => setAiSettingsModalOpen(false)}
         size="md"
         className="p-5 sm:p-6 space-y-4 rounded-2xl max-w-lg"
@@ -3659,21 +3633,60 @@ function EchoSidebarRow({
   onDelete,
 }: EchoSidebarRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null)
+
+  const updateMenuPosition = useCallback(() => {
+    if (!buttonRef.current) return
+    const rect = buttonRef.current.getBoundingClientRect()
+    const menuWidth = 144
+    const menuHeight = 125
+    const spaceBelow = window.innerHeight - rect.bottom
+    const top = spaceBelow < menuHeight + 8 ? rect.top - menuHeight - 4 : rect.bottom + 4
+    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth))
+    setMenuCoords({ top, left })
+  }, [])
+
+  const handleToggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!menuOpen) {
+      updateMenuPosition()
+      setMenuOpen(true)
+    } else {
+      setMenuOpen(false)
+    }
+  }
 
   useEffect(() => {
+    if (!menuOpen) return
+
+    updateMenuPosition()
+
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
+      if (buttonRef.current && buttonRef.current.contains(event.target as Node)) {
+        return
       }
+      const popoverEl = document.getElementById(`thread-menu-popover-${thread.id}`)
+      if (popoverEl && popoverEl.contains(event.target as Node)) {
+        return
+      }
+      setMenuOpen(false)
     }
-    if (menuOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
+
+    function handleScrollOrResize() {
+      setMenuOpen(false)
     }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    window.addEventListener("scroll", handleScrollOrResize, true)
+    window.addEventListener("resize", handleScrollOrResize)
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
+      window.removeEventListener("scroll", handleScrollOrResize, true)
+      window.removeEventListener("resize", handleScrollOrResize)
     }
-  }, [menuOpen])
+  }, [menuOpen, thread.id, updateMenuPosition])
 
   return (
     <div
@@ -3682,7 +3695,8 @@ function EchoSidebarRow({
         "group relative flex w-full items-center gap-2 rounded-xl px-2.5 py-2 h-9 text-[13px] sm:text-sm cursor-pointer transition-colors text-left",
         isActive
           ? "bg-slate-100 dark:bg-neutral-800 font-semibold text-slate-900 dark:text-white shadow-2xs"
-          : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          : "hover:bg-slate-50 dark:hover:bg-neutral-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
+        menuOpen && "z-20 bg-slate-100/70 dark:bg-neutral-800/70"
       )}
     >
       <span className="truncate flex-1">{thread.title}</span>
@@ -3693,7 +3707,6 @@ function EchoSidebarRow({
           "flex items-center gap-0.5 transition-opacity shrink-0",
           menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}
-        ref={menuRef}
       >
         <motion.button
           type="button"
@@ -3706,66 +3719,78 @@ function EchoSidebarRow({
         </motion.button>
 
         <motion.button
+          ref={buttonRef}
           type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            setMenuOpen((v) => !v)
-          }}
+          onClick={handleToggleMenu}
           {...tactileProps.iconButton}
-          className="size-5 rounded hover:bg-slate-200/60 dark:hover:bg-neutral-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center cursor-pointer transition-colors"
+          className={cn(
+            "size-5 rounded hover:bg-slate-200/60 dark:hover:bg-neutral-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center cursor-pointer transition-colors",
+            menuOpen && "bg-slate-200/80 text-slate-800 dark:bg-neutral-700 dark:text-white"
+          )}
           title="Tùy chọn khác"
         >
           <MoreHorizontal className="size-2.5" />
         </motion.button>
 
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              variants={originPopoverVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={springs.popover}
-              className="absolute right-0 top-7 z-50 w-36 p-1 bg-white dark:bg-card text-slate-800 dark:text-slate-200 rounded-xl shadow-lg border border-slate-200/90 dark:border-neutral-800 text-xs select-none"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  setMenuOpen(false)
-                  onRename(thread, e)
-                }}
-                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <Edit2 className="size-3 text-slate-500" />
-                <span>Đổi tên</span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  setMenuOpen(false)
-                  onExport(thread, e)
-                }}
-                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <Download className="size-3 text-slate-500" />
-                <span>Xuất .md</span>
-              </button>
-              <div className="h-[1px] bg-slate-100 dark:bg-neutral-800 my-0.5" />
-              <button
-                type="button"
-                onClick={(e) => {
-                  setMenuOpen(false)
-                  onDelete(thread.id, e)
-                }}
-                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <Trash2 className="size-3" />
-                <span>Xóa</span>
-              </button>
-            </motion.div>
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence>
+              {menuOpen && menuCoords && (
+                <motion.div
+                  id={`thread-menu-popover-${thread.id}`}
+                  variants={originPopoverVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  transition={springs.popover}
+                  style={{
+                    position: "fixed",
+                    top: menuCoords.top,
+                    left: menuCoords.left,
+                    zIndex: 99999,
+                  }}
+                  className="w-36 p-1 bg-white dark:bg-card text-slate-800 dark:text-slate-200 rounded-xl shadow-xl border border-slate-200/90 dark:border-neutral-800 text-xs select-none pointer-events-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setMenuOpen(false)
+                      onRename(thread, e)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Edit2 className="size-3 text-slate-500" />
+                    <span>Đổi tên</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setMenuOpen(false)
+                      onExport(thread, e)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Download className="size-3 text-slate-500" />
+                    <span>Xuất .md</span>
+                  </button>
+                  <div className="h-[1px] bg-slate-100 dark:bg-neutral-800 my-0.5" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setMenuOpen(false)
+                      onDelete(thread.id, e)
+                    }}
+                    className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="size-3" />
+                    <span>Xóa</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
           )}
-        </AnimatePresence>
       </div>
     </div>
   )
@@ -4732,43 +4757,8 @@ function EchoTaskUpdateCard({
   }, [tasks, data.request_id, data.task_name])
 
   const handleConfirmUpdate = async () => {
-    if (!data.request_id) return
-    setIsUpdating(true)
-    try {
-      const targetPhase = data.suggested_phase || (matchedTask ? matchedTask.current_phase : "Đang xử lý")
-      const targetStatus = data.suggested_status || (matchedTask ? matchedTask.status : "Đang xử lý")
-      const targetProgress =
-        typeof data.suggested_progress === "number"
-          ? data.suggested_progress
-          : matchedTask
-          ? matchedTask.progress
-          : 50
-      const noteToSend = editNote || data.note || "Cập nhật qua AI Copilot"
-
-      const res = await updateTaskProgressInSheet(data.request_id, {
-        new_phase: targetPhase,
-        new_status: targetStatus,
-        new_progress: targetProgress,
-        note: noteToSend,
-      })
-
-      if (res.success) {
-        setIsDone(true)
-        toast.success(`Đã cập nhật bài toán [${data.request_id}] lên ${targetPhase} (${targetProgress}%)!`)
-        window.dispatchEvent(
-          new CustomEvent("task_updated", {
-            detail: { requestId: data.request_id, phase: targetPhase, status: targetStatus, progress: targetProgress },
-          })
-        )
-      } else {
-        toast.warning(res.message || "Không thể đồng bộ lên Google Sheet, đã lưu cục bộ.")
-        setIsDone(true)
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Lỗi khi cập nhật trạng thái bài toán")
-    } finally {
-      setIsUpdating(false)
-    }
+    setIsUpdating(false)
+    toast.info("AI Chat hiện ở chế độ chỉ đọc. Hãy cập nhật task trong màn hình chi tiết task.")
   }
 
   const handleOpenDetail = () => {
@@ -5238,6 +5228,134 @@ function RenderMarkdownParagraph({ text }: { text: string }) {
   )
 }
 
+/**
+ * Trích xuất hoặc tự động sinh Follow-up suggestions thông minh theo chủ đề thực tế của tin nhắn.
+ * Đảm bảo mỗi hội thoại sẽ có gợi ý hành động riêng biệt, phù hợp ngữ cảnh, không bị lặp lại cứng nhắc.
+ */
+export function extractSmartContextualSuggestions(text: string): string[] {
+  if (!text) return []
+  const lower = text.toLowerCase()
+
+  // 1. Nếu là về sơ đồ / luồng / quy trình (Mermaid / Flowchart)
+  if (lower.includes("```mermaid") || lower.includes("sơ đồ luồng") || lower.includes("flowchart") || lower.includes("graph td") || lower.includes("graph lr")) {
+    return [
+      "Chi tiết các bước trong sơ đồ",
+      "Thêm điểm kiểm soát rủi ro",
+      "Xuất sơ đồ ra file SVG",
+    ]
+  }
+
+  // 2. Nếu là về Design System Tokens / Màu sắc / Typography / Radius
+  if (lower.includes("#1057fb") || lower.includes("#ed1c24") || lower.includes("design token") || lower.includes("bảng màu") || lower.includes("typography") || lower.includes("bo góc")) {
+    return [
+      "Xem mã màu Figma Token",
+      "Kiểm tra độ tương phản WCAG AA",
+      "Tạo file tokens.json",
+    ]
+  }
+
+  // 3. Nếu là về eKYC / Sinh trắc học / Nhận diện CCCD / NFC
+  if (lower.includes("ekyc") || lower.includes("sinh trắc") || lower.includes("cccd") || lower.includes("nfc") || lower.includes("khuôn mặt")) {
+    return [
+      "Chi tiết màn hình chụp CCCD",
+      "Quy tắc xử lý lỗi khuôn mặt",
+      "Bổ sung edge cases mạng yếu",
+    ]
+  }
+
+  // 4. Nếu là về PO Pending / Deadline / Trễ hạn / SLA
+  if (lower.includes("po pending") || lower.includes("quá hạn") || lower.includes("sla 24h") || lower.includes("chậm tiến độ") || lower.includes("đôn đốc")) {
+    return [
+      "Lọc bài toán quá hạn SLA 24h",
+      "Soạn tin nhắn đôn đốc PO",
+      "Xem báo cáo tải theo Designer",
+    ]
+  }
+
+  // 5. Nếu là về Bảng biểu / Table / Thống kê số liệu
+  if (lower.includes("```chart") || (lower.includes("|") && lower.includes("---")) || lower.includes("thống kê") || lower.includes("phân bổ tải")) {
+    return [
+      "Xuất bảng ra file TSV/Excel",
+      "Lọc các mục cần ưu tiên xử lý",
+      "So sánh chỉ số theo từng tháng",
+    ]
+  }
+
+  // 6. Nếu là về IA / Wireframe / SenTopo / Kiến trúc thông tin
+  if (lower.includes("sentopo") || lower.includes("wireframe") || lower.includes("sitemap") || lower.includes("kiến trúc thông tin") || lower.includes("user journey")) {
+    return [
+      "Mở công cụ sơ đồ SenTopo",
+      "Phân tích User Journey chi tiết",
+      "Checklist nghiệm thu Khâu 4",
+    ]
+  }
+
+  // 7. Khâu chuyên biệt trong 7 khâu UX MBBank
+  if (lower.includes("khâu 1") || lower.includes("tiếp nhận đề bài") || lower.includes("backlog")) {
+    return ["Kế hoạch phỏng vấn người dùng", "Đánh giá mức độ ưu tiên Backlog"]
+  }
+  if (lower.includes("khâu 2") || lower.includes("scoping") || lower.includes("sizing")) {
+    return ["Xác định sizing S/M/L/XL", "Biên bản PO Alignment"]
+  }
+  if (lower.includes("khâu 3") || lower.includes("discovery") || lower.includes("nghiên cứu")) {
+    return ["Lập sơ đồ Customer Journey", "Viết Problem Statement"]
+  }
+  if (lower.includes("khâu 4") || lower.includes("wireframe")) {
+    return ["Vẽ luồng User Flow chi tiết", "Bộ Wireframe độ trung thực thấp"]
+  }
+  if (lower.includes("khâu 5") || lower.includes("ui design") || lower.includes("giao diện")) {
+    return ["Kiểm tra đủ 4 trạng thái UI", "Áp dụng token Design System v3.0"]
+  }
+  if (lower.includes("khâu 6") || lower.includes("usability") || lower.includes("po nghiệm thu")) {
+    return ["Kịch bản Usability Testing", "Biên bản nghiệm thu PO Sign-off"]
+  }
+  if (lower.includes("khâu 7") || lower.includes("handoff") || lower.includes("uat") || lower.includes("bàn giao")) {
+    return ["Xuất tài liệu bàn giao Dev", "Kế hoạch kiểm thử UAT"]
+  }
+
+  // 8. Sản phẩm số ngân hàng (Vay, Thẻ, Tiết kiệm, Tài khoản, Chuyển tiền)
+  if (lower.includes("gói vay") || lower.includes("khoản vay")) {
+    return ["Xem quy chuẩn UI gói vay", "Quy tắc hiển thị lãi suất", "Tối ưu form nhập liệu 1 chạm"]
+  }
+  if (lower.includes("thẻ tín dụng") || lower.includes("mở thẻ")) {
+    return ["Flow kích hoạt thẻ ảo", "Quy chuẩn hiển thị hạn mức", "Microcopy hướng dẫn bảo mật"]
+  }
+  if (lower.includes("tiết kiệm") || lower.includes("tiền gửi")) {
+    return ["Bảng tính lãi suất dự kiến", "Flow tất toán trước hạn", "Checklist UI khâu onboarding"]
+  }
+
+  // 9. Code / JSON / API
+  if (lower.includes("```json") || lower.includes("```typescript") || lower.includes("```javascript")) {
+    return [
+      "Tạo mock data kiểm thử",
+      "Bổ sung kiểm tra validation",
+      "Tối ưu cấu trúc đối tượng",
+    ]
+  }
+
+  // 10. Trích xuất mã bài toán cụ thể nếu có
+  const reqMatch = text.match(/\[?((?:REQ|TASK|MB)-\d+)\]?/i)
+  if (reqMatch) {
+    return [
+      `Xem chi tiết bài toán ${reqMatch[1]}`,
+      `Liên hệ Designer phụ trách ${reqMatch[1]}`,
+      "Checklist nghiệm thu bài toán",
+    ]
+  }
+
+  // 11. Release notes / Changelog demo fallback
+  if (lower.includes("excess over july") || lower.includes("release-notes")) {
+    return ["Shorten to two lines", "Add the retry window"]
+  }
+
+  // Default fallback linh hoạt, đa dạng
+  return [
+    "Phân tích rủi ro tiềm ẩn",
+    "Tóm tắt 3 điểm trọng tâm",
+    "Gợi ý các bước triển khai tiếp theo",
+  ]
+}
+
 const EchoMessageRow = React.memo(function EchoMessageRow({
   message,
   isCopied,
@@ -5311,14 +5429,17 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
       }
     }
 
-    // 2. Trích xuất khối Follow-up Suggestions nếu có (từ thẻ ```suggestions hoặc :::suggestions)
+    // 2. Trích xuất khối Follow-up Suggestions nếu có (từ thẻ ```suggestions, ```quick_prompts, :::suggestions)
     let parsedSuggestions: string[] = []
-    const sugMatch = workingText.match(/```suggestions\n([\s\S]*?)```/) || workingText.match(/:::suggestions\n([\s\S]*?):::/)
+    const sugMatch =
+      workingText.match(/```(?:suggestions?|quick_prompts?|follow_ups?)\s*\n([\s\S]*?)```/i) ||
+      workingText.match(/(?:::|~~~)(?:suggestions?|quick_prompts?|follow_ups?)\s*\n([\s\S]*?)(?:::|~~~)/i)
     if (sugMatch) {
       parsedSuggestions = sugMatch[1]
         .split("\n")
-        .map((s) => s.trim().replace(/^[-*]\s*/, ""))
-        .filter(Boolean)
+        .map((s) => s.trim().replace(/^[-*•\d\.\)]+\s*/, ""))
+        .filter((s) => s.length > 0 && s.length < 100)
+        .slice(0, 3)
       workingText = workingText.replace(sugMatch[0], "").trim()
     }
 
@@ -5342,16 +5463,12 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
       ]
     }
 
-    // 4. Nếu chưa có suggestions và không đang stream, tự động tạo 2 suggestions thông minh theo ngữ cảnh (Screenshot 1)
+    // 4. Nếu chưa có suggestions và không đang stream, tự động tạo suggestions thông minh theo chủ đề
     if (parsedSuggestions.length === 0 && !isStreaming) {
-      if (workingText.toLowerCase().includes("excess over july") || workingText.toLowerCase().includes("seat reductions") || workingText.toLowerCase().includes("retry")) {
-        parsedSuggestions = ["Shorten to two lines", "Add the retry window"]
-      } else if (workingText.toLowerCase().includes("ekyc") || workingText.toLowerCase().includes("khâu")) {
-        parsedSuggestions = ["Rút ngắn còn 2 dòng", "Phân tích chi tiết rủi ro", "Xuất checklist nghiệm thu"]
-      } else if (workingText.toLowerCase().includes("po pending") || workingText.toLowerCase().includes("deadline")) {
-        parsedSuggestions = ["Đôn đốc PO phụ trách", "Xem bài toán quá hạn 48h"]
-      } else if (actionData) {
+      if (actionData) {
         parsedSuggestions = ["Kiểm tra lịch trống", "Xem chi tiết người tham gia"]
+      } else {
+        parsedSuggestions = extractSmartContextualSuggestions(raw)
       }
     }
 
@@ -5583,23 +5700,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         })}
 
         {/* Khối Action Card nếu có (Screenshot 3) */}
-        {actionData && (
-          <EchoActionCard
-            data={actionData}
-            tasks={tasks}
-            onOpenTask={onOpenTask}
-          />
-        )}
-
-        {/* Khối Task Update Card — AI đề xuất cập nhật trạng thái task */}
-        {taskUpdateData && taskUpdateData.request_id && (
-          <EchoTaskUpdateCard
-            data={taskUpdateData}
-            tasks={tasks}
-            onOpenTask={onOpenTask}
-            onSendSuggestion={onSendSuggestion}
-          />
-        )}
+        {/* Action/task_update blocks are intentionally not rendered in read-only chat mode. */}
 
         {/* Khối Referenced Documents nếu có (Screenshot 4) */}
         {referencedDocs.length > 0 && (

@@ -13,6 +13,15 @@ export const config = {
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+const ALLOWED_MODELS = new Set([
+  DEFAULT_MODEL,
+  "google/gemini-2.0-flash-001",
+  "qwen/qwen3.8-27b:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+])
+const MAX_MESSAGES = 40
+const MAX_REQUEST_CHARS = 120_000
+const MAX_OUTPUT_TOKENS = 4_096
 const DEFAULT_GAS_URL =
   "https://script.google.com/macros/s/AKfycbyz4_GK_guUx9L6uaRd4vK5jqJwG60eLr8Xju3j2hcEUianS8873cp4fJe8BBBrilKQ/exec"
 
@@ -124,9 +133,11 @@ export async function verifySessionToken(token: string | null | undefined): Prom
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 4000) // 4 giây timeout
 
-    const checkUrl = `${gasUrl}?action=check_session&session_token=${encodeURIComponent(clean)}`
-    const res = await fetch(checkUrl, {
-      method: "GET",
+    // Keep the bearer credential out of URLs, browser history and proxy logs.
+    const res = await fetch(gasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "check_session", session_token: clean }),
       signal: ctrl.signal,
     })
     clearTimeout(timer)
@@ -189,6 +200,41 @@ export function checkRateLimit(
   }
 }
 
+async function hashIdentifier(identifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identifier))
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
+async function checkDistributedRateLimit(identifier: string): Promise<{
+  configured: boolean
+  allowed: boolean
+  remaining: number
+  retryAfterSeconds: number
+}> {
+  const redisUrl = getEnv("UPSTASH_REDIS_REST_URL")?.replace(/\/$/, "")
+  const redisToken = getEnv("UPSTASH_REDIS_REST_TOKEN")
+  if (!redisUrl || !redisToken) {
+    return { configured: false, allowed: false, remaining: 0, retryAfterSeconds: 60 }
+  }
+
+  const bucket = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS)
+  const key = `ai-rate:${await hashIdentifier(identifier)}:${bucket}`
+  const response = await fetch(`${redisUrl}/pipeline`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${redisToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify([["INCR", key], ["EXPIRE", key, "120"]]),
+  })
+  if (!response.ok) throw new Error("RATE_LIMIT_STORE_UNAVAILABLE")
+  const result = await response.json() as Array<{ result?: number }>
+  const count = Number(result?.[0]?.result || 0)
+  return {
+    configured: true,
+    allowed: count > 0 && count <= RATE_LIMIT_MAX_REQUESTS,
+    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - count),
+    retryAfterSeconds: Math.max(1, Math.ceil((RATE_LIMIT_WINDOW_MS - (Date.now() % RATE_LIMIT_WINDOW_MS)) / 1000)),
+  }
+}
+
 /**
  * Reset bộ đếm rate limit (dành cho kiểm thử)
  */
@@ -201,7 +247,7 @@ export function resetRateLimitMap(): void {
  */
 function buildKeyPool(): string[] {
   const pool: string[] = []
-  const envKey = getEnv("OPENROUTER_API_KEY") || getEnv("VITE_OPENROUTER_API_KEY")
+  const envKey = getEnv("OPENROUTER_API_KEY")
   if (envKey) {
     envKey.split(",").forEach((k: string) => {
       const clean = k.trim()
@@ -215,6 +261,13 @@ function buildKeyPool(): string[] {
 export default async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get("origin")
   const corsHeaders = getCorsHeaders(origin)
+
+  if (origin && !isAllowedOrigin(origin)) {
+    return new Response(JSON.stringify({ success: false, error: { message: "Origin không được phép." } }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
 
   // 1. Handle CORS Preflight
   if (req.method === "OPTIONS") {
@@ -254,6 +307,14 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    const contentLength = Number(req.headers.get("content-length") || 0)
+    if (contentLength > MAX_REQUEST_CHARS) {
+      return new Response(
+        JSON.stringify({ success: false, error: { message: "Yêu cầu vượt giới hạn dữ liệu cho phép." } }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
     // 3. Caller Authentication
     const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || ""
     let sessionToken: string | null = null
@@ -261,7 +322,10 @@ export default async function handler(req: Request): Promise<Response> {
       sessionToken = authHeader.slice(7).trim()
     }
 
-    const authRequired = getEnv("AI_GATEWAY_AUTH_REQUIRED") === "true"
+    const runtimeEnv = (getEnv("VERCEL_ENV") || getEnv("NODE_ENV") || "production").toLowerCase()
+    const allowUnauthenticatedDev =
+      runtimeEnv !== "production" && getEnv("ALLOW_UNAUTHENTICATED_AI_DEV") === "true"
+    const authRequired = !allowUnauthenticatedDev
 
     if (authRequired) {
       if (!sessionToken) {
@@ -323,7 +387,25 @@ export default async function handler(req: Request): Promise<Response> {
       sessionToken && validateSessionToken(sessionToken)
         ? `session:${sessionToken}`
         : `ip:${clientIp}`
-    const rateLimit = checkRateLimit(rateLimitIdentifier)
+    let rateLimit: { configured?: boolean; allowed: boolean; remaining: number; retryAfterSeconds: number }
+    if (runtimeEnv === "production") {
+      try {
+        rateLimit = await checkDistributedRateLimit(rateLimitIdentifier)
+      } catch {
+        return new Response(
+          JSON.stringify({ success: false, error: { message: "Không thể xác minh giới hạn truy cập AI. Vui lòng thử lại sau." } }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+      if (!rateLimit.configured) {
+        return new Response(
+          JSON.stringify({ success: false, error: { message: "Kho giới hạn truy cập AI chưa được cấu hình trên máy chủ." } }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+    } else {
+      rateLimit = checkRateLimit(rateLimitIdentifier)
+    }
 
     if (!rateLimit.allowed) {
       return new Response(
@@ -375,7 +457,7 @@ export default async function handler(req: Request): Promise<Response> {
       max_tokens = 1024,
     } = body
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
       return new Response(
         JSON.stringify({
           error: { message: "Missing or invalid 'messages' array in request body." },
@@ -385,11 +467,37 @@ export default async function handler(req: Request): Promise<Response> {
       )
     }
 
+    const normalizedMessages = messages.map((message: any) => ({
+      role: message?.role,
+      content: message?.content,
+    }))
+    const serializedMessages = JSON.stringify(normalizedMessages)
+    const hasInvalidMessage = normalizedMessages.some((message: any) =>
+      !["system", "user", "assistant"].includes(message.role) ||
+      !(typeof message.content === "string" || Array.isArray(message.content))
+    )
+    if (hasInvalidMessage || serializedMessages.length > MAX_REQUEST_CHARS) {
+      return new Response(
+        JSON.stringify({ success: false, error: { message: "Nội dung hội thoại không hợp lệ hoặc vượt giới hạn." } }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
+    const requestedModel = String(model || DEFAULT_MODEL).trim()
+    if (!ALLOWED_MODELS.has(requestedModel)) {
+      return new Response(
+        JSON.stringify({ success: false, error: { message: "Model không nằm trong danh sách được quản trị cho phép." } }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+    const safeTemperature = Math.min(1, Math.max(0, Number(temperature) || 0.25))
+    const safeMaxTokens = Math.min(MAX_OUTPUT_TOKENS, Math.max(64, Number(max_tokens) || 1024))
+
     const openRouterPayload = {
-      model,
+      model: requestedModel,
       models: Array.from(
         new Set([
-          model,
+          requestedModel,
           "google/gemma-4-31b-it:free",
           "qwen/qwen3.8-27b:free",
           "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -397,10 +505,10 @@ export default async function handler(req: Request): Promise<Response> {
         ])
       ),
       route: "fallback",
-      messages,
+      messages: normalizedMessages,
       stream: Boolean(stream),
-      temperature,
-      max_tokens,
+      temperature: safeTemperature,
+      max_tokens: safeMaxTokens,
     }
 
     // 7. Key Rotation Execution

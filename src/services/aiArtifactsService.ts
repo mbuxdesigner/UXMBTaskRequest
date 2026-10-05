@@ -24,6 +24,10 @@ export interface UXArtifact {
   driveThumbnailUrl?: string
   driveDownloadUrl?: string
   uploadedBy?: string
+  approvalStatus?: "draft" | "approved" | "retired"
+  version?: string
+  effectiveDate?: string
+  owner?: string
 }
 
 const STORAGE_ARTIFACTS_KEY = "ux_mb_ai_artifacts"

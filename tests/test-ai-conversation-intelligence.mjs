@@ -132,7 +132,7 @@ test("Grounding tự thêm nguồn task và tài liệu", () => {
     taskIds: ["UXMB-101"],
     documentNames: ["Quy trình 7 Khâu.md"],
   })
-  assert.match(result.content, /Nguồn đã dùng/)
+  assert.match(result.content, /Nguồn tham chiếu đã nạp/)
   assert.match(result.content, /UXMB-101/)
   assert.match(result.content, /Quy trình 7 Khâu\.md/)
 })

@@ -248,26 +248,9 @@ function doGet(e) {
     }
 
     if (action === "get_requests") {
-      const isTest = e.parameter.env === "preview" || 
-                     e.parameter.env === "development" || 
-                     e.parameter.client_environment === "preview" || 
-                     e.parameter.client_environment === "development" || 
-                     e.parameter.is_test === "true";
-      const sessionToken = e.parameter && e.parameter.session_token;
-      let callerUser = null;
-      if (sessionToken) {
-        try {
-          const ss = SpreadsheetApp.getActiveSpreadsheet();
-          callerUser = findUserBySessionToken(ss, sessionToken);
-        } catch (ue) {}
-      }
-      const requests = getAllRequestsFromSheet(isTest, callerUser);
       return createJsonResponse({
-        status: "success",
-        requests: requests,
-        nickname_persistence_version: 1,
-        client_environment: isTest ? "preview" : "production",
-        timestamp: new Date().toISOString()
+        status: "forbidden",
+        message: "Không hỗ trợ tải task qua GET. Vui lòng dùng phiên POST đã xác thực."
       });
     }
 
@@ -408,7 +391,10 @@ function doGet(e) {
     }
 
     if (action === "get_chat_threads") {
-      return handleGetChatThreads(e ? (e.parameter || {}) : {});
+      return createJsonResponse({
+        status: "forbidden",
+        message: "Không hỗ trợ tải lịch sử chat qua GET. Vui lòng dùng phiên POST đã xác thực."
+      });
     }
 
     return createJsonResponse({ status: "error", message: "Unknown action: " + action });
@@ -442,6 +428,10 @@ function doPost(e) {
     // 2. ACTION: REQUEST OTP
     if (action === "request_otp") {
       return handleRequestOtpFast(data);
+    }
+
+    if (action === "get_requests") {
+      return handleGetRequestsSecure(data);
     }
 
     // 3. ACTION: UPDATE TASK PROGRESS
@@ -1810,9 +1800,92 @@ function handleUpdateTaskProgress(data) {
   });
 }
 
+function handleGetRequestsSecure(data) {
+  const sessionToken = String((data && data.session_token) || "").trim();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const callerUser = findUserBySessionToken(ss, sessionToken);
+  if (!callerUser) {
+    return createJsonResponse({
+      status: "unauthorized",
+      message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
+    });
+  }
+
+  const isTest = data.env === "preview" ||
+    data.env === "development" ||
+    data.client_environment === "preview" ||
+    data.client_environment === "development" ||
+    data.is_test === true ||
+    data.is_test === "true";
+  const requests = getAllRequestsFromSheet(isTest, callerUser);
+  return createJsonResponse({
+    status: "success",
+    requests: requests,
+    nickname_persistence_version: 1,
+    client_environment: isTest ? "preview" : "production",
+    timestamp: new Date().toISOString()
+  });
+}
+
+function normalizeAccessValue_(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
+
+function taskMatchesUserIdentity_(task, callerUser, fields) {
+  const emails = [callerUser.teamsEmail, callerUser.personalEmail]
+    .map(function (value) { return String(value || "").toLowerCase().trim(); })
+    .filter(Boolean);
+  const prefixes = emails.map(function (email) { return email.split("@")[0]; });
+  const names = [callerUser.displayName].map(normalizeAccessValue_).filter(Boolean);
+  const rawCandidates = [];
+  fields.forEach(function (field) {
+    const value = task && task[field];
+    if (Array.isArray(value)) rawCandidates.push.apply(rawCandidates, value);
+    else if (value) rawCandidates.push(value);
+  });
+
+  return rawCandidates.some(function (candidate) {
+    const raw = String(candidate || "").toLowerCase().trim();
+    const normalized = normalizeAccessValue_(candidate);
+    if (!raw) return false;
+    if (emails.some(function (email) { return raw === email || raw.indexOf(email) !== -1; })) return true;
+    if (prefixes.some(function (prefix) {
+      return raw === prefix || raw.indexOf(prefix + "@") !== -1 || raw.indexOf(" " + prefix) !== -1;
+    })) return true;
+    return names.some(function (name) { return normalized === name; });
+  });
+}
+
+function filterRequestsForCaller_(requests, callerUser) {
+  if (!callerUser) return [];
+  const role = String(callerUser.role || "").trim();
+  if (role === "Admin" || role === "Design Owner") return requests;
+
+  return requests.filter(function (task) {
+    if (taskMatchesUserIdentity_(task, callerUser, ["viewers", "watchers"])) return true;
+    if (role === "Designer") {
+      return taskMatchesUserIdentity_(task, callerUser, [
+        "assigned_designer", "assigned_designer_name", "assignee", "ux_owner"
+      ]);
+    }
+    if (role === "PO" || role === "Business") {
+      return taskMatchesUserIdentity_(task, callerUser, [
+        "requester_email", "requester_name", "created_by", "created_by_email", "author", "creator"
+      ]);
+    }
+    return false;
+  });
+}
+
 /**
- * Đọc toàn bộ danh sách yêu cầu từ RAW_TASKS (hoặc RAW_TASKS_TEST nếu isTest)
- * Hỗ trợ che giấu thông tin nhạy cảm giữa các Squad (Item 14) khi callerUser là PO/Business
+ * Đọc danh sách yêu cầu từ RAW_TASKS (hoặc RAW_TASKS_TEST nếu isTest).
+ * Khi có callerUser, dữ liệu được lọc quyền ngay tại backend trước khi trả về client.
  */
 function getAllRequestsFromSheet(isTest) {
   const callerUser = arguments.length > 1 ? arguments[1] : null;
@@ -1909,33 +1982,8 @@ function getAllRequestsFromSheet(isTest) {
     } catch (e) {}
   }
 
-  // Item 14: Sensitive Data Masking for non-Admin/non-Designer (PO, Business)
-  const callerRole = callerUser ? String(callerUser.role || "").trim() : "";
-  const callerEmail = callerUser ? String(callerUser.teamsEmail || callerUser.personalEmail || "").trim().toLowerCase() : "";
-  const callerSquad = callerUser ? String(callerUser.squad || "").trim().toLowerCase() : "";
-
-  if (callerUser && (callerRole === "PO" || callerRole === "Business")) {
-    for (let r = 0; r < requests.length; r++) {
-      const item = requests[r];
-      const itemRequester = String(item.requester_email || "").trim().toLowerCase();
-      const itemSquad = String(item.squad_name || item.preferred_squad || "").trim().toLowerCase();
-      const isMySquad = Boolean(callerSquad && itemSquad && (itemSquad.includes(callerSquad) || callerSquad.includes(itemSquad)));
-      const isMyRequest = Boolean(callerEmail && itemRequester === callerEmail);
-
-      if (!isMySquad && !isMyRequest) {
-        // Mask confidential strategic information from other squads
-        item.title = "[Confidential - Restricted Squad]";
-        item.description = "[Confidential - Restricted Squad]";
-        if (item.brief) item.brief = "[Confidential - Restricted Squad]";
-        if (item.user_problem) item.user_problem = "[Confidential - Restricted Squad]";
-        if (item.business_need) item.business_need = "[Confidential - Restricted Squad]";
-        if (item.problem) item.problem = "[Confidential - Restricted Squad]";
-        if (item.target_user) item.target_user = "[Confidential - Restricted Squad]";
-      }
-    }
-  }
-
-  return requests.reverse();
+  const scopedRequests = callerUser ? filterRequestsForCaller_(requests, callerUser) : requests;
+  return scopedRequests.reverse();
 }
 
 /**
@@ -3668,13 +3716,24 @@ function initDriveFolderStructure() {
  */
 function handleUploadFile(data) {
   try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const user = findUserBySessionToken(ss, String(data.session_token || "").trim());
+    if (!user) return createJsonResponse({ status: "unauthorized", message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." });
+    const csrfResult = validateCsrfToken(data, user);
+    if (!csrfResult.valid) return createJsonResponse({ status: "forbidden", message: csrfResult.message });
+
     const base64Data = data.base64Data || data.base64;
-    const fileName = String(data.fileName || ("attachment_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss"))).trim();
+    const fileName = String(data.fileName || ("attachment_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss")))
+      .replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_").trim().slice(0, 180);
     const mimeType = String(data.mimeType || "application/octet-stream").trim().toLowerCase();
     const folderName = data.folderName || "04_Task_Attachments";
 
     if (!base64Data) {
       return createJsonResponse({ status: "error", message: "Thiếu dữ liệu tệp Base64 (base64Data)." });
+    }
+    const allowedFolders = ["02_AI_Documents_Artifacts", "03_Event_Photos_Media", "04_Task_Attachments"];
+    if (allowedFolders.indexOf(String(folderName)) === -1) {
+      return createJsonResponse({ status: "forbidden", message: "Thư mục tải lên không hợp lệ." });
     }
 
     // 1. Kiểm tra kích thước payload (giới hạn tối đa 35MB base64 ~ 25MB file gốc)
@@ -3732,14 +3791,10 @@ function handleUploadFile(data) {
     const blob = Utilities.newBlob(decoded, mimeType, fileName);
     const file = folder.createFile(blob);
 
-    // Cấp quyền xem trong nội bộ domain MB (DOMAIN_WITH_LINK)
+    // Chỉ cấp quyền xem trong nội bộ domain MB; tuyệt đối không fallback public link.
     try {
       file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (e) {
-      try {
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (err) {}
-    }
+    } catch (e) {}
 
     const fileId = file.getId();
     const previewUrl = "https://drive.google.com/file/d/" + fileId + "/view";
@@ -3783,6 +3838,12 @@ function handleUploadFile(data) {
  */
 function handleUploadAvatar(data) {
   try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const user = findUserBySessionToken(ss, String(data.session_token || "").trim());
+    if (!user) return createJsonResponse({ status: "unauthorized", message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." });
+    const csrfResult = validateCsrfToken(data, user);
+    if (!csrfResult.valid) return createJsonResponse({ status: "forbidden", message: csrfResult.message });
+
     const base64Data = data.base64Data || data.base64;
     const email = String(data.email || data.teamsEmail || data.personalEmail || "").trim().toLowerCase();
     const fileName = "avatar_" + (email ? email.replace(/[^a-zA-Z0-9]/g, "_") : "user") + "_" + Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyyMMdd_HHmmss") + ".jpg";
@@ -3790,6 +3851,13 @@ function handleUploadAvatar(data) {
 
     if (!base64Data) {
       return createJsonResponse({ status: "error", message: "Thiếu dữ liệu ảnh Avatar (base64Data)." });
+    }
+    const allowedEmails = [user.teamsEmail, user.personalEmail].map(function (value) { return String(value || "").trim().toLowerCase(); });
+    if (String(user.role || "") !== "Admin" && allowedEmails.indexOf(email) === -1) {
+      return createJsonResponse({ status: "forbidden", message: "Không có quyền cập nhật avatar của tài khoản khác." });
+    }
+    if (String(base64Data).length > 8000000 || !/^image\/(png|jpeg|webp)$/.test(String(mimeType).toLowerCase())) {
+      return createJsonResponse({ status: "forbidden", message: "Ảnh avatar không hợp lệ hoặc vượt giới hạn kích thước." });
     }
 
     // 1. Lấy Folder 05_User_Avatars theo quy hoạch chuẩn
@@ -3800,9 +3868,7 @@ function handleUploadAvatar(data) {
     const blob = Utilities.newBlob(decoded, mimeType, fileName);
     const file = folder.createFile(blob);
 
-    try {
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (e) {}
+    try { file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
 
     const fileId = file.getId();
     // Link ảnh trực tiếp
@@ -4901,18 +4967,85 @@ function handleGetUnifiedOperationalData(data) {
 /**
  * Lưu các đoạn chat của người dùng vào Google Drive & ghi log từng tin nhắn vào Sheet AI_CHAT_MESSAGES
  */
+function getAuthenticatedChatIdentity_(data, requireCsrf) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sessionToken = String((data && data.session_token) || "").trim();
+  const user = findUserBySessionToken(ss, sessionToken);
+  if (!user) {
+    return { ok: false, status: "unauthorized", message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." };
+  }
+  if (requireCsrf) {
+    const csrfResult = validateCsrfToken(data, user);
+    if (!csrfResult.valid) {
+      return { ok: false, status: "forbidden", message: csrfResult.message };
+    }
+  }
+
+  const allowedEmails = [user.teamsEmail, user.personalEmail]
+    .map(function (email) { return String(email || "").trim().toLowerCase(); })
+    .filter(Boolean);
+  const requestedEmail = String(data.user_email || data.userEmail || "").trim().toLowerCase();
+  if (requestedEmail && allowedEmails.indexOf(requestedEmail) === -1) {
+    return { ok: false, status: "forbidden", message: "Không có quyền truy cập lịch sử chat của tài khoản khác." };
+  }
+  const ownerEmail = allowedEmails[0] || "";
+  if (!ownerEmail) {
+    return { ok: false, status: "forbidden", message: "Tài khoản chưa có email định danh hợp lệ." };
+  }
+  return { ok: true, user: user, ownerEmail: ownerEmail };
+}
+
+function sanitizeChatThreadsForStorage_(threads) {
+  if (!Array.isArray(threads)) return [];
+  return threads.slice(0, 100).map(function (thread) {
+    const messages = Array.isArray(thread && thread.messages) ? thread.messages : [];
+    return {
+      id: String((thread && thread.id) || "").slice(0, 200),
+      title: String((thread && thread.title) || "Cuộc trò chuyện").slice(0, 300),
+      createdAt: String((thread && thread.createdAt) || "").slice(0, 80),
+      updatedAt: String((thread && thread.updatedAt) || "").slice(0, 80),
+      isPinned: Boolean(thread && thread.isPinned),
+      messages: messages.slice(-200).map(function (message) {
+        const content = String((message && message.content) || "").slice(0, 49000);
+        return {
+          id: String((message && message.id) || "").slice(0, 200),
+          role: message && message.role === "assistant" ? "assistant" : "user",
+          content: content,
+          timestamp: String((message && message.timestamp) || "").slice(0, 80),
+          modelUsed: String((message && message.modelUsed) || "").slice(0, 160),
+          feedback: message && (message.feedback === "up" || message.feedback === "down") ? message.feedback : undefined,
+          attachedArtifactName: String((message && message.attachedArtifactName) || "").slice(0, 300)
+        };
+      })
+    };
+  });
+}
+
+function getPrivateChatHistoryFolder_() {
+  const folderName = "UXMB_AI_Chat_History_Private";
+  const folders = DriveApp.getFoldersByName(folderName);
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  try { folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); } catch (sharingErr) {}
+  return folder;
+}
+
 function handleSaveChatThreads(data) {
   try {
-    const rawEmail = String(data.user_email || data.userEmail || "").trim().toLowerCase();
-    if (!rawEmail) {
-      return createJsonResponse({ status: "error", message: "Thiếu email người dùng (user_email)." });
+    const identity = getAuthenticatedChatIdentity_(data, true);
+    if (!identity.ok) {
+      return createJsonResponse({ status: identity.status, message: identity.message });
     }
+    const rawEmail = identity.ownerEmail;
     const safeEmail = rawEmail.replace(/[^a-zA-Z0-9@._-]/g, "_");
-    const threads = data.threads || [];
-    const threadsJson = typeof threads === "string" ? threads : JSON.stringify(threads);
+    const rawThreads = typeof data.threads === "string" ? JSON.parse(data.threads || "[]") : data.threads;
+    const threads = sanitizeChatThreadsForStorage_(rawThreads);
+    const threadsJson = JSON.stringify(threads);
+    if (threadsJson.length > 2000000) {
+      return createJsonResponse({ status: "error", message: "Lịch sử chat vượt giới hạn lưu trữ an toàn 2 MB." });
+    }
 
-    // Lưu vào thư mục 01_AI_Chat_History theo quy hoạch chuẩn
-    const folder = getTargetDriveFolder("01_AI_Chat_History");
+    // Chat là dữ liệu cá nhân: lưu trong folder riêng tư, không kế thừa link sharing của kho tài liệu.
+    const folder = getPrivateChatHistoryFolder_();
 
     const fileName = "chat_threads_" + safeEmail + ".json";
     let files = folder.getFilesByName(fileName);
@@ -4922,12 +5055,8 @@ function handleSaveChatThreads(data) {
       file.setContent(threadsJson);
     } else {
       file = folder.createFile(fileName, threadsJson, "application/json");
-      try {
-        file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (e) {
-        try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}
-      }
     }
+    try { file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); } catch (sharingErr) {}
 
     // Ghi chi tiết từng tin nhắn (đầy đủ nội dung câu hỏi/trả lời) vào Sheet AI_CHAT_MESSAGES
     let messageLogStats = null;
@@ -4935,7 +5064,7 @@ function handleSaveChatThreads(data) {
       const parsedForLog = Array.isArray(threads) ? threads : JSON.parse(threadsJson || "[]");
       messageLogStats = syncChatMessagesLogSheet_(
         rawEmail,
-        String(data.user_name || data.displayName || rawEmail.split("@")[0]),
+        String(identity.user.displayName || rawEmail.split("@")[0]),
         parsedForLog
       );
     } catch (logErr) {
@@ -5065,28 +5194,16 @@ function syncChatMessagesLogSheet_(email, displayName, threads) {
  */
 function handleGetChatThreads(data) {
   try {
-    const rawEmail = String(data.user_email || data.userEmail || "").trim().toLowerCase();
-    if (!rawEmail) {
-      return createJsonResponse({ status: "error", message: "Thiếu email người dùng (user_email)." });
+    const identity = getAuthenticatedChatIdentity_(data, false);
+    if (!identity.ok) {
+      return createJsonResponse({ status: identity.status, message: identity.message });
     }
+    const rawEmail = identity.ownerEmail;
     const safeEmail = rawEmail.replace(/[^a-zA-Z0-9@._-]/g, "_");
     
-    // Tìm trong thư mục quy hoạch chuẩn 01_AI_Chat_History
-    const folder = getTargetDriveFolder("01_AI_Chat_History");
+    const folder = getPrivateChatHistoryFolder_();
     const fileName = "chat_threads_" + safeEmail + ".json";
     let files = folder.getFilesByName(fileName);
-
-    // Fallback tìm trong thư mục cũ nếu chưa migrate
-    if (!files.hasNext()) {
-      const legacyFolders = DriveApp.getFoldersByName("UX_AI_Chat_History");
-      if (legacyFolders.hasNext()) {
-        const legacyFolder = legacyFolders.next();
-        const legacyFiles = legacyFolder.getFilesByName(fileName);
-        if (legacyFiles.hasNext()) {
-          files = legacyFiles;
-        }
-      }
-    }
 
     if (!files.hasNext()) {
       return createJsonResponse({ status: "success", threads: [], message: "Chưa có lịch sử chat trên Drive." });

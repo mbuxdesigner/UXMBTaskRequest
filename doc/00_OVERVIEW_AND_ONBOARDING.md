@@ -16,6 +16,8 @@ Deploy App/doc/
 ├── 🚀 GIT_WORKFLOW_VERCEL_PIPELINE.md            <-- QUY TRÌNH DEPLOY VERCEL: Tách nhánh develop/main, Zero-Downtime, Cô lập Sheet test
 ├── 🛡️ CLOUDFLARE_HARDENING_GUIDE.md             <-- CẨM NANG BẢO VỆ HẠ TẦNG: Cloudflare WAF, Bot Fight Mode, DNS an toàn
 ├── 📄 AI_CHAT_ARTIFACT_FORMAT_GUIDE.md        <-- QUY CHUẨN FORMAT TÀI LIỆU NOTION: Bảng quy tắc Markdown, Bullet 3 tầng, Auto-bold nhãn
+├── 🔒 AI_CHAT_SECURITY_AND_DEPLOYMENT_RUNBOOK.md <-- RUNBOOK AI: Secrets phía server, Upstash, GAS, smoke test, rollback và incident
+├── ✅ AI_CHAT_UAT_AND_ACCEPTANCE_CHECKLIST.md   <-- CHECKLIST NGHIỆM THU AI: Task lookup, quy định, RBAC, grounding, UAT và sign-off
 ├── 🎨 UI_DESIGN_SYSTEM.md                        <-- TÀI LIỆU THIẾT KẾ TOÀN DIỆN: Tokens (#0F172A), Pills, Badges, ReUI Sonner Toast
 │
 ├── 📂 reports/                        <-- BÁO CÁO CẬP NHẬT HỆ THỐNG ĐỊNH KỲ:
@@ -35,7 +37,8 @@ Deploy App/doc/
 │   ├── 📋 2026-09-28_DAILY_UPDATE_REPORT.md  <-- Báo cáo Designer Planner, Schedule Meeting, AI briefing, right sheet và planned work date persistence
 │   ├── 📋 2026-09-30_DAILY_UPDATE_REPORT.md  <-- Báo cáo Chuẩn hóa ReUI Empty State (1 & 10), Tinh gọn UI Priority kéo thả, Executive Summary All-in-One 1 lần xuất toàn bộ & Sửa triệt để lỗi đơ luồng tóm tắt 4/4
 │   ├── 📋 2026-10-03_DAILY_UPDATE_REPORT.md  <-- Báo cáo Quy hoạch Google Drive, Dynamic Semantic Fallback Engine 7 kịch bản, Quy chuẩn đọc tài liệu Prompt
-│   └── 📋 2026-10-04_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 04/10: Audit AI Chats, Vá bảo mật Gateway & PII, Figma Copy Toolkit, Agentic Dynamic Router & Context Retrieval, Chuẩn hóa Persona Senior Designer
+│   ├── 📋 2026-10-04_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 04/10: Audit AI Chats, Vá bảo mật Gateway & PII, Figma Copy Toolkit, Agentic Dynamic Router & Context Retrieval, Chuẩn hóa Persona Senior Designer
+│   └── 🔐 2026-10-05_AI_CHATS_AUDIT_AND_HARDENING_REPORT.md <-- BÁO CÁO NGHIỆM THU: Gateway fail-closed, task RBAC, private chat, grounding, test evidence và residual risks
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
@@ -78,7 +81,7 @@ Deploy App/doc/
 │   │   └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, ReUI Empty State (1 & 10), Kéo thả task xếp ngày, Agent Activity Trace, Executive Summary All-in-One typewriter streaming & deep-link, KPI cá nhân, Right-Sheet, hoặc cấu hình lịch Admin.
 │   │
 │   └── 🤖 14_AI_CHATS_AND_INTELLIGENT_COPILOT.md
-│       └── Đọc khi: Sửa/Làm mới Trợ lý AI Copilot, Agent Activity Trace, Slash Commands (/), Hạn mức AI ngày, Kho UX Artifacts & Viewer tài liệu Notion-style, Quản trị Gemini/OpenRouter Gateway.
+│       └── Đọc khi: Sửa Trợ lý AI read-only tra cứu Task và Quy định, task grounding, approved artifacts, cloud sync, Mermaid, AI Gateway, Upstash hoặc GAS security.
 ```
 
 ---

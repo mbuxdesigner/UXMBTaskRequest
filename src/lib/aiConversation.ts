@@ -207,8 +207,8 @@ export function groundAIResponse(
     ...(sources.documentNames || []).map((name) => `“${name}”`),
   ].filter(Boolean)
   const uniqueSources = Array.from(new Set(sourceLabels))
-  if (uniqueSources.length > 0 && !/nguồn đã dùng\s*:/i.test(safeContent)) {
-    safeContent = `${safeContent.trim()}\n\n---\n**Nguồn đã dùng:** ${uniqueSources.join(", ")}`
+  if (uniqueSources.length > 0 && !/nguồn (?:đã dùng|tham chiếu đã nạp)\s*:/i.test(safeContent)) {
+    safeContent = `${safeContent.trim()}\n\n---\n**Nguồn tham chiếu đã nạp:** ${uniqueSources.join(", ")}`
   }
 
   return { content: safeContent, unknownTaskReferences }
