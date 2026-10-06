@@ -756,10 +756,77 @@ export function removeCustomAIKey(id: string): AIKeyEntry[] {
   return updated
 }
 
+export const STORAGE_CUSTOM_GEMINI_KEYS_POOL = "ux_portal_custom_gemini_keys_pool"
+
+export function getCustomGeminiKeysPool(): GeminiKeyEntry[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEYS_POOL)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+    const single = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY)
+    if (single) {
+      return [{
+        id: "gemini-primary",
+        key: single,
+        label: "Google Key chính",
+        status: "active",
+        createdAt: new Date().toISOString()
+      }]
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+export function saveCustomGeminiKeysPool(keys: GeminiKeyEntry[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEYS_POOL, JSON.stringify(keys))
+    if (keys.length > 0) {
+      localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEY, keys[0].key)
+    } else {
+      localStorage.removeItem(STORAGE_CUSTOM_GEMINI_KEY)
+    }
+  } catch {}
+}
+
+export function addCustomGeminiKey(rawKey: string, label: string = "Google Key"): GeminiKeyEntry[] {
+  const clean = rawKey.trim()
+  if (!clean) return getCustomGeminiKeysPool()
+  const current = getCustomGeminiKeysPool()
+  const exists = current.some(k => k.key === clean)
+  if (exists) return current
+  const newEntry: GeminiKeyEntry = {
+    id: "gkey-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+    key: clean,
+    label: label.trim() || `Google Key #${current.length + 1}`,
+    status: "active",
+    createdAt: new Date().toISOString()
+  }
+  const updated = [...current, newEntry]
+  saveCustomGeminiKeysPool(updated)
+  return updated
+}
+
+export function removeCustomGeminiKey(id: string): GeminiKeyEntry[] {
+  const current = getCustomGeminiKeysPool()
+  const updated = current.filter(k => k.id !== id)
+  saveCustomGeminiKeysPool(updated)
+  return updated
+}
+
 export function getCustomGeminiKey(): string {
   if (typeof window === "undefined") return ""
   try {
-    return localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY) || ""
+    const direct = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY)
+    if (direct) return direct
+    const pool = getCustomGeminiKeysPool()
+    if (pool.length > 0) return pool[0].key
+    return ""
   } catch {
     return ""
   }
@@ -771,6 +838,7 @@ export function saveCustomGeminiKey(key: string): void {
     const clean = key.trim()
     if (clean) {
       localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEY, clean)
+      addCustomGeminiKey(clean, "Google Key chính")
     } else {
       localStorage.removeItem(STORAGE_CUSTOM_GEMINI_KEY)
     }

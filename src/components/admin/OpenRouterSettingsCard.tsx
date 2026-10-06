@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react"
 import {
-  AlertCircle,
-  Check,
   CheckCircle2,
   ChevronDown,
   Code2,
@@ -30,9 +28,11 @@ import {
   getCustomAIKeysPool,
   addCustomAIKey,
   removeCustomAIKey,
-  getCustomGeminiKey,
-  saveCustomGeminiKey,
+  getCustomGeminiKeysPool,
+  addCustomGeminiKey,
+  removeCustomGeminiKey,
   type AIKeyEntry,
+  type GeminiKeyEntry,
 } from "@/services/aiService"
 
 interface OpenRouterSettingsCardProps {
@@ -74,17 +74,22 @@ const CURATED_FREE_MODELS = [
 export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRouterSettingsCardProps) {
   const [enabled, setEnabled] = useState(true)
   const [model, setModel] = useState("")
+
+  // OpenRouter Pool State
   const [keys, setKeys] = useState<AIKeyEntry[]>([])
   const [newKeyLabel, setNewKeyLabel] = useState("")
   const [newKeyInput, setNewKeyInput] = useState("")
-  const [geminiKeyInput, setGeminiKeyInput] = useState("")
-  const [savedGeminiKey, setSavedGeminiKey] = useState("")
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{
     success: boolean
     message: string
     latencyMs: number
   } | null>(null)
+
+  // Google AI Studio Pool State
+  const [geminiKeys, setGeminiKeys] = useState<GeminiKeyEntry[]>([])
+  const [newGeminiKeyLabel, setNewGeminiKeyLabel] = useState("")
+  const [newGeminiKeyInput, setNewGeminiKeyInput] = useState("")
   const [testingGemini, setTestingGemini] = useState(false)
   const [geminiTestResult, setGeminiTestResult] = useState<{
     success: boolean
@@ -96,9 +101,7 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
     setEnabled(isAIEnabled())
     setModel(getStoredAIModel())
     setKeys(getCustomAIKeysPool())
-    const gKey = getCustomGeminiKey()
-    setSavedGeminiKey(gKey)
-    setGeminiKeyInput(gKey)
+    setGeminiKeys(getCustomGeminiKeysPool())
   }, [])
 
   const handleSelectCuratedModel = (modelId: string, modelName: string) => {
@@ -107,6 +110,7 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
     toast.success(`Đã chọn model: ${modelName}`)
   }
 
+  // OpenRouter key pool handlers
   const handleAddKey = () => {
     if (!newKeyInput.trim()) {
       toast.error("Vui lòng nhập OpenRouter API Key!")
@@ -125,18 +129,32 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
     }
     const updated = removeCustomAIKey(id)
     setKeys(updated)
-    toast.success("Đã xóa API Key khỏi Rotation Pool.")
+    toast.success("Đã xóa OpenRouter API Key khỏi Rotation Pool.")
   }
 
-  const handleSaveGeminiKey = () => {
-    const trimmed = geminiKeyInput.trim()
-    saveCustomGeminiKey(trimmed)
-    setSavedGeminiKey(trimmed)
-    if (trimmed) {
-      toast.success("Đã lưu Google AI Studio API Key thành công!")
-    } else {
-      toast.info("Đã xóa Google AI Studio API Key.")
+  // Google key pool handlers
+  const handleAddGeminiKey = () => {
+    if (!newGeminiKeyInput.trim()) {
+      toast.error("Vui lòng nhập Google AI Studio API Key (AIzaSy...)!")
+      return
     }
+    const updated = addCustomGeminiKey(
+      newGeminiKeyInput,
+      newGeminiKeyLabel || `Google Key #${geminiKeys.length + 1}`
+    )
+    setGeminiKeys(updated)
+    setNewGeminiKeyInput("")
+    setNewGeminiKeyLabel("")
+    toast.success("Đã thêm Google AI Key vào Rotation Pool!")
+  }
+
+  const handleRemoveGeminiKey = (id: string) => {
+    if (geminiKeys.length <= 1) {
+      if (!confirm("Đây là Google key duy nhất trong pool. Bạn có chắc muốn xóa không?")) return
+    }
+    const updated = removeCustomGeminiKey(id)
+    setGeminiKeys(updated)
+    toast.success("Đã xóa Google AI Key khỏi Rotation Pool.")
   }
 
   const handleTestGateway = async () => {
@@ -167,7 +185,8 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
     setTestingGemini(true)
     setGeminiTestResult(null)
     try {
-      const res = await testAIConnection(geminiKeyInput.trim() || undefined, "google/gemini-2.0-flash-001")
+      const activeGeminiKey = geminiKeys.length > 0 ? geminiKeys[0].key : undefined
+      const res = await testAIConnection(activeGeminiKey, "google/gemini-2.0-flash-001")
       setGeminiTestResult(res)
       if (res.success) {
         toast.success(`Google AI Studio Online! Độ trễ: ${res.latencyMs}ms`)
@@ -192,6 +211,7 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
   }
 
   const totalOpenRouterRPD = keys.length * 50
+  const totalGoogleRPD = geminiKeys.length * 1500
 
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white dark:border-neutral-800 dark:bg-card">
@@ -312,7 +332,7 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
                 </select>
               </label>
 
-              {/* DEDICATED GOOGLE AI STUDIO DIRECT GATEWAY CARD */}
+              {/* DEDICATED GOOGLE AI STUDIO DIRECT GATEWAY POOL */}
               <div className="bg-white dark:bg-neutral-900 p-4 rounded-2xl border border-slate-200/90 dark:border-neutral-800 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
@@ -320,64 +340,126 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
                       G
                     </div>
                     <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      Cổng kết nối Google AI Studio (Gemini)
+                      Cổng Google AI Studio ({geminiKeys.length} key · ~{totalGoogleRPD.toLocaleString("vi-VN")} req/ngày)
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 font-semibold">
-                      1.500 requests/ngày Free
+                      1.500 RPD / Key Free
                     </span>
                   </div>
-                  <a
-                    href="https://aistudio.google.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-slate-700 dark:text-slate-300 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Lấy Key tại aistudio.google.com</span>
-                    <ExternalLink className="size-3" />
-                  </a>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-0.5">
-                  <div className="sm:col-span-2">
-                    <Input
-                      type="password"
-                      value={geminiKeyInput}
-                      onChange={(e) => setGeminiKeyInput(e.target.value)}
-                      placeholder="AIzaSy... (Dán Google AI Studio API Key)"
-                      className="text-xs font-mono rounded-xl border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 dark:text-slate-100 h-9.5"
-                    />
-                  </div>
-                  <div>
-                    <Button
-                      type="button"
-                      onClick={handleSaveGeminiKey}
-                      className="w-full rounded-xl text-xs font-semibold cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white h-9.5 shadow-xs"
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="https://aistudio.google.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-slate-700 dark:text-slate-300 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                     >
-                      <Key className="size-3.5 mr-1" />
-                      <span>{savedGeminiKey ? "Cập nhật Key" : "Lưu Google Key"}</span>
-                    </Button>
-                  </div>
-                  <div>
+                      <span>Lấy Key tại aistudio.google.com</span>
+                      <ExternalLink className="size-3" />
+                    </a>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleTestGemini}
-                      disabled={testingGemini || !geminiKeyInput.trim()}
-                      className="w-full rounded-xl text-xs font-semibold gap-1.5 cursor-pointer bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-slate-200 h-9.5"
+                      disabled={testingGemini || geminiKeys.length === 0}
+                      className="h-8 text-xs rounded-xl border-slate-200 dark:border-neutral-700"
                     >
-                      <RefreshCw className={cn("size-3.5", testingGemini && "animate-spin")} />
+                      <RefreshCw className={cn("size-3.5 mr-1", testingGemini && "animate-spin")} />
                       <span>{testingGemini ? "Đang thử..." : "Test Google"}</span>
                     </Button>
                   </div>
                 </div>
 
                 {geminiTestResult && (
-                  <div className={cn("flex items-center gap-1.5 text-xs font-medium pt-1", geminiTestResult.success ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
+                  <div className={cn("flex items-center gap-1.5 text-xs font-medium", geminiTestResult.success ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
                     {geminiTestResult.success && <CheckCircle2 className="size-3.5 shrink-0" />}
                     <span>{geminiTestResult.message} ({geminiTestResult.latencyMs}ms)</span>
                   </div>
                 )}
+
+                {/* List of Google Keys in Pool */}
+                <div className="rounded-xl border border-slate-200/90 dark:border-neutral-800 divide-y divide-slate-100 dark:divide-neutral-800/80 overflow-hidden bg-slate-50/50 dark:bg-neutral-900/60">
+                  {geminiKeys.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-slate-400">
+                      Chưa có Google AI Key nào. Thêm key bên dưới để dùng 1.500 requests/ngày miễn phí.
+                    </div>
+                  ) : (
+                    <AnimatePresence initial={false}>
+                      {geminiKeys.map((k, index) => (
+                        <motion.div
+                          key={k.id}
+                          layout
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={springs.snappy}
+                          className="p-2.5 sm:p-3 flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="size-5 rounded-md bg-white dark:bg-neutral-800 text-slate-800 dark:text-slate-200 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-neutral-700">
+                              #{index + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                                  {k.label}
+                                </span>
+                                <span className="inline-block px-1.5 py-0.2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 font-semibold">
+                                  Active (1.500 RPD)
+                                </span>
+                              </div>
+                              <span className="font-mono text-slate-400 dark:text-slate-500 text-[11px]">
+                                {maskKey(k.key)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveGeminiKey(k.id)}
+                            className="size-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer"
+                            title="Xóa key này"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </div>
+
+                {/* Add new Google Key form */}
+                <div className="p-3 rounded-xl border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 space-y-2">
+                  <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Plus className="size-3.5 text-slate-700 dark:text-slate-300" />
+                    <span>Thêm Google AI Key dự phòng mới:</span>
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Input
+                      value={newGeminiKeyLabel}
+                      onChange={(e) => setNewGeminiKeyLabel(e.target.value)}
+                      placeholder="Nhãn (VD: Google Backup 1)..."
+                      className="text-xs rounded-xl border-slate-200 dark:border-neutral-700 bg-slate-50/60 dark:bg-neutral-800 dark:text-slate-100 h-9.5"
+                    />
+                    <Input
+                      type="password"
+                      value={newGeminiKeyInput}
+                      onChange={(e) => setNewGeminiKeyInput(e.target.value)}
+                      placeholder="AIzaSy... (Dán Google API Key)"
+                      className="text-xs font-mono rounded-xl border-slate-200 dark:border-neutral-700 bg-slate-50/60 dark:bg-neutral-800 dark:text-slate-100 h-9.5"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddGeminiKey}
+                      className="w-full rounded-xl text-xs font-semibold cursor-pointer bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-xs h-9.5"
+                    >
+                      <Plus className="size-3.5 mr-1" />
+                      <span>Lưu vào Google Pool</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {/* OpenRouter Key Rotation Pool */}
@@ -394,7 +476,7 @@ export function OpenRouterSettingsCard({ isExpanded, onToggleExpand }: OpenRoute
                   </span>
                 </div>
 
-                {/* List of keys in pool */}
+                {/* List of keys in OpenRouter pool */}
                 <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-slate-200/90 dark:border-neutral-800 divide-y divide-slate-100 dark:divide-neutral-800/80 overflow-hidden shadow-2xs">
                   {keys.length === 0 ? (
                     <div className="p-4 text-center text-xs text-slate-400">
