@@ -3927,8 +3927,6 @@ function handleUploadAvatar(data) {
     const fallbackAvatarUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w500";
     const finalAvatarUrl = avatarUrl;
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
     // 3. Tự động lưu URL Avatar vào RAW_SETTINGS (Key: USERS_LIST)
     if (email) {
       let rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
