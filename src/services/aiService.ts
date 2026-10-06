@@ -658,11 +658,17 @@ export function setAIEnabled(enabled: boolean): void {
 }
 
 export const STORAGE_CUSTOM_AI_KEY = "ux_portal_ai_api_key"
+export const STORAGE_CUSTOM_AI_KEYS_POOL = "ux_portal_ai_keys_pool"
+export const STORAGE_CUSTOM_GEMINI_KEY = "ux_portal_custom_gemini_key"
 
 export function getCustomApiKey(): string {
   if (typeof window === "undefined") return ""
   try {
-    return localStorage.getItem(STORAGE_CUSTOM_AI_KEY) || ""
+    const direct = localStorage.getItem(STORAGE_CUSTOM_AI_KEY)
+    if (direct) return direct
+    const pool = getCustomAIKeysPool()
+    if (pool.length > 0) return pool[0].key
+    return ""
   } catch {
     return ""
   }
@@ -674,6 +680,7 @@ export function saveCustomApiKey(key: string): void {
     const clean = key.trim()
     if (clean) {
       localStorage.setItem(STORAGE_CUSTOM_AI_KEY, clean)
+      addCustomAIKey(clean, "Key chính")
     } else {
       localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
     }
@@ -684,6 +691,89 @@ export function removeCustomApiKey(): void {
   if (typeof window === "undefined") return
   try {
     localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
+    saveCustomAIKeysPool([])
+  } catch {}
+}
+
+export function getCustomAIKeysPool(): AIKeyEntry[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(STORAGE_CUSTOM_AI_KEYS_POOL)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+    const single = localStorage.getItem(STORAGE_CUSTOM_AI_KEY)
+    if (single) {
+      return [{
+        id: "key-primary",
+        key: single,
+        label: "Key chính",
+        status: "active",
+        createdAt: new Date().toISOString()
+      }]
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+export function saveCustomAIKeysPool(keys: AIKeyEntry[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_CUSTOM_AI_KEYS_POOL, JSON.stringify(keys))
+    if (keys.length > 0) {
+      localStorage.setItem(STORAGE_CUSTOM_AI_KEY, keys[0].key)
+    } else {
+      localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
+    }
+  } catch {}
+}
+
+export function addCustomAIKey(rawKey: string, label: string = "API Key"): AIKeyEntry[] {
+  const clean = rawKey.trim()
+  if (!clean) return getCustomAIKeysPool()
+  const current = getCustomAIKeysPool()
+  const exists = current.some(k => k.key === clean)
+  if (exists) return current
+  const newEntry: AIKeyEntry = {
+    id: "key-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+    key: clean,
+    label: label.trim() || `Key #${current.length + 1}`,
+    status: "active",
+    createdAt: new Date().toISOString()
+  }
+  const updated = [...current, newEntry]
+  saveCustomAIKeysPool(updated)
+  return updated
+}
+
+export function removeCustomAIKey(id: string): AIKeyEntry[] {
+  const current = getCustomAIKeysPool()
+  const updated = current.filter(k => k.id !== id)
+  saveCustomAIKeysPool(updated)
+  return updated
+}
+
+export function getCustomGeminiKey(): string {
+  if (typeof window === "undefined") return ""
+  try {
+    return localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY) || ""
+  } catch {
+    return ""
+  }
+}
+
+export function saveCustomGeminiKey(key: string): void {
+  if (typeof window === "undefined") return
+  try {
+    const clean = key.trim()
+    if (clean) {
+      localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEY, clean)
+    } else {
+      localStorage.removeItem(STORAGE_CUSTOM_GEMINI_KEY)
+    }
   } catch {}
 }
 
