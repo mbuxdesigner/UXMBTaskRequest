@@ -657,21 +657,53 @@ export function setAIEnabled(enabled: boolean): void {
   localStorage.setItem(STORAGE_AI_ENABLED_KEY, String(enabled))
 }
 
+export const STORAGE_CUSTOM_AI_KEY = "ux_portal_ai_api_key"
+
+export function getCustomApiKey(): string {
+  if (typeof window === "undefined") return ""
+  try {
+    return localStorage.getItem(STORAGE_CUSTOM_AI_KEY) || ""
+  } catch {
+    return ""
+  }
+}
+
+export function saveCustomApiKey(key: string): void {
+  if (typeof window === "undefined") return
+  try {
+    const clean = key.trim()
+    if (clean) {
+      localStorage.setItem(STORAGE_CUSTOM_AI_KEY, clean)
+    } else {
+      localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
+    }
+  } catch {}
+}
+
+export function removeCustomApiKey(): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
+  } catch {}
+}
+
 /**
  * Test kết nối thử nghiệm đến OpenRouter với 1 API Key cụ thể
  */
 export async function testAIConnection(apiKey?: string, model: string = DEFAULT_AI_MODEL): Promise<{ success: boolean; message: string; latencyMs: number }> {
-  void apiKey
+  const activeKey = (apiKey !== undefined ? apiKey : getCustomApiKey()).trim()
   const startTime = Date.now()
   const sessionToken = getStoredSessionToken()
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`
+  if (activeKey) headers["x-custom-api-key"] = activeKey
   try {
     const res = await fetch("/api/ai-gateway", {
       method: "POST",
       headers,
       body: JSON.stringify({
         model,
+        apiKey: activeKey || undefined,
         messages: [{ role: "user", content: "Ping" }],
         max_tokens: 64,
       }),
@@ -788,11 +820,15 @@ export async function streamAICompletion(
       // Trong Production (!isDev), BẮT BUỘC 100% phải gọi qua gateway và đính kèm session token
       if (!response) {
         const sessionToken = getStoredSessionToken()
+        const customKey = getCustomApiKey()
         const gatewayHeaders: Record<string, string> = {
           "Content-Type": "application/json",
         }
         if (sessionToken) {
           gatewayHeaders["Authorization"] = `Bearer ${sessionToken}`
+        }
+        if (customKey) {
+          gatewayHeaders["x-custom-api-key"] = customKey
         }
 
         try {
@@ -805,6 +841,7 @@ export async function streamAICompletion(
               models: fallbackModels,
               route: "fallback",
               stream: true,
+              apiKey: customKey || undefined,
               temperature: config.temperature ?? 0.7,
               max_tokens: config.max_tokens ?? 2048,
             }),

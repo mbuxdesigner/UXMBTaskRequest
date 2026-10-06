@@ -2597,10 +2597,10 @@ runTest("Integration", "INT-DUALPOOL-04", "aiService: direct provider fallback h
   assert.ok(!serviceSrc.includes("generativelanguage.googleapis.com"), "Must not fall back to Gemini from the browser")
 })
 
-runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: provider key entry UI is removed", () => {
+runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: OpenRouter API key entry is supported with managed gateway", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8").replace(/\r\n/g, "\n")
-  assert.ok(!cardSrc.includes("getStoredGeminiKeys"), "Admin UI must not load browser provider keys")
-  assert.ok(!cardSrc.includes('type="password"'), "Admin UI must not request provider keys")
+  assert.ok(!cardSrc.includes("getStoredGeminiKeys"), "Admin UI must not load legacy browser Gemini keys")
+  assert.ok(cardSrc.includes("OpenRouter API Key"), "Admin UI must support OpenRouter API key configuration")
   assert.ok(cardSrc.includes("Provider key được quản lý ở máy chủ"))
 })
 

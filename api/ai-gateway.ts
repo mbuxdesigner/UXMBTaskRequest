@@ -63,7 +63,7 @@ function getCorsHeaders(origin: string | null | undefined): Record<string, strin
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, X-Custom-API-Key",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   }
@@ -428,13 +428,32 @@ export default async function handler(req: Request): Promise<Response> {
       )
     }
 
-    // 5. Check Server API Key (OPENROUTER_API_KEY)
+    // 5. Request Body Validation
+    const body = await req.json().catch(() => ({}))
+    const {
+      messages,
+      model = DEFAULT_MODEL,
+      stream = false,
+      temperature = 0.7,
+      max_tokens = 1024,
+    } = body
+
+    // 6. Check Server API Key & Client Admin Custom Key
     const availableKeys = buildKeyPool()
+    const customKeyHeader = req.headers.get("x-custom-api-key")?.trim()
+    const customKeyFromBody = (typeof body?.apiKey === "string" ? body.apiKey.trim() : "") ||
+      (typeof body?.customApiKey === "string" ? body.customApiKey.trim() : "")
+    const clientProvidedKey = customKeyHeader || customKeyFromBody
+
+    if (clientProvidedKey && !availableKeys.includes(clientProvidedKey)) {
+      availableKeys.unshift(clientProvidedKey)
+    }
+
     if (availableKeys.length === 0) {
       return new Response(
         JSON.stringify({
           error: {
-            message: "Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ.",
+            message: "Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ hoặc qua cấu hình quản trị.",
             code: "MISSING_SERVER_API_KEY",
           },
           success: false,
@@ -446,16 +465,6 @@ export default async function handler(req: Request): Promise<Response> {
         }
       )
     }
-
-    // 6. Request Body Validation
-    const body = await req.json()
-    const {
-      messages,
-      model = DEFAULT_MODEL,
-      stream = false,
-      temperature = 0.7,
-      max_tokens = 1024,
-    } = body
 
     if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
       return new Response(
