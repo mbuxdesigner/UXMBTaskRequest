@@ -1982,8 +1982,33 @@ function getAllRequestsFromSheet(isTest) {
     } catch (e) {}
   }
 
-  const scopedRequests = callerUser ? filterRequestsForCaller_(requests, callerUser) : requests;
-  return scopedRequests.reverse();
+  // Item 14: Sensitive Data Masking for non-Admin/non-Designer (PO, Business)
+  const callerRole = callerUser ? String(callerUser.role || "").trim() : "";
+  const callerEmail = callerUser ? String(callerUser.teamsEmail || callerUser.personalEmail || "").trim().toLowerCase() : "";
+  const callerSquad = callerUser ? String(callerUser.squad || "").trim().toLowerCase() : "";
+
+  if (callerUser && (callerRole === "PO" || callerRole === "Business")) {
+    for (let r = 0; r < requests.length; r++) {
+      const item = requests[r];
+      const itemRequester = String(item.requester_email || "").trim().toLowerCase();
+      const itemSquad = String(item.squad_name || item.preferred_squad || "").trim().toLowerCase();
+      const isMySquad = Boolean(callerSquad && itemSquad && (itemSquad.includes(callerSquad) || callerSquad.includes(itemSquad)));
+      const isMyRequest = Boolean(callerEmail && itemRequester === callerEmail);
+
+      if (!isMySquad && !isMyRequest) {
+        // Mask confidential strategic information from other squads
+        item.title = "[Confidential - Restricted Squad]";
+        item.description = "[Confidential - Restricted Squad]";
+        if (item.brief) item.brief = "[Confidential - Restricted Squad]";
+        if (item.user_problem) item.user_problem = "[Confidential - Restricted Squad]";
+        if (item.business_need) item.business_need = "[Confidential - Restricted Squad]";
+        if (item.problem) item.problem = "[Confidential - Restricted Squad]";
+        if (item.target_user) item.target_user = "[Confidential - Restricted Squad]";
+      }
+    }
+  }
+
+  return requests.reverse();
 }
 
 /**

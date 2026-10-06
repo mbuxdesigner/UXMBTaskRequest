@@ -93,7 +93,12 @@ export function getAppEnvironment(): AppEnvironmentConfig {
 
   if (typeof window !== "undefined" && window.location) {
     const hostname = window.location.hostname || ""
-    if (hostname === "uxmb-task-request.vercel.app") {
+    if (
+      hostname === "uxmb-task-request.vercel.app" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0"
+    ) {
       appEnv = "production"
     } else if (
       hostname.endsWith(".vercel.app") ||
@@ -101,12 +106,6 @@ export function getAppEnvironment(): AppEnvironmentConfig {
       hostname.includes("-git-")
     ) {
       appEnv = "preview"
-    } else if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "0.0.0.0"
-    ) {
-      appEnv = "development"
     } else if (typeof import.meta !== "undefined" && import.meta.env?.VITE_APP_ENV) {
       const envVal = String(import.meta.env.VITE_APP_ENV).toLowerCase()
       if (envVal === "production" || envVal === "preview" || envVal === "development") {
@@ -120,16 +119,20 @@ export function getAppEnvironment(): AppEnvironmentConfig {
     ).toLowerCase()
     if (envVal === "production" || envVal === "preview" || envVal === "development") {
       appEnv = envVal
-    } else if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
-      appEnv = "development"
     } else {
       appEnv = "production"
     }
   }
 
-  const isProduction = appEnv === "production"
+  const isProduction = true // Dev và Production đồng nhất 100% để luôn tải và ghi nhận dữ liệu thật
   const isPreview = appEnv === "preview"
-  const isLocal = appEnv === "development"
+  const isLocal = typeof window !== "undefined" && Boolean(
+    window.location && (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "0.0.0.0"
+    )
+  )
 
   // Direct backend script URL fallback
   const directScriptUrl =

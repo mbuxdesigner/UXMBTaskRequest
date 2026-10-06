@@ -5113,20 +5113,6 @@ export default function DesignerPlannerPage() {
         }}
       />
 
-      {/* Floating Copilot Button */}
-      {!isChatCopilotOpen && (
-        <button
-          type="button"
-          onClick={() => setIsChatCopilotOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105 border border-slate-700/60 cursor-pointer group"
-          title="Mở Trợ lý UX MB Copilot"
-        >
-          <div className="w-6 h-6 rounded-full bg-indigo-500/30 flex items-center justify-center text-indigo-300">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400 group-hover:rotate-12 transition-transform" />
-          </div>
-          <span className="text-xs font-semibold pr-1">Hỏi AI Copilot</span>
-        </button>
-      )}
 
       {/* Interactive AI Chat Copilot Widget */}
       <AIChatCopilot

@@ -9,6 +9,7 @@ import {
   requestTeamsOtp,
   verifyTeamsOtp,
   refreshAllDataOnLogin,
+  getStoredSession,
   UserSession,
   DEMO_ACCOUNTS,
   saveSession,
@@ -105,6 +106,8 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
   const [otp, setOtp] = useState("")
   const [isSendingOtp, setIsSendingOtp] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncStepText, setSyncStepText] = useState("Đang đồng bộ dữ liệu & phân quyền...")
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [infoMsg, setInfoMsg] = useState<React.ReactNode | null>(null)
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(5)
@@ -201,22 +204,39 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     try {
       const res = await verifyTeamsOtp(email, cleanOtp)
       if (res.success && res.session) {
-        onAuthSuccess(res.session)
+        setIsVerifying(false)
+        setIsSyncing(true)
+        setSyncStepText("Đang đồng bộ dữ liệu & phân quyền...")
+
+        // Chờ đồng bộ Master Data (nav_items, nav_order, squads, role sync)
+        // Dùng Promise.race để đảm bảo timeout an toàn tối đa 3 giây phòng khi mạng chậm
+        try {
+          await Promise.race([
+            refreshAllDataOnLogin(),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ])
+        } catch (syncErr) {
+          console.warn("Lỗi đồng bộ trong lúc đăng nhập:", syncErr)
+        }
+
+        // Lấy session mới nhất (phòng trường hợp syncSessionRoleFromSheet đã cập nhật role chuẩn từ Sheet)
+        const effectiveSession = getStoredSession() || res.session
+        onAuthSuccess(effectiveSession)
       } else {
         setErrorMsg(res.message || "Mã xác thực không chính xác. Vui lòng kiểm tra lại.")
         if (typeof res.remainingAttempts === "number") {
           setRemainingAttempts(res.remainingAttempts)
         }
+        setIsVerifying(false)
       }
     } catch {
       setErrorMsg("Lỗi xác thực mã OTP. Vui lòng thử lại.")
-    } finally {
       setIsVerifying(false)
     }
   }
 
   // Đăng nhập nhanh Demo Role (1-Click)
-  const handleQuickDemoLogin = (account: typeof DEMO_ACCOUNTS[0]) => {
+  const handleQuickDemoLogin = async (account: typeof DEMO_ACCOUNTS[0]) => {
     const session = saveSession(
       "MOCK_TOKEN_" + Date.now(),
       account.personalEmail,
@@ -229,14 +249,67 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
       account.squads,
       account.products
     )
-    onAuthSuccess(session)
-    refreshAllDataOnLogin().catch(() => {})
+    setIsSyncing(true)
+    setSyncStepText("Đang đồng bộ dữ liệu & phân quyền...")
+
+    try {
+      await Promise.race([
+        refreshAllDataOnLogin(),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ])
+    } catch {}
+
+    const effectiveSession = getStoredSession() || session
+    onAuthSuccess(effectiveSession)
   }
 
   const handleOtpComplete = (code: string) => {
     if (!isVerifying) {
       handleVerifyOtp(code)
     }
+  }
+
+  if (isSyncing) {
+    return (
+      <div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col justify-center items-center p-6 select-none relative overflow-hidden font-sans">
+        {/* Ambient glow background */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden z-0 bg-[radial-gradient(circle_at_50%_40%,rgba(16,87,251,0.06)_0%,transparent_65%)]" />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="w-full max-w-[380px] bg-white rounded-3xl p-9 border border-slate-200/85 shadow-[0_16px_40px_-8px_rgba(15,23,42,0.06),0_4px_16px_-2px_rgba(15,23,42,0.03)] text-center relative z-10"
+        >
+          {/* Logo MB Bank UX Team với Breathing effect */}
+          <div className="flex justify-center items-center mb-6">
+            <img
+              src="./img-logo-UXTeamWith.webp"
+              alt="MB Bank UX Team"
+              width="196"
+              height="33"
+              className="h-8 w-auto object-contain animate-mb-pulse-glow"
+              onError={(e) => {
+                e.currentTarget.src = "./img-logo-UXTeamRegDark.webp"
+              }}
+            />
+          </div>
+
+          {/* Thanh Gradient Progress Bar chạy mượt mà */}
+          <div className="w-40 h-[3px] bg-[#EEF2F6] rounded-full overflow-hidden mx-auto mb-4 relative">
+            <div className="absolute top-0 left-0 w-[60%] h-full bg-gradient-to-r from-transparent via-[#1057FB] to-[#002D80] rounded-full animate-mb-progress-bar" />
+          </div>
+
+          {/* Thông điệp Loading */}
+          <p className="text-[13px] font-semibold text-slate-700 tracking-tight">
+            {syncStepText}
+          </p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
+            Digital Banking Division
+          </p>
+        </motion.div>
+      </div>
+    )
   }
 
   return (

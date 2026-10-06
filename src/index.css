@@ -875,4 +875,40 @@ input[type="checkbox"] {
   filter: blur(0px);
 }
 
+/* ==========================================================================
+   MB BANK SPLASH & SYNC LOADING ANIMATIONS
+   ========================================================================== */
+@keyframes mbPulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.95;
+    filter: drop-shadow(0 4px 14px rgba(16, 87, 251, 0.1));
+  }
+  50% {
+    transform: scale(1.025);
+    opacity: 1;
+    filter: drop-shadow(0 8px 22px rgba(16, 87, 251, 0.22));
+  }
+}
+
+@keyframes mbProgressBar {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(65%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-mb-pulse-glow {
+  animation: mbPulseGlow 2.8s ease-in-out infinite;
+}
+
+.animate-mb-progress-bar {
+  animation: mbProgressBar 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 

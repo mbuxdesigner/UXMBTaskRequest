@@ -17,7 +17,6 @@ import {
   type TeamEvent,
   type EventCategoryConfig,
 } from "../config/systemConfig.ts"
-import { syncMasterDataToSheet, fetchMasterDataFromSheet } from "./googleSheetService.ts"
 export interface UserSession {
   email?: string
   displayName?: string

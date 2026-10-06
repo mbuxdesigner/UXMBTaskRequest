@@ -294,10 +294,16 @@ export function ExecutiveSummaryTypewriter({
     }
   }, [totalChars, triggerKey, seed, perspectiveAngle])
 
+  const handleSkipTyping = () => {
+    if (!isTypingComplete) {
+      setVisibleChars(totalChars)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div
-        onClick={!isTypingComplete ? () => setVisibleChars(totalChars) : undefined}
+        onClick={handleSkipTyping}
         className={cn("space-y-3 relative group select-text", !isTypingComplete && "cursor-pointer")}
         title={!isTypingComplete ? "Nhấn vào đây để hiện toàn bộ văn bản ngay" : undefined}
       >

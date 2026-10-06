@@ -11,7 +11,7 @@ import {
   buildPhases,
   mockRequests,
   isDemoRequest,
-} from "../data/mockData"
+} from "../data/mockData.ts"
 import {
   getGoogleSheetConfig,
   saveGoogleSheetConfig,
@@ -46,9 +46,7 @@ export function isTestTask(req: Partial<UXRequest> | Record<string, any> | null 
   const title = String(req.title || "").trim()
   return (
     Boolean(req.is_test) ||
-    req.client_environment === "preview" ||
-    req.client_environment === "development" ||
-    id.startsWith("REQ-TEST-") ||
+        id.startsWith("REQ-TEST-") ||
     id.startsWith("TEST-") ||
     title.startsWith("[TEST]")
   )
@@ -126,34 +124,63 @@ async function fetchRemoteRequestRows(
     const timeoutId = setTimeout(() => controller.abort(), isSameOriginGateway ? 12000 : 25000)
 
     try {
-      const response = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8", Accept: "application/json" },
-        body: JSON.stringify({
-          action: "get_requests",
-          session_token: session.sessionToken,
-          client_environment: getAppEnvironment().appEnv,
-        }),
-        cache: "no-store",
-        signal: controller.signal,
-      })
-      const responseText = await response.text()
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 160)}`)
-      }
+      let data: any = null
 
-      let data: any
+      // 1. Thử gửi qua POST trước (nếu backend hỗ trợ POST action: get_requests)
       try {
-        data = JSON.parse(responseText)
-      } catch {
-        throw new Error(`Invalid JSON response: ${responseText.slice(0, 160)}`)
+        const response = await fetch(url.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8", Accept: "application/json" },
+          body: JSON.stringify({
+            action: "get_requests",
+            session_token: session.sessionToken,
+            client_environment: "production",
+          }),
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const responseText = await response.text()
+        if (response.ok) {
+          try {
+            data = JSON.parse(responseText)
+          } catch {}
+        }
+      } catch (postErr) {
+        console.warn("POST get_requests failed, will try GET fallback:", postErr)
       }
 
-      if (data.status === "unauthorized" || data.status === "forbidden") {
-        handleSessionExpired()
-        throw new Error(`UNAUTHORIZED: ${data.message || "Phiên đăng nhập không hợp lệ."}`)
+      // 2. Nếu POST thất bại hoặc backend GAS trả về 'Unknown POST action' -> Fallback qua GET
+      if (!data || data.status !== "success" || !Array.isArray(data.requests)) {
+        if (data && (data.status === "unauthorized" || data.status === "forbidden")) {
+          const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "0.0.0.0");
+          if (!isLocalHost && !session.sessionToken.startsWith("MOCK_") && !session.sessionToken.startsWith("DEMO_")) {
+            handleSessionExpired();
+          }
+          throw new Error(`UNAUTHORIZED: ${data.message || "Phiên đăng nhập không hợp lệ."}`);
+        }
+
+        const getUrl = new URL(url.toString())
+        getUrl.searchParams.set("action", "get_requests")
+        getUrl.searchParams.set("_t", Date.now().toString())
+        if (session.sessionToken) {
+          getUrl.searchParams.set("session_token", session.sessionToken)
+        }
+
+        const getRes = await fetch(getUrl.toString(), {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const getText = await getRes.text()
+        if (getRes.ok) {
+          try {
+            data = JSON.parse(getText)
+          } catch {}
+        }
       }
-      if (data.status === "success" && Array.isArray(data.requests)) {
+
+      if (data?.status === "success" && Array.isArray(data.requests)) {
         return data.requests
       }
       throw new Error(data?.message || "Request endpoint returned an invalid payload")
@@ -1006,7 +1033,7 @@ export async function logRequestToGoogleSheet(
         }
       }
       if (data.status === "unauthorized") {
-        handleSessionExpired(data.message)
+        if (!envConfig.isLocal && !session?.sessionToken?.startsWith("MOCK_") && !session?.sessionToken?.startsWith("DEMO_")) handleSessionExpired(data.message)
         return {
           success: false,
           message: data.message || "Phiên đăng nhập đã hết hạn. Vui lòng xác thực lại qua Teams.",
@@ -1846,7 +1873,9 @@ export async function syncTeamMembersToSheet(
     }
 
     if (data.status === "unauthorized") {
-      handleSessionExpired(data.message)
+      if (!envConfig.isLocal && !session?.sessionToken?.startsWith("MOCK_") && !session?.sessionToken?.startsWith("DEMO_")) {
+        handleSessionExpired(data.message);
+      }
     }
 
     return {
@@ -2024,7 +2053,7 @@ export async function syncMasterDataToSheet(params: {
     }
 
     if (data.status === "unauthorized") {
-      handleSessionExpired(data.message)
+      if (!envConfig.isLocal && !session?.sessionToken?.startsWith("MOCK_") && !session?.sessionToken?.startsWith("DEMO_")) handleSessionExpired(data.message)
     }
 
     return {
