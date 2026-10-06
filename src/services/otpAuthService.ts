@@ -1150,6 +1150,19 @@ export async function verifyTeamsOtp(
           data.csrf_token
         )
 
+        if (data.nav_items) {
+          try {
+            const parsed = typeof data.nav_items === "string" ? JSON.parse(data.nav_items) : data.nav_items
+            if (parsed && typeof parsed === "object") saveRoleNavConfig(parsed)
+          } catch {}
+        }
+        if (data.nav_order) {
+          try {
+            const parsed = typeof data.nav_order === "string" ? JSON.parse(data.nav_order) : data.nav_order
+            if (parsed && typeof parsed === "object") saveNavOrderConfig(parsed)
+          } catch {}
+        }
+
         try {
           const synced = await syncSessionRoleFromSheet()
           if (synced) session = synced
@@ -1380,16 +1393,26 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
 /**
  * Tải siêu tốc cấu hình Nav & Master Data khi đăng nhập (chỉ tải cấu hình nhẹ, không chặn luồng tải bài toán)
  */
-export async function syncNavConfigFastOnLogin(): Promise<void> {
+export async function syncNavConfigFastOnLogin(): Promise<boolean> {
   try {
     const res = await fetchMasterDataFromSheet()
     if (res.success && res.data) {
-      if (res.data.nav_items && typeof res.data.nav_items === "object") {
-        saveRoleNavConfig(res.data.nav_items)
+      let navItems = res.data.nav_items
+      if (typeof navItems === "string") {
+        try { navItems = JSON.parse(navItems) } catch {}
       }
-      if (res.data.nav_order && typeof res.data.nav_order === "object") {
-        saveNavOrderConfig(res.data.nav_order)
+      if (navItems && typeof navItems === "object") {
+        saveRoleNavConfig(navItems)
       }
+
+      let navOrder = res.data.nav_order
+      if (typeof navOrder === "string") {
+        try { navOrder = JSON.parse(navOrder) } catch {}
+      }
+      if (navOrder && typeof navOrder === "object") {
+        saveNavOrderConfig(navOrder)
+      }
+
       if (Array.isArray(res.data.products) && res.data.products.length > 0) {
         localStorage.setItem("mbbank_admin_products", JSON.stringify(res.data.products))
         localStorage.setItem("ux_portal_products_v2", JSON.stringify(res.data.products))
@@ -1406,9 +1429,12 @@ export async function syncNavConfigFastOnLogin(): Promise<void> {
         localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))
         localStorage.setItem("mbbank_team_members", JSON.stringify(res.data.team_members))
       }
+      return true
     }
+    return false
   } catch (e) {
     console.warn("Could not fast-sync nav config on login:", e)
+    return false
   }
 }
 

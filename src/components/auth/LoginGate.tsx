@@ -209,17 +209,20 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
         setIsSyncing(true)
         setSyncStepText("Đang đồng bộ dữ liệu & phân quyền...")
 
-        // Chờ đồng bộ siêu tốc Master Data & Menu Nav (chỉ nạp config nhẹ, timeout tối đa 1.0 giây)
+        // Chờ đồng bộ Master Data & Menu Nav (thường chỉ mất ~2-3 giây, timeout an toàn 12 giây)
         try {
           await Promise.race([
             syncNavConfigFastOnLogin(),
-            new Promise((resolve) => setTimeout(resolve, 1000)),
+            new Promise((resolve) => setTimeout(resolve, 12000)),
           ])
         } catch (syncErr) {
           console.warn("Lỗi đồng bộ trong lúc đăng nhập:", syncErr)
         }
 
-        // Lấy session mới nhất
+        setSyncStepText("Khởi tạo không gian làm việc...")
+        await new Promise((resolve) => setTimeout(resolve, 200))
+
+        // Lấy session mới nhất và chuyển vào Workspace
         const effectiveSession = getStoredSession() || res.session
         onAuthSuccess(effectiveSession)
 
@@ -258,9 +261,12 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
     try {
       await Promise.race([
         syncNavConfigFastOnLogin(),
-        new Promise((resolve) => setTimeout(resolve, 800)),
+        new Promise((resolve) => setTimeout(resolve, 12000)),
       ])
     } catch {}
+
+    setSyncStepText("Khởi tạo không gian làm việc...")
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
     const effectiveSession = getStoredSession() || session
     onAuthSuccess(effectiveSession)

@@ -499,7 +499,7 @@ function doPost(e) {
       }
       const masterData = readMasterDataFromSettingsSheet(rawSettings);
       const members = getOrInitTeamMembers(ss);
-      const leaves = fetchTeamLeavesData(false);
+      const leaves = (data.include_leaves === true || data.include_leaves === "true") ? fetchTeamLeavesData(false) : [];
       return createJsonResponse({
         status: "success",
         master_data: masterData,
@@ -2393,6 +2393,17 @@ function handleVerifyOtpFast(data) {
       expiresAt: sessionExpiresDate.getTime()
     }), cacheTtlSeconds);
 
+    let navItemsConfig = null;
+    let navOrderConfig = null;
+    try {
+      const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+      if (rawSettings) {
+        const md = readMasterDataFromSettingsSheet(rawSettings);
+        navItemsConfig = md["NAV_ITEMS_CONFIG"] || null;
+        navOrderConfig = md["NAV_ORDER_CONFIG"] || null;
+      }
+    } catch (e) {}
+
     return createJsonResponse({
       status: "success",
       message: "Xác thực thành công!",
@@ -2404,7 +2415,9 @@ function handleVerifyOtpFast(data) {
       avatar_url: otpObj.avatarUrl || "",
       role: finalRole,
       expires_in: durationMinutes * 60,
-      last_active_at: nowMs
+      last_active_at: nowMs,
+      nav_items: navItemsConfig,
+      nav_order: navOrderConfig
     });
   }
 
@@ -2477,6 +2490,17 @@ function handleVerifyOtpFast(data) {
     details: "Đăng nhập thành công qua Teams OTP. Chính sách phiên: " + sessionPolicy
   });
 
+  let fallbackNavItems = null;
+  let fallbackNavOrder = null;
+  try {
+    const rawSettings = ss.getSheetByName(SHEET_RAW_SETTINGS);
+    if (rawSettings) {
+      const md = readMasterDataFromSettingsSheet(rawSettings);
+      fallbackNavItems = md["NAV_ITEMS_CONFIG"] || null;
+      fallbackNavOrder = md["NAV_ORDER_CONFIG"] || null;
+    }
+  } catch (e) {}
+
   return createJsonResponse({
     status: "success",
     message: "Xác thực thành công!",
@@ -2488,7 +2512,9 @@ function handleVerifyOtpFast(data) {
     avatar_url: userRowInfo.avatarUrl,
     role: userRowInfo.role,
     expires_in: durationMinutes * 60,
-    last_active_at: nowMs
+    last_active_at: nowMs,
+    nav_items: fallbackNavItems,
+    nav_order: fallbackNavOrder
   });
 }
 
