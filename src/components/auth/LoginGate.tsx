@@ -8,6 +8,7 @@ import BrandLogo from "@/components/common/BrandLogo"
 import {
   requestTeamsOtp,
   verifyTeamsOtp,
+  syncNavConfigFastOnLogin,
   refreshAllDataOnLogin,
   getStoredSession,
   UserSession,
@@ -208,20 +209,22 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
         setIsSyncing(true)
         setSyncStepText("Đang đồng bộ dữ liệu & phân quyền...")
 
-        // Chờ đồng bộ Master Data (nav_items, nav_order, squads, role sync)
-        // Dùng Promise.race để đảm bảo timeout an toàn tối đa 3 giây phòng khi mạng chậm
+        // Chờ đồng bộ siêu tốc Master Data & Menu Nav (chỉ nạp config nhẹ, timeout tối đa 1.0 giây)
         try {
           await Promise.race([
-            refreshAllDataOnLogin(),
-            new Promise((resolve) => setTimeout(resolve, 3000)),
+            syncNavConfigFastOnLogin(),
+            new Promise((resolve) => setTimeout(resolve, 1000)),
           ])
         } catch (syncErr) {
           console.warn("Lỗi đồng bộ trong lúc đăng nhập:", syncErr)
         }
 
-        // Lấy session mới nhất (phòng trường hợp syncSessionRoleFromSheet đã cập nhật role chuẩn từ Sheet)
+        // Lấy session mới nhất
         const effectiveSession = getStoredSession() || res.session
         onAuthSuccess(effectiveSession)
+
+        // Dữ liệu danh sách bài toán (Requests) chạy ngầm không chặn người dùng
+        refreshAllDataOnLogin().catch(() => {})
       } else {
         setErrorMsg(res.message || "Mã xác thực không chính xác. Vui lòng kiểm tra lại.")
         if (typeof res.remainingAttempts === "number") {
@@ -254,13 +257,16 @@ export default function LoginGate({ onAuthSuccess }: LoginGateProps) {
 
     try {
       await Promise.race([
-        refreshAllDataOnLogin(),
-        new Promise((resolve) => setTimeout(resolve, 2500)),
+        syncNavConfigFastOnLogin(),
+        new Promise((resolve) => setTimeout(resolve, 800)),
       ])
     } catch {}
 
     const effectiveSession = getStoredSession() || session
     onAuthSuccess(effectiveSession)
+
+    // Tải danh sách bài toán chạy ngầm
+    refreshAllDataOnLogin().catch(() => {})
   }
 
   const handleOtpComplete = (code: string) => {

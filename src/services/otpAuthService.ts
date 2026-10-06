@@ -1377,6 +1377,41 @@ export async function syncSessionRoleFromSheet(): Promise<UserSession | null> {
   return currentSession
 }
 
+/**
+ * Tải siêu tốc cấu hình Nav & Master Data khi đăng nhập (chỉ tải cấu hình nhẹ, không chặn luồng tải bài toán)
+ */
+export async function syncNavConfigFastOnLogin(): Promise<void> {
+  try {
+    const res = await fetchMasterDataFromSheet()
+    if (res.success && res.data) {
+      if (res.data.nav_items && typeof res.data.nav_items === "object") {
+        saveRoleNavConfig(res.data.nav_items)
+      }
+      if (res.data.nav_order && typeof res.data.nav_order === "object") {
+        saveNavOrderConfig(res.data.nav_order)
+      }
+      if (Array.isArray(res.data.products) && res.data.products.length > 0) {
+        localStorage.setItem("mbbank_admin_products", JSON.stringify(res.data.products))
+        localStorage.setItem("ux_portal_products_v2", JSON.stringify(res.data.products))
+      }
+      if (Array.isArray(res.data.squads) && res.data.squads.length > 0) {
+        localStorage.setItem("mbbank_admin_squads", JSON.stringify(res.data.squads))
+        localStorage.setItem("ux_portal_squads_v2", JSON.stringify(res.data.squads))
+      }
+      if (Array.isArray(res.data.phases) && res.data.phases.length > 0) {
+        localStorage.setItem("mbbank_admin_phases", JSON.stringify(res.data.phases))
+        localStorage.setItem("ux_portal_phases_v2", JSON.stringify(res.data.phases))
+      }
+      if (Array.isArray(res.data.team_members) && res.data.team_members.length > 0) {
+        localStorage.setItem("mbbank_admin_team", JSON.stringify(res.data.team_members))
+        localStorage.setItem("mbbank_team_members", JSON.stringify(res.data.team_members))
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fast-sync nav config on login:", e)
+  }
+}
+
 let activeRefreshPromise: Promise<void> | null = null
 
 /**
