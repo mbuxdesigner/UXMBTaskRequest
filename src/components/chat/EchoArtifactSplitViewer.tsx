@@ -4,7 +4,6 @@ import {
   FileCode,
   FileSpreadsheet,
   X,
-  ExternalLink,
   Copy,
   Check,
   File,
@@ -556,6 +555,15 @@ export function EchoArtifactSplitViewer({
           i++
         }
         const quoteContent = quoteLines.join("\n")
+
+        // Bỏ qua callout lưu trữ Google Drive theo yêu cầu người dùng
+        if (
+          quoteContent.includes("Tệp lưu trữ tại Google Drive") ||
+          (quoteContent.includes("Google Drive") && quoteContent.includes("Tải về"))
+        ) {
+          continue
+        }
+
         elements.push(
           <div
             key={`quote-${startIdx}`}
@@ -823,19 +831,7 @@ export function EchoArtifactSplitViewer({
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Google Drive Link if present */}
-          {artifact.driveUrl && (
-            <a
-              href={artifact.driveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-              title="Mở trên Google Drive"
-            >
-              <ExternalLink className="size-3.5" />
-              <span className="hidden sm:inline">Drive</span>
-            </a>
-          )}
+          {/* Delete artifact button */}
 
           {/* Delete artifact button */}
           {canDelete && onDelete && (

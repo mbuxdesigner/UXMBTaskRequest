@@ -1105,17 +1105,15 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
           const imageEmbedUrl = localDataUrl || driveThumbnailUrl || driveUrl
 
-          const driveLinksMd = driveUrl
-            ? `\n\n[🔗 Mở xem trên Google Drive](${driveUrl}) · [📥 Tải file gốc](${driveDownloadUrl || driveUrl})\n\n`
-            : "\n\n"
+          const driveLinksMd = "\n\n"
 
           const newArt = addArtifact({
             name: fileName,
             fileType: "image",
             size: formatFileSize(driveRes.fileSize || file.size),
-            content: `# ${fileName}\n\n![${fileName}](${imageEmbedUrl})${driveLinksMd}*Ảnh màn hình / tài liệu thiết kế do ${userName} tải lên và lưu trữ an toàn trên Google Drive.*`,
-            summary: `Ảnh thiết kế / tư liệu: ${fileName}${driveUrl ? " (Đã lưu Google Drive)" : ""}`,
-            tags: ["Ảnh", ext.toUpperCase(), "Google Drive"],
+            content: `# ${fileName}\n\n![${fileName}](${imageEmbedUrl})${driveLinksMd}*Ảnh màn hình / tài liệu thiết kế do ${userName} tải lên.*`,
+            summary: `Ảnh thiết kế / tư liệu: ${fileName}`,
+            tags: ["Ảnh", ext.toUpperCase()],
             isCustomUploaded: true,
             driveUrl: driveUrl || undefined,
             driveFileId: driveRes.fileId,
@@ -1143,20 +1141,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               r.readAsText(file)
             })
           } catch {
-            textContent = `Tệp ${fileName} (${formatFileSize(file.size)}) đã được lưu trữ trên Google Drive.`
+            textContent = `Tệp ${fileName} (${formatFileSize(file.size)}).`
           }
-
-          const driveBanner = driveUrl
-            ? `> 📂 **Tệp lưu trữ tại Google Drive:** [${fileName}](${driveUrl}) · [📥 Tải về](${driveDownloadUrl || driveUrl})\n\n`
-            : ""
 
           const newArt = addArtifact({
             name: fileName,
             fileType,
             size: formatFileSize(driveRes.fileSize || file.size),
-            content: `${driveBanner}${textContent}`,
-            summary: `Tài liệu do ${userName} tải lên: ${fileName}${driveUrl ? " (Đã lưu Google Drive)" : ""}`,
-            tags: ["Tải lên", ext.toUpperCase(), "Google Drive"],
+            content: textContent,
+            summary: `Tài liệu do ${userName} tải lên: ${fileName}`,
+            tags: ["Tải lên", ext.toUpperCase()],
             isCustomUploaded: true,
             driveUrl: driveUrl || undefined,
             driveFileId: driveRes.fileId,
