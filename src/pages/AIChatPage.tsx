@@ -6641,23 +6641,8 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
             </motion.button>
           </div>
 
-          {/* Right Action: Instructions Hint & Send Button */}
-          <div className="flex items-center gap-3">
-            {/* Keyboard Shortcuts Hint */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 select-none">
-              <span className="inline-flex items-center gap-1">
-                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
-                <span className="text-[10px] text-slate-400">gửi</span>
-              </span>
-              <span className="text-slate-300 dark:text-neutral-600">•</span>
-              <span className="inline-flex items-center gap-1">
-                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[10px] leading-none px-1.5 py-0.5 rounded">Shift</kbd>
-                <span className="text-slate-400 text-[10px]">+</span>
-                <kbd className="bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-neutral-700 shadow-2xs font-sans text-[11px] leading-none px-1.5 py-0.5 rounded">↵</kbd>
-                <span className="text-[10px] text-slate-400">xuống dòng</span>
-              </span>
-            </div>
-
+          {/* Right Action: Send / Stop Button */}
+          <div className="flex items-center gap-2">
             {/* Send / Stop Button */}
             {isStreaming ? (
               <motion.button
