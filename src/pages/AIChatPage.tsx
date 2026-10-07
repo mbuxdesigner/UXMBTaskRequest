@@ -53,6 +53,7 @@ import {
   Key,
   Image as ImageIcon,
   Info,
+  GripVertical,
 } from "lucide-react"
 import { EchoInteractiveChart, EchoMermaidFlowchart } from "@/components/common/EchoChartsAndFlowcharts"
 import { DropdownMenu } from "@/components/reui/dropdown-menu"
@@ -496,6 +497,60 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const [artifacts, setArtifacts] = useState<UXArtifact[]>(() => getStoredArtifacts())
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
   const [isChatSplitOpen, setIsChatSplitOpen] = useState(true)
+  const [splitRatio, setSplitRatio] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("ux_mb_chat_doc_split_ratio")
+      if (saved) {
+        const val = parseFloat(saved)
+        if (!isNaN(val) && val >= 25 && val <= 75) return val
+      }
+    } catch {}
+    return 48
+  })
+  const [isDraggingSplitter, setIsDraggingSplitter] = useState(false)
+  const [isDesktopSplit, setIsDesktopSplit] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true
+  )
+  const splitContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktopSplit(window.innerWidth >= 1024)
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  useEffect(() => {
+    if (!isDraggingSplitter) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!splitContainerRef.current) return
+      const rect = splitContainerRef.current.getBoundingClientRect()
+      const rawPercent = ((e.clientX - rect.left) / rect.width) * 100
+      const clamped = Math.min(75, Math.max(25, rawPercent))
+      setSplitRatio(clamped)
+    }
+
+    const handleMouseUp = () => {
+      setIsDraggingSplitter(false)
+      try {
+        localStorage.setItem("ux_mb_chat_doc_split_ratio", splitRatio.toFixed(1))
+      } catch {}
+    }
+
+    document.body.style.userSelect = "none"
+    document.body.style.cursor = "col-resize"
+
+    window.addEventListener("mousemove", handleMouseMove)
+    window.addEventListener("mouseup", handleMouseUp)
+
+    return () => {
+      document.body.style.userSelect = ""
+      document.body.style.cursor = ""
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDraggingSplitter, splitRatio])
+
   const [artifactZoom, setArtifactZoom] = useState(100)
   const [createArtifactModalOpen, setCreateArtifactModalOpen] = useState(false)
   const [newArtTitle, setNewArtTitle] = useState("")
@@ -2665,16 +2720,23 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             {selectedArtifact ? (
               /* DUAL PANE / SPLIT VIEW: CHAT VIEWPORT (LEFT) + ARTIFACT VIEWER (RIGHT) */
               <motion.div
+                ref={splitContainerRef}
                 key={`main-view-split-${selectedArtifact.id}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8, scale: 0.995 }}
                 transition={{ duration: 0.22, ease: easings.easeOutExpo }}
-                className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full"
+                className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden w-full h-full relative"
               >
             {/* Left Pane: Chat Conversation (Can be collapsed via isChatSplitOpen) */}
             {isChatSplitOpen && (
-              <div className="w-full lg:w-1/2 xl:w-[48%] flex flex-col border-r border-slate-200/80 dark:border-neutral-800 min-h-0 h-full overflow-hidden bg-white dark:bg-card">
+              <div
+                style={isDesktopSplit ? { flex: `0 0 ${splitRatio}%`, maxWidth: `${splitRatio}%`, width: `${splitRatio}%` } : undefined}
+                className={cn(
+                  "w-full flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-neutral-800 min-h-0 h-full overflow-hidden bg-white dark:bg-card shrink-0",
+                  !isDraggingSplitter && "transition-[flex-basis,max-width,width] duration-75"
+                )}
+              >
                 {/* Scrollable Message Viewport */}
                 <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
                   {!activeThread?.messages || activeThread.messages.length === 0 ? (
@@ -2759,11 +2821,51 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </div>
             )}
 
+            {/* Draggable Divider / Resizer (Visible on desktop) */}
+            {isChatSplitOpen && (
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  setIsDraggingSplitter(true)
+                }}
+                onDoubleClick={() => setSplitRatio(50)}
+                title="Kéo sang trái/phải để điều chỉnh độ rộng (Click đúp để căn đều 50/50)"
+                className={cn(
+                  "hidden lg:flex w-3 -mx-1.5 z-30 cursor-col-resize select-none items-center justify-center group relative transition-colors shrink-0",
+                  isDraggingSplitter ? "bg-blue-500/20" : "hover:bg-blue-500/10"
+                )}
+              >
+                {/* Visual hairline */}
+                <div
+                  className={cn(
+                    "w-0.5 h-full transition-all duration-150",
+                    isDraggingSplitter
+                      ? "bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.6)]"
+                      : "bg-slate-200 dark:bg-neutral-800 group-hover:bg-blue-500"
+                  )}
+                />
+                {/* Visual grip handle pill */}
+                <div
+                  className={cn(
+                    "absolute top-1/2 -translate-y-1/2 size-5 rounded-full bg-white dark:bg-neutral-900 border shadow-2xs flex items-center justify-center transition-all",
+                    isDraggingSplitter
+                      ? "border-blue-500 text-blue-600 scale-110 shadow-md ring-2 ring-blue-500/20"
+                      : "border-slate-300 dark:border-neutral-700 text-slate-400 group-hover:border-blue-400 group-hover:text-blue-500"
+                  )}
+                >
+                  <GripVertical className="size-3" />
+                </div>
+              </div>
+            )}
+
             {/* Right Pane: Document Viewer with high-end typography & floating zoom pill */}
-            <div className={cn(
-              "flex flex-col min-h-0 h-full overflow-hidden transition-all",
-              isChatSplitOpen ? "w-full lg:w-1/2 xl:w-[52%]" : "w-full"
-            )}>
+            <div
+              style={isDesktopSplit && isChatSplitOpen ? { flex: `0 0 ${100 - splitRatio}%`, maxWidth: `${100 - splitRatio}%`, width: `${100 - splitRatio}%` } : undefined}
+              className={cn(
+                "flex flex-col min-h-0 h-full overflow-hidden transition-all flex-1",
+                !isDraggingSplitter && "transition-[flex-basis,max-width,width] duration-75"
+              )}
+            >
               <EchoArtifactSplitViewer
                 artifact={selectedArtifact}
                 onClose={() => setSelectedArtifactId(null)}
