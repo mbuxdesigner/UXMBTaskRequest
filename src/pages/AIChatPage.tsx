@@ -6639,17 +6639,6 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
             >
               <Sparkles className="size-3.5" />
             </motion.button>
-
-            {/* 4. Artifacts Library Button */}
-            <motion.button
-              type="button"
-              onClick={onOpenArtifacts}
-              {...tactileProps.iconButton}
-              className="size-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
-              title="Mở thư viện tài liệu Artifacts"
-            >
-              <FolderOpen className="size-3.5" />
-            </motion.button>
           </div>
 
           {/* Right Action: Instructions Hint & Send Button */}
