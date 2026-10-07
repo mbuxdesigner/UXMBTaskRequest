@@ -968,10 +968,8 @@ export async function streamAICompletion(
       const fallbackModels = Array.from(new Set([
         targetModel,
         "google/gemma-4-31b-it:free",
-        "qwen/qwen3.8-27b:free",
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
         "openrouter/free"
-      ]))
+      ])).slice(0, 3)
 
       // Mọi request production đi qua Edge Gateway; không đưa provider key vào browser.
       // 1. Gọi qua Edge Gateway: /api/ai-gateway
