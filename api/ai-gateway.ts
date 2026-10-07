@@ -378,7 +378,8 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
-    // 4. In-Memory Sliding Window Rate Limiting (Tối đa 20 req/phút per IP / session)
+    // 4. Rate Limiting (Tối đa 20 req/phút per IP / session)
+    // Ưu tiên Upstash Redis phân tán nếu có cấu hình; tự động fallback in-memory nếu chưa cấu hình
     const clientIp =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
@@ -388,20 +389,17 @@ export default async function handler(req: Request): Promise<Response> {
         ? `session:${sessionToken}`
         : `ip:${clientIp}`
     let rateLimit: { configured?: boolean; allowed: boolean; remaining: number; retryAfterSeconds: number }
-    if (runtimeEnv === "production") {
+    const hasUpstash = Boolean(getEnv("UPSTASH_REDIS_REST_URL") && getEnv("UPSTASH_REDIS_REST_TOKEN"))
+
+    if (runtimeEnv === "production" && hasUpstash) {
       try {
         rateLimit = await checkDistributedRateLimit(rateLimitIdentifier)
-      } catch {
-        return new Response(
-          JSON.stringify({ success: false, error: { message: "Không thể xác minh giới hạn truy cập AI. Vui lòng thử lại sau." } }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        )
-      }
-      if (!rateLimit.configured) {
-        return new Response(
-          JSON.stringify({ success: false, error: { message: "Kho giới hạn truy cập AI chưa được cấu hình trên máy chủ." } }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        )
+        if (!rateLimit.configured) {
+          rateLimit = checkRateLimit(rateLimitIdentifier)
+        }
+      } catch (err) {
+        console.warn("[AI Gateway] Distributed rate limit check failed, falling back to in-memory limiter:", err)
+        rateLimit = checkRateLimit(rateLimitIdentifier)
       }
     } else {
       rateLimit = checkRateLimit(rateLimitIdentifier)
