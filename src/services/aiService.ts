@@ -334,8 +334,10 @@ export function getDailyAIUsage(): AIDailyUsage {
       openRouter: dummyOpenRouter,
     }
   }
-  const openRouterKeys = getStoredAIKeys().filter(k => k.status !== "error")
-  const googleKeys = getStoredGeminiKeys().filter(k => k.status !== "error")
+  const customAIKeys = getCustomAIKeysPool().filter(k => k.status !== "error")
+  const customGoogleKeys = getCustomGeminiKeysPool().filter(k => k.status !== "error")
+  const openRouterKeys = customAIKeys.length > 0 ? customAIKeys : getStoredAIKeys().filter(k => k.status !== "error")
+  const googleKeys = customGoogleKeys.length > 0 ? customGoogleKeys : getStoredGeminiKeys().filter(k => k.status !== "error")
   const openRouterKeysCount = openRouterKeys.length
   const googleKeysCount = googleKeys.length
 
@@ -530,7 +532,7 @@ export function getModelAvailability(modelId: string): {
       badgeVariant: "warning",
     }
   }
-  if (group.status === "exhausted" || group.remainingRequests <= 0) {
+  if (group.status === "exhausted" || (group.totalRequests > 0 && group.remainingRequests <= 0)) {
     return {
       isAvailable: false,
       groupName: group.groupName,
@@ -543,9 +545,9 @@ export function getModelAvailability(modelId: string): {
   return {
     isAvailable: true,
     groupName: group.groupName,
-    percentRemaining: group.percentRemaining,
-    remainingRequests: group.remainingRequests,
-    badgeText: `Còn ${group.percentRemaining}%`,
+    percentRemaining: group.totalRequests === 0 ? 100 : group.percentRemaining,
+    remainingRequests: group.totalRequests === 0 ? 999 : group.remainingRequests,
+    badgeText: group.totalRequests === 0 ? "Sẵn sàng" : `Còn ${group.percentRemaining}%`,
     badgeVariant: "success",
   }
 }
