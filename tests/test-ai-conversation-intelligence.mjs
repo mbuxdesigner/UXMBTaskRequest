@@ -21,9 +21,10 @@ const task = (id, nickname, product, extras = {}) => ({
 })
 
 const tasks = [
-  task("UXMB-101", "Tiền gửi Online", "Tiền gửi", { feature_journey: "Mở sổ tiết kiệm" }),
-  task("UXMB-102", "Tiền gửi Siêu Lãi", "Tiền gửi", { feature_journey: "Tái tục khoản gửi" }),
-  task("UXMB-205", "Luồng mở thẻ tín dụng", "Thẻ tín dụng", { feature_journey: "Đăng ký thẻ" }),
+  task("UXMB-101", "Tiền gửi Online", "Tiền gửi", { feature_journey: "Mở sổ tiết kiệm", current_phase: "User Flow", assigned_designer: "Nguyễn Văn Cường" }),
+  task("UXMB-102", "Tiền gửi Siêu Lãi", "Tiền gửi", { feature_journey: "Tái tục khoản gửi", current_phase: "UI Design", assigned_designer: "Trần Thị Mai" }),
+  task("UXMB-205", "Luồng mở thẻ tín dụng", "Thẻ tín dụng", { feature_journey: "Đăng ký thẻ", current_phase: "User Flow", assigned_designer: "Nguyễn Văn Cường" }),
+  task("REQ-001", "Mở tài khoản CASA", "App MBBank", { feature_journey: "CASA Onboarding", current_phase: "Prototype", assigned_designer: "Lê Văn An" }),
 ]
 
 let passed = 0
@@ -145,4 +146,32 @@ test("Grounding chặn mã task do model tự bịa", () => {
   assert.deepEqual(result.unknownTaskReferences, ["UXMB-999"])
 })
 
+test("Resolve linh hoạt mã task dạng compact, hashtag, tiền tố bài/task", () => {
+  assert.equal(resolveTaskReference("kiểm tra req001", tasks).task?.request_id, "REQ-001")
+  assert.equal(resolveTaskReference("task 001", tasks).task?.request_id, "REQ-001")
+  assert.equal(resolveTaskReference("bài 101", tasks).task?.request_id, "UXMB-101")
+  assert.equal(resolveTaskReference("xem giúp #REQ-001", tasks).task?.request_id, "REQ-001")
+  assert.equal(resolveTaskReference("REQ_001 thế nào", tasks).task?.request_id, "REQ-001")
+})
+
+test("Resolve câu hỏi tự nhiên bài CASA không bị rơi vào null", () => {
+  const r1 = resolveTaskReference("bài toán CASA thế nào rồi", tasks)
+  assert.equal(r1.task?.request_id, "REQ-001")
+  assert.ok(r1.confidence >= 0.8)
+
+  const r2 = resolveTaskReference("bài CASA thế nào", tasks)
+  assert.equal(r2.task?.request_id, "REQ-001")
+})
+
+test("Nhận diện câu hỏi theo Designer", () => {
+  const result = resolveTaskReference("các task của Cường", tasks)
+  assert.deepEqual(result.candidates.map((t) => t.request_id).sort(), ["UXMB-101", "UXMB-205"])
+})
+
+test("Nhận diện câu hỏi theo Khâu UX", () => {
+  const result = resolveTaskReference("những bài ở khâu 4", tasks)
+  assert.deepEqual(result.candidates.map((t) => t.request_id).sort(), ["UXMB-101", "UXMB-205"])
+})
+
 console.log(`\nAI conversation intelligence: ${passed}/${passed} tests passed.`)
+

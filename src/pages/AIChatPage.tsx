@@ -1580,10 +1580,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       previousMemory?.pendingTaskIds
     )
     const resolvedTask = taskResolution.task
-    const usesTaskContext = baseUsesTaskContext || Boolean(resolvedTask && taskResolution.isFollowUp)
     const aggregateTaskQuery = isTiendoCommand || isChartCommand || isAggregateTaskQuery(cleanText)
+    const usesTaskContext =
+      baseUsesTaskContext ||
+      Boolean(resolvedTask) ||
+      taskResolution.candidates.length > 0 ||
+      aggregateTaskQuery
     const focusedTasks = aggregateTaskQuery
-      ? tasks
+      ? (taskResolution.candidates.length > 0 ? taskResolution.candidates : tasks)
       : resolvedTask
       ? [resolvedTask]
       : taskResolution.candidates.length > 0
@@ -1655,9 +1659,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       loadedDocNames: loadedDocNames.length > 0 ? loadedDocNames : undefined,
       resolvedTaskId: resolvedTask?.request_id,
       retrievalSummary: resolvedTask
-        ? `Đã định danh bài toán ${resolvedTask.request_id} và nạp dữ liệu chi tiết.`
+        ? `Đã định danh bài toán ${resolvedTask.request_id} (${resolvedTask.nickname || resolvedTask.title}) và nạp dữ liệu chi tiết.`
         : taskResolution.method === "ambiguous"
         ? `Tìm thấy ${taskResolution.candidates.length} bài toán có thể phù hợp; cần người dùng xác nhận.`
+        : taskResolution.candidates.length > 0
+        ? `Đã tìm thấy & nạp ${taskResolution.candidates.length} bài toán phù hợp tiêu chí truy vấn.`
         : usesTaskContext
         ? `Đã nạp ${focusedTasks.length || tasks.length} bài toán trong phạm vi được phép.`
         : loadedDocNames.length > 0
@@ -1735,9 +1741,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       {
         id: "step-1",
         label: resolvedTask
-          ? `Đã xác định bài toán ${resolvedTask.request_id}`
+          ? `Đã xác định bài toán ${resolvedTask.request_id} (${resolvedTask.nickname || resolvedTask.title})`
           : taskResolution.method === "ambiguous"
           ? `Phát hiện ${taskResolution.candidates.length} bài toán cần xác nhận`
+          : taskResolution.candidates.length > 0
+          ? `Đã tìm thấy ${taskResolution.candidates.length} bài toán phù hợp tiêu chí`
           : "Đã phân tích yêu cầu và phạm vi dữ liệu",
         status: "completed",
         timestamp: new Date().toISOString(),

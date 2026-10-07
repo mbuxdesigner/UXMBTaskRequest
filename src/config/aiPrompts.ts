@@ -201,7 +201,7 @@ export function detectUserIntent(query: string = ""): DetectedIntent {
     isActionCard: q.includes("bài toán trọng điểm") || q.includes("action card") || q.includes("thẻ hành động"),
     isDoc: q.includes("/doc") || q.includes("/tracuu") || q.includes("tài liệu") || q.includes("quy trình") || q.includes("nguyên tắc") || q.includes("quy định") || q.includes("nội quy") || q.includes("chính sách") || q.includes("tiêu chuẩn") || q.includes("checklist") || q.includes("design system") || q.includes("token") || q.includes("sla") || q.includes("hướng dẫn") || q.includes("handoff") || q.startsWith("@"),
     isProductSpec: /tiền gửi|tiet kiem|tiết kiệm|chứng chỉ tiền gửi|siêu lãi|san pham|sản phẩm|ekyc|nfc|thẻ|the tín dụng|cho vay|khoản vay|chuyển tiền|tai khoan|tài khoản|qr/.test(q),
-    isTask: /\b(task|tasks|deadline|pending)\b|bài toán|công việc|tiến độ|quá hạn|trễ hạn|rủi ro|phụ trách|ưu tiên|trọng tâm|tập trung|nên làm gì|đang làm/.test(q),
+    isTask: /\b(task|tasks|deadline|pending|req|uxmb)\b|bài toán|công việc|tiến độ|quá hạn|trễ hạn|rủi ro|phụ trách|ưu tiên|trọng tâm|tập trung|nên làm gì|đang làm|\bbài\b|khâu\s*\d|khau\s*\d/.test(q),
     isCalendar: /lịch|cuộc họp|họp|calendar|deep work|khung giờ/.test(q),
     isWeather: /thời tiết|dự báo thời tiết|trời (?:có )?mưa|có mưa không|nhiệt độ|trời nắng/.test(q),
     isDateTime: /hôm nay.*(?:ngày bao nhiêu|ngày mấy|ngày gì|thứ mấy)|mấy giờ|giờ hiện tại|bây giờ là/.test(q),
@@ -607,8 +607,8 @@ export function buildEnrichedContext(options: {
   const metrics = computeTaskMetrics(effectiveTasks, now)
   const intent = detectUserIntent(options.userQuery || "")
   const hasQuery = Boolean(options.userQuery?.trim())
-  // Agentic Context Routing: Chỉ nạp Task Data khi câu hỏi thực sự liên quan đến bài toán/tiến độ/phân bổ
-  const includeTaskContext = !hasQuery || intent.isTask || intent.isChart || intent.isTaskUpdate || intent.isActionCard
+  // Agentic Context Routing: Nạp Task Data khi câu hỏi liên quan hoặc khi caller truyền tasks cụ thể
+  const includeTaskContext = !hasQuery || Boolean(options.tasks && options.tasks.length > 0) || intent.isTask || intent.isChart || intent.isTaskUpdate || intent.isActionCard
   const includeCalendarContext = !hasQuery || intent.isCalendar
 
   // 1. CURRENT_TIME chuẩn xác
