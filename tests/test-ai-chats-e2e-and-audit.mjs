@@ -2148,6 +2148,32 @@ if (fs.existsSync(aiPromptsPath) && fs.existsSync(aiArtifactsPath)) {
     assert.ok(systemMsg.content.includes("#1057FB"), "System message must contain MB Primary Blue from AI_PERSONA")
     assert.ok(systemMsg.content.includes("Design Ops Copilot") || systemMsg.content.includes("MBBank"), "System message must contain MB persona")
   })
+
+  // INT-PROMPT-05: searchArtifactsByQuery matches custom-uploaded documents without approvalStatus restriction
+  runTest("Integration", "INT-PROMPT-05", "src/config/aiPrompts.ts: searchArtifactsByQuery automatically matches custom uploaded docs (e.g. Nguye_tac_lam_viec.md)", () => {
+    const mockArtifacts = [
+      {
+        id: "art-custom-1",
+        name: "Nguye_tac_lam_viec.md",
+        content: "# Nguyên tắc làm việc\n1. Luôn bảo mật thông tin nội bộ.\n2. Tuân thủ quy trình 7 khâu UX.",
+        summary: "Quy định và nguyên tắc làm việc đội ngũ",
+        tags: ["Nguyên tắc", "Quy định"],
+        isCustomUploaded: true,
+      },
+      {
+        id: "art-seed-1",
+        name: "Quy_trinh_7_khau.md",
+        content: "Nội dung quy trình",
+        summary: "7 khâu",
+        tags: ["Quy trình"],
+      }
+    ]
+
+    const results = promptsModule.searchArtifactsByQuery("tóm tắt nguyên tắc làm việc giúp tôi", mockArtifacts)
+    assert.ok(Array.isArray(results), "searchArtifactsByQuery must return array")
+    assert.ok(results.length > 0, "Must find relevant document for work principles")
+    assert.strictEqual(results[0].id, "art-custom-1", "Must match custom uploaded Nguye_tac_lam_viec.md")
+  })
 }
 
 // ------------------------------------------------------------------------------

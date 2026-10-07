@@ -1601,19 +1601,25 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const allArtifacts = getStoredArtifacts()
     let loadedDocNames: string[] = []
     let activeArtifactIds: string[] = previousMemory?.activeArtifactIds || []
+    let autoFoundDocs: UXArtifact[] = []
+
     if (attachedDocName) {
       loadedDocNames = [attachedDocName]
       activeArtifactIds = allArtifacts
         .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
         .map((artifact) => artifact.id)
     } else {
-      const shouldSearchDocs = isDocCommand || questionIntent.isDoc || questionIntent.isProductSpec || (!usesTaskContext && Boolean(cleanText))
       const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
-      const matchedDocs = shouldSearchDocs || Boolean(resolvedTask)
-        ? searchArtifactsByQuery(retrievalQuery, allArtifacts)
-        : []
-      loadedDocNames = matchedDocs.map((d) => d.name)
-      if (matchedDocs.length > 0) activeArtifactIds = matchedDocs.map((document) => document.id)
+      const matchedDocs = searchArtifactsByQuery(retrievalQuery, allArtifacts)
+      if (matchedDocs.length > 0) {
+        autoFoundDocs = matchedDocs
+        loadedDocNames = matchedDocs.map((d) => d.name)
+        activeArtifactIds = matchedDocs.map((document) => document.id)
+        if (!selectedArtifactId) {
+          setSelectedArtifactId(matchedDocs[0].id)
+          setIsChatSplitOpen(true)
+        }
+      }
     }
 
     const intentLabel = questionIntent.isTask || questionIntent.isTaskUpdate || resolvedTask
@@ -1655,7 +1661,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         : usesTaskContext
         ? `Đã nạp ${focusedTasks.length || tasks.length} bài toán trong phạm vi được phép.`
         : loadedDocNames.length > 0
-        ? `Đã nạp ${loadedDocNames.length} tài liệu liên quan.`
+        ? `Đã tự động tìm kiếm & nạp ${loadedDocNames.length} tài liệu liên quan: ${loadedDocNames.join(", ")}.`
         : "Không cần nạp dữ liệu công việc cho câu hỏi này.",
       confidence: taskResolution.confidence,
     }
@@ -1738,7 +1744,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       },
       {
         id: "step-2",
-        label: `Đã nạp ${focusedTasks.length} bài toán và ${loadedDocNames.length} tài liệu liên quan`,
+        label: loadedDocNames.length > 0
+          ? `Đã tìm thấy & nạp ${loadedDocNames.length} tài liệu: ${loadedDocNames.join(", ")}`
+          : focusedTasks.length > 0
+          ? `Đã nạp ${focusedTasks.length} bài toán và ${loadedDocNames.length} tài liệu`
+          : "Đã nạp phạm vi dữ liệu ngữ cảnh",
         status: "completed",
         timestamp: new Date().toISOString(),
       },
@@ -1849,6 +1859,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           userRole: session?.role,
           userQuery: retrievalQuery,
         }) + `\n\n${customContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời đầy đủ, trực tiếp câu hỏi của người dùng. Trích xuất chính xác nguyên văn các nguyên tắc, điều khoản hoặc quy định được hỏi. Trả lời chi tiết, có cấu trúc rõ ràng.`
+      } else if (autoFoundDocs.length > 0) {
+        // Tự động tìm kiếm và nạp tài liệu phù hợp từ kho Artifacts khi không có tài liệu gắn kèm cụ thể
+        const docsSummary = serializeArtifactsContext(autoFoundDocs, "full")
+        contextStr = buildEnrichedContext({
+          intelligence,
+          tasks: focusedTasks.length > 0 ? focusedTasks : tasks,
+          artifacts: [], // Đã nạp autoFoundDocs bên dưới
+          userName,
+          userRole: session?.role,
+          userQuery: retrievalQuery,
+        }) + `\n\n=== TÀI LIỆU NỘI BỘ TỰ ĐỘNG TÌM THẤY THEO YÊU CẦU ===\n${docsSummary}\n\n=== CHỈ DẪN TRẢ LỜI CĂN CỨ VÀO TÀI LIỆU TÌM THẤY ===\nNgười dùng chưa gắn kèm tài liệu nhưng hệ thống đã tự động tìm thấy ${autoFoundDocs.length} tài liệu phù hợp trong kho: ${autoFoundDocs.map(d => `"${d.name}"`).join(", ")}.\nHãy đọc kỹ toàn bộ nội dung tài liệu trên để trả lời trực tiếp, chính xác câu hỏi của người dùng.\nƯu tiên trích dẫn đúng nguyên tắc, điều khoản, quy định trong tài liệu và ghi rõ tên tài liệu nguồn.`
       } else {
         // Default: Luôn gửi enriched context (tasks + artifacts summary)
         contextStr = buildEnrichedContext({
@@ -2495,6 +2516,30 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 <div className="flex items-center justify-between px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
                   <span>Kho tài liệu</span>
                   <span className="text-[11px] font-mono text-slate-400 font-normal">({filteredArtifacts.length})</span>
+                </div>
+
+                {/* Quick Search input for Artifacts */}
+                <div className="px-1.5 pb-2 pt-0.5">
+                  <div className="relative flex items-center">
+                    <Search className="size-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tìm kiếm tài liệu..."
+                      className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-slate-100/90 dark:bg-neutral-800/80 border border-slate-200/70 dark:border-neutral-700/60 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-neutral-600 transition-all text-slate-800 dark:text-slate-200"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                        title="Xóa tìm kiếm"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <motion.div

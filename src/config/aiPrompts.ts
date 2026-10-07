@@ -199,7 +199,7 @@ export function detectUserIntent(query: string = ""): DetectedIntent {
     isFlowchart: q.includes("/flow") || q.includes("/sodo") || q.includes("sơ đồ") || q.includes("flowchart") || q.includes("mermaid") || q.includes("luồng quy trình") || q.includes("hành trình"),
     isTaskUpdate: q.includes("/update") || q.includes("cập nhật task") || q.includes("chuyển khâu") || q.includes("đổi tiến độ") || q.includes("sửa trạng thái"),
     isActionCard: q.includes("bài toán trọng điểm") || q.includes("action card") || q.includes("thẻ hành động"),
-    isDoc: q.includes("/doc") || q.includes("/tracuu") || q.includes("tài liệu") || q.includes("quy trình") || q.includes("checklist") || q.includes("design system") || q.includes("token") || q.includes("sla") || q.includes("hướng dẫn") || q.includes("handoff") || q.startsWith("@"),
+    isDoc: q.includes("/doc") || q.includes("/tracuu") || q.includes("tài liệu") || q.includes("quy trình") || q.includes("nguyên tắc") || q.includes("quy định") || q.includes("nội quy") || q.includes("chính sách") || q.includes("tiêu chuẩn") || q.includes("checklist") || q.includes("design system") || q.includes("token") || q.includes("sla") || q.includes("hướng dẫn") || q.includes("handoff") || q.startsWith("@"),
     isProductSpec: /tiền gửi|tiet kiem|tiết kiệm|chứng chỉ tiền gửi|siêu lãi|san pham|sản phẩm|ekyc|nfc|thẻ|the tín dụng|cho vay|khoản vay|chuyển tiền|tai khoan|tài khoản|qr/.test(q),
     isTask: /\b(task|tasks|deadline|pending)\b|bài toán|công việc|tiến độ|quá hạn|trễ hạn|rủi ro|phụ trách|ưu tiên|trọng tâm|tập trung|nên làm gì|đang làm/.test(q),
     isCalendar: /lịch|cuộc họp|họp|calendar|deep work|khung giờ/.test(q),
@@ -333,8 +333,9 @@ export function computeTaskMetrics(tasks: UXRequest[], now = new Date()): Precom
 export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): UXArtifact[] {
   if (!query || !artifacts || artifacts.length === 0) return []
 
-  const trustedArtifacts = artifacts.filter(
-    (artifact) => !artifact.isCustomUploaded || artifact.approvalStatus === "approved"
+  // Cho phép tra cứu cả tài liệu mặc định lẫn tài liệu do người dùng tải lên (ngoại trừ tài liệu đã retired)
+  const candidateArtifacts = artifacts.filter(
+    (artifact) => artifact.approvalStatus !== "retired"
   )
   
   const q = query.toLowerCase().trim()
@@ -347,7 +348,7 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
     "số", "so", "một", "mot", "hai", "ba", "bốn", "bon", "năm", "nam", "sáu", "sau", "bảy", "bay",
     "tám", "tam", "chín", "chin", "mười", "muoi", "có", "co", "được", "duoc", "không", "khong",
     "hay", "hoặc", "hoac", "tóm", "tom", "tắt", "tat", "hãy", "hay", "gì", "gi", "nào", "nao",
-    "sao", "thế", "the", "như", "nhu", "làm", "lam", "xin", "cần", "can", "muốn", "muon",
+    "sao", "thế", "the", "như", "nhu", "xin", "cần", "can", "muốn", "muon",
     "xem", "đọc", "doc", "biết", "biet", "hỏi", "hoi", "trả", "tra", "lời", "loi"
   ])
 
@@ -361,6 +362,14 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
     "tiet kiem": ["tien-gui", "tien gui", "tiết kiệm", "savings", "lãi suất", "sản phẩm"],
     "sản phẩm": ["tien-gui", "san-pham", "san pham", "sản phẩm", "tiền gửi", "savings"],
     "san pham": ["tien-gui", "san-pham", "san pham", "sản phẩm", "tiền gửi", "savings"],
+    "nguyên tắc": ["nguyen-tac", "nguyen tac", "nguyen_tac", "nguye_tac", "nguyên tắc", "nguyen tac lam viec", "nguyên tắc làm việc", "quy định", "nội quy", "lam viec", "làm việc", "chính sách"],
+    "nguyen tac": ["nguyen-tac", "nguyen tac", "nguyen_tac", "nguye_tac", "nguyên tắc", "nguyen tac lam viec", "nguyên tắc làm việc", "quy định", "nội quy", "lam viec", "làm việc", "chính sách"],
+    "làm việc": ["lam viec", "làm việc", "nguyen tac", "nguyên tắc", "nguyen_tac", "nguye_tac", "quy trinh"],
+    "lam viec": ["lam viec", "làm việc", "nguyen tac", "nguyên tắc", "nguyen_tac", "nguye_tac", "quy trinh"],
+    "quy định": ["quy-dinh", "quy dinh", "quy định", "nguyên tắc", "tiêu chuẩn", "nội quy"],
+    "quy dinh": ["quy-dinh", "quy dinh", "quy định", "nguyên tắc", "tiêu chuẩn", "nội quy"],
+    "tiêu chuẩn": ["tieu-chuan", "tieu chuan", "tiêu chuẩn", "quy chuẩn", "checklist", "handoff"],
+    "tieu chuan": ["tieu-chuan", "tieu chuan", "tiêu chuẩn", "quy chuẩn", "checklist", "handoff"],
     "quy trình": ["quy-trinh", "7-khau", "7 khau", "khau", "quy trinh", "quy trình", "workflow"],
     "quy trinh": ["quy-trinh", "7-khau", "7 khau", "khau", "quy trinh", "quy trình", "workflow"],
     "khâu": ["quy-trinh", "7-khau", "7 khau", "khau"],
@@ -390,23 +399,39 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
 
   if (expandedKeywords.size === 0 && !keywords.length) return []
   
-  const scored = trustedArtifacts.map(art => {
+  const scored = candidateArtifacts.map(art => {
     let score = 0
     const artName = (art.name || "").toLowerCase()
+    const artNameClean = artName.replace(/[-_.]+/g, " ")
     const artNameNorm = normalizeVi(artName)
+    const artNameCleanNorm = normalizeVi(artNameClean)
     const artContent = (art.content || "").toLowerCase()
     const artSummary = (art.summary || "").toLowerCase()
     const artTags = (art.tags || []).map(t => t.toLowerCase()).join(" ")
     const artTagsNorm = normalizeVi(artTags)
     
     // Khớp nguyên cụm từ khóa (Phrase matching)
-    if (artName.includes(q) || artNameNorm.includes(qNorm)) score += 35
+    if (artName.includes(q) || artNameNorm.includes(qNorm) || artNameCleanNorm.includes(qNorm)) score += 40
     if (artTags.includes(q) || artTagsNorm.includes(qNorm)) score += 25
     if (artSummary.includes(q)) score += 15
 
+    const artTokens = artNameCleanNorm.split(/\s+/).filter(t => t.length > 1)
+
     for (const kw of expandedKeywords) {
       const kwNorm = normalizeVi(kw)
-      if (artName.includes(kw) || artNameNorm.includes(kwNorm)) score += 15
+      if (artName.includes(kw) || artNameNorm.includes(kwNorm) || artNameCleanNorm.includes(kwNorm)) {
+        score += 15
+      } else {
+        // Hỗ trợ so khớp tiền tố từ ghép không dấu (ví dụ: nguye khớp nguyen)
+        for (const tok of artTokens) {
+          if (tok.length >= 4 && kwNorm.length >= 4) {
+            if (tok.startsWith(kwNorm) || kwNorm.startsWith(tok)) {
+              score += 12
+              break
+            }
+          }
+        }
+      }
       if (artTags.includes(kw) || artTagsNorm.includes(kwNorm)) score += 10
       if (artSummary.includes(kw)) score += 5
       if (artContent.includes(kw)) score += 2
@@ -415,9 +440,9 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
     return { art, score }
   })
   
-  // Chỉ lấy tài liệu đạt điểm tin cậy (>= 10) và tối đa 2 tài liệu phù hợp nhất
+  // Chỉ lấy tài liệu đạt điểm tin cậy (>= 10) và tối đa 3 tài liệu phù hợp nhất
   const matched = scored.filter(s => s.score >= 10).sort((a, b) => b.score - a.score)
-  return matched.slice(0, 2).map(s => s.art)
+  return matched.slice(0, 3).map(s => s.art)
 }
 
 /**
@@ -627,7 +652,7 @@ export function buildEnrichedContext(options: {
   }
 
   // 6. Tài liệu Artifacts (Agentic Dynamic Knowledge Retrieval)
-  const shouldSearchDocs = intent.isDoc || intent.isProductSpec || (hasQuery && !intent.isTask && !intent.isCalendar)
+  const shouldSearchDocs = intent.isDoc || intent.isProductSpec || (hasQuery && !intent.isCalendar)
   if (shouldSearchDocs && options.artifacts && options.artifacts.length > 0) {
     const query = options.userQuery || ""
     const relevant = searchArtifactsByQuery(query, options.artifacts)
