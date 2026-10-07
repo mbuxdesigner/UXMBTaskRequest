@@ -976,7 +976,9 @@ export async function streamAICompletion(
       // Trong Production (!isDev), BẮT BUỘC 100% phải gọi qua gateway và đính kèm session token
       if (!response) {
         const sessionToken = getStoredSessionToken()
-        const customKey = getCustomApiKey()
+        const customKey = isGeminiTargetForUsage
+          ? (getNextActiveGeminiKey() || getCustomGeminiKey() || getCustomApiKey())
+          : (getCustomApiKey() || getNextActiveGeminiKey())
         const gatewayHeaders: Record<string, string> = {
           "Content-Type": "application/json",
         }

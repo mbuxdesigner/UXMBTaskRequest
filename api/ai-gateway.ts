@@ -13,9 +13,15 @@ export const config = {
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+const GOOGLE_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 const ALLOWED_MODELS = new Set([
   DEFAULT_MODEL,
   "google/gemini-2.0-flash-001",
+  "google/gemini-2.0-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-001",
+  "google/gemini-2.5-flash",
+  "google/gemini-1.5-flash",
   "qwen/qwen3.8-27b:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
 ])
@@ -518,21 +524,51 @@ export default async function handler(req: Request): Promise<Response> {
 
     // 7. Key Rotation Execution
     let lastErrorStatus = 500
-    let lastErrorMessage = "Failed to communicate with OpenRouter"
+    let lastErrorMessage = "Failed to communicate with AI provider"
 
     for (let i = 0; i < availableKeys.length; i++) {
       const activeKey = availableKeys[i]
 
+      // Detect if key belongs to Google AI Studio (starts with AQ., AIzaSy, or is testing/using Gemini with non-OpenRouter key)
+      const isGoogleKey =
+        activeKey.startsWith("AQ.") ||
+        activeKey.startsWith("AIzaSy") ||
+        (!activeKey.startsWith("sk-or-") && requestedModel.includes("gemini"))
+
+      const upstreamEndpoint = isGoogleKey
+        ? `${GOOGLE_AI_ENDPOINT}?key=${encodeURIComponent(activeKey)}`
+        : OPENROUTER_ENDPOINT
+
+      const upstreamHeaders: Record<string, string> = {
+        Authorization: `Bearer ${activeKey}`,
+        "Content-Type": "application/json",
+      }
+
+      if (!isGoogleKey) {
+        upstreamHeaders["HTTP-Referer"] = "https://uxmb-task-request.vercel.app"
+        upstreamHeaders["X-Title"] = "UX MB Task Portal AI"
+      }
+
+      let googleModel = requestedModel.replace(/^google\//, "")
+      if (googleModel === "gemini-2.0-flash-001") {
+        googleModel = "gemini-2.0-flash"
+      }
+
+      const upstreamPayload = isGoogleKey
+        ? {
+            model: googleModel,
+            messages: normalizedMessages,
+            stream: Boolean(stream),
+            temperature: safeTemperature,
+            max_tokens: safeMaxTokens,
+          }
+        : openRouterPayload
+
       try {
-        const upstreamResponse = await fetch(OPENROUTER_ENDPOINT, {
+        const upstreamResponse = await fetch(upstreamEndpoint, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${activeKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://uxmb-task-request.vercel.app",
-            "X-Title": "UX MB Task Portal AI",
-          },
-          body: JSON.stringify(openRouterPayload),
+          headers: upstreamHeaders,
+          body: JSON.stringify(upstreamPayload),
         })
 
         // If rate limited or quota exceeded, rotate to next key
@@ -542,10 +578,10 @@ export default async function handler(req: Request): Promise<Response> {
           continue
         }
 
-        // If unauthorized, rotate to next key
-        if (upstreamResponse.status === 401) {
-          lastErrorStatus = 401
-          lastErrorMessage = `API Key #${i + 1} is invalid (HTTP 401). Attempting next key...`
+        // If unauthorized / forbidden, rotate to next key
+        if (upstreamResponse.status === 401 || upstreamResponse.status === 403) {
+          lastErrorStatus = upstreamResponse.status
+          lastErrorMessage = `API Key #${i + 1} is invalid (HTTP ${upstreamResponse.status}). Attempting next key...`
           continue
         }
 
