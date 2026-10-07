@@ -123,8 +123,10 @@ import { TestExam } from "@/types/testAssessment"
 import {
   getRoleNavConfig,
   saveRoleNavConfig,
+  normalizeRoleNavConfig,
   getNavOrderConfig,
   saveNavOrderConfig,
+  normalizeNavOrderConfig,
   RoleNavConfig,
   RoleNavVisibility,
   NavOrderConfig,
@@ -1918,6 +1920,15 @@ export default function QuanLyPage() {
   const [navOrder, setNavOrder] = useState<NavOrderConfig>(() => getNavOrderConfig())
   const [draggedGroup, setDraggedGroup] = useState<"platform" | "resources" | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    const handleNavChanged = () => {
+      setNavConfig(getRoleNavConfig())
+      setNavOrder(getNavOrderConfig())
+    }
+    window.addEventListener("nav_visibility_changed", handleNavChanged)
+    return () => window.removeEventListener("nav_visibility_changed", handleNavChanged)
+  }, [])
   const [loading, setLoading] = useState<boolean>(() => {
     try {
       const cached = localStorage.getItem("mbbank_admin_team")
@@ -1977,14 +1988,22 @@ export default function QuanLyPage() {
             saveRoleSessionPolicies(d.session_policies)
           }
           if (d.nav_items) {
-            setNavConfig(d.nav_items)
-            saveRoleNavConfig(d.nav_items)
+            const normalizedConfig = normalizeRoleNavConfig(d.nav_items)
+            setNavConfig(normalizedConfig)
+            saveRoleNavConfig(normalizedConfig)
+            if (JSON.stringify(normalizedConfig) !== JSON.stringify(d.nav_items)) {
+              syncMasterDataToSheet({ nav_items: normalizedConfig })
+            }
           } else {
             syncMasterDataToSheet({ nav_items: navConfig })
           }
           if (d.nav_order) {
-            setNavOrder(d.nav_order)
-            saveNavOrderConfig(d.nav_order)
+            const normalizedOrder = normalizeNavOrderConfig(d.nav_order)
+            setNavOrder(normalizedOrder)
+            saveNavOrderConfig(normalizedOrder)
+            if (JSON.stringify(normalizedOrder) !== JSON.stringify(d.nav_order)) {
+              syncMasterDataToSheet({ nav_order: normalizedOrder })
+            }
           } else {
             // One-time migration for installations where menu ordering only
             // existed in this browser's localStorage.
@@ -2566,13 +2585,15 @@ export default function QuanLyPage() {
           updatedCount++
         }
         if (res.data.nav_items && typeof res.data.nav_items === "object") {
-          setNavConfig(res.data.nav_items)
-          saveRoleNavConfig(res.data.nav_items)
+          const normalizedConfig = normalizeRoleNavConfig(res.data.nav_items)
+          setNavConfig(normalizedConfig)
+          saveRoleNavConfig(normalizedConfig)
           updatedCount++
         }
         if (res.data.nav_order && typeof res.data.nav_order === "object") {
-          setNavOrder(res.data.nav_order)
-          saveNavOrderConfig(res.data.nav_order)
+          const normalizedOrder = normalizeNavOrderConfig(res.data.nav_order)
+          setNavOrder(normalizedOrder)
+          saveNavOrderConfig(normalizedOrder)
           updatedCount++
         }
         if (Array.isArray(res.data.audit_logs) && res.data.audit_logs.length > 0) {
@@ -4328,7 +4349,7 @@ export default function QuanLyPage() {
                         overview: { label: "Overview (Tổng quan)", icon: <BarChart3 className="w-3.5 h-3.5" />, desc: "Báo cáo thống kê, biểu đồ tiến độ & SLA tổng thể" },
                         track: { label: "My task (Theo dõi bài toán)", icon: <CheckSquare className="w-3.5 h-3.5" />, desc: "Bảng Kanban, danh sách bảng & lưới theo dõi tiến độ công việc" },
                         calendar: { label: "Lịch & UX Planner", icon: <Calendar className="w-3.5 h-3.5" />, desc: "Lịch trình công việc, deadline bài toán, lịch nghỉ phép & sự kiện team" },
-                        aichat: { label: "AI Chats", icon: <img src="/ai-default.png" alt="AI" className="w-3.5 h-3.5 object-contain" />, desc: "Trợ lý AI hỏi đáp trực tiếp, tra cứu thông tin bài toán & tư vấn nghiệp vụ" },
+                        aichat: { label: "AI Chats (Trợ lý Copilot)", icon: <img src="/ai-default.png" alt="AI" className="w-3.5 h-3.5 object-contain" />, desc: "Trợ lý AI hỏi đáp trực tiếp, tra cứu thông tin bài toán & kho tài liệu" },
                         create: { label: "Tạo task mới (Gửi đề bài)", icon: <PlusCircle className="w-3.5 h-3.5" />, desc: "Form 3 bước gửi bài toán thiết kế UX cho team" },
                         ia: { label: "Kiến trúc Thông tin (IA)", icon: <Network className="w-3.5 h-3.5" />, desc: "Sơ đồ cây tương tác Mindmap & Phân cấp tính năng đa sản phẩm" },
                       }[key]
