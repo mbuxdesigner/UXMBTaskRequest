@@ -2634,20 +2634,6 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               </AnimatePresence>
             </div>
 
-            {/* Sidebar User Footer */}
-            <div className="p-3 border-t border-slate-200/80 shrink-0 bg-slate-50/80 flex items-center justify-between text-xs text-slate-600 select-none">
-              <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                <UserAvatar
-                  name={session?.displayName || userName}
-                  avatarUrl={session?.avatarUrl}
-                  className="size-6.5 shrink-0 rounded-full border border-slate-200/80 shadow-2xs"
-                />
-                <span className="truncate font-semibold text-slate-800 text-xs">{session?.displayName || userName}</span>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold border border-slate-200/70 shrink-0 uppercase">
-                {session?.role || "Designer"}
-              </span>
-            </div>
           </motion.aside>
         )}
       </AnimatePresence>
