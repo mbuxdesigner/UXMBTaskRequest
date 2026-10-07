@@ -1,12 +1,17 @@
 import assert from "node:assert/strict"
+import fs from "node:fs"
 import {
+  buildAggregateClarification,
+  buildDeterministicAggregateAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
   isAggregateTaskQuery,
   isContextualFollowUp,
   normalizeConversationText,
+  resolveAggregateTaskQuery,
   resolveTaskReference,
+  shouldResolveTaskQuery,
 } from "../src/lib/aiConversation.ts"
 
 const task = (id, nickname, product, extras = {}) => ({
@@ -171,6 +176,96 @@ test("Nhận diện câu hỏi theo Designer", () => {
 test("Nhận diện câu hỏi theo Khâu UX", () => {
   const result = resolveTaskReference("những bài ở khâu 4", tasks)
   assert.deepEqual(result.candidates.map((t) => t.request_id).sort(), ["UXMB-101", "UXMB-205"])
+})
+
+const digiTasks = [
+  task("DIGI-001", "Digi Lite_CCCD bổ sung UI", "Digi Invest", { squad_name: "Digital Banking", assigned_designer: "Mai" }),
+  task("DIGI-002", "Dashboard đầu tư", "Digi Invest", { squad_name: "Wealth", assigned_designer: "Cường" }),
+  task("APP-003", "Digi onboarding", "App MBBank", { squad_name: "Digital Banking", assigned_designer: "An" }),
+  task("PAY-004", "Payment overview", "Payments", { squad_name: "Digital Banking", assigned_designer: "Bình" }),
+]
+
+test("Truy vấn Digi mơ hồ được làm rõ theo từng trường thay vì nạp toàn bộ task", () => {
+  assert.equal(isAggregateTaskQuery("Số lượng task của Digi"), true)
+  const result = resolveAggregateTaskQuery("Số lượng task của Digi", digiTasks)
+  assert.equal(result.mode, "clarify")
+  assert.equal(result.operation, "count")
+  assert.equal(result.tasks.length, 0)
+  assert.ok(result.options.some((option) => option.field === "product" && option.taskIds.length === 2))
+  assert.ok(result.options.some((option) => option.field === "title" && option.taskIds.length === 2))
+  assert.ok(result.options.some((option) => option.field === "squad" && option.taskIds.length === 3))
+  assert.match(buildAggregateClarification(result), /nhiều phạm vi/)
+})
+
+test("Truy vấn nêu rõ sản phẩm chỉ lấy task thuộc trường product", () => {
+  const result = resolveAggregateTaskQuery("Sản phẩm Digi có bao nhiêu task?", digiTasks)
+  assert.equal(result.mode, "filtered")
+  assert.equal(result.scope?.field, "product")
+  assert.equal(result.scope?.value, "Digi Invest")
+  assert.deepEqual(result.tasks.map((item) => item.request_id).sort(), ["DIGI-001", "DIGI-002"])
+})
+
+test("Truy vấn nêu rõ tên task gom mọi title chứa Digi vào cùng phạm vi", () => {
+  const result = resolveAggregateTaskQuery("Tên task chứa Digi có bao nhiêu task?", digiTasks)
+  assert.equal(result.mode, "filtered")
+  assert.equal(result.scope?.field, "title")
+  assert.deepEqual(result.tasks.map((item) => item.request_id).sort(), ["APP-003", "DIGI-001"])
+})
+
+test("Lựa chọn làm rõ bằng số được áp dụng ở lượt chat tiếp theo", () => {
+  const ambiguous = resolveAggregateTaskQuery("Digi có bao nhiêu task?", digiTasks)
+  const productIndex = ambiguous.options.findIndex((option) => option.field === "product")
+  const selected = resolveAggregateTaskQuery(String(productIndex + 1), digiTasks, ambiguous.options)
+  assert.equal(selected.mode, "filtered")
+  assert.equal(selected.operation, "count")
+  assert.equal(selected.scope?.field, "product")
+  assert.equal(selected.tasks.length, 2)
+})
+
+test("Không khớp thực thể không được fallback thành toàn bộ task", () => {
+  const result = resolveAggregateTaskQuery("Sản phẩm Không-Tồn-Tại có bao nhiêu task?", digiTasks)
+  assert.equal(result.mode, "none")
+  assert.equal(result.tasks.length, 0)
+  assert.match(buildAggregateClarification(result), /chưa tìm thấy/i)
+})
+
+test("Câu đếm được tạo bằng code và công bố rõ phạm vi", () => {
+  const result = resolveAggregateTaskQuery("Sản phẩm Digi có bao nhiêu task?", digiTasks)
+  const answer = buildDeterministicAggregateAnswer(result, digiTasks.length)
+  assert.match(answer, /\*\*2 task\*\*/)
+  assert.match(answer, /Sản phẩm = Digi Invest/)
+  assert.match(answer, /không yêu cầu AI tự đếm văn bản/)
+})
+
+test("Phạm vi đã chọn được giữ cho câu hỏi nối tiếp", () => {
+  const first = resolveAggregateTaskQuery("Sản phẩm Digi có bao nhiêu task?", digiTasks)
+  const followUp = resolveAggregateTaskQuery("Trong số đó có những task nào?", digiTasks, [], first.scope)
+  assert.equal(followUp.mode, "filtered")
+  assert.equal(followUp.operation, "list")
+  assert.deepEqual(followUp.tasks.map((item) => item.request_id).sort(), ["DIGI-001", "DIGI-002"])
+})
+
+test("Lệnh chart và tiến độ không bị hiểu nhầm thành tên thực thể", () => {
+  assert.equal(resolveAggregateTaskQuery("/chart", digiTasks).mode, "all")
+  assert.equal(resolveAggregateTaskQuery("/tiendo", digiTasks).mode, "all")
+})
+
+test("Intent tài liệu thuần túy không được chuyển sang resolver task", () => {
+  const intent = { isDoc: true, isTask: false, isTaskUpdate: false, isActionCard: false }
+  assert.equal(shouldResolveTaskQuery("tìm tài liệu liên quan đến quy định làm việc", intent), false)
+})
+
+test("Câu hỏi tài liệu vẫn resolve task khi người dùng nêu rõ task hoặc mã task", () => {
+  const docAndTaskIntent = { isDoc: true, isTask: true, isTaskUpdate: false, isActionCard: false }
+  const docOnlyIntent = { isDoc: true, isTask: false, isTaskUpdate: false, isActionCard: false }
+  assert.equal(shouldResolveTaskQuery("tìm tài liệu của task UXMB-101", docAndTaskIntent), true)
+  assert.equal(shouldResolveTaskQuery("tìm tài liệu của UXMB-101", docOnlyIntent), true)
+})
+
+test("Text thường chỉ được đưa vào pipeline render một lần", () => {
+  const pageSource = fs.readFileSync(new URL("../src/pages/AIChatPage.tsx", import.meta.url), "utf8")
+  assert.match(pageSource, /if \(!text\.includes\("\{"\)\) \{\s*normalizedSegments\.push\(seg\)\s*continue/s)
+  assert.doesNotMatch(pageSource, /if \(!foundAnyJson && cursor === 0\)/)
 })
 
 console.log(`\nAI conversation intelligence: ${passed}/${passed} tests passed.`)

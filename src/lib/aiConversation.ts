@@ -4,9 +4,34 @@ export interface AIConversationMemory {
   activeTaskId?: string
   activeArtifactIds: string[]
   pendingTaskIds?: string[]
+  pendingEntityOptions?: TaskEntityOption[]
+  activeEntityScope?: TaskEntityScope
   lastIntent?: string
   lastUserQuery?: string
   updatedAt: string
+}
+
+export type TaskEntityField = "product" | "title" | "squad" | "assignee" | "feature" | "phase" | "status"
+
+export interface TaskEntityOption {
+  field: TaskEntityField
+  value: string
+  taskIds: string[]
+  label: string
+  queryTerm: string
+  operation?: AggregateTaskResolution["operation"]
+}
+
+export interface TaskEntityScope extends TaskEntityOption {}
+
+export interface AggregateTaskResolution {
+  mode: "all" | "filtered" | "clarify" | "none"
+  operation: "count" | "list" | "summary"
+  tasks: UXRequest[]
+  options: TaskEntityOption[]
+  scope?: TaskEntityScope
+  queryTerm: string
+  confidence: number
 }
 
 export interface TaskReferenceResolution {
@@ -57,7 +82,240 @@ export function tokens(value: unknown): string[] {
 
 export function isAggregateTaskQuery(query: string): boolean {
   const q = normalizeConversationText(query)
-  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|co nhung|squad|team|khau \d|khâu \d)\b/.test(q)
+  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|so luong|dem|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|co nhung|squad|team|khau \d|khâu \d)\b/.test(q)
+}
+
+export function shouldResolveTaskQuery(
+  query: string,
+  intent: { isDoc: boolean; isTask: boolean; isTaskUpdate: boolean; isActionCard: boolean },
+  hasPendingTaskSelection = false
+): boolean {
+  if (hasPendingTaskSelection) return true
+  const normalized = normalizeConversationText(query)
+  const hasExplicitTaskReference = /\b(?:uxmb|req|task|mb)[\s_-]*[a-z0-9-]*\d+[a-z0-9-]*\b/.test(normalized)
+  if (hasExplicitTaskReference || intent.isTask || intent.isTaskUpdate || intent.isActionCard) return true
+  return !intent.isDoc
+}
+
+const ENTITY_FIELD_LABELS: Record<TaskEntityField, string> = {
+  product: "Sản phẩm",
+  title: "Tên task",
+  squad: "Squad",
+  assignee: "Người phụ trách",
+  feature: "Feature/Journey",
+  phase: "Khâu UX",
+  status: "Trạng thái",
+}
+
+const AGGREGATE_QUERY_WORDS = new Set([
+  "bao", "nhieu", "so", "luong", "dem", "tong", "hop", "thong", "ke", "danh", "sach",
+  "liet", "ke", "task", "tasks", "bai", "toan", "cong", "viec", "co", "cua", "thuoc", "theo",
+  "nhung", "nao", "tat", "ca", "toan", "bo", "team", "giup", "minh", "toi", "cho", "xem",
+  "hien", "tai", "dang", "quan", "ly", "trong", "pham", "vi",
+  "san", "pham", "product", "ten", "tieu", "de", "nickname", "squad", "nhom",
+  "designer", "nguoi", "phu", "trach", "ux", "design", "owner", "feature", "journey",
+  "hanh", "trinh", "khau", "giai", "doan", "phase", "trang", "thai", "status", "chua",
+  "chart", "bieudo", "bieu", "do", "ve", "truc", "quan", "phan", "bo", "tiendo",
+])
+
+function entityFieldValues(task: UXRequest): Array<{ field: TaskEntityField; value: string }> {
+  const title = task.nickname?.trim() || task.title?.trim() || ""
+  const values: Array<{ field: TaskEntityField; value: string }> = [
+    { field: "product", value: task.product || "" },
+    { field: "title", value: title },
+    { field: "squad", value: task.squad_name || task.preferred_squad || task.squad || "" },
+    { field: "assignee", value: task.assigned_designer || task.design_owner || task.ux_owner || "" },
+    { field: "feature", value: task.feature_journey || "" },
+    { field: "phase", value: task.current_phase || "" },
+    { field: "status", value: task.status || "" },
+  ]
+  return values.filter((entry) => Boolean(entry.value))
+}
+
+function detectRequestedEntityField(query: string): TaskEntityField | undefined {
+  const q = normalizeConversationText(query)
+  if (/\b(san pham|product)\b/.test(q)) return "product"
+  if (/\b(ten task|ten bai|tieu de|nickname)\b/.test(q)) return "title"
+  if (/\b(squad|nhom)\b/.test(q)) return "squad"
+  if (/\b(designer|nguoi phu trach|phu trach|ux owner|design owner)\b/.test(q)) return "assignee"
+  if (/\b(feature|journey|hanh trinh)\b/.test(q)) return "feature"
+  if (/\b(khau|giai doan|phase)\b/.test(q)) return "phase"
+  if (/\b(trang thai|status)\b/.test(q)) return "status"
+  return undefined
+}
+
+function aggregateOperation(query: string): AggregateTaskResolution["operation"] {
+  const q = normalizeConversationText(query)
+  if (/\b(bao nhieu|so luong|dem)\b/.test(q)) return "count"
+  if (/\b(danh sach|liet ke|nhung task|nhung bai|task nao|bai nao|co nhung)\b/.test(q)) return "list"
+  return "summary"
+}
+
+function extractAggregateEntityTerm(query: string): string {
+  const normalized = normalizeConversationText(query)
+  const remaining = normalized
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && !AGGREGATE_QUERY_WORDS.has(token))
+  return remaining.join(" ").trim()
+}
+
+function matchEntityValue(term: string, value: string): number {
+  const normalizedValue = normalizeConversationText(value)
+  if (!term || !normalizedValue) return 0
+  if (normalizedValue === term) return 100
+  if (normalizedValue.startsWith(term) || term.startsWith(normalizedValue)) return 88
+  if (normalizedValue.includes(term) || term.includes(normalizedValue)) return 78
+
+  const termTokens = term.split(/\s+/).filter(Boolean)
+  const valueTokens = normalizedValue.split(/\s+/).filter(Boolean)
+  if (termTokens.length === 0 || valueTokens.length === 0) return 0
+  const matched = termTokens.filter((token) => valueTokens.some((valueToken) => valueToken === token || valueToken.startsWith(token))).length
+  return matched === termTokens.length ? 65 + Math.min(10, matched * 2) : 0
+}
+
+function optionFromSelection(option: TaskEntityOption, tasks: UXRequest[]): AggregateTaskResolution {
+  const allowedIds = new Set(option.taskIds)
+  const matchedTasks = tasks.filter((task) => allowedIds.has(taskId(task)))
+  return {
+    mode: matchedTasks.length > 0 ? "filtered" : "none",
+    operation: "summary",
+    tasks: matchedTasks,
+    options: [],
+    scope: { ...option, taskIds: matchedTasks.map(taskId) },
+    queryTerm: option.queryTerm,
+    confidence: matchedTasks.length > 0 ? 1 : 0,
+  }
+}
+
+export function resolveAggregateTaskQuery(
+  query: string,
+  tasks: UXRequest[],
+  pendingOptions: TaskEntityOption[] = [],
+  activeScope?: TaskEntityScope
+): AggregateTaskResolution {
+  const operation = aggregateOperation(query)
+  const normalizedQuery = normalizeConversationText(query)
+
+  if (pendingOptions.length > 0) {
+    const ordinal = normalizedQuery.match(/^(?:lua chon |chon |muc )?([1-9])$/)?.[1]
+    const selectedByOrdinal = ordinal ? pendingOptions[Number(ordinal) - 1] : undefined
+    const requestedField = detectRequestedEntityField(query)
+    const selectedByField = requestedField
+      ? pendingOptions.find((option) => option.field === requestedField)
+      : undefined
+    const selectedByValue = pendingOptions.find((option) => {
+      const value = normalizeConversationText(option.value)
+      return normalizedQuery === value || normalizedQuery.includes(value) || value.includes(normalizedQuery)
+    })
+    const selected = selectedByOrdinal || selectedByValue || selectedByField
+    if (selected) {
+      return { ...optionFromSelection(selected, tasks), operation: selected.operation || operation }
+    }
+  }
+
+  const referencesActiveScope = /\b(so do|trong so do|cac task nay|nhung task nay|pham vi nay|nhom nay)\b/.test(normalizedQuery)
+  const queryTerm = extractAggregateEntityTerm(query)
+  if (activeScope && (referencesActiveScope || !queryTerm)) {
+    return { ...optionFromSelection(activeScope, tasks), operation }
+  }
+
+  const explicitlyAll = /\b(tat ca|toan bo|ca team|toan team)\b/.test(normalizedQuery)
+  if (!queryTerm && explicitlyAll) {
+    return { mode: "all", operation, tasks, options: [], queryTerm: "", confidence: 1 }
+  }
+  if (!queryTerm) {
+    return { mode: "all", operation, tasks, options: [], queryTerm: "", confidence: 0.9 }
+  }
+
+  const requestedField = detectRequestedEntityField(query)
+  const grouped = new Map<string, { field: TaskEntityField; value: string; tasks: UXRequest[]; score: number }>()
+  for (const task of tasks) {
+    for (const entry of entityFieldValues(task)) {
+      if (requestedField && entry.field !== requestedField) continue
+      const score = matchEntityValue(queryTerm, entry.value)
+      if (score <= 0) continue
+      const key = `${entry.field}:${normalizeConversationText(entry.value)}`
+      const existing = grouped.get(key)
+      if (existing) {
+        existing.tasks.push(task)
+        existing.score = Math.max(existing.score, score)
+      } else {
+        grouped.set(key, { ...entry, tasks: [task], score })
+      }
+    }
+  }
+
+  const candidates = Array.from(grouped.values())
+    .sort((a, b) => b.score - a.score || b.tasks.length - a.tasks.length || a.value.localeCompare(b.value, "vi"))
+  if (candidates.length === 0) {
+    return { mode: "none", operation, tasks: [], options: [], queryTerm, confidence: 0 }
+  }
+
+  const bestScore = candidates[0].score
+  const plausible = candidates.filter((candidate) => candidate.score >= Math.max(65, bestScore - 15)).slice(0, 5)
+  const optionMap = new Map<string, TaskEntityOption>()
+  plausible.forEach((candidate) => {
+    const isContainsField = candidate.field === "title" || candidate.field === "feature"
+    const key = isContainsField ? `${candidate.field}:contains:${queryTerm}` : `${candidate.field}:${normalizeConversationText(candidate.value)}`
+    const existing = optionMap.get(key)
+    const candidateTaskIds = candidate.tasks.map(taskId)
+    if (existing) {
+      existing.taskIds = Array.from(new Set([...existing.taskIds, ...candidateTaskIds]))
+      return
+    }
+    optionMap.set(key, {
+      field: candidate.field,
+      value: isContainsField ? queryTerm : candidate.value,
+      taskIds: Array.from(new Set(candidateTaskIds)),
+      label: isContainsField
+        ? `${ENTITY_FIELD_LABELS[candidate.field]} chứa “${queryTerm}”`
+        : `${ENTITY_FIELD_LABELS[candidate.field]} = ${candidate.value}`,
+      queryTerm,
+      operation,
+    })
+  })
+  const options = Array.from(optionMap.values())
+
+  if (options.length > 1) {
+    return {
+      mode: "clarify",
+      operation,
+      tasks: [],
+      options,
+      queryTerm,
+      confidence: Math.min(0.79, bestScore / 100),
+    }
+  }
+
+  const selected = options[0]
+  const resolved = optionFromSelection(selected, tasks)
+  return { ...resolved, operation, confidence: Math.min(0.98, bestScore / 100) }
+}
+
+export function buildAggregateClarification(resolution: AggregateTaskResolution): string {
+  if (resolution.mode === "none") {
+    return `Mình chưa tìm thấy task nào khớp với **“${resolution.queryTerm}”** trong các trường sản phẩm, tên task, squad, người phụ trách, feature, khâu hoặc trạng thái. Bạn có thể ghi rõ hơn, ví dụ **“sản phẩm ${resolution.queryTerm}”** hoặc **“tên task chứa ${resolution.queryTerm}”**.`
+  }
+  if (resolution.mode !== "clarify") return ""
+  const choices = resolution.options
+    .map((option, index) => `${index + 1}. **${option.label}** — ${option.taskIds.length} task`)
+    .join("\n")
+  const suggestions = resolution.options.map((option) => `- ${option.label}`).join("\n")
+  return `Mình thấy **“${resolution.queryTerm}”** có thể chỉ nhiều phạm vi:\n\n${choices}\n\nBạn muốn mình dùng phạm vi nào?\n\n\`\`\`suggestions\n${suggestions}\n\`\`\``
+}
+
+export function buildDeterministicAggregateAnswer(
+  resolution: AggregateTaskResolution,
+  totalAccessibleTasks: number
+): string {
+  if (resolution.operation !== "count" || (resolution.mode !== "filtered" && resolution.mode !== "all")) return ""
+  const count = resolution.tasks.length
+  const scopeLabel = resolution.scope?.label || "toàn bộ phạm vi được phép truy cập"
+  const sourceIds = resolution.tasks.slice(0, 12).map((task) => `[${taskId(task)}]`).join(", ")
+  const remaining = Math.max(0, count - 12)
+  return `Hiện có **${count} task** thuộc **${scopeLabel}**, trên tổng số **${totalAccessibleTasks} task** bạn được phép xem.\n\n` +
+    `**Cách tính:** lọc chính xác theo trường **${resolution.scope ? ENTITY_FIELD_LABELS[resolution.scope.field] : "Phạm vi truy cập"}**, sau đó đếm bằng dữ liệu hệ thống — không yêu cầu AI tự đếm văn bản.` +
+    (sourceIds ? `\n\n**Task nguồn:** ${sourceIds}${remaining > 0 ? ` và ${remaining} task khác` : ""}.` : "")
 }
 
 export function isContextualFollowUp(query: string): boolean {
@@ -310,6 +568,8 @@ export function createConversationMemory(options: {
   activeTask?: UXRequest | null
   activeArtifactIds?: string[]
   pendingTaskIds?: string[]
+  pendingEntityOptions?: TaskEntityOption[]
+  activeEntityScope?: TaskEntityScope | null
   intent?: string
   userQuery: string
   now?: Date
@@ -318,6 +578,10 @@ export function createConversationMemory(options: {
     activeTaskId: options.activeTask ? taskId(options.activeTask) : options.previous?.activeTaskId,
     activeArtifactIds: options.activeArtifactIds ?? options.previous?.activeArtifactIds ?? [],
     pendingTaskIds: options.pendingTaskIds ?? [],
+    pendingEntityOptions: options.pendingEntityOptions ?? [],
+    activeEntityScope: options.activeEntityScope === null
+      ? undefined
+      : options.activeEntityScope ?? options.previous?.activeEntityScope,
     lastIntent: options.intent || options.previous?.lastIntent,
     lastUserQuery: options.userQuery,
     updatedAt: (options.now || new Date()).toISOString(),

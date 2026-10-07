@@ -67,11 +67,15 @@ import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import {
+  buildAggregateClarification,
+  buildDeterministicAggregateAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
   isAggregateTaskQuery,
+  resolveAggregateTaskQuery,
   resolveTaskReference,
+  shouldResolveTaskQuery,
   type AIConversationMemory,
 } from "@/lib/aiConversation"
 import {
@@ -1573,21 +1577,49 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     const previousThread = threads.find((thread) => thread.id === activeThreadId)
     const previousMemory = previousThread?.conversationMemory
-    const taskResolution = resolveTaskReference(
+    const canResolveTaskQuery = shouldResolveTaskQuery(
       cleanText,
-      tasks,
-      previousMemory?.activeTaskId,
-      previousMemory?.pendingTaskIds
+      questionIntent,
+      Boolean(previousMemory?.pendingTaskIds?.length)
     )
-    const resolvedTask = taskResolution.task
-    const aggregateTaskQuery = isTiendoCommand || isChartCommand || isAggregateTaskQuery(cleanText)
+    const documentFirstIntent = questionIntent.isDoc && !canResolveTaskQuery
+    const aggregateTaskQuery =
+      !documentFirstIntent && (
+        isTiendoCommand ||
+        isChartCommand ||
+        isAggregateTaskQuery(cleanText) ||
+        Boolean(previousMemory?.pendingEntityOptions?.length)
+      )
+    const aggregateResolution = aggregateTaskQuery
+      ? resolveAggregateTaskQuery(
+          cleanText,
+          tasks,
+          previousMemory?.pendingEntityOptions,
+          previousMemory?.activeEntityScope
+        )
+      : null
+    const taskResolution = canResolveTaskQuery
+      ? resolveTaskReference(
+          cleanText,
+          tasks,
+          previousMemory?.activeTaskId,
+          previousMemory?.pendingTaskIds
+        )
+      : {
+          task: null,
+          candidates: [],
+          confidence: 1,
+          method: "none" as const,
+          isFollowUp: false,
+        }
+    const resolvedTask = aggregateTaskQuery ? null : taskResolution.task
     const usesTaskContext =
       baseUsesTaskContext ||
       Boolean(resolvedTask) ||
       taskResolution.candidates.length > 0 ||
       aggregateTaskQuery
     const focusedTasks = aggregateTaskQuery
-      ? (taskResolution.candidates.length > 0 ? taskResolution.candidates : tasks)
+      ? (aggregateResolution?.tasks || [])
       : resolvedTask
       ? [resolvedTask]
       : taskResolution.candidates.length > 0
@@ -1600,6 +1632,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const summaryProjs = intelligence?.activeAssignedTasks || (intelligence?.delegatedTasks?.map((d) => d.task) || tasks)
     const riskProjs = intelligence?.overdueTasks || []
     const goLive = intelligence?.goLiveTasks || []
+    const focusedTaskIds = new Set(focusedTasks.map((task) => task.request_id))
+    const hasResolvedAggregateScope = aggregateResolution?.mode === "filtered" || aggregateResolution?.mode === "all"
+    const shouldShowTaskTrace = usesTaskContext && (!aggregateTaskQuery || Boolean(hasResolvedAggregateScope))
+    const traceTasks = aggregateTaskQuery ? focusedTasks : activeAssigned
+    const scopedRiskProjects = aggregateTaskQuery
+      ? riskProjs.filter((task) => focusedTaskIds.has(task.request_id))
+      : riskProjs
+    const scopedGoLiveTasks = aggregateTaskQuery
+      ? goLive.filter((task) => focusedTaskIds.has(task.request_id))
+      : goLive
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
     const allArtifacts = getStoredArtifacts()
@@ -1612,7 +1654,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeArtifactIds = allArtifacts
         .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
         .map((artifact) => artifact.id)
-    } else {
+    } else if (!aggregateTaskQuery) {
       const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
       const matchedDocs = searchArtifactsByQuery(retrievalQuery, allArtifacts)
       if (matchedDocs.length > 0) {
@@ -1638,28 +1680,48 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeTask: resolvedTask,
       activeArtifactIds,
       pendingTaskIds: taskResolution.method === "ambiguous"
+        && !aggregateTaskQuery
         ? taskResolution.candidates.map((task) => task.request_id)
         : [],
+      pendingEntityOptions: aggregateResolution?.mode === "clarify"
+        ? aggregateResolution.options
+        : [],
+      activeEntityScope: aggregateTaskQuery ? aggregateResolution?.scope || null : undefined,
       intent: intentLabel,
       userQuery: cleanText,
     })
-    const clarificationText = taskResolution.method === "ambiguous"
+    if (aggregateTaskQuery) conversationMemory.activeTaskId = undefined
+    const aggregateClarificationText = aggregateResolution
+      ? buildAggregateClarification(aggregateResolution)
+      : ""
+    const deterministicAggregateAnswer = aggregateResolution
+      ? buildDeterministicAggregateAnswer(aggregateResolution, tasks.length)
+      : ""
+    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
       ? `Mình tìm thấy nhiều bài toán phù hợp:\n\n${taskResolution.candidates
           .map((task, index) => `${index + 1}. **[${task.request_id}]** ${task.nickname || task.title}`)
           .join("\n")}\n\nBạn muốn mình phân tích bài toán nào?`
-      : ""
+      : "")
     if (clarificationText) conversationMemory.activeTaskId = undefined
 
     const traceData: ChatTraceData = {
-      activeTasks: usesTaskContext ? activeAssigned : [],
-      summaryProjects: usesTaskContext ? (focusedTasks.length > 0 ? focusedTasks : summaryProjs) : [],
-      riskProjects: usesTaskContext ? riskProjs : [],
-      goLiveTasks: usesTaskContext ? goLive : [],
+      activeTasks: shouldShowTaskTrace ? traceTasks : [],
+      summaryProjects: shouldShowTaskTrace ? (focusedTasks.length > 0 ? focusedTasks : summaryProjs) : [],
+      riskProjects: shouldShowTaskTrace ? scopedRiskProjects : [],
+      goLiveTasks: shouldShowTaskTrace ? scopedGoLiveTasks : [],
       dominantPhaseText: dominantPhase,
       loadedDocNames: loadedDocNames.length > 0 ? loadedDocNames : undefined,
       resolvedTaskId: resolvedTask?.request_id,
       retrievalSummary: resolvedTask
         ? `Đã định danh bài toán ${resolvedTask.request_id} (${resolvedTask.nickname || resolvedTask.title}) và nạp dữ liệu chi tiết.`
+        : aggregateResolution?.mode === "clarify"
+        ? `Từ khóa “${aggregateResolution.queryTerm}” khớp ${aggregateResolution.options.length} phạm vi dữ liệu; cần người dùng xác nhận.`
+        : aggregateResolution?.mode === "none"
+        ? `Không tìm thấy task nào khớp “${aggregateResolution.queryTerm}”; không tự động mở rộng sang toàn bộ dữ liệu.`
+        : aggregateResolution?.scope
+        ? `Đã lọc ${focusedTasks.length}/${tasks.length} task theo ${aggregateResolution.scope.label}.`
+        : deterministicAggregateAnswer
+        ? `Đã đếm ${focusedTasks.length}/${tasks.length} task bằng dữ liệu có cấu trúc.`
         : taskResolution.method === "ambiguous"
         ? `Tìm thấy ${taskResolution.candidates.length} bài toán có thể phù hợp; cần người dùng xác nhận.`
         : taskResolution.candidates.length > 0
@@ -1669,7 +1731,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         : loadedDocNames.length > 0
         ? `Đã tự động tìm kiếm & nạp ${loadedDocNames.length} tài liệu liên quan: ${loadedDocNames.join(", ")}.`
         : "Không cần nạp dữ liệu công việc cho câu hỏi này.",
-      confidence: taskResolution.confidence,
+      confidence: aggregateResolution?.confidence ?? taskResolution.confidence,
     }
 
     const assistantMsg: ChatMessage = {
@@ -1683,9 +1745,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       traceData,
       grounding: clarificationText
         ? {
-            taskIds: taskResolution.candidates.map((task) => task.request_id),
+            taskIds: aggregateResolution?.mode === "clarify"
+              ? aggregateResolution.options.flatMap((option) => option.taskIds)
+              : focusedTasks.map((task) => task.request_id),
             documentNames: [],
-            confidence: 0.5,
+            confidence: aggregateResolution?.confidence ?? 0.5,
           }
         : undefined,
     }
@@ -5667,6 +5731,12 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
       // Quét tìm khối { ... } nhiều dòng có cấu trúc JSON hợp lệ
       const text = seg.content
+      if (!text.includes("{")) {
+        normalizedSegments.push(seg)
+        continue
+      }
+
+      const extractedSegments: Array<{ type: "text" | "code"; content: string; lang?: string; fileName?: string }> = []
       let cursor = 0
       let foundAnyJson = false
 
@@ -5674,7 +5744,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         const braceIdx = text.indexOf("{", cursor)
         if (braceIdx === -1) {
           const rest = text.substring(cursor)
-          if (rest.trim()) normalizedSegments.push({ type: "text", content: rest })
+          if (rest.trim()) extractedSegments.push({ type: "text", content: rest })
           break
         }
 
@@ -5723,14 +5793,14 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
               // JSON hợp lệ được tìm thấy!
               const textBefore = text.substring(cursor, braceIdx)
               if (textBefore.trim()) {
-                normalizedSegments.push({ type: "text", content: textBefore })
+                extractedSegments.push({ type: "text", content: textBefore })
               }
 
               // Tìm tên tệp nếu có nhắc đến ở văn bản trước
               const fileMatch = textBefore.match(/([a-zA-Z0-9_\-.]+\.(?:json|ts|tsx|js|css|yaml|yml))/i)
               const detectedFileName = fileMatch ? fileMatch[1] : "Tokens.json"
 
-              normalizedSegments.push({
+              extractedSegments.push({
                 type: "code",
                 content: rawCandidate,
                 lang: "json",
@@ -5749,7 +5819,9 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         cursor = braceIdx + 1
       }
 
-      if (!foundAnyJson && cursor === 0) {
+      if (foundAnyJson) {
+        normalizedSegments.push(...extractedSegments)
+      } else {
         normalizedSegments.push(seg)
       }
     }

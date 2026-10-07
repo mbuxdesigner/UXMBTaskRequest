@@ -538,6 +538,8 @@ export function serializeTaskContext(
       deadline: dl || "Chưa có",
       is_overdue: isOverdue,
       status: t.status || "Chờ xử lý",
+      product: clip(t.product, 200),
+      feature_journey: clip(t.feature_journey, 300),
       squad: t.squad_name || t.preferred_squad || (t as any).squad || t.product || "Chưa gán",
       assignee: sanitizeContextText(t.assigned_designer || "Chưa gán"),
       figma_url: Boolean(t.figma_url),

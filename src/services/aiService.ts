@@ -1198,8 +1198,8 @@ export async function streamAICompletion(
  */
 function extractTaskCountsBySquad(messages: PromptMessage[]): Array<{ name: string; tasks: number }> {
   const context = messages
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
+    .map((message) => getPromptMessageText(message.content))
+    .filter((content, index) => messages[index].role === "system" || content.includes("=== TASK_DATA_JSON ==="))
     .join("\n")
 
   const counts = new Map<string, number>()
@@ -1225,14 +1225,16 @@ interface ContextTask {
   progress: number
   deadline: string
   status: string
+  product?: string
+  feature_journey?: string
   squad: string
   assignee: string
 }
 
 function extractTasksFromContext(messages: PromptMessage[]): ContextTask[] {
   const context = messages
-    .filter((message) => message.role === "system")
-    .map((message) => message.content)
+    .map((message) => getPromptMessageText(message.content))
+    .filter((content, index) => messages[index].role === "system" || content.includes("=== TASK_DATA_JSON ==="))
     .join("\n")
   const structuredMatch = context.match(/=== TASK_DATA_JSON ===\n([\s\S]*?)\n=== END_TASK_DATA_JSON ===/)
 
@@ -1304,8 +1306,8 @@ ${JSON.stringify({
 }
 
 function buildContextTaskReply(query: string, tasks: ContextTask[]): string | null {
-  const normalized = query.toLowerCase()
-  const isTaskQuery = /\b(task|tasks|card)\b|bài toán|công việc|tiến độ|deadline|quá hạn|trễ hạn|rủi ro|po pending|\bpending\b|sla|cần theo dõi/i.test(normalized)
+  const normalized = normalizeVietnameseText(query)
+  const isTaskQuery = /\b(task|tasks|card)\b|bai toan|cong viec|tien do|deadline|qua han|tre han|rui ro|po pending|\bpending\b|sla|can theo doi/i.test(normalized)
   if (!isTaskQuery) return null
 
   if (tasks.length === 0) {
@@ -1313,17 +1315,20 @@ function buildContextTaskReply(query: string, tasks: ContextTask[]): string | nu
   }
 
   const matchingTerms = normalized
-    .replace(/liệt kê|giúp tôi|cho tôi|các|task|tasks|card|bài toán|công việc|tiến độ|deadline|quá hạn|trễ hạn|rủi ro|po pending|pending|sla|cần theo dõi|của|theo|và|những|nào|là|gì|đang|có/gi, " ")
+    .replace(/liet ke|giup toi|cho toi|cac|task|tasks|card|bai toan|cong viec|tien do|deadline|qua han|tre han|rui ro|po pending|pending|sla|can theo doi|cua|theo|va|nhung|nao|la|gi|dang|co|bao nhieu|so luong|dem|san pham|ten task|squad|designer/gi, " ")
     .split(/\s+/)
     .filter((term) => term.length >= 3)
-  const isRiskQuery = /quá hạn|trễ hạn|rủi ro|po pending|\bpending\b|sla/i.test(normalized)
+  const isRiskQuery = /qua han|tre han|rui ro|po pending|\bpending\b|sla/i.test(normalized)
   const filtered = tasks.filter((task) => {
-    const haystack = `${task.id} ${task.title} ${task.squad} ${task.assignee} ${task.status} ${task.phase}`.toLowerCase()
+    const haystack = normalizeVietnameseText(`${task.id} ${task.title} ${task.product || ""} ${task.feature_journey || ""} ${task.squad} ${task.assignee} ${task.status} ${task.phase}`)
     const matchesTerms = matchingTerms.length === 0 || matchingTerms.some((term) => haystack.includes(term))
-    const isRisk = /po pending|pending|quá hạn|trễ hạn/i.test(task.status) || task.progress < 100 && task.deadline !== "Chưa có"
+    const isRisk = /po pending|pending|qua han|tre han/i.test(normalizeVietnameseText(task.status)) || task.progress < 100 && task.deadline !== "Chưa có"
     return matchesTerms && (!isRiskQuery || isRisk)
   })
-  const result = filtered.length > 0 ? filtered : tasks
+  if (matchingTerms.length > 0 && filtered.length === 0) {
+    return `Mình không tìm thấy task nào khớp tiêu chí **${matchingTerms.join(" ")}** trong phạm vi dữ liệu hiện tại. Mình không tự động mở rộng kết quả sang toàn bộ task.`
+  }
+  const result = filtered
   const rows = result.map((task) => `| ${task.id} | ${task.title} | ${task.squad || "Chưa gán"} | ${task.assignee || "Chưa gán"} | ${task.phase} | ${task.progress}% | ${task.deadline} | ${task.status} |`).join("\n")
 
   return `Dưới đây là danh sách **${result.length}/${tasks.length} bài toán** trong phạm vi dữ liệu hiện tại:\n\n| Mã task | Bài toán | Squad | Phụ trách | Khâu | Tiến độ | Deadline | Trạng thái |\n|---|---|---|---|---|---:|---|---|\n${rows}\n\n*Dữ liệu được tổng hợp trực tiếp từ context hiện tại; không sử dụng task mẫu.*`
