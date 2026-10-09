@@ -69,6 +69,7 @@ import { cn } from "@/lib/utils"
 import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
+  buildDeterministicTaskDetailAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
@@ -1675,7 +1676,12 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         }
       : queryPlan
     const allArtifacts = getStoredArtifacts()
-    const toolResult = executeQueryPlan(retrievalPlan, focusedTasks.length > 0 ? focusedTasks : tasks, allArtifacts)
+    const toolResult = executeQueryPlan(
+      retrievalPlan,
+      focusedTasks.length > 0 ? focusedTasks : tasks,
+      allArtifacts,
+      { trustedTaskScope: Boolean(resolvedTask || hasResolvedAggregateScope) }
+    )
     const retrievalConfidence = toolResult.sources.length > 0
       ? toolResult.sources.reduce((sum, source) => sum + source.confidence, 0) / toolResult.sources.length
       : retrievalPlan.confidence
@@ -1737,7 +1743,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const deterministicAggregateAnswer = aggregateResolution
       ? buildDeterministicAggregateAnswer(aggregateResolution, tasks.length)
       : ""
-    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
+    const deterministicTaskDetailAnswer = resolvedTask
+      ? buildDeterministicTaskDetailAnswer(cleanText, resolvedTask)
+      : ""
+    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || deterministicTaskDetailAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
       ? `Mình tìm thấy nhiều bài toán phù hợp:\n\n${taskResolution.candidates
           .map((task, index) => `${index + 1}. **[${task.request_id}]** ${task.nickname || task.title}`)
           .join("\n")}\n\nBạn muốn mình phân tích bài toán nào?`

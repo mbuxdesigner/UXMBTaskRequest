@@ -3,6 +3,7 @@ import fs from "node:fs"
 import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
+  buildDeterministicTaskDetailAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
@@ -111,6 +112,34 @@ test("Câu hỏi một người đang làm gì được trả lời trực tiế
   assert.match(answer, /UXMB-101/)
   assert.match(answer, /UXMB-205/)
   assert.doesNotMatch(answer, /cung cấp mã task/i)
+})
+
+test("Câu hỏi nội dung triển khai tiếp tục dùng active task", () => {
+  assert.equal(isContextualFollowUp("nội dung triển khai là gì"), true)
+  const result = resolveTaskReference("nội dung triển khai là gì", tasks, "UXMB-101")
+  assert.equal(result.task?.request_id, "UXMB-101")
+  assert.equal(result.method, "memory")
+})
+
+test("Nội dung task được trả trực tiếp từ ba trường nghiệp vụ", () => {
+  const detailedTask = {
+    ...tasks[0],
+    description: "Luồng thay đổi tài khoản nhận tiền.",
+    user_problem: "Khách hàng phải ra quầy.",
+    business_need: "Giảm thời gian vận hành.",
+  }
+  const answer = buildDeterministicTaskDetailAnswer("nội dung triển khai là gì", detailedTask)
+  assert.match(answer, /Luồng thay đổi tài khoản/)
+  assert.match(answer, /Khách hàng phải ra quầy/)
+  assert.match(answer, /Giảm thời gian vận hành/)
+})
+
+test("Task đã resolve được giữ trong structured tool dù follow-up không trùng từ khóa", () => {
+  const plan = createQueryPlan("nội dung triển khai là gì", "task_analysis")
+  const result = executeQueryPlan(plan, [tasks[0]], [], { trustedTaskScope: true })
+  assert.equal(result.tasks[0]?.request_id, "UXMB-101")
+  const payload = JSON.parse(result.promptPayload)
+  assert.equal(payload.tool_results.search_tasks[0].data.id, "UXMB-101")
 })
 
 test("Chuẩn hóa tiếng Việt phục vụ matching", () => {

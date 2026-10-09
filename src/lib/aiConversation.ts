@@ -339,9 +339,30 @@ export function isContextualFollowUp(query: string): boolean {
   const q = normalizeConversationText(query)
   const wordCount = q ? q.split(/\s+/).length : 0
   return (
-    /\b(no|bai nay|task nay|cong viec nay|viec nay|cai nay|truong hop nay|tiep theo|them nua|con lai)\b/.test(q) ||
+    /\b(no|bai nay|task nay|cong viec nay|viec nay|cai nay|truong hop nay|tiep theo|them nua|con lai|noi dung trien khai|noi dung yeu cau|mo ta chi tiet|van de nguoi dung|muc tieu kinh doanh|business need|user problem|acceptance criteria|scope chi tiet)\b/.test(q) ||
     (/^(ai|tai sao|vi sao|khi nao|bao gio|co|can|nen|lam sao|the nao)\b/.test(q) && wordCount <= 10)
   )
+}
+
+export function buildDeterministicTaskDetailAnswer(query: string, task: UXRequest): string {
+  const normalized = normalizeConversationText(query)
+  const asksForContent = /\b(noi dung|trien khai|mo ta|nhu cau|yeu cau|van de nguoi dung|muc tieu kinh doanh|business need|user problem|scope|acceptance criteria)\b/.test(normalized)
+  if (!asksForContent) return ""
+
+  const sections = [
+    task.description ? `### Mô tả nhu cầu UX & Luồng nghiệp vụ\n${task.description}` : "",
+    task.user_problem ? `### Vấn đề người dùng\n${task.user_problem}` : "",
+    task.business_need ? `### Lý do cần thiết & Mục tiêu kinh doanh\n${task.business_need}` : "",
+    task.target_user ? `### Người dùng mục tiêu\n${task.target_user}` : "",
+    Array.isArray(task.expected_output) && task.expected_output.length > 0
+      ? `### Đầu ra mong đợi\n${task.expected_output.map((item) => `- ${item}`).join("\n")}`
+      : "",
+  ].filter(Boolean)
+
+  if (sections.length === 0) {
+    return `Task **[${taskId(task)}] ${task.nickname || task.title}** chưa có nội dung mô tả, vấn đề người dùng hoặc mục tiêu kinh doanh trong dữ liệu hệ thống.`
+  }
+  return `## [${taskId(task)}] ${task.nickname || task.title}\n\n${sections.join("\n\n")}`
 }
 
 export function taskId(task: UXRequest): string {

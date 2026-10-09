@@ -154,11 +154,23 @@ function taskRecord(task: UXRequest) {
     status: task.status,
     progress: task.progress,
     deadline: task.design_deadline || task.expected_deadline,
+    description: task.description,
+    user_problem: task.user_problem,
+    business_need: task.business_need,
+    target_user: task.target_user,
+    expected_output: task.expected_output,
   }
 }
 
-export function executeQueryPlan(plan: QueryPlan, tasks: UXRequest[], artifacts: UXArtifact[]): StructuredToolResult {
-  const rankedTasks = plan.sources.includes("tasks")
+export function executeQueryPlan(
+  plan: QueryPlan,
+  tasks: UXRequest[],
+  artifacts: UXArtifact[],
+  options: { trustedTaskScope?: boolean } = {}
+): StructuredToolResult {
+  const rankedTasks = plan.sources.includes("tasks") && options.trustedTaskScope
+    ? tasks.slice(0, 20).map((item) => ({ item, score: 1, semanticScore: 1, lexicalScore: 1 }))
+    : plan.sources.includes("tasks")
     ? semanticSearch(plan.query, tasks, taskSearchText, 8)
     : []
   const approvedArtifacts = artifacts.filter((artifact) => artifact.approvalStatus !== "retired")
