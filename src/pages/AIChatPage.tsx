@@ -1662,11 +1662,23 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       : goLive
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
+    const retrievalPlan = usesTaskContext && !queryPlan.sources.includes("tasks")
+      ? {
+          ...queryPlan,
+          sources: ["tasks" as const, ...queryPlan.sources],
+          confidence: Math.max(queryPlan.confidence, 0.88),
+          reason: "Task resolver đã xác định đây là truy vấn công việc; bắt buộc nạp task tool.",
+          toolCalls: [
+            { name: "search_tasks" as const, arguments: { query: cleanText, limit: 8 } },
+            ...queryPlan.toolCalls,
+          ],
+        }
+      : queryPlan
     const allArtifacts = getStoredArtifacts()
-    const toolResult = executeQueryPlan(queryPlan, focusedTasks.length > 0 ? focusedTasks : tasks, allArtifacts)
+    const toolResult = executeQueryPlan(retrievalPlan, focusedTasks.length > 0 ? focusedTasks : tasks, allArtifacts)
     const retrievalConfidence = toolResult.sources.length > 0
       ? toolResult.sources.reduce((sum, source) => sum + source.confidence, 0) / toolResult.sources.length
-      : queryPlan.confidence
+      : retrievalPlan.confidence
     let loadedDocNames: string[] = []
     let activeArtifactIds: string[] = previousMemory?.activeArtifactIds || []
     let autoFoundDocs: UXArtifact[] = []
@@ -1676,7 +1688,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeArtifactIds = allArtifacts
         .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
         .map((artifact) => artifact.id)
-    } else if (queryPlan.sources.includes("documents") || isDocCommand || cleanText.startsWith("@")) {
+    } else if (retrievalPlan.sources.includes("documents") || isDocCommand || cleanText.startsWith("@")) {
       const matchedDocs = toolResult.documents
       if (matchedDocs.length > 0) {
         autoFoundDocs = matchedDocs
@@ -1689,9 +1701,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       }
     }
 
-    const intentLabel = queryPlan.sources.includes("tasks")
+    const intentLabel = retrievalPlan.sources.includes("tasks")
       ? "task_analysis"
-      : queryPlan.sources.includes("documents")
+      : retrievalPlan.sources.includes("documents")
       ? "document_query"
       : questionIntent.isCalendar
       ? "calendar_query"

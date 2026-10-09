@@ -50,6 +50,7 @@ const test = (name, fn) => {
 
 test("Query planner chọn task, tài liệu hoặc cả hai", () => {
   assert.deepEqual(createQueryPlan("deadline task DIGI").sources, ["tasks"])
+  assert.deepEqual(createQueryPlan("Phong đang làm gì").sources, ["tasks"])
   assert.deepEqual(createQueryPlan("tìm quy định làm việc").sources, ["documents"])
   assert.deepEqual(createQueryPlan("đối chiếu task này theo quy định").sources, ["tasks", "documents"])
 })
@@ -94,6 +95,22 @@ test("Conversation summary dài giữ đầu mối cũ và câu hỏi mới", ()
   )
   assert.ok(summary.includes("DIGI"))
   assert.ok(summary.includes("dừng ở bước nào"))
+})
+
+test("Câu hỏi một người đang làm gì được trả lời trực tiếp bằng danh sách task", () => {
+  const answer = buildDeterministicAggregateAnswer({
+    mode: "filtered",
+    operation: "list",
+    tasks: [tasks[0], tasks[2]],
+    options: [],
+    scope: { field: "assignee", value: "Nguyễn Văn Cường", taskIds: ["UXMB-101", "UXMB-205"], label: "Người phụ trách = Nguyễn Văn Cường", queryTerm: "cuong" },
+    queryTerm: "cuong",
+    confidence: 0.95,
+  }, tasks.length)
+  assert.match(answer, /2 task/)
+  assert.match(answer, /UXMB-101/)
+  assert.match(answer, /UXMB-205/)
+  assert.doesNotMatch(answer, /cung cấp mã task/i)
 })
 
 test("Chuẩn hóa tiếng Việt phục vụ matching", () => {
@@ -352,7 +369,7 @@ test("File đang xem được tách khỏi file chủ động gắn vào chat", 
   const pageSource = fs.readFileSync(new URL("../src/pages/AIChatPage.tsx", import.meta.url), "utf8")
   assert.match(pageSource, /const \[chatArtifactId, setChatArtifactId\]/)
   assert.match(pageSource, /activeArtifact=\{chatArtifact\}/)
-  assert.match(pageSource, /queryPlan\.sources\.includes\("documents"\) \|\| isDocCommand \|\| cleanText\.startsWith\("@"\)/)
+  assert.match(pageSource, /retrievalPlan\.sources\.includes\("documents"\) \|\| isDocCommand \|\| cleanText\.startsWith\("@"\)/)
   assert.match(pageSource, /STRUCTURED_TOOL_RESULTS/)
   assert.match(pageSource, /CONVERSATION_SUMMARY/)
   assert.match(pageSource, /ai-grounding-sources/)

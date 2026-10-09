@@ -36,7 +36,7 @@ export interface StructuredToolResult {
   promptPayload: string
 }
 
-const TASK_HINT = /\b(task|bai toan|cong viec|deadline|tien do|designer|squad|product|san pham|khau|phase|trang thai|uxmb|req)\b/
+const TASK_HINT = /\b(task|bai toan|cong viec|dang lam gi|lam gi|viec gi|deadline|tien do|designer|nguoi phu trach|squad|product|san pham|khau|phase|trang thai|uxmb|req)\b/
 const DOC_HINT = /\b(tai lieu|quy dinh|quy trinh|nguyen tac|chinh sach|tieu chuan|checklist|handoff|design system|huong dan)\b/
 const CALENDAR_HINT = /\b(lich|cuoc hop|meeting|calendar|hom nay co hop)\b/
 const CROSS_HINT = /\b(doi chieu|so sanh|ap dung|theo quy dinh|co dung|tuan thu|lien quan)\b/

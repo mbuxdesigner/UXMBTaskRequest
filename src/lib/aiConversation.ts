@@ -311,8 +311,22 @@ export function buildDeterministicAggregateAnswer(
   resolution: AggregateTaskResolution,
   totalAccessibleTasks: number
 ): string {
-  if (resolution.operation !== "count" || (resolution.mode !== "filtered" && resolution.mode !== "all")) return ""
+  if (resolution.mode !== "filtered" && resolution.mode !== "all") return ""
   const count = resolution.tasks.length
+  if (resolution.operation === "list") {
+    const visibleTasks = resolution.tasks.slice(0, 12)
+    const rows = visibleTasks.map((task, index) => {
+      const deadline = task.design_deadline || task.expected_deadline || "Chưa có hạn"
+      const phase = task.current_phase || task.status || "Chưa cập nhật trạng thái"
+      const progress = Number.isFinite(Number(task.progress)) ? ` · ${Number(task.progress)}%` : ""
+      return `${index + 1}. **[${taskId(task)}] ${task.nickname || task.title}** — ${phase}${progress} · Hạn: ${deadline}`
+    })
+    const remaining = Math.max(0, count - visibleTasks.length)
+    const scope = resolution.scope?.label || "phạm vi được phép truy cập"
+    return `Hiện có **${count} task** thuộc **${scope}**:\n\n${rows.join("\n")}` +
+      (remaining > 0 ? `\n\n_Còn ${remaining} task khác trong cùng phạm vi._` : "")
+  }
+  if (resolution.operation !== "count") return ""
   const scopeLabel = resolution.scope?.label || "toàn bộ phạm vi được phép truy cập"
   const sourceIds = resolution.tasks.slice(0, 12).map((task) => `[${taskId(task)}]`).join(", ")
   const remaining = Math.max(0, count - 12)
