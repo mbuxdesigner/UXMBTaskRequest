@@ -8,6 +8,8 @@ export interface AIConversationMemory {
   activeEntityScope?: TaskEntityScope
   lastIntent?: string
   lastUserQuery?: string
+  conversationSummary?: string
+  summarizedMessageCount?: number
   updatedAt: string
 }
 
@@ -573,6 +575,8 @@ export function createConversationMemory(options: {
   activeEntityScope?: TaskEntityScope | null
   intent?: string
   userQuery: string
+  conversationSummary?: string
+  summarizedMessageCount?: number
   now?: Date
 }): AIConversationMemory {
   return {
@@ -585,6 +589,8 @@ export function createConversationMemory(options: {
       : options.activeEntityScope ?? options.previous?.activeEntityScope,
     lastIntent: options.intent || options.previous?.lastIntent,
     lastUserQuery: options.userQuery,
+    conversationSummary: options.conversationSummary ?? options.previous?.conversationSummary,
+    summarizedMessageCount: options.summarizedMessageCount ?? options.previous?.summarizedMessageCount,
     updatedAt: (options.now || new Date()).toISOString(),
   }
 }

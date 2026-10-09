@@ -79,6 +79,12 @@ import {
   type AIConversationMemory,
 } from "@/lib/aiConversation"
 import {
+  createQueryPlan,
+  executeQueryPlan,
+  updateConversationSummary,
+  type AISourceReference,
+} from "@/lib/aiRetrievalPipeline"
+import {
   springs,
   durations,
   easings,
@@ -196,6 +202,7 @@ interface ChatMessage {
     documentNames: string[]
     confidence: number
     rejectedReferences?: string[]
+    sources?: AISourceReference[]
   }
 }
 
@@ -1587,12 +1594,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     const previousThread = threads.find((thread) => thread.id === activeThreadId)
     const previousMemory = previousThread?.conversationMemory
+    const queryPlan = createQueryPlan(cleanText, previousMemory?.lastIntent)
     const canResolveTaskQuery = shouldResolveTaskQuery(
       cleanText,
       questionIntent,
       Boolean(previousMemory?.pendingTaskIds?.length)
-    )
-    const documentFirstIntent = questionIntent.isDoc && !canResolveTaskQuery
+    ) || queryPlan.sources.includes("tasks")
+    const documentFirstIntent = queryPlan.sources.includes("documents") && !queryPlan.sources.includes("tasks")
     const aggregateTaskQuery =
       !documentFirstIntent && (
         isTiendoCommand ||
@@ -1655,6 +1663,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const dominantPhase = intelligence?.dominantPhaseText || "khảo sát nghiệp vụ & định nghĩa đầu bài (Define)"
 
     const allArtifacts = getStoredArtifacts()
+    const toolResult = executeQueryPlan(queryPlan, focusedTasks.length > 0 ? focusedTasks : tasks, allArtifacts)
+    const retrievalConfidence = toolResult.sources.length > 0
+      ? toolResult.sources.reduce((sum, source) => sum + source.confidence, 0) / toolResult.sources.length
+      : queryPlan.confidence
     let loadedDocNames: string[] = []
     let activeArtifactIds: string[] = previousMemory?.activeArtifactIds || []
     let autoFoundDocs: UXArtifact[] = []
@@ -1664,9 +1676,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeArtifactIds = allArtifacts
         .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
         .map((artifact) => artifact.id)
-    } else if (questionIntent.isDoc || isDocCommand || cleanText.startsWith("@")) {
-      const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
-      const matchedDocs = searchArtifactsByQuery(retrievalQuery, allArtifacts)
+    } else if (queryPlan.sources.includes("documents") || isDocCommand || cleanText.startsWith("@")) {
+      const matchedDocs = toolResult.documents
       if (matchedDocs.length > 0) {
         autoFoundDocs = matchedDocs
         loadedDocNames = matchedDocs.map((d) => d.name)
@@ -1678,13 +1689,18 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       }
     }
 
-    const intentLabel = questionIntent.isTask || questionIntent.isTaskUpdate || resolvedTask
+    const intentLabel = queryPlan.sources.includes("tasks")
       ? "task_analysis"
-      : questionIntent.isDoc || questionIntent.isProductSpec
+      : queryPlan.sources.includes("documents")
       ? "document_query"
       : questionIntent.isCalendar
       ? "calendar_query"
       : "general"
+    const summaryMessages = [
+      ...(previousThread?.messages || []).map((message) => ({ role: message.role, content: message.content })),
+      { role: "user" as const, content: cleanText },
+    ]
+    const conversationSummary = updateConversationSummary(previousMemory?.conversationSummary, summaryMessages)
     const conversationMemory = createConversationMemory({
       previous: previousMemory,
       activeTask: resolvedTask,
@@ -1699,6 +1715,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeEntityScope: aggregateTaskQuery ? aggregateResolution?.scope || null : undefined,
       intent: intentLabel,
       userQuery: cleanText,
+      conversationSummary,
+      summarizedMessageCount: summaryMessages.length,
     })
     if (aggregateTaskQuery) conversationMemory.activeTaskId = undefined
     const aggregateClarificationText = aggregateResolution
@@ -1759,7 +1777,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               ? aggregateResolution.options.flatMap((option) => option.taskIds)
               : focusedTasks.map((task) => task.request_id),
             documentNames: [],
-            confidence: aggregateResolution?.confidence ?? 0.5,
+            confidence: aggregateResolution?.confidence ?? retrievalConfidence,
+            sources: toolResult.sources,
           }
         : undefined,
     }
@@ -1866,11 +1885,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 
     try {
       const currentThread = threads.find((t) => t.id === targetThreadId)
-      const baseHistory: PromptMessage[] = historyOverride ?? (currentThread?.messages || []).map((m) => ({
+      const baseHistory: PromptMessage[] = historyOverride ?? (currentThread?.messages || []).slice(-12).map((m) => ({
         role: m.role,
         content: m.content,
       }))
       const history: PromptMessage[] = [...baseHistory, { role: "user", content: text }]
+      const memoryContext = conversationMemory.conversationSummary
+        ? `=== CONVERSATION_SUMMARY ===\n${conversationMemory.conversationSummary}\n=== END_CONVERSATION_SUMMARY ===`
+        : ""
+      const structuredToolContext = `=== STRUCTURED_TOOL_RESULTS ===\n${toolResult.promptPayload}\n=== END_STRUCTURED_TOOL_RESULTS ===\n` +
+        "Mọi kết luận dùng dữ liệu nội bộ phải kết thúc bằng mã nguồn tương ứng như [T1] hoặc [D1]. Không viện dẫn nguồn ngoài danh sách."
 
       // Enhanced context building: Luôn kết hợp Tasks + Artifacts + Intelligence
       let contextStr = ""
@@ -1962,6 +1986,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           userRole: session?.role,
           userQuery: retrievalQuery,
         })
+      }
+
+      // Normal retrieval uses bounded schema-validated tool output instead of dumping every record.
+      if (!isChartCommand && !isFlowCommand && !isTiendoCommand && !customContext) {
+        contextStr = `${memoryContext}\n\n${structuredToolContext}`
+      } else if (memoryContext) {
+        contextStr = `${memoryContext}\n\n${contextStr}`
       }
 
       if (taskResolution.method === "ambiguous" && taskResolution.candidates.length > 0) {
@@ -2065,8 +2096,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 grounding: {
                   taskIds: focusedTasks.map((task) => task.request_id).filter(Boolean),
                   documentNames: loadedDocNames,
-                  confidence: resolvedTask ? taskResolution.confidence : (taskResolution.method === "ambiguous" ? 0.5 : 0.75),
+                  confidence: resolvedTask ? taskResolution.confidence : (taskResolution.method === "ambiguous" ? 0.5 : retrievalConfidence),
                   rejectedReferences: grounded.unknownTaskReferences,
+                  sources: toolResult.sources,
                 },
               })
               resolve()
@@ -6042,6 +6074,34 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
               <span className="italic">Đang chuẩn bị câu trả lời...</span>
             </div>
           )
+        )}
+
+        {message.grounding && message.content && (
+          <div className="mt-3 rounded-lg border border-border/70 bg-muted/35 px-3 py-2 text-xs" data-testid="ai-grounding-sources">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-foreground">Nguồn kiểm chứng</span>
+              <span className="text-muted-foreground">
+                Độ tin cậy {Math.round(message.grounding.confidence * 100)}%
+              </span>
+            </div>
+            {message.grounding.sources && message.grounding.sources.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {message.grounding.sources.map((source) => (
+                  <span
+                    key={`${message.id}-${source.id}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-muted-foreground"
+                    title={`Mức khớp truy xuất ${Math.round(source.confidence * 100)}%`}
+                  >
+                    <span className="font-semibold text-foreground">[{source.id}]</span>
+                    <span className="max-w-56 truncate">{source.label}</span>
+                    <span>{Math.round(source.confidence * 100)}%</span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-1 text-muted-foreground">Không sử dụng dữ liệu nội bộ cho câu trả lời này.</div>
+            )}
+          </div>
         )}
 
         {/* Assistant Action Bar */}

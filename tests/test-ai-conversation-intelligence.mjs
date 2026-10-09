@@ -13,6 +13,15 @@ import {
   resolveTaskReference,
   shouldResolveTaskQuery,
 } from "../src/lib/aiConversation.ts"
+import {
+  cosineSimilarity,
+  createLocalEmbedding,
+  createQueryPlan,
+  executeQueryPlan,
+  semanticSearch,
+  summarizeConversation,
+  updateConversationSummary,
+} from "../src/lib/aiRetrievalPipeline.ts"
 
 const task = (id, nickname, product, extras = {}) => ({
   request_id: id,
@@ -38,6 +47,54 @@ const test = (name, fn) => {
   passed += 1
   console.log(`✓ ${name}`)
 }
+
+test("Query planner chọn task, tài liệu hoặc cả hai", () => {
+  assert.deepEqual(createQueryPlan("deadline task DIGI").sources, ["tasks"])
+  assert.deepEqual(createQueryPlan("tìm quy định làm việc").sources, ["documents"])
+  assert.deepEqual(createQueryPlan("đối chiếu task này theo quy định").sources, ["tasks", "documents"])
+})
+
+test("Local embedding tạo vector chuẩn hóa và cosine ổn định", () => {
+  const first = createLocalEmbedding("quy định bàn giao thiết kế")
+  const close = createLocalEmbedding("quy trình bàn giao design")
+  const far = createLocalEmbedding("deadline thẻ tín dụng")
+  assert.ok(Math.abs(cosineSimilarity(first, first) - 1) < 0.0001)
+  assert.ok(cosineSimilarity(first, close) > cosineSimilarity(first, far))
+})
+
+test("Semantic search và reranker ưu tiên task đúng chủ đề", () => {
+  const ranked = semanticSearch("mở thẻ tín dụng", tasks, (item) => `${item.title} ${item.product}`)
+  assert.equal(ranked[0]?.item.request_id, "UXMB-205")
+  assert.ok(ranked[0].score >= ranked.at(-1).score)
+})
+
+test("Structured tool execution trả source id và payload có schema", () => {
+  const artifacts = [{ id: "doc-1", name: "Quy định bàn giao", content: "Checklist bàn giao thiết kế", approvalStatus: "approved" }]
+  const result = executeQueryPlan(createQueryPlan("đối chiếu task mở thẻ theo quy định bàn giao"), tasks, artifacts)
+  assert.ok(result.sources.some((source) => source.id.startsWith("T")))
+  assert.ok(result.sources.some((source) => source.id.startsWith("D")))
+  assert.equal(JSON.parse(result.promptPayload).schema, "uxmb.tool-results.v1")
+})
+
+test("Conversation summary giữ các lượt gần nhất trong ngân sách", () => {
+  const summary = summarizeConversation([
+    { role: "user", content: "Hỏi về task DIGI" },
+    { role: "assistant", content: "Đã tìm thấy task" },
+    { role: "user", content: "Deadline của các task đó?" },
+  ], 2)
+  assert.ok(!summary.includes("Hỏi về task DIGI"))
+  assert.ok(summary.includes("Deadline của các task đó?"))
+})
+
+test("Conversation summary dài giữ đầu mối cũ và câu hỏi mới", () => {
+  const summary = updateConversationSummary(
+    "Phạm vi đang nói về sản phẩm DIGI.",
+    [{ role: "user", content: "Các task đó đang dừng ở bước nào?" }],
+    180
+  )
+  assert.ok(summary.includes("DIGI"))
+  assert.ok(summary.includes("dừng ở bước nào"))
+})
 
 test("Chuẩn hóa tiếng Việt phục vụ matching", () => {
   assert.equal(normalizeConversationText("Tiền gửi Đặc biệt"), "tien gui dac biet")
@@ -295,7 +352,10 @@ test("File đang xem được tách khỏi file chủ động gắn vào chat", 
   const pageSource = fs.readFileSync(new URL("../src/pages/AIChatPage.tsx", import.meta.url), "utf8")
   assert.match(pageSource, /const \[chatArtifactId, setChatArtifactId\]/)
   assert.match(pageSource, /activeArtifact=\{chatArtifact\}/)
-  assert.match(pageSource, /else if \(questionIntent\.isDoc \|\| isDocCommand \|\| cleanText\.startsWith\("@"\)\)/)
+  assert.match(pageSource, /queryPlan\.sources\.includes\("documents"\) \|\| isDocCommand \|\| cleanText\.startsWith\("@"\)/)
+  assert.match(pageSource, /STRUCTURED_TOOL_RESULTS/)
+  assert.match(pageSource, /CONVERSATION_SUMMARY/)
+  assert.match(pageSource, /ai-grounding-sources/)
   assert.doesNotMatch(pageSource, /activeArtifact=\{selectedArtifact\}/)
 })
 
