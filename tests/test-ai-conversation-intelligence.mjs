@@ -268,5 +268,36 @@ test("Text thường chỉ được đưa vào pipeline render một lần", () 
   assert.doesNotMatch(pageSource, /if \(!foundAnyJson && cursor === 0\)/)
 })
 
+test("Câu hỏi một người đang làm gì được hiểu là danh sách task theo assignee", () => {
+  const peopleTasks = [
+    task("P-001", "Thiết kế màn hình A", "App", { assigned_designer: "Nguyễn Văn Phong", squad_name: "Digital Banking" }),
+    task("P-002", "Rà soát flow B", "App", { assigned_designer: "Nguyễn Văn Phong", squad_name: "Digital Banking" }),
+    task("P-003", "Prototype C", "App", { assigned_designer: "Trần Thị Mai", squad_name: "Digital Banking" }),
+  ]
+  assert.equal(isAggregateTaskQuery("Phong hôm nay đang làm công việc gì"), true)
+  const result = resolveAggregateTaskQuery("Phong hôm nay đang làm công việc gì", peopleTasks)
+  assert.equal(result.mode, "filtered")
+  assert.equal(result.operation, "list")
+  assert.equal(result.scope?.field, "assignee")
+  assert.deepEqual(result.tasks.map((item) => item.request_id).sort(), ["P-001", "P-002"])
+
+  const followUp = resolveAggregateTaskQuery(
+    "Các mốc thời gian deadline của từng task và các phần này đang dừng lại ở bước nào?",
+    peopleTasks,
+    [],
+    result.scope
+  )
+  assert.equal(followUp.mode, "filtered")
+  assert.deepEqual(followUp.tasks.map((item) => item.request_id).sort(), ["P-001", "P-002"])
+})
+
+test("File đang xem được tách khỏi file chủ động gắn vào chat", () => {
+  const pageSource = fs.readFileSync(new URL("../src/pages/AIChatPage.tsx", import.meta.url), "utf8")
+  assert.match(pageSource, /const \[chatArtifactId, setChatArtifactId\]/)
+  assert.match(pageSource, /activeArtifact=\{chatArtifact\}/)
+  assert.match(pageSource, /else if \(questionIntent\.isDoc \|\| isDocCommand \|\| cleanText\.startsWith\("@"\)\)/)
+  assert.doesNotMatch(pageSource, /activeArtifact=\{selectedArtifact\}/)
+})
+
 console.log(`\nAI conversation intelligence: ${passed}/${passed} tests passed.`)
 

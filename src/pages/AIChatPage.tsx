@@ -500,6 +500,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   // Artifacts State (User Uploads & Pre-seeded Knowledge Base)
   const [artifacts, setArtifacts] = useState<UXArtifact[]>(() => getStoredArtifacts())
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null)
+  const [chatArtifactId, setChatArtifactId] = useState<string | null>(null)
   const [isChatSplitOpen, setIsChatSplitOpen] = useState(true)
   const [splitRatio, setSplitRatio] = useState<number>(() => {
     try {
@@ -743,6 +744,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       setIsStreaming(false)
     }
     setActiveThreadId(threadId)
+    setChatArtifactId(null)
     localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, threadId)
   }, [isStreaming])
 
@@ -797,6 +799,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const selectedArtifact = useMemo(() => {
     return artifacts.find((a) => a.id === selectedArtifactId) || null
   }, [artifacts, selectedArtifactId])
+  const chatArtifact = useMemo(() => {
+    return artifacts.find((a) => a.id === chatArtifactId) || null
+  }, [artifacts, chatArtifactId])
 
   // Manual Cloud Sync Trigger
   const handleManualCloudSync = useCallback(async () => {
@@ -999,6 +1004,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     setActiveThreadId("draft")
     setSidebarTab("chats")
     setSelectedArtifactId(null)
+    setChatArtifactId(null)
     localStorage.setItem(STORAGE_ACTIVE_THREAD_ID, "draft")
   }
 
@@ -1366,6 +1372,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     if (selectedArtifactId === id) {
       setSelectedArtifactId(updated[0]?.id || null)
     }
+    if (chatArtifactId === id) setChatArtifactId(null)
     syncMasterDataToSheet({ ai_artifacts: updated }).catch((err) => {
       console.warn("[AIChatPage] Background sync artifacts to sheet failed:", err)
     })
@@ -1376,6 +1383,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
   const handleChatWithArtifact = (art: UXArtifact) => {
     setSidebarTab("chats")
     handleCreateNewChat()
+    setSelectedArtifactId(art.id)
+    setChatArtifactId(art.id)
+    setIsChatSplitOpen(true)
     const prompt = `Hãy phân tích tài liệu "${art.name}" và tóm tắt những điểm trọng tâm nhất cho tôi.`
     const artifactContext = `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${art.name}" (${art.fileType}) ===\n${art.content}`
     handleSendMessage(prompt, artifactContext, art.name)
@@ -1654,7 +1664,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       activeArtifactIds = allArtifacts
         .filter((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
         .map((artifact) => artifact.id)
-    } else if (!aggregateTaskQuery) {
+    } else if (questionIntent.isDoc || isDocCommand || cleanText.startsWith("@")) {
       const retrievalQuery = buildTaskRetrievalQuery(cleanText, resolvedTask)
       const matchedDocs = searchArtifactsByQuery(retrievalQuery, allArtifacts)
       if (matchedDocs.length > 0) {
@@ -2636,6 +2646,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                         transition={dataContinuityTransition}
                         onClick={() => {
                           setSelectedArtifactId(art.id)
+                          setChatArtifactId(null)
                           setIsChatSplitOpen(true)
                         }}
                         className={cn(
@@ -2866,7 +2877,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           <motion.button
                             key={idx}
                             type="button"
-                            onClick={() => handleSendMessage(promptText, selectedArtifact.content, selectedArtifact.name)}
+                            onClick={() => {
+                              setChatArtifactId(selectedArtifact.id)
+                              handleSendMessage(promptText, selectedArtifact.content, selectedArtifact.name)
+                            }}
                             {...tactileProps.button}
                             className="group flex w-full items-center justify-between py-2 px-2.5 rounded-xl text-left text-xs text-slate-700 dark:text-slate-300 bg-slate-50/80 hover:bg-slate-100 border border-slate-200/60 dark:border-neutral-800 transition-colors cursor-pointer"
                           >
@@ -2888,7 +2902,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                           tasks={tasks}
                           intelligence={intelligence}
                           onOpenTask={(task) => setActiveDetailTask(task)}
-                          onSendSuggestion={(text) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name)}
+                          onSendSuggestion={(text) => handleSendMessage(
+                            text,
+                            chatArtifact?.content,
+                            chatArtifact?.name
+                          )}
                           onFeedback={(feedback) => handleMessageFeedback(m.id, feedback)}
                         />
                       ))}
@@ -2901,7 +2919,13 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                 <div className="shrink-0 px-3 sm:px-4 pb-3 pt-1 z-20 border-t border-slate-200/70 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-sm">
                   <EchoComposerForm
                     isStreaming={isStreaming}
-                    onSend={(text, attachedImg) => handleSendMessage(text, selectedArtifact.content, selectedArtifact.name, undefined, attachedImg)}
+                    onSend={(text, attachedImg) => handleSendMessage(
+                      text,
+                      chatArtifact?.content,
+                      chatArtifact?.name,
+                      undefined,
+                      attachedImg
+                    )}
                     onStop={handleStopStream}
                     onOpenArtifacts={() => setSidebarTab("artifacts")}
                     onUploadFile={() => {
@@ -2912,8 +2936,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       fileInputRef.current?.click()
                     }}
                     artifacts={artifacts}
-                    activeArtifact={selectedArtifact}
-                    onClearActiveArtifact={() => setSelectedArtifactId(null)}
+                    activeArtifact={chatArtifact}
+                    onClearActiveArtifact={() => setChatArtifactId(null)}
                     canUploadArtifacts={canUploadArtifacts}
                     currentModel={currentModel}
                     onModelChange={handleModelChange}
@@ -2971,10 +2995,16 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             >
               <EchoArtifactSplitViewer
                 artifact={selectedArtifact}
-                onClose={() => setSelectedArtifactId(null)}
+                onClose={() => {
+                  setSelectedArtifactId(null)
+                  setChatArtifactId(null)
+                }}
                 onDelete={() => handleDeleteArtifact(selectedArtifact.id)}
                 canDelete={canUploadArtifacts}
-                onAskAboutDoc={(prompt) => handleSendMessage(prompt, selectedArtifact.content, selectedArtifact.name)}
+                onAskAboutDoc={(prompt) => {
+                  setChatArtifactId(selectedArtifact.id)
+                  handleSendMessage(prompt, selectedArtifact.content, selectedArtifact.name)
+                }}
               />
             </div>
           </motion.div>
@@ -3339,10 +3369,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   isStreaming={isStreaming}
                   onSend={(text, attachedImg) => handleSendMessage(
                     text,
-                    (selectedArtifact as any)
-                      ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${(selectedArtifact as any)?.name}" (${(selectedArtifact as any)?.fileType}) ===\n${(selectedArtifact as any)?.content}`
+                    chatArtifact
+                      ? `=== TÀI LIỆU NGƯỜI DÙNG ĐẨY LÊN: "${chatArtifact.name}" (${chatArtifact.fileType}) ===\n${chatArtifact.content}`
                       : undefined,
-                    (selectedArtifact as any)?.name,
+                    chatArtifact?.name,
                     undefined,
                     attachedImg
                   )}
@@ -3356,6 +3386,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                     fileInputRef.current?.click()
                   }}
                   artifacts={artifacts}
+                  activeArtifact={chatArtifact}
+                  onClearActiveArtifact={() => setChatArtifactId(null)}
                   canUploadArtifacts={canUploadArtifacts}
                   currentModel={currentModel}
                   onModelChange={handleModelChange}

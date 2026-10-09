@@ -82,7 +82,7 @@ export function tokens(value: unknown): string[] {
 
 export function isAggregateTaskQuery(query: string): boolean {
   const q = normalizeConversationText(query)
-  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|so luong|dem|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|co nhung|squad|team|khau \d|khâu \d)\b/.test(q)
+  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|so luong|dem|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|tung bai|tung task|cong viec gi|dang lam gi|lam cong viec gi|co nhung|squad|team|khau \d|khâu \d)\b/.test(q)
 }
 
 export function shouldResolveTaskQuery(
@@ -116,6 +116,7 @@ const AGGREGATE_QUERY_WORDS = new Set([
   "designer", "nguoi", "phu", "trach", "ux", "design", "owner", "feature", "journey",
   "hanh", "trinh", "khau", "giai", "doan", "phase", "trang", "thai", "status", "chua",
   "chart", "bieudo", "bieu", "do", "ve", "truc", "quan", "phan", "bo", "tiendo",
+  "hom", "nay", "lam", "gi", "moc", "thoi", "gian", "deadline", "tung", "phan", "dung", "lai", "buoc",
 ])
 
 function entityFieldValues(task: UXRequest): Array<{ field: TaskEntityField; value: string }> {
@@ -147,7 +148,7 @@ function detectRequestedEntityField(query: string): TaskEntityField | undefined 
 function aggregateOperation(query: string): AggregateTaskResolution["operation"] {
   const q = normalizeConversationText(query)
   if (/\b(bao nhieu|so luong|dem)\b/.test(q)) return "count"
-  if (/\b(danh sach|liet ke|nhung task|nhung bai|task nao|bai nao|co nhung)\b/.test(q)) return "list"
+  if (/\b(danh sach|liet ke|nhung task|nhung bai|task nao|bai nao|tung task|tung bai|cong viec gi|dang lam gi|lam cong viec gi|co nhung)\b/.test(q)) return "list"
   return "summary"
 }
 
@@ -213,7 +214,7 @@ export function resolveAggregateTaskQuery(
     }
   }
 
-  const referencesActiveScope = /\b(so do|trong so do|cac task nay|nhung task nay|pham vi nay|nhom nay)\b/.test(normalizedQuery)
+  const referencesActiveScope = /\b(so do|trong so do|cac task nay|nhung task nay|tung task|tung bai|cac phan nay|nhung phan nay|cac bai do|nhung bai do|pham vi nay|nhom nay|chung)\b/.test(normalizedQuery)
   const queryTerm = extractAggregateEntityTerm(query)
   if (activeScope && (referencesActiveScope || !queryTerm)) {
     return { ...optionFromSelection(activeScope, tasks), operation }
