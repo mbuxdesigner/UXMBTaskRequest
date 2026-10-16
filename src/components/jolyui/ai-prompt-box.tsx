@@ -4,6 +4,8 @@ import {
   ArrowUp, 
   Send, 
   Clock, 
+  Snowflake,
+  Ban,
   Users,
   AtSign,
   Command as CommandIcon,
@@ -100,7 +102,29 @@ export const DEFAULT_COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
     iconBg: "bg-amber-100 text-amber-600",
     icon: <Clock className="w-3.5 h-3.5" />,
-    keywords: ["pending", "po pending", "tạm dừng", "tam dung", "chờ", "cho", "delay", "hoãn"],
+    keywords: ["pending", "po pending", "chờ", "cho", "delay", "hoãn"],
+  },
+  {
+    id: "freeze",
+    name: "freeze",
+    syntax: "/freeze: [lý do]",
+    insertText: "/freeze: ",
+    description: "Đóng băng tiến độ SLA & tạm dừng bài toán",
+    badgeClass: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    iconBg: "bg-cyan-100 text-cyan-600",
+    icon: <Snowflake className="w-3.5 h-3.5" />,
+    keywords: ["freeze", "pause", "tạm dừng", "tam dung", "đóng băng", "dong bang", "dừng", "dung"],
+  },
+  {
+    id: "reject",
+    name: "reject",
+    syntax: "/reject: [lý do]",
+    insertText: "/reject: ",
+    description: "Từ chối bài toán kèm lý do",
+    badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
+    iconBg: "bg-rose-100 text-rose-600",
+    icon: <Ban className="w-3.5 h-3.5" />,
+    keywords: ["reject", "từ chối", "tu choi", "hủy", "huy", "bác bỏ", "bac bo"],
   },
 ]
 
@@ -145,6 +169,8 @@ export function AiPromptBox({
   // Track active modes (supporting both new / and legacy @)
   const isSendPoActive = /(?:^|\s)(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po/i.test(value)
   const isPendingActive = /(?:^|\s)(?:\/|@)(po_)?pending/i.test(value)
+  const isFreezeActive = /(?:^|\s)(?:\/|@)(?:freeze|pause|tamdung|tạm dừng)/i.test(value)
+  const isRejectActive = /(?:^|\s)(?:\/|@)(?:reject|tuchoi|từ chối)/i.test(value)
 
   // Auto-resize textarea height as content changes
   useEffect(() => {
@@ -477,24 +503,39 @@ export function AiPromptBox({
   }
 
   // Toggle mode via toolbar button
-  const handleToggleMode = useCallback((mode: "send_po" | "pending") => {
+  const handleToggleMode = useCallback((mode: "send_po" | "pending" | "freeze" | "reject") => {
     let newText = value
     const sendPoRegex = /(?:^|\s)(?:\/|@)se(?:n)?(?:d)?(?:_)?to(?:_)?po:\s*/i
     const pendingRegex = /(?:^|\s)(?:\/|@)(po_)?pending:\s*/i
+    const freezeRegex = /(?:^|\s)(?:\/|@)(?:freeze|pause|tamdung|tạm dừng):\s*/i
+    const rejectRegex = /(?:^|\s)(?:\/|@)(?:reject|tuchoi|từ chối):\s*/i
+
+    const cleanAllPrefixes = (t: string) =>
+      t.replace(sendPoRegex, "").replace(pendingRegex, "").replace(freezeRegex, "").replace(rejectRegex, "").trimStart()
 
     if (mode === "send_po") {
       if (sendPoRegex.test(newText)) {
-        newText = newText.replace(sendPoRegex, "").trimStart()
+        newText = cleanAllPrefixes(newText)
       } else {
-        newText = newText.replace(pendingRegex, "").trimStart()
-        newText = `/sentopo: ${newText}`
+        newText = `/sentopo: ${cleanAllPrefixes(newText)}`
       }
     } else if (mode === "pending") {
       if (pendingRegex.test(newText)) {
-        newText = newText.replace(pendingRegex, "").trimStart()
+        newText = cleanAllPrefixes(newText)
       } else {
-        newText = newText.replace(sendPoRegex, "").trimStart()
-        newText = `/pending: ${newText}`
+        newText = `/pending: ${cleanAllPrefixes(newText)}`
+      }
+    } else if (mode === "freeze") {
+      if (freezeRegex.test(newText)) {
+        newText = cleanAllPrefixes(newText)
+      } else {
+        newText = `/freeze: ${cleanAllPrefixes(newText)}`
+      }
+    } else if (mode === "reject") {
+      if (rejectRegex.test(newText)) {
+        newText = cleanAllPrefixes(newText)
+      } else {
+        newText = `/reject: ${cleanAllPrefixes(newText)}`
       }
     }
 
@@ -689,6 +730,10 @@ export function AiPromptBox({
               ? "Dán link Figma kèm ghi chú bàn giao cho PO xem xét (ví dụ: /sentopo: https://figma.com/...)..." 
               : isPendingActive 
               ? "Nhập lý do chuyển trạng thái Pending (ví dụ: /pending: Chờ cung cấp API)..." 
+              : isFreezeActive
+              ? "Nhập lý do đóng băng tiến độ & tạm dừng task (ví dụ: /freeze: Đổi ưu tiên Sprint)..."
+              : isRejectActive
+              ? "Nhập lý do từ chối bài toán (ví dụ: /reject: Ngoài phạm vi năng lực UX)..."
               : placeholder
           }
           className="flex min-h-[46px] w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
@@ -697,8 +742,8 @@ export function AiPromptBox({
         {/* Actions Toolbar */}
         <div className="flex items-center justify-between gap-2 p-0 pt-1.5 border-t border-slate-100/80">
           
-          {/* Left Action Buttons: Sent to PO & Pending */}
-          <div className="flex items-center gap-0.5 select-none">
+          {/* Left Action Buttons: Sent to PO, Pending, Freeze, Reject */}
+          <div className="flex items-center gap-0.5 select-none flex-wrap">
             
             {/* 1. Send to PO Action Button */}
             <button
@@ -781,6 +826,92 @@ export function AiPromptBox({
                     className="flex-shrink-0 overflow-hidden whitespace-nowrap text-[#D97706] text-xs font-bold"
                   >
                     Pending
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+
+            <CustomDivider />
+
+            {/* 3. Freeze Action Button */}
+            <button
+              type="button"
+              onClick={() => handleToggleMode("freeze")}
+              className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all cursor-pointer ${
+                isFreezeActive
+                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-800 font-semibold"
+                  : "border-transparent bg-transparent text-slate-500 hover:text-cyan-600 hover:bg-cyan-50/80"
+              }`}
+              title="Bật/Tắt lệnh Tạm dừng / Freeze (/freeze)"
+            >
+              <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                <motion.div
+                  animate={{
+                    rotate: isFreezeActive ? 360 : 0,
+                    scale: isFreezeActive ? 1.15 : 1,
+                  }}
+                  whileHover={{
+                    rotate: isFreezeActive ? 360 : 15,
+                    scale: 1.15,
+                    transition: { type: "spring", stiffness: 300, damping: 10 },
+                  }}
+                  transition={{ type: "spring", stiffness: 260, damping: 25 }}
+                >
+                  <Snowflake className={`h-3.5 w-3.5 ${isFreezeActive ? "text-cyan-600" : "text-inherit"}`} />
+                </motion.div>
+              </div>
+              <AnimatePresence>
+                {isFreezeActive && (
+                  <motion.span
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: "auto", opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: "easeOut" }}
+                    className="flex-shrink-0 overflow-hidden whitespace-nowrap text-cyan-800 text-xs font-bold"
+                  >
+                    Tạm dừng
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+
+            <CustomDivider />
+
+            {/* 4. Reject Action Button */}
+            <button
+              type="button"
+              onClick={() => handleToggleMode("reject")}
+              className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all cursor-pointer ${
+                isRejectActive
+                  ? "border-rose-500 bg-rose-500/15 text-rose-800 font-semibold"
+                  : "border-transparent bg-transparent text-slate-500 hover:text-rose-600 hover:bg-rose-50/80"
+              }`}
+              title="Bật/Tắt lệnh Từ chối (/reject)"
+            >
+              <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                <motion.div
+                  animate={{
+                    scale: isRejectActive ? 1.15 : 1,
+                  }}
+                  whileHover={{
+                    scale: 1.15,
+                    transition: { type: "spring", stiffness: 300, damping: 10 },
+                  }}
+                  transition={{ type: "spring", stiffness: 260, damping: 25 }}
+                >
+                  <Ban className={`h-3.5 w-3.5 ${isRejectActive ? "text-rose-600" : "text-inherit"}`} />
+                </motion.div>
+              </div>
+              <AnimatePresence>
+                {isRejectActive && (
+                  <motion.span
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: "auto", opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: "easeOut" }}
+                    className="flex-shrink-0 overflow-hidden whitespace-nowrap text-rose-800 text-xs font-bold"
+                  >
+                    Từ chối
                   </motion.span>
                 )}
               </AnimatePresence>

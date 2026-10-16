@@ -105,6 +105,11 @@ export interface UXRequest {
   task_updates?: TaskUpdateRecord[]
   sent_to_po_at?: string
   pending_reason?: string
+  freeze_reason?: string
+  frozen_at?: string
+  rejected_reason?: string
+  rejected_at?: string
+  previous_status?: string
   viewers?: string[]
   isRestricted?: boolean
   is_test?: boolean

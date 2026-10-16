@@ -186,13 +186,18 @@ export function computeSubtreeMetrics(
     const req = requestsMap?.get(id)
     if (req) {
       const s = (req.status || "").toLowerCase()
+      const isRejected = s.includes("từ chối") || s.includes("rejected") || Boolean((req as any).rejected_reason && !s.includes("thực hiện"))
       const isDone =
-        s.includes("hoàn thành") ||
-        s.includes("nghiệm thu") ||
-        s.includes("release") ||
-        req.progress === 100
+        !isRejected &&
+        (s.includes("hoàn thành") ||
+          s.includes("nghiệm thu") ||
+          s.includes("release") ||
+          req.progress === 100)
       const isDoing =
         !isDone &&
+        !isRejected &&
+        !s.includes("tạm dừng") &&
+        !s.includes("freeze") &&
         (s.includes("thực hiện") ||
           s.includes("đang làm") ||
           s.includes("tiến hành") ||
@@ -203,7 +208,7 @@ export function computeSubtreeMetrics(
         completedTasks++
       } else if (isDoing) {
         inProgressTasks++
-      } else {
+      } else if (!isRejected) {
         pendingTasks++
       }
     } else {

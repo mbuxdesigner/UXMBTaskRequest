@@ -51,6 +51,8 @@ import {
   X, 
   Send, 
   PauseCircle, 
+  Snowflake,
+  Ban,
   ExternalLink, 
   ShieldAlert,
   TriangleAlert,
@@ -2064,6 +2066,8 @@ export default function RequestDetail({
       `https?:\\/\\/[^\\s]+|` +
       `(?:\/|@)[sS][eE][nN]?[dD]?_?[tT][oO]_?[pP][oO](?::|\\s)?|` +
       `(?:\/|@)(?:[pP][oO]_)?(?:[pP][eE][nN][dD][iI][nN][gG])(?::|\\s)?|` +
+      `(?:\/|@)(?:[fF][rR][eE][eE][zZ][eE]|[pP][aA][uU][sS][eE])(?::|\\s)?|` +
+      `(?:\/|@)(?:[rR][eE][jJ][eE][cC][tT]|[tT][uU][cC][hH][oO][iI])(?::|\\s)?|` +
       `@[aA][lL][lL]\\b|@[eE][vV][eE][rR][yY][oO][nN][eE]\\b|@[mM][ọo][iị]\\s+[nN][gG][ưu][ờo][iì]\\b|` +
       `${mentionPattern})`
 
@@ -2872,9 +2876,11 @@ export default function RequestDetail({
         is_comment: false,
       }
 
-      // Gỡ cờ pending ngay lập tức trên UI (0ms latency)
+      // Gỡ cờ pending / freeze ngay lập tức trên UI (0ms latency)
       request.sent_to_po_at = undefined
       request.pending_reason = undefined
+      request.freeze_reason = undefined
+      request.frozen_at = undefined
       request.status = "Đang thực hiện"
       setOptimisticUpdates((prev) => [...prev, resumeRecord])
 
@@ -2889,6 +2895,8 @@ export default function RequestDetail({
                   ...r,
                   status: "Đang thực hiện",
                   pending_reason: undefined,
+                  freeze_reason: undefined,
+                  frozen_at: undefined,
                   sent_to_po_at: undefined,
                   task_updates: [resumeRecord, ...(r.task_updates || [])],
                 }
@@ -2912,8 +2920,10 @@ export default function RequestDetail({
       if (res.success) {
         request.sent_to_po_at = undefined
         request.pending_reason = undefined
+        request.freeze_reason = undefined
+        request.frozen_at = undefined
         request.status = "Đang thực hiện"
-        toast.success("Đã gỡ trạng thái Pending thành công!", "Bài toán đã quay lại trạng thái Đang thực hiện.", { id: toastId })
+        toast.success("Đã kích hoạt lại bài toán thành công!", "Bài toán đã quay lại trạng thái Đang thực hiện.", { id: toastId })
         dispatchNotification({
           type: "task_resumed",
           requestId: request.request_id,
@@ -2928,7 +2938,91 @@ export default function RequestDetail({
         toast.error("Không thể gỡ trạng thái", res.message, { id: toastId })
       }
     } catch {
-      toast.error("Lỗi khi gỡ trạng thái Pending", undefined, { id: toastId })
+      toast.error("Lỗi khi gỡ trạng thái Pending / Tạm dừng", undefined, { id: toastId })
+    }
+  }
+
+  // Khôi phục / Mở lại bài toán từ trạng thái Từ chối (Re-open)
+  const handleReopenRequest = async () => {
+    if (!request) return
+    const toastId = "reopen-task-toast"
+    toast.info("Đang mở lại bài toán...", undefined, { id: toastId })
+    try {
+      const actor = session ? (session.displayName || session.teamsEmail) : displayName
+      const reopenNote = `Thành viên (${actor || "Người dùng"}) đã mở lại bài toán sau khi xem xét lại.`
+      const now = new Date()
+      const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`
+
+      const reopenRecord: TaskUpdateRecord = {
+        id: `OPT-${Date.now()}`,
+        request_id: request.request_id,
+        timestamp: formattedDate,
+        updated_by: actor,
+        author_role: (session ? session.role : "Designer") as any,
+        new_phase: request.current_phase || "Chờ xác nhận",
+        new_progress: request.progress || 0,
+        note: reopenNote,
+        deliverable_link: request.deliverables?.figma_url || "",
+        is_comment: false,
+      }
+
+      request.sent_to_po_at = undefined
+      request.pending_reason = undefined
+      request.freeze_reason = undefined
+      request.frozen_at = undefined
+      request.rejected_reason = undefined
+      request.rejected_at = undefined
+      const restoredStatus = request.previous_status || "Chờ tiếp nhận"
+      request.status = restoredStatus
+      setOptimisticUpdates((prev) => [...prev, reopenRecord])
+
+      try {
+        const cached = localStorage.getItem("ux_portal_real_requests")
+        if (cached) {
+          const list: UXRequest[] = JSON.parse(cached)
+          const updated = list.map((r) =>
+            r.request_id === request.request_id
+              ? {
+                  ...r,
+                  status: restoredStatus,
+                  pending_reason: undefined,
+                  freeze_reason: undefined,
+                  frozen_at: undefined,
+                  rejected_reason: undefined,
+                  rejected_at: undefined,
+                  sent_to_po_at: undefined,
+                  task_updates: [reopenRecord, ...(r.task_updates || [])],
+                }
+              : r
+          )
+          localStorage.setItem("ux_portal_real_requests", JSON.stringify(updated))
+        }
+      } catch (e) {
+        console.warn("Could not optimistically update cache:", e)
+      }
+
+      const res = await updateTaskProgress(request.request_id, {
+        new_phase: request.current_phase || "Chờ xác nhận",
+        new_status: restoredStatus,
+        new_progress: request.progress || 0,
+        note: reopenNote,
+        assigned_designer: request.assigned_designer,
+        sent_to_po_at: "",
+        is_comment: false,
+      })
+
+      if (res.success) {
+        toast.success("Đã mở lại bài toán thành công!", undefined, { id: toastId })
+        if (onUpdated) await onUpdated()
+      } else {
+        toast.error("Không thể mở lại bài toán", res.message, { id: toastId })
+      }
+    } catch (err) {
+      toast.error("Không thể mở lại bài toán", String(err), { id: toastId })
     }
   }
 
@@ -3571,6 +3665,37 @@ export default function RequestDetail({
         ? `Đã chuyển sang Pending (Lý do: ${reasonText})`
         : "Đã chuyển trạng thái sang Pending!"
     }
+    // 3. Cú pháp /freeze hoặc /pause: -> chuyển sang Tạm dừng với lý do cụ thể
+    else if (/(?:^|\s)(?:\/|@)(?:freeze|pause|tamdung|tạm dừng)(?::|\s)?/i.test(rawText)) {
+      const match = rawText.match(/(?:\/|@)(?:freeze|pause|tamdung|tạm dừng)(?::|\s)?\s*([^.\n]*)/i)
+      const reasonText = match && match[1] ? match[1].trim() : ""
+
+      newStatus = "Tạm dừng"
+      sentToPoAt = ""
+      request.status = "Tạm dừng"
+      request.sent_to_po_at = undefined
+      request.freeze_reason = reasonText || "Đóng băng tiến độ & tạm dừng theo yêu cầu"
+      request.pending_reason = reasonText || "Đóng băng tiến độ & tạm dừng theo yêu cầu"
+      request.frozen_at = new Date().toISOString()
+      toastMessage = reasonText 
+        ? `Đã tạm dừng bài toán (Lý do: ${reasonText})`
+        : "Đã tạm dừng bài toán thành công!"
+    }
+    // 4. Cú pháp /reject hoặc /tuchoi: -> chuyển sang Từ chối với lý do cụ thể
+    else if (/(?:^|\s)(?:\/|@)(?:reject|tuchoi|từ chối)(?::|\s)?/i.test(rawText)) {
+      const match = rawText.match(/(?:\/|@)(?:reject|tuchoi|từ chối)(?::|\s)?\s*([^.\n]*)/i)
+      const reasonText = match && match[1] ? match[1].trim() : ""
+
+      newStatus = "Từ chối"
+      sentToPoAt = ""
+      request.status = "Từ chối"
+      request.sent_to_po_at = undefined
+      request.rejected_reason = reasonText || "Từ chối thực hiện yêu cầu này"
+      request.rejected_at = new Date().toISOString()
+      toastMessage = reasonText 
+        ? `Đã từ chối bài toán (Lý do: ${reasonText})`
+        : "Đã từ chối bài toán thành công!"
+    }
 
     const now = new Date()
     const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
@@ -3693,6 +3818,11 @@ export default function RequestDetail({
       assigned_designer: request.assigned_designer,
       sent_to_po_at: sentToPoAt,
       is_comment: true,
+      pending_reason: request.pending_reason,
+      freeze_reason: request.freeze_reason,
+      frozen_at: request.frozen_at,
+      rejected_reason: request.rejected_reason,
+      rejected_at: request.rejected_at,
     })
       .then((res) => {
         if (res.success) {
@@ -3741,12 +3871,25 @@ export default function RequestDetail({
     return 0
   }, [request, adminPhases])
 
-  // Phân loại chuẩn 2 loại Pending:
+  // Phân loại chuẩn các loại Pending, Freeze và Từ chối:
   // 1. PO Pending: Sau 24h kể từ khi Designer gửi figma cho PO nhưng chưa phản hồi (Màu Amber)
   // 2. Pending: Designer chủ động gắn @pending: kèm lý do cụ thể trong đoạn chat (Màu Slate)
+  // 3. Freeze: Đóng băng tiến độ & tạm dừng qua /freeze (Màu Cyan)
+  // 4. Từ chối: Từ chối bài toán qua /reject (Màu Rose)
   const pendingClassification = useMemo(() => {
     return getRequestPendingClassification(request)
-  }, [request?.status, request?.sent_to_po_at, request?.pending_reason, request?.task_updates, request?.latest_update, optimisticUpdates])
+  }, [
+    request?.status, 
+    request?.sent_to_po_at, 
+    request?.pending_reason, 
+    request?.freeze_reason, 
+    request?.frozen_at, 
+    request?.rejected_reason, 
+    request?.rejected_at, 
+    request?.task_updates, 
+    request?.latest_update, 
+    optimisticUpdates
+  ])
 
   // Tính toán thời gian SLA 24h chờ PO (Banner 1 Tím: khi trong hạn 24h chờ PO phản hồi)
   const poWaitInfo = useMemo(() => {
@@ -4126,6 +4269,86 @@ export default function RequestDetail({
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
                           <span>Tiếp tục làm</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BANNER LOẠI 3: FREEZE / TẠM DỪNG (Màu Cyan) */}
+                  {pendingClassification.type === "frozen" && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-cyan-50/95 border border-cyan-300 text-xs text-cyan-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <Snowflake className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-cyan-950 text-[13px] flex items-center gap-1.5 flex-wrap">
+                            <span>Trạng thái: Tạm dừng (Freeze)</span>
+                            <span className="px-2 py-0.5 rounded-full bg-cyan-200/90 text-[10px] font-extrabold text-cyan-900 uppercase tracking-wide border border-cyan-300/80">
+                              Đóng băng tiến độ
+                            </span>
+                          </p>
+                          <div className="mt-1 space-y-0.5">
+                            <p className="text-xs text-cyan-950 font-semibold flex items-center gap-1.5 flex-wrap">
+                              <span className="text-cyan-700 font-normal">Lý do:</span>
+                              <span className="text-cyan-900 bg-cyan-100/90 px-2 py-0.5 rounded-md border border-cyan-200 font-medium">
+                                {pendingClassification.reason || request.freeze_reason || "Đóng băng tiến độ & tạm dừng theo yêu cầu"}
+                              </span>
+                            </p>
+                            <p className="text-[11.5px] text-cyan-700">
+                              Bài toán đang ở trạng thái đóng băng tạm thời, tiến độ và thời gian cam kết SLA được bảo lưu.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleDesignerResumeUpdate}
+                          className="h-7.5 px-3 text-xs bg-white hover:bg-cyan-100 text-cyan-950 border-cyan-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          title="Tiếp tục thực hiện bài toán và gỡ trạng thái đóng băng"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Tiếp tục làm</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BANNER LOẠI 4: TỪ CHỐI / REJECTED (Màu Rose) */}
+                  {pendingClassification.type === "rejected" && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-50/95 border border-rose-300 text-xs text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <Ban className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-rose-950 text-[13px] flex items-center gap-1.5 flex-wrap">
+                            <span>Trạng thái: Từ chối</span>
+                            <span className="px-2 py-0.5 rounded-full bg-rose-200/90 text-[10px] font-extrabold text-rose-900 uppercase tracking-wide border border-rose-300/80">
+                              Đã từ chối
+                            </span>
+                          </p>
+                          <div className="mt-1 space-y-0.5">
+                            <p className="text-xs text-rose-950 font-semibold flex items-center gap-1.5 flex-wrap">
+                              <span className="text-rose-700 font-normal">Lý do:</span>
+                              <span className="text-rose-900 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-200 font-medium">
+                                {pendingClassification.reason || request.rejected_reason || "Yêu cầu đã bị từ chối"}
+                              </span>
+                            </p>
+                            <p className="text-[11.5px] text-rose-700">
+                              Bài toán này đã bị từ chối và ngừng xử lý. Bạn có thể mở lại bài toán nếu cần tiếp tục triển khai.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto flex-wrap">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleReopenRequest}
+                          className="h-7.5 px-3 text-xs bg-white hover:bg-rose-100 text-rose-950 border-rose-300 rounded-xl font-bold cursor-pointer shadow-2xs flex items-center gap-1.5"
+                          title="Mở lại bài toán để tiếp tục xử lý"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Mở lại bài toán</span>
                         </Button>
                       </div>
                     </div>
@@ -5500,6 +5723,30 @@ export default function RequestDetail({
                                         <span
                                           key={`cmd-pend-${lIdx}-${pIdx}`}
                                           className="inline-flex items-center px-2 py-0.5 mr-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200/90 shadow-2xs"
+                                        >
+                                          {part.trim()}
+                                        </span>
+                                      )
+                                    }
+
+                                    // Lệnh Freeze (/freeze hoặc /pause hoặc /tamdung)
+                                    if (/^(?:\/|@)(?:freeze|pause|tamdung|tạm dừng)(?::|\s)?$/i.test(part)) {
+                                      return (
+                                        <span
+                                          key={`cmd-freeze-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center px-2 py-0.5 mr-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-800 border border-cyan-200/90 shadow-2xs"
+                                        >
+                                          {part.trim()}
+                                        </span>
+                                      )
+                                    }
+
+                                    // Lệnh Reject (/reject hoặc /tuchoi)
+                                    if (/^(?:\/|@)(?:reject|tuchoi|từ chối)(?::|\s)?$/i.test(part)) {
+                                      return (
+                                        <span
+                                          key={`cmd-reject-${lIdx}-${pIdx}`}
+                                          className="inline-flex items-center px-2 py-0.5 mr-1 rounded-md text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200/90 shadow-2xs"
                                         >
                                           {part.trim()}
                                         </span>

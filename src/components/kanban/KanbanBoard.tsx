@@ -23,7 +23,9 @@ import {
   CheckCircle2,
   Flag,
   Clock,
-  PauseCircle
+  PauseCircle,
+  Snowflake,
+  Ban
 } from "lucide-react"
 
 export interface KanbanBoardProps {
@@ -224,6 +226,32 @@ function getRequestPendingInfo(req: UXRequest) {
       tooltip: "PO Pending: Sau 24h kể từ khi Designer gửi lại figma cho PO nhưng chưa phản hồi",
       reason: p.reason,
       elapsedHours: p.elapsedHours,
+    }
+  }
+
+  if (p.type === "frozen") {
+    return {
+      isPending: true,
+      type: "frozen" as const,
+      label: "Tạm dừng",
+      badgeClass: "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100",
+      dotClass: "bg-cyan-500",
+      tooltip: `Tạm dừng (Freeze): ${p.reason || "Đóng băng tiến độ & SLA theo yêu cầu"}`,
+      reason: p.reason,
+      elapsedHours: 0,
+    }
+  }
+
+  if (p.type === "rejected") {
+    return {
+      isPending: true,
+      type: "rejected" as const,
+      label: "Từ chối",
+      badgeClass: "border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100",
+      dotClass: "bg-rose-500",
+      tooltip: `Từ chối: ${p.reason || "Đã từ chối thực hiện yêu cầu này"}`,
+      reason: p.reason,
+      elapsedHours: 0,
     }
   }
 
@@ -530,6 +558,10 @@ export default function KanbanBoard({
                         className={`group relative rounded-2xl border transition-all duration-200 cursor-grab active:cursor-grabbing select-none overflow-hidden ${
                           pendingInfo.type === "po_pending"
                             ? "bg-white border-amber-300/90 shadow-2xs ring-1 ring-amber-200/50 hover:border-amber-400 hover:shadow-md"
+                            : pendingInfo.type === "frozen"
+                            ? "bg-white border-cyan-300/90 shadow-2xs ring-1 ring-cyan-200/50 hover:border-cyan-400 hover:shadow-md"
+                            : pendingInfo.type === "rejected"
+                            ? "bg-white border-rose-300/90 shadow-2xs ring-1 ring-rose-200/50 hover:border-rose-400 hover:shadow-md"
                             : pendingInfo.type === "designer_pending"
                             ? "bg-white border-slate-300/90 shadow-2xs ring-1 ring-slate-200/60 hover:border-slate-400 hover:shadow-md"
                             : "bg-white border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300"
@@ -556,6 +588,32 @@ export default function KanbanBoard({
                                   {pendingInfo.elapsedHours}h trễ
                                 </span>
                               ) : null}
+                            </div>
+                          ) : pendingInfo.type === "frozen" ? (
+                            <div 
+                              className="flex items-center justify-between gap-1.5 px-3 py-1 bg-cyan-50 text-cyan-900 border-b border-cyan-200/80 text-[11px]"
+                              title={`Tạm dừng: ${pendingInfo.reason || "Đóng băng tiến độ & SLA"}`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Snowflake className="w-3 h-3 text-cyan-600 shrink-0" />
+                                <span className="font-bold text-[10px] uppercase tracking-wide text-cyan-800">Tạm dừng</span>
+                                <span className="text-cyan-700 truncate">
+                                  · Lí do: <strong className="text-cyan-900 font-medium">{pendingInfo.reason || "Đóng băng tiến độ"}</strong>
+                                </span>
+                              </div>
+                            </div>
+                          ) : pendingInfo.type === "rejected" ? (
+                            <div 
+                              className="flex items-center justify-between gap-1.5 px-3 py-1 bg-rose-50 text-rose-900 border-b border-rose-200/80 text-[11px]"
+                              title={`Từ chối: ${pendingInfo.reason || "Đã từ chối bài toán"}`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Ban className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span className="font-bold text-[10px] uppercase tracking-wide text-rose-800">Từ chối</span>
+                                <span className="text-rose-700 truncate">
+                                  · Lí do: <strong className="text-rose-900 font-medium">{pendingInfo.reason || "Từ chối thực hiện"}</strong>
+                                </span>
+                              </div>
                             </div>
                           ) : (
                             <div 

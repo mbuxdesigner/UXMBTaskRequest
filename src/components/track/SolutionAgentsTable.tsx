@@ -113,8 +113,15 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
   const progress = typeof r.progress === "number" ? r.progress : 0
   const phaseLower = (r.current_phase || "").toLowerCase().trim()
 
-  // 1. Hoàn thành
-  if (status === "hoàn thành" || status === "done" || progress >= 100) {
+  // 1. Hoàn thành & Từ chối (Nhóm đóng / kết thúc bài toán)
+  if (
+    status === "hoàn thành" ||
+    status === "done" ||
+    status === "từ chối" ||
+    status === "rejected" ||
+    Boolean(r.rejected_reason && status !== "đang thực hiện") ||
+    progress >= 100
+  ) {
     return "completed"
   }
 
@@ -1002,11 +1009,31 @@ export default function SolutionAgentsTable({
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
                                           pendingInfo.type === "po_pending"
                                             ? "bg-amber-50 text-amber-800 border-amber-300"
+                                            : pendingInfo.type === "frozen"
+                                            ? "bg-cyan-50 text-cyan-800 border-cyan-300"
+                                            : pendingInfo.type === "rejected"
+                                            ? "bg-rose-50 text-rose-800 border-rose-300"
                                             : "bg-slate-100 text-slate-700 border-slate-300"
                                         }`}
-                                        title={pendingInfo.type === "po_pending" ? "PO Pending: Quá hạn 24h PO chưa duyệt" : `Pending: ${pendingInfo.reason}`}
+                                        title={
+                                          pendingInfo.type === "po_pending" 
+                                            ? "PO Pending: Quá hạn 24h PO chưa duyệt" 
+                                            : pendingInfo.type === "frozen"
+                                            ? `Tạm dừng: ${pendingInfo.reason || "Đóng băng tiến độ"}`
+                                            : pendingInfo.type === "rejected"
+                                            ? `Từ chối: ${pendingInfo.reason || "Đã từ chối bài toán"}`
+                                            : `Pending: ${pendingInfo.reason}`
+                                        }
                                       >
-                                        <span className={`size-1.5 rounded-full shrink-0 ${pendingInfo.type === "po_pending" ? "bg-amber-500" : "bg-slate-500"}`} />
+                                        <span className={`size-1.5 rounded-full shrink-0 ${
+                                          pendingInfo.type === "po_pending" 
+                                            ? "bg-amber-500" 
+                                            : pendingInfo.type === "frozen"
+                                            ? "bg-cyan-500"
+                                            : pendingInfo.type === "rejected"
+                                            ? "bg-rose-500"
+                                            : "bg-slate-500"
+                                        }`} />
                                         <span>{pendingInfo.label}</span>
                                       </span>
                                     )}
@@ -1115,10 +1142,26 @@ export default function SolutionAgentsTable({
                                 )}
                                 {pendingInfo.isPending ? (
                                   <span
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap bg-amber-50 text-amber-800 border-amber-300 h-6"
-                                    title={`Pending: ${pendingInfo.reason || pendingInfo.label}`}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${
+                                      pendingInfo.type === "po_pending"
+                                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                                        : pendingInfo.type === "frozen"
+                                        ? "bg-cyan-50 text-cyan-800 border-cyan-300"
+                                        : pendingInfo.type === "rejected"
+                                        ? "bg-rose-50 text-rose-800 border-rose-300"
+                                        : "bg-slate-100 text-slate-800 border-slate-300"
+                                    }`}
+                                    title={`Trạng thái: ${pendingInfo.label}${pendingInfo.reason ? ` (${pendingInfo.reason})` : ""}`}
                                   >
-                                    <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
+                                    <span className={`size-1.5 rounded-full shrink-0 ${
+                                      pendingInfo.type === "po_pending"
+                                        ? "bg-amber-500"
+                                        : pendingInfo.type === "frozen"
+                                        ? "bg-cyan-500"
+                                        : pendingInfo.type === "rejected"
+                                        ? "bg-rose-500"
+                                        : "bg-slate-500"
+                                    }`} />
                                     <span className="truncate">{pendingInfo.label || phaseInfo.name}</span>
                                   </span>
                                 ) : (

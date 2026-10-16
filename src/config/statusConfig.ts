@@ -23,6 +23,11 @@ export type RequestStatus =
   | "Đang review"
   | "Hoàn thành"
   | "Bị chặn"
+  | "Tạm dừng"
+  | "Từ chối"
+  | "Freeze"
+  | "Frozen"
+  | "Rejected"
 
 export interface StatusBadgeConfig {
   /** Badge variant name matching the Badge component */
@@ -411,16 +416,68 @@ export const STATUS_CONFIG: Record<string, StatusBadgeConfig> = {
       dot: "bg-amber-500",
     },
   },
+  "Tạm dừng": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-800",
+      border: "border-cyan-300",
+      dot: "bg-cyan-600",
+    },
+  },
+  "Freeze": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-800",
+      border: "border-cyan-300",
+      dot: "bg-cyan-600",
+    },
+  },
+  "Frozen": {
+    variant: "teal",
+    dotColor: "bg-cyan-600",
+    inlineClasses: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-800",
+      border: "border-cyan-300",
+      dot: "bg-cyan-600",
+    },
+  },
+  "Từ chối": {
+    variant: "destructive",
+    dotColor: "bg-rose-600",
+    inlineClasses: {
+      bg: "bg-rose-50",
+      text: "text-rose-800",
+      border: "border-rose-300",
+      dot: "bg-rose-600",
+    },
+  },
+  "Rejected": {
+    variant: "destructive",
+    dotColor: "bg-rose-600",
+    inlineClasses: {
+      bg: "bg-rose-50",
+      text: "text-rose-800",
+      border: "border-rose-300",
+      dot: "bg-rose-600",
+    },
+  },
 }
 
-// ─── Phân loại chuẩn 2 loại Pending ─────────────────────────
+// ─── Phân loại chuẩn trạng thái Pending / Tạm dừng / Từ chối ───────────
 // 1. PO Pending: Sau 24h kể từ khi Designer gửi figma cho PO nhưng chưa phản hồi (Màu Amber)
 // 2. Pending: Lý do theo đoạn chat của designer khi dùng @pending: (Màu Slate)
+// 3. Tạm dừng (Freeze): Đóng băng tiến độ & SLA khi dùng /freeze: (Màu Cyan)
+// 4. Từ chối (Reject): Từ chối bài toán khi dùng /reject: (Màu Rose)
 
 export interface RequestPendingClassification {
   isPending: boolean
-  type: "po_pending" | "designer_pending" | null
-  label: "PO Pending" | "Pending" | ""
+  type: "po_pending" | "designer_pending" | "frozen" | "rejected" | null
+  label: "PO Pending" | "Pending" | "Tạm dừng" | "Từ chối" | ""
   reason: string
   sentTimeStr: string
   elapsedHours: number
@@ -638,11 +695,66 @@ export function getRequestPendingClassification(req: any): RequestPendingClassif
   }
 
   // ==========================================
-  // LOẠI 2: DESIGNER PENDING (Xám Slate / Tạm dừng theo yêu cầu)
-  // Chỉ kích hoạt KHI VÀ CHỈ KHI trạng thái hiện tại của task là "Pending" hoặc "Tạm dừng"
+  // LOẠI 4: TỪ CHỐI / REJECTED (Màu Đỏ Rose)
+  // ==========================================
+  const isRejectedStatus =
+    rawStatus === "từ chối" ||
+    rawStatus === "rejected" ||
+    Boolean(req.rejected_reason && rawStatus !== "đang thực hiện" && rawStatus !== "hoàn thành" && rawStatus !== "done")
+
+  if (isRejectedStatus) {
+    const rejectReason = (req.rejected_reason || "").trim()
+    return {
+      isPending: true,
+      type: "rejected",
+      label: "Từ chối",
+      reason: rejectReason || "Đã từ chối thực hiện yêu cầu này",
+      sentTimeStr: "",
+      elapsedHours: 0,
+      hoursRemaining: 0,
+      badgeClasses: {
+        bg: "bg-rose-50",
+        text: "text-rose-800",
+        border: "border-rose-300",
+        dot: "bg-rose-600",
+      },
+    }
+  }
+
+  // ==========================================
+  // LOẠI 3: FREEZE / TẠM DỪNG (Màu Xanh Cyan)
+  // ==========================================
+  const isFrozenStatus =
+    rawStatus === "tạm dừng" ||
+    rawStatus === "freeze" ||
+    rawStatus === "frozen" ||
+    Boolean(req.freeze_reason && rawStatus !== "đang thực hiện" && rawStatus !== "hoàn thành" && rawStatus !== "done")
+
+  if (isFrozenStatus) {
+    const freezeReason = (req.freeze_reason || req.pending_reason || "").trim()
+    return {
+      isPending: true,
+      type: "frozen",
+      label: "Tạm dừng",
+      reason: freezeReason || "Đóng băng tiến độ & SLA theo yêu cầu",
+      sentTimeStr: "",
+      elapsedHours: 0,
+      hoursRemaining: 0,
+      badgeClasses: {
+        bg: "bg-cyan-50",
+        text: "text-cyan-800",
+        border: "border-cyan-300",
+        dot: "bg-cyan-600",
+      },
+    }
+  }
+
+  // ==========================================
+  // LOẠI 2: DESIGNER PENDING (Xám Slate / Tạm hoãn theo yêu cầu)
+  // Chỉ kích hoạt KHI VÀ CHỈ KHI trạng thái hiện tại của task là "Pending"
   // TUYỆT ĐỐI KHÔNG duyệt lịch sử cũ để gắn cờ khi task đã được bấm "Tiếp tục làm" / "Đang thực hiện"
   // ==========================================
-  const isPendingStatus = rawStatus === "pending" || rawStatus === "tạm dừng" || rawStatus === "chờ phản hồi"
+  const isPendingStatus = rawStatus === "pending" || rawStatus === "chờ phản hồi"
   if (isPendingStatus) {
     let chatPendingReason = (req.pending_reason || "").trim()
 

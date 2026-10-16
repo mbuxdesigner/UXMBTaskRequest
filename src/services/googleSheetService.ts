@@ -1091,6 +1091,11 @@ export async function updateTaskProgressInSheet(
     is_comment?: boolean
     is_po_edit?: boolean
     viewers?: string[]
+    pending_reason?: string
+    freeze_reason?: string
+    frozen_at?: string
+    rejected_reason?: string
+    rejected_at?: string
   }
 ): Promise<{ success: boolean; message: string; updatedRequest?: UXRequest }> {
   const session = getStoredSession()
@@ -1163,7 +1168,21 @@ export async function updateTaskProgressInSheet(
         sent_to_po_at: (params.sent_to_po_at !== undefined)
           ? (params.sent_to_po_at === "" ? undefined : params.sent_to_po_at)
           : (params.new_status === "Đã gửi PO" || params.new_status === "PO pending" ? oldReq.sent_to_po_at : undefined),
-        pending_reason: (params.new_status === "Pending" || params.new_status === "PO pending") ? oldReq.pending_reason : undefined,
+        pending_reason: (params.new_status === "Pending" || params.new_status === "PO pending")
+          ? (params.pending_reason !== undefined ? params.pending_reason : oldReq.pending_reason)
+          : undefined,
+        freeze_reason: (params.new_status === "Tạm dừng" || params.new_status === "Freeze" || params.new_status === "Frozen")
+          ? (params.freeze_reason !== undefined ? params.freeze_reason : (oldReq.freeze_reason || params.note))
+          : undefined,
+        frozen_at: (params.new_status === "Tạm dừng" || params.new_status === "Freeze" || params.new_status === "Frozen")
+          ? (params.frozen_at !== undefined ? params.frozen_at : (oldReq.frozen_at || formattedDate))
+          : undefined,
+        rejected_reason: (params.new_status === "Từ chối" || params.new_status === "Rejected")
+          ? (params.rejected_reason !== undefined ? params.rejected_reason : (oldReq.rejected_reason || params.note))
+          : undefined,
+        rejected_at: (params.new_status === "Từ chối" || params.new_status === "Rejected")
+          ? (params.rejected_at !== undefined ? params.rejected_at : (oldReq.rejected_at || formattedDate))
+          : undefined,
         phases: buildPhases(params.new_phase),
         latest_update: {
           date: formattedDate,
