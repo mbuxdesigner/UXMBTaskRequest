@@ -788,52 +788,151 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       let created = false
       let blocked = false
 
-      function dfs(curr: IANode): boolean {
+      // 1. Find targetNode and its path of ancestors
+      let targetPath: IANode[] = []
+      function findPath(curr: IANode, path: IANode[]): boolean {
+        const currentPath = [...path, curr]
         if (curr.id === parentId) {
-          if (curr.tier >= 5) {
-            toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
-            blocked = true
-            return true
-          }
-          curr.collapsed = false // auto-expand parent
-          const nextTier = (curr.tier + 1) as IATier
-          const newId = nodeData.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-          const newNode: IANode = {
-            id: newId,
-            tier: nextTier,
-            name: (nodeData.name && nodeData.name.trim()) || `Node mới (Cấp ${nextTier})`,
-            parentId: curr.id,
-            description: nodeData.description || "",
-            code: nodeData.code || "",
-            figmaUrl: nodeData.figmaUrl,
-            squad: nodeData.squad,
-            taskIds: nodeData.taskIds,
-            hasActiveTask: nodeData.hasActiveTask,
-            requestId: nodeData.requestId,
-            touchpointType: nextTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
-            children: nextTier < 5 ? [] : undefined,
-            colorTheme: curr.colorTheme,
-            displaySettings: nodeData.displaySettings,
-            customX: nodeData.customX,
-            customY: nodeData.customY,
-          }
-          if (!curr.children) curr.children = []
-          curr.children.push(newNode)
-          created = true
+          targetPath = currentPath
           return true
         }
         if (curr.children) {
           for (const child of curr.children) {
-            if (dfs(child)) return true
+            if (findPath(child, currentPath)) return true
           }
         }
         return false
       }
 
       for (const r of [clone, ...(clone.siblingRoots || [])]) {
-        if (dfs(r)) {
+        if (findPath(r, [])) {
           break
         }
+      }
+
+      if (targetPath.length === 0) {
+        throw new Error(`Parent node with id "${parentId}" not found`)
+      }
+
+      const targetNode = targetPath[targetPath.length - 1]
+
+      // 2. Resolve target tier and parent node
+      const targetTier = nodeData.tier
+      if (targetTier === undefined) {
+        // Direct addition to targetNode (e.g. from node card (+) button or keyboard Tab)
+        const curr = targetNode
+        if (curr.tier >= 5) {
+          toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
+          blocked = true
+          return prevTrees
+        }
+        curr.collapsed = false // auto-expand parent
+        const nextTier = (curr.tier + 1) as IATier
+        const newId = nodeData.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        const newNode: IANode = {
+          id: newId,
+          tier: nextTier,
+          name: (nodeData.name && nodeData.name.trim()) || `Node mới (Cấp ${nextTier})`,
+          parentId: curr.id,
+          description: nodeData.description || "",
+          code: nodeData.code || "",
+          figmaUrl: nodeData.figmaUrl,
+          squad: nodeData.squad,
+          taskIds: nodeData.taskIds,
+          hasActiveTask: nodeData.hasActiveTask,
+          requestId: nodeData.requestId,
+          touchpointType: nextTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
+          children: nextTier < 5 ? [] : undefined,
+          colorTheme: curr.colorTheme,
+          displaySettings: nodeData.displaySettings,
+          customX: nodeData.customX,
+          customY: nodeData.customY,
+        }
+        if (!curr.children) curr.children = []
+        curr.children.push(newNode)
+        created = true
+      } else {
+        // Explicit targetTier specified (e.g. from SlideOver template Lv2..Lv5 or drag-and-drop)
+        const requiredParentTier = Math.max(1, targetTier - 1) as IATier
+        let effectiveParent: IANode | null = null
+
+        if (targetNode.tier === requiredParentTier) {
+          effectiveParent = targetNode
+        } else if (targetNode.tier > requiredParentTier) {
+          // targetNode is deeper than requiredParentTier; find matching ancestor
+          for (let i = targetPath.length - 1; i >= 0; i--) {
+            if (targetPath[i].tier === requiredParentTier) {
+              effectiveParent = targetPath[i]
+              break
+            }
+          }
+        } else {
+          // targetNode is higher up; traverse down and auto-create intermediate nodes if needed
+          let curr = targetNode
+          while (curr.tier < requiredParentTier) {
+            const nextChildTier = (curr.tier + 1) as IATier
+            if (!curr.children) curr.children = []
+            let nextChild = curr.children[curr.children.length - 1]
+            if (!nextChild || nextChild.tier !== nextChildTier) {
+              const defaultName =
+                nextChildTier === 2
+                  ? "Phân hệ nghiệp vụ mới"
+                  : nextChildTier === 3
+                  ? "Luồng tính năng mới"
+                  : "Màn hình chính"
+              const intermediateNode: IANode = {
+                id: `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                tier: nextChildTier,
+                name: defaultName,
+                parentId: curr.id,
+                touchpointType: nextChildTier === 4 ? "screen" : undefined,
+                children: nextChildTier < 5 ? [] : undefined,
+                colorTheme: curr.colorTheme,
+              }
+              curr.children.push(intermediateNode)
+              nextChild = intermediateNode
+            }
+            curr.collapsed = false
+            curr = nextChild
+          }
+          effectiveParent = curr
+        }
+
+        if (!effectiveParent) {
+          effectiveParent = targetNode
+        }
+
+        const curr = effectiveParent
+        if (curr.tier >= 5) {
+          toast.warning("Cấp 5 (Lv5) là tầng thành phần/chi tiết cuối cùng, không thể tạo thêm nhánh con.")
+          blocked = true
+          return prevTrees
+        }
+
+        curr.collapsed = false
+        const newId = nodeData.id || `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        const newNode: IANode = {
+          id: newId,
+          tier: targetTier,
+          name: (nodeData.name && nodeData.name.trim()) || `Node mới (Cấp ${targetTier})`,
+          parentId: curr.id,
+          description: nodeData.description || "",
+          code: nodeData.code || "",
+          figmaUrl: nodeData.figmaUrl,
+          squad: nodeData.squad,
+          taskIds: nodeData.taskIds,
+          hasActiveTask: nodeData.hasActiveTask,
+          requestId: nodeData.requestId,
+          touchpointType: targetTier === 4 ? (nodeData.touchpointType || "screen") : undefined,
+          children: targetTier < 5 ? [] : undefined,
+          colorTheme: curr.colorTheme || targetNode.colorTheme,
+          displaySettings: nodeData.displaySettings,
+          customX: nodeData.customX,
+          customY: nodeData.customY,
+        }
+        if (!curr.children) curr.children = []
+        curr.children.push(newNode)
+        created = true
       }
 
       if (blocked) {

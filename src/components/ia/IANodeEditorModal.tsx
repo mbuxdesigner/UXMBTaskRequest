@@ -271,7 +271,7 @@ export default function IANodeEditorModal({
       setCustomTag("")
       setColorTheme(targetNode.colorTheme || "blue")
       setTouchpointType("screen")
-      const childTier = Math.min(4, (targetNode.tier || 1) + 1) as IATier
+      const childTier = Math.min(5, (targetNode.tier || 1) + 1) as IATier
       setDisplaySettings(getTierDefaultDisplaySettings(childTier))
       setErrorMessage("")
     } else {
@@ -509,6 +509,10 @@ export default function IANodeEditorModal({
     // Trạng thái setting tự động (hasActiveTask: undefined) - hệ thống tự động tính toán từ các task liên kết
     const nodePayload: Partial<IANode> = {
       name: name.trim(),
+      tier:
+        mode === "add"
+          ? (Math.min(5, (targetNode?.tier || 1) + 1) as IATier)
+          : targetNode?.tier,
       description: description.trim() || undefined,
       squad: finalSquad || undefined,
       taskIds: effectiveTaskIds,

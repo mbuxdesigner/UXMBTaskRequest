@@ -409,7 +409,7 @@ export default function IAPage() {
         return
       }
 
-      // Tier 2, 3, 4: Gắn vào node đang chọn hoặc root node
+      // Tier 2, 3, 4, 5: Tự động gắn vào đúng cấp cha theo cấu trúc 5 tầng IA
       const targetParent = selectedNode || activeTree
       if (!targetParent) return
 
@@ -418,7 +418,7 @@ export default function IAPage() {
         tier: item.tier,
         touchpointType: item.touchpointType,
       })
-      toast.success(`Đã thêm ${item.name} vào dưới "${targetParent.name}"!`)
+      toast.success(`Đã thêm ${item.name} vào sơ đồ!`)
       setTimeout(() => handleFitToView(), 100)
     },
     [canEdit, activeProduct, addRootNode, selectedNode, activeTree, addChildNode, handleFitToView]

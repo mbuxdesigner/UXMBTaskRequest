@@ -602,10 +602,22 @@ export default function IASlideOverSheet({
                   </span>
                 </div>
                 <span className="text-[10px] font-mono font-medium text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded shrink-0 ml-1">
-                  Nhánh con Lv{selectedNode.tier + 1}
+                  {selectedNode.tier >= 5 ? "Tầng tối đa (Lv5)" : `Nhánh con Lv${selectedNode.tier + 1}`}
                 </span>
               </div>
-            ) : null}
+            ) : (
+              <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-600 flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  <span className="truncate">
+                    Gốc: <strong className="font-semibold text-slate-900">{activeTree?.name || activeProduct?.name}</strong> (Lv1)
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono font-medium text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded shrink-0 ml-1">
+                  Tự động gắn tầng phù hợp
+                </span>
+              </div>
+            )}
 
             {/* List of Template Cards (reUI Sheet 2 style) */}
             <div className="space-y-2">
@@ -616,7 +628,7 @@ export default function IASlideOverSheet({
               ) : (
                 filteredTemplates.map((item) => {
                   const IconComponent = item.icon
-                  const isBlockedByLv5 = isSelectedNodeLv5 && item.tier !== 1
+                  const isBlockedByLv5 = false
 
                   return (
                     <div
