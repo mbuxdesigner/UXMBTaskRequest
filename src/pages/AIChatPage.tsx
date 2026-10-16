@@ -66,6 +66,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { MBRobotHead, type RobotHeadState } from "@/components/common/MBRobotHead"
 import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
@@ -2351,15 +2352,15 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             {/* 1. Header: Brand Logo (/ai-default.png), Title, Search, Collapse */}
             <div className="flex flex-col p-2.5 gap-2 shrink-0">
               <div className="flex items-center gap-2 px-1 pt-1">
-                {/* Brand Logo Box: Uses ai-default.png */}
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
-                  <img
-                    src={aiDefaultLogo}
-                    alt="AI MB"
-                    className="size-5 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.src = "/ai-default.png"
-                    }}
+                {/* Brand Logo Box: Uses MBRobotHead mini */}
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-xl border border-blue-200/80 bg-blue-50/60 shadow-2xs overflow-hidden">
+                  <MBRobotHead
+                    shape="rectangle"
+                    size={28}
+                    state={isStreaming ? "speaking" : "idle"}
+                    antenna={false}
+                    floorShadow={false}
+                    interactive={false}
                   />
                 </div>
 
@@ -3078,23 +3079,27 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               {!activeThread?.messages || activeThread.messages.length === 0 ? (
                 /* Empty State (Exact match to Echo Chat UI with 100% MBBank UX Domain Content) */
                 <div className="mx-auto flex w-full max-w-4xl lg:max-w-5xl flex-col justify-center py-6 sm:py-10">
-                  {/* Title & Subtitle */}
-                  <div className="flex items-start gap-3.5">
-                    <div className="size-10 rounded-xl border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-card shadow-2xs flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
-                      <img
-                        src={aiDefaultLogo}
-                        alt="AI MB"
-                        className="size-7 object-contain"
-                        onError={(e) => {
-                          e.currentTarget.src = "/ai-default.png"
-                        }}
+                  {/* Title & Subtitle with Animated 3D MB Robot Head */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-5 rounded-2xl border border-blue-100/90 dark:border-blue-900/40 bg-gradient-to-r from-blue-50/70 via-white to-slate-50/60 dark:from-blue-950/20 dark:via-card dark:to-background shadow-xs">
+                    <div className="relative shrink-0 flex items-center justify-center">
+                      <div className="absolute -inset-3 rounded-full bg-blue-500/15 blur-xl pointer-events-none" />
+                      <MBRobotHead
+                        shape="rectangle"
+                        size={92}
+                        state="idle"
+                        interactive={true}
+                        className="transition-transform hover:scale-105 duration-200"
                       />
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                      <h2 className="text-2xl sm:text-[28px] font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-100">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="inline-flex items-center gap-1.5 w-fit px-2.5 py-0.5 rounded-full bg-blue-100/80 dark:bg-blue-900/50 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                        <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        Trợ lý AI Trực tuyến · MB Bank UX
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100">
                         Trợ lý UX MB có thể hỗ trợ gì cho bạn?
                       </h2>
-                      <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
+                      <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">
                         Tra cứu thông tin task và các quy định, quy chuẩn thiết kế MBBank từ nguồn được phép truy cập.
                       </p>
                     </div>
@@ -3467,8 +3472,15 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         className="p-5 sm:p-6 space-y-4 rounded-2xl"
       >
         <div className="flex items-start gap-3.5">
-          <div className="size-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
-            <CloudOff className="size-5" />
+          <div className="size-11 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200/80 dark:border-amber-800 shadow-2xs overflow-hidden">
+            <MBRobotHead
+              shape="rectangle"
+              size={36}
+              state="error"
+              antenna={false}
+              floorShadow={false}
+              interactive={false}
+            />
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">
@@ -6037,17 +6049,23 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
     (message.content && message.content.startsWith("⚠️"))
   )
 
+  const robotAvatarState: RobotHeadState = isErrorMessage
+    ? "error"
+    : isStreaming
+    ? (message.isThinkingComplete ? "speaking" : "thinking")
+    : "idle"
+
   return (
     <div className="flex items-start gap-3">
-      {/* Bot Circular Avatar: Uses ai-default.png */}
-      <div className="size-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 mt-0.5 border border-border shadow-2xs bg-background">
-        <img
-          src={aiDefaultLogo}
-          alt="AI MB"
-          className="size-6 object-contain"
-          onError={(e) => {
-            e.currentTarget.src = "/ai-default.png"
-          }}
+      {/* Bot 3D Animated Avatar */}
+      <div className="size-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 mt-0.5 border border-blue-200/80 dark:border-blue-900/60 shadow-2xs bg-blue-50/50 dark:bg-slate-900">
+        <MBRobotHead
+          shape="rectangle"
+          size={32}
+          state={robotAvatarState}
+          antenna={false}
+          floorShadow={false}
+          interactive={false}
         />
       </div>
 
@@ -6090,8 +6108,15 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           renderedAssistantContent
         ) : (
           !message.reasoning && (
-            <div className="flex items-center gap-2 py-1 text-muted-foreground text-xs">
-              <span className="size-2 rounded-full bg-primary animate-ping" />
+            <div className="flex items-center gap-2.5 py-1 text-muted-foreground text-xs">
+              <MBRobotHead
+                shape="rectangle"
+                size={22}
+                state="thinking"
+                antenna={false}
+                floorShadow={false}
+                interactive={false}
+              />
               <span className="italic">Đang chuẩn bị câu trả lời...</span>
             </div>
           )

@@ -14,6 +14,7 @@ import {
   FormSkeleton,
   ManagementSkeleton,
 } from "@/components/common/ReuiSkeletons"
+import { MBRobotLoader } from "@/components/common/MBRobotLoader"
 
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
 import { pageContainerVariants } from "@/lib/motion"
@@ -95,10 +96,22 @@ export const preloadPage = (targetPage: Page) => {
 }
 
 function PageLoadingSkeleton({ page }: { page: Page }) {
+  if (page === "aichat") {
+    return (
+      <div className="flex-1 w-full min-h-[420px] flex items-center justify-center p-6">
+        <MBRobotLoader
+          title="Đang khởi chạy Trợ lý UX MB..."
+          description="Hệ thống đang chuẩn bị kết nối dữ liệu và không gian hội thoại."
+          state="working"
+          size={96}
+        />
+      </div>
+    )
+  }
+
   switch (page) {
     case "overview":
     case "calendar":
-    case "aichat":
       return <DashboardSkeleton />
 
     case "track":
