@@ -66,6 +66,7 @@ interface IACanvasViewportProps {
   ) => void
   onEditNode: (node: IANode) => void
   onUpdateNode?: (nodeId: string, nodeData: Partial<IANode>) => void
+  onToggleDisableNode?: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
   onNodePositionChange?: (nodeId: string, x: number, y: number, persist?: boolean) => void
   onNodeDrag?: (nodeId: string, x: number, y: number) => void
@@ -122,6 +123,7 @@ export default function IACanvasViewport({
   onCreateConnectedNodeAt,
   onEditNode,
   onUpdateNode,
+  onToggleDisableNode,
   onDeleteNode,
   onNodePositionChange,
   onNodeDrag,
@@ -957,6 +959,7 @@ export default function IACanvasViewport({
               scale={transform.scale}
               onAddChild={onAddChild}
               onEditNode={onEditNode}
+              onToggleDisable={onToggleDisableNode}
               onDeleteNode={onDeleteNode}
               onViewDetail={onOpenNodeDetail || onEditNode}
               onOpenTask={onOpenDetail}

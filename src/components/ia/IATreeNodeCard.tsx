@@ -385,6 +385,7 @@ function IATreeNodeCardComponent({
   // Trước đây App MB dùng theme "blue" nên vô tình rơi về palette theo level,
   // còn các sản phẩm amber/emerald/purple lại bị tô một màu từ Lv1 đến Lv5.
   const themeStyles = getTierThemeStyles(node.tier)
+  const isEffectivelyDisabled = Boolean(layoutNode.isDisabled || node.disabled)
 
   // Drag and drop arranger logic
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -618,9 +619,14 @@ function IATreeNodeCardComponent({
         minHeight: layoutNode.height,
         zIndex: isDragging || isResizing ? 40 : isWireDropTarget ? 35 : isSelected ? 30 : isHighlighted ? 20 : 10,
         touchAction: "none",
-        backgroundColor: themeStyles.bgHex,
+        backgroundColor: isEffectivelyDisabled ? "#f1f5f9" : themeStyles.bgHex,
+        opacity: isEffectivelyDisabled ? 0.7 : 1,
       }}
-      className={`group relative rounded-xl border px-2.5 pt-2 pb-2.5 text-left flex flex-col justify-start ${transitionClass} select-none shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border} ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
+      className={`group relative rounded-xl border px-2.5 pt-2 pb-2.5 text-left flex flex-col justify-start ${transitionClass} select-none ${
+        isEffectivelyDisabled
+          ? "shadow-none hover:shadow-none border-slate-300 hover:border-slate-400 grayscale"
+          : `shadow-[0_2px_8px_-1px_rgba(15,23,42,0.08),0_1px_3px_0_rgba(15,23,42,0.06)] hover:shadow-[0_8px_20px_-2px_rgba(15,23,42,0.12),0_3px_6px_-1px_rgba(15,23,42,0.08)] ${themeStyles.border}`
+      } ${highlightClass} ${wireDropTargetClass} ${draggingClass} ${selectedClass}`}
       onClick={handleCardClick}
       onDoubleClick={handleDoubleClick}
       {...(isDragging || isResizing ? {} : tactileProps.card)}
@@ -638,6 +644,7 @@ function IATreeNodeCardComponent({
               : node.tier === 4
               ? "Cấp 4: Màn hình & Điểm chạm"
               : "Cấp 5: Thành phần & Chi tiết tương tác") +
+            (isEffectivelyDisabled ? " • (Đã vô hiệu hóa)" : "") +
             (node.squad?.trim() ? ` • Squad: ${node.squad.trim()}` : "")
           }
           side="top"
@@ -645,18 +652,25 @@ function IATreeNodeCardComponent({
           <span
             data-testid={`ia-node-level-badge-${node.id}`}
             className={`text-[11px] font-bold tracking-tight inline-flex items-center gap-1 pointer-events-auto select-none truncate ${
-              node.tier === 1
-                  ? "text-[#1057FB]"
-                  : node.tier === 2
-                  ? "text-emerald-700"
-                  : node.tier === 3
-                  ? "text-amber-700"
-                  : node.tier === 4
-                  ? "text-sky-700"
-                  : "text-purple-700"
+              isEffectivelyDisabled
+                ? "text-slate-400"
+                : node.tier === 1
+                ? "text-[#1057FB]"
+                : node.tier === 2
+                ? "text-emerald-700"
+                : node.tier === 3
+                ? "text-amber-700"
+                : node.tier === 4
+                ? "text-sky-700"
+                : "text-purple-700"
             }`}
           >
             <span>{node.tier === 1 ? "✨ Lv1" : `Lv${node.tier}`}</span>
+            {isEffectivelyDisabled && (
+              <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-200/90 text-slate-500 font-semibold border border-slate-300/60 ml-0.5">
+                Đã tắt
+              </span>
+            )}
             {node.squad?.trim() && (
               <span className="font-semibold text-slate-600 truncate max-w-[180px]">
                 {` - "${node.squad.trim()}"`}
@@ -826,9 +840,13 @@ function IATreeNodeCardComponent({
             />
           </div>
         ) : (
-          <Tooltip content={node.name + (readOnly ? "" : " (Click để sửa tên trực tiếp)")} side="top">
+          <Tooltip content={node.name + (isEffectivelyDisabled ? " (Đã vô hiệu hóa)" : readOnly ? "" : " (Click để sửa tên trực tiếp)")} side="top">
             <h4
-              className="text-[15px] font-bold text-slate-900 leading-tight tracking-tight line-clamp-2 hover:text-blue-600 cursor-text transition-colors"
+              className={`text-[15px] font-bold leading-tight tracking-tight line-clamp-2 cursor-text transition-colors ${
+                isEffectivelyDisabled
+                  ? "line-through text-slate-500 decoration-slate-400"
+                  : "text-slate-900 hover:text-blue-600"
+              }`}
               onClick={(e) => {
                 if (!readOnly) {
                   e.stopPropagation()
@@ -850,7 +868,9 @@ function IATreeNodeCardComponent({
         {node.description && node.tier !== 1 && (
           <Tooltip content={node.description} side="top">
             <p
-              className="text-[10.5px] text-slate-500 line-clamp-1 mt-0.5 font-normal leading-tight"
+              className={`text-[10.5px] line-clamp-1 mt-0.5 font-normal leading-tight ${
+                isEffectivelyDisabled ? "line-through text-slate-400" : "text-slate-500"
+              }`}
             >
               {node.description}
             </p>

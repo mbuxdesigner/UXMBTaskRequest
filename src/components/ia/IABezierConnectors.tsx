@@ -164,8 +164,15 @@ function IABezierConnectorsComponent({
           let strokeWidth = 1.75
           let filter: string | undefined = undefined
           let markerId = "ia-arrow-default"
+          let strokeDasharray: string | undefined = undefined
+          let strokeOpacity: number | undefined = undefined
 
-          if (isConnHighlighted) {
+          if (conn.isDisabled) {
+            strokeColor = "#cbd5e1"
+            strokeDasharray = "4 4"
+            strokeOpacity = 0.6
+            strokeWidth = 1.5
+          } else if (isConnHighlighted) {
             strokeColor = "#3b82f6" // blue-500
             strokeWidth = 2.5
             filter = "url(#glow-filter)"
@@ -194,6 +201,8 @@ function IABezierConnectorsComponent({
               fill="none"
               stroke={strokeColor}
               strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              strokeOpacity={strokeOpacity}
               strokeLinecap="round"
               strokeLinejoin="round"
               markerEnd={`url(#${markerId})`}

@@ -79,6 +79,7 @@ export default function IAPage() {
     connectNodes,
     createConnectedNodeAt,
     updateNode,
+    toggleNodeDisabled,
     updateNodePosition,
     updateMultipleNodePositions,
     updateNodeDimensions,
@@ -662,6 +663,18 @@ export default function IAPage() {
             onCreateConnectedNodeAt={canEdit ? createConnectedNodeAt : undefined}
             onEditNode={handleOpenEdit}
             onUpdateNode={canEdit ? updateNode : undefined}
+            onToggleDisableNode={
+              canEdit
+                ? (node) => {
+                    toggleNodeDisabled(node.id)
+                    if (node.disabled) {
+                      toast.success(`Đã kích hoạt lại "${node.name}" và các nhánh con!`)
+                    } else {
+                      toast.info(`Đã vô hiệu hóa "${node.name}" và các nhánh con!`)
+                    }
+                  }
+                : undefined
+            }
             onDeleteNode={handleOpenDelete}
             onNodeDrag={canEdit ? (id, x, y) => updateNodePosition(id, x, y, false) : undefined}
             onNodeDragEnd={canEdit ? (id, x, y) => updateNodePosition(id, x, y, true) : undefined}

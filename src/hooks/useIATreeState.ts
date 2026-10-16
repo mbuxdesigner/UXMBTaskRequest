@@ -29,6 +29,7 @@ export interface LayoutNode {
   childCount: number
   isVisible: boolean
   isHighlighted: boolean
+  isDisabled?: boolean
   metrics?: SubtreeMetrics
 }
 
@@ -45,6 +46,7 @@ export interface LayoutConnector {
   path: string
   colorTheme?: string
   isHighlighted?: boolean
+  isDisabled?: boolean
   trunkHandle?: {
     x: number
     y: number
@@ -71,6 +73,7 @@ export interface UseIATreeStateReturn {
     nodeData?: Partial<IANode>
   ) => void
   updateNode: (nodeId: string, nodeData: Partial<IANode>) => void
+  toggleNodeDisabled: (nodeId: string) => void
   updateNodePosition: (nodeId: string, x: number, y: number, persist?: boolean) => void
   updateMultipleNodePositions: (positions: Array<{ nodeId: string; x: number; y: number }>, persist?: boolean) => void
   updateNodeDimensions: (nodeId: string, width: number, height: number, persist?: boolean) => void
@@ -976,6 +979,63 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           if ("colorTheme" in nodeData) curr.colorTheme = nodeData.colorTheme
           if ("isCriticalPath" in nodeData) curr.isCriticalPath = nodeData.isCriticalPath
           if ("displaySettings" in nodeData) curr.displaySettings = nodeData.displaySettings
+          if ("disabled" in nodeData) {
+            curr.disabled = nodeData.disabled
+            // Cascade disabled state down to all descendants
+            const setDescendantsDisabled = (n: IANode, dis: boolean | undefined) => {
+              n.disabled = dis
+              if (n.children) {
+                for (const c of n.children) setDescendantsDisabled(c, dis)
+              }
+            }
+            if (curr.children) {
+              for (const c of curr.children) setDescendantsDisabled(c, nodeData.disabled)
+            }
+          }
+          return true
+        }
+        if (curr.children) {
+          for (const child of curr.children) {
+            if (dfs(child)) return true
+          }
+        }
+        return false
+      }
+
+      for (const r of [clone, ...(clone.siblingRoots || [])]) {
+        if (dfs(r)) break
+      }
+
+      const nextTrees = { ...prevTrees, [selectedProductId]: clone }
+      saveTreesToStorage(nextTrees)
+      return nextTrees
+    })
+  }, [selectedProductId, getTargetTree])
+
+  // Toggle Node Disabled (Cascade to all descendants)
+  const toggleNodeDisabled = useCallback((nodeId: string) => {
+    setTrees((prevTrees) => {
+      const current = getTargetTree(prevTrees, selectedProductId)
+      const clone = deepCloneTree(current)
+
+      function dfs(curr: IANode): boolean {
+        if (curr.id === nodeId) {
+          const nextDisabled = !curr.disabled
+          curr.disabled = nextDisabled
+          // Cascade down to all descendants
+          const setDescendantsDisabled = (n: IANode, dis: boolean) => {
+            n.disabled = dis
+            if (n.children) {
+              for (const c of n.children) {
+                setDescendantsDisabled(c, dis)
+              }
+            }
+          }
+          if (curr.children) {
+            for (const c of curr.children) {
+              setDescendantsDisabled(c, nextDisabled)
+            }
+          }
           return true
         }
         if (curr.children) {
@@ -1654,13 +1714,14 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       isExpanded: boolean
       hasChildren: boolean
       childCount: number
+      isDisabled: boolean
       children: InternalNode[]
     }
 
     const { ancestorIdsToExpand, matchedIds } = searchResult
 
     // 1. First pass: Build internal hierarchy with effective collapse state
-    function buildInternal(node: IANode): InternalNode {
+    function buildInternal(node: IANode, parentDisabled: boolean = false): InternalNode {
       const dim = tierDimensions[node.tier] || DEFAULT_TIER_DIMENSIONS[node.tier] || { width: 260, height: 68 }
       let nodeWidth = node.customWidth || dim.width
       if (node.tier === 5 && !node.customWidth) {
@@ -1671,6 +1732,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
       const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 5)
       const childCount = node.children && node.tier < 5 ? node.children.length : 0
+      const isDisabled = Boolean(node.disabled || parentDisabled)
 
       // Node is forced expanded if it's an ancestor of a search match
       const forceExpanded = ancestorIdsToExpand.has(node.id)
@@ -1680,7 +1742,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const children: InternalNode[] = []
       if (hasChildren && isExpanded && node.tier < 5) {
         for (const child of node.children!) {
-          children.push(buildInternal(child))
+          children.push(buildInternal(child, isDisabled))
         }
       }
 
@@ -1702,6 +1764,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         isExpanded,
         hasChildren,
         childCount,
+        isDisabled,
         children,
       }
     }
@@ -1798,6 +1861,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         childCount: item.childCount,
         isVisible: true,
         isHighlighted,
+        isDisabled: item.isDisabled,
         metrics: precomputedMetricsMap.get(item.node.id),
       })
 
@@ -2051,6 +2115,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           path,
           colorTheme: parent.node.colorTheme || child.node.colorTheme,
           isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          isDisabled: Boolean(pLayout.isDisabled || cLayout.isDisabled),
         })
         continue
       }
@@ -2096,6 +2161,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           path,
           colorTheme: parent.node.colorTheme || child.node.colorTheme,
           isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          isDisabled: Boolean(pLayout.isDisabled || cLayout.isDisabled),
         })
         continue
       }
@@ -2146,6 +2212,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           path,
           colorTheme: parent.node.colorTheme || child.node.colorTheme,
           isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          isDisabled: Boolean(pLayout.isDisabled || cLayout.isDisabled),
           trunkHandle,
         })
         continue
@@ -2195,6 +2262,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
           path,
           colorTheme: parent.node.colorTheme || child.node.colorTheme,
           isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+          isDisabled: Boolean(pLayout.isDisabled || cLayout.isDisabled),
           trunkHandle,
         })
         continue
@@ -2242,6 +2310,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
         path,
         colorTheme: parent.node.colorTheme || child.node.colorTheme,
         isHighlighted: pLayout.isHighlighted || cLayout.isHighlighted,
+        isDisabled: Boolean(pLayout.isDisabled || cLayout.isDisabled),
       })
     }
 
@@ -2353,6 +2422,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
     connectNodes,
     createConnectedNodeAt,
     updateNode,
+    toggleNodeDisabled,
     updateNodePosition,
     updateMultipleNodePositions,
     updateNodeDimensions,

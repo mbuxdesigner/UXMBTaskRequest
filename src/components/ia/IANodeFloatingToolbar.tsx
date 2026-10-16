@@ -10,6 +10,7 @@ import {
   Maximize2,
   Sparkles,
   Eye,
+  EyeOff,
   CheckSquare,
 } from "lucide-react"
 import { IANode } from "@/types/ia"
@@ -26,6 +27,7 @@ interface IANodeFloatingToolbarProps {
   scale: number
   onAddChild: (node: IANode) => void
   onEditNode: (node: IANode) => void
+  onToggleDisable?: (node: IANode) => void
   onDeleteNode: (node: IANode) => void
   onCenterNode?: (node: IANode) => void
   onViewDetail?: (node: IANode) => void
@@ -42,6 +44,7 @@ export default function IANodeFloatingToolbar({
   scale,
   onAddChild,
   onEditNode,
+  onToggleDisable,
   onDeleteNode,
   onCenterNode,
   onViewDetail,
@@ -153,6 +156,39 @@ export default function IANodeFloatingToolbar({
             {...tactileProps.button}
           >
             <Pencil className="w-4 h-4" />
+          </motion.button>
+        </Tooltip>
+      )}
+
+      {/* Toggle Disable / Enable Node - Chỉ khi có quyền Edit */}
+      {!readOnly && onToggleDisable && (
+        <Tooltip
+          content={
+            node.disabled
+              ? "Kích hoạt lại node (Enable)"
+              : "Vô hiệu hóa node (Disable) • Toàn bộ nhánh con sẽ tắt theo"
+          }
+          side="top"
+        >
+          <motion.button
+            type="button"
+            data-testid={`ia-float-toggle-disable-${node.id}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleDisable(node)
+            }}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+              node.disabled
+                ? "text-emerald-400 hover:text-white hover:bg-emerald-950/60"
+                : "text-slate-300 hover:text-amber-300 hover:bg-slate-800"
+            }`}
+            {...tactileProps.button}
+          >
+            {node.disabled ? (
+              <Eye className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <EyeOff className="w-4 h-4" />
+            )}
           </motion.button>
         </Tooltip>
       )}

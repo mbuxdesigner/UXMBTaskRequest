@@ -132,6 +132,7 @@ export default function IANodeEditorModal({
   const [customTag, setCustomTag] = useState<string>("")
   const [colorTheme, setColorTheme] = useState<string>("blue")
   const [touchpointType, setTouchpointType] = useState<IATouchpointType>("screen")
+  const [isDisabled, setIsDisabled] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string>("")
 
   // Xác định Sản phẩm mục tiêu của Node / Cây IA
@@ -260,6 +261,7 @@ export default function IANodeEditorModal({
       setCustomTag(targetNode.customTag || "")
       setColorTheme(targetNode.colorTheme || "blue")
       setTouchpointType(targetNode.touchpointType || "screen")
+      setIsDisabled(Boolean(targetNode.disabled))
       setDisplaySettings(targetNode.displaySettings || getTierDefaultDisplaySettings(targetNode.tier || 3))
       setErrorMessage("")
     } else if (mode === "add" && targetNode) {
@@ -271,6 +273,7 @@ export default function IANodeEditorModal({
       setCustomTag("")
       setColorTheme(targetNode.colorTheme || "blue")
       setTouchpointType("screen")
+      setIsDisabled(false)
       const childTier = Math.min(5, (targetNode.tier || 1) + 1) as IATier
       setDisplaySettings(getTierDefaultDisplaySettings(childTier))
       setErrorMessage("")
@@ -283,6 +286,7 @@ export default function IANodeEditorModal({
       setCustomTag("")
       setColorTheme("blue")
       setTouchpointType("screen")
+      setIsDisabled(false)
       setDisplaySettings(getTierDefaultDisplaySettings(3))
       setErrorMessage("")
     }
@@ -521,6 +525,7 @@ export default function IANodeEditorModal({
       code: targetNode?.code || undefined,
       customTag: customTag.trim() || undefined,
       colorTheme: colorTheme || undefined,
+      disabled: isDisabled,
       displaySettings: displaySettings, // Cài đặt hiển thị chi tiết của node
       touchpointType:
         (mode === "add" && targetNode?.tier === 3) ||
@@ -1405,6 +1410,36 @@ export default function IANodeEditorModal({
                           size="sm"
                           checked={activeSettings.showBranchCount}
                           onCheckedChange={(val) => updateDisplaySetting("showBranchCount", val)}
+                          className="shrink-0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TRẠNG THÁI VÔ HIỆU HÓA (DISABLE NODE) */}
+                  <div className="pt-1">
+                    <div className="rounded-2xl bg-white border border-slate-200/80 shadow-2xs overflow-hidden transition-all">
+                      <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-slate-900">
+                              Vô hiệu hóa node (Disable)
+                            </p>
+                            {isDisabled && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                                Đã tắt
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Khi bật, node sẽ chuyển sang xám, bỏ shadow, giảm 70% opacity, gạch giữa tiêu đề và toàn bộ các node con trực thuộc bên dưới cũng sẽ tắt theo.
+                          </p>
+                        </div>
+                        <Switch
+                          size="sm"
+                          data-testid="ia-node-modal-disable-switch"
+                          checked={isDisabled}
+                          onCheckedChange={(val) => setIsDisabled(val)}
                           className="shrink-0"
                         />
                       </div>

@@ -128,6 +128,7 @@ export interface IANode {
   customTag?: string
   displaySettings?: IANodeDisplaySettings // Cài đặt hiển thị On/Off chi tiết của từng node
   collapsed?: boolean
+  disabled?: boolean      // Trạng thái vô hiệu hóa node (bỏ shadow, xám, opacity 70%, gạch ngang title, cascade xuống các node con)
   createdAt?: string
   updatedAt?: string
 }
