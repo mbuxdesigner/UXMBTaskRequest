@@ -1737,7 +1737,8 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       const nodeHeight = node.customHeight || getNodeEstimatedHeight(node, tierDimensions)
       const hasChildren = Boolean(node.children && node.children.length > 0 && node.tier < 5)
       const childCount = node.children && node.tier < 5 ? node.children.length : 0
-      const isDisabled = Boolean(node.disabled || parentDisabled)
+      const isParentDis = typeof parentDisabled === "boolean" ? parentDisabled : false
+      const isDisabled = Boolean(node.disabled || isParentDis)
 
       // Node is forced expanded if it's an ancestor of a search match
       const forceExpanded = ancestorIdsToExpand.has(node.id)
@@ -1875,7 +1876,7 @@ export function useIATreeState(initialProductId: string = "app-mbbank"): UseIATr
       }
     }
 
-    const allRootInternals = rootNodes.map(buildInternal)
+    const allRootInternals = rootNodes.map((r) => buildInternal(r, false))
     let currentClusterStartX = START_X
 
     for (const root of allRootInternals) {
