@@ -90,22 +90,6 @@ export default function IANodeFloatingToolbar({
         transition={springs.snappy}
         className="flex items-center justify-center gap-1 p-1 bg-slate-900/95 text-white backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl"
       >
-      {/* Xem chi tiết Node (Luôn khả dụng cho cả View và Edit) */}
-      <Tooltip content="Xem chi tiết node" side="top">
-        <motion.button
-          type="button"
-          data-testid={`ia-float-view-${node.id}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onViewDetail?.(node)
-          }}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-white bg-blue-600 hover:bg-blue-500 transition-colors cursor-pointer shadow-xs"
-          {...tactileProps.button}
-        >
-          <Eye className="w-4 h-4" />
-        </motion.button>
-      </Tooltip>
-
       {/* Xem bài toán liên kết (nếu có) */}
       {linkedRequest && onOpenTask && (
         <Tooltip content={`Xem bài toán: ${linkedRequest.title}`} side="top">
