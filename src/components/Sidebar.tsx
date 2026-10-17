@@ -45,6 +45,7 @@ interface SidebarProps {
   onNavigate: (page: Page) => void
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  onLogout?: () => void
 }
 
 export function DynamicCalendarIcon({ className, day }: { className?: string; day?: number }) {
@@ -85,7 +86,8 @@ export function DynamicCalendarIcon({ className, day }: { className?: string; da
 
 export default function Sidebar({ 
   currentPage, 
-  onNavigate 
+  onNavigate,
+  onLogout,
 }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [session, setSession] = useState<UserSession | null>(getStoredSession())
@@ -238,11 +240,15 @@ export default function Sidebar({
   }
 
   const handleLogout = async () => {
+    setUserMenuOpen(false)
     await logoutTeamsSession()
     setSession(null)
-    setUserMenuOpen(false)
-    window.location.hash = "#overview"
-    window.location.reload()
+    if (onLogout) {
+      onLogout()
+    } else {
+      window.location.hash = "#overview"
+      window.location.reload()
+    }
   }
 
   const displayName = session?.displayName || "Lê Hoàng Nam"

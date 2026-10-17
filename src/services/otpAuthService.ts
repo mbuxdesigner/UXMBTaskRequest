@@ -674,6 +674,12 @@ export function saveSession(
     } catch (ssErr) {
       console.warn("Could not save session to sessionStorage:", ssErr)
     }
+    try {
+      sessionStorage.removeItem(SESSION_EXPIRED_REASON_KEY)
+      sessionStorage.removeItem("ux_session_expired_reason")
+      localStorage.removeItem(SESSION_EXPIRED_REASON_KEY)
+      localStorage.removeItem("ux_session_expired_reason")
+    } catch {}
     window.dispatchEvent(new Event("auth_session_changed"))
     window.dispatchEvent(new Event("storage"))
     const effectiveEmail = teamsEmail || personalEmail || ""
@@ -721,12 +727,24 @@ export function handleSessionExpired(reason?: string) {
 export function clearSession() {
   try {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    sessionStorage.removeItem("ux_portal_session")
+    sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+    sessionStorage.removeItem(SESSION_EXPIRED_REASON_KEY)
+    sessionStorage.removeItem("ux_session_expired_reason")
+    sessionStorage.removeItem("mbbank_admin_original_session")
+
     localStorage.removeItem(SESSION_STORAGE_KEY)
     localStorage.removeItem("ux_portal_session")
-    sessionStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
     localStorage.removeItem(ORIGINAL_SESSION_BACKUP_KEY)
+    localStorage.removeItem(SESSION_EXPIRED_REASON_KEY)
+    localStorage.removeItem("ux_session_expired_reason")
+    localStorage.removeItem("mbbank_admin_original_session")
+
+    hideSessionExpiryWarningDialog()
+
     window.dispatchEvent(new Event("auth_session_changed"))
     window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("ux_user_logged_out"))
   } catch (err) {
     console.warn("Could not clear session:", err)
   }
@@ -1297,14 +1315,17 @@ export async function logoutTeamsSession(): Promise<void> {
 
   if (session && config.scriptUrl && config.scriptUrl.trim()) {
     try {
-      fetch(config.scriptUrl.trim(), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
-          action: "logout",
-          session_token: session.sessionToken,
+      await Promise.race([
+        fetch(config.scriptUrl.trim(), {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "logout",
+            session_token: session.sessionToken,
+          }),
         }),
-      }).catch(() => {})
+        new Promise((resolve) => setTimeout(resolve, 800)),
+      ]).catch(() => {})
     } catch {}
   }
   clearSession()
@@ -1759,9 +1780,10 @@ export function showSessionExpiryWarningDialog(remainingMinutes: number): void {
     }
     const logoutBtn = document.getElementById("ux-session-logout-btn")
     if (logoutBtn) {
-      logoutBtn.onclick = () => {
+      logoutBtn.onclick = async () => {
         hideSessionExpiryWarningDialog()
-        logoutTeamsSession()
+        await logoutTeamsSession()
+        window.location.hash = "#overview"
       }
     }
   } else {

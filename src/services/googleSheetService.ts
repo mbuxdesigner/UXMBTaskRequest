@@ -2479,7 +2479,12 @@ export async function syncUserChatThreadsToCloud(params: {
         file_id: data.file_id,
       }
     }
-    if (data.status === "unauthorized") handleSessionExpired()
+    if (data.status === "unauthorized") {
+      const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "0.0.0.0")
+      if (!isLocalHost && !session?.sessionToken?.startsWith("MOCK_") && !session?.sessionToken?.startsWith("DEMO_")) {
+        handleSessionExpired()
+      }
+    }
     return {
       success: false,
       message: data.message || "Lỗi khi lưu lịch sử chat lên máy chủ.",
@@ -2540,7 +2545,10 @@ export async function fetchUserChatThreadsFromCloud(
         }
       }
       if (data.status === "unauthorized" || data.status === "forbidden") {
-        if (data.status === "unauthorized") handleSessionExpired()
+        const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "0.0.0.0")
+        if (data.status === "unauthorized" && !isLocalHost && !session?.sessionToken?.startsWith("MOCK_") && !session?.sessionToken?.startsWith("DEMO_")) {
+          handleSessionExpired()
+        }
         return {
           success: false,
           threads: [],

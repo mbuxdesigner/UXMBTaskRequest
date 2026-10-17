@@ -287,8 +287,18 @@ export default function App() {
   // Lắng nghe sự kiện thay đổi phiên (Đăng nhập / Đăng xuất)
   useEffect(() => {
     const handleAuthChange = () => {
-      if (isSessionExpiredModalOpenRef.current) return
       const current = getStoredSession()
+      if (!current) {
+        // Đã đăng xuất: lập tức dọn cờ hết hạn phiên và đưa về LoginGate
+        isSessionExpiredModalOpenRef.current = false
+        setSessionExpiredState({ open: false, message: "" })
+        setSession(null)
+        return
+      }
+
+      // Đã đăng nhập mới hoặc phiên hợp lệ được làm mới
+      isSessionExpiredModalOpenRef.current = false
+      setSessionExpiredState({ open: false, message: "" })
       setSession(current)
       if (current?.role && !isPageAllowedForRole(page, current.role)) {
         const fallback = isPageAllowedForRole("track", current.role) ? "track" : "create"
@@ -322,10 +332,8 @@ export default function App() {
     window.addEventListener("focus", handleWindowFocus)
 
     const interval = setInterval(() => {
-      if (isSessionExpiredModalOpenRef.current) return
       const current = getStoredSession()
-
-      if (!current && session) {
+      if (!current && session && !isSessionExpiredModalOpenRef.current) {
         setSession(null)
       }
     }, 5000)
@@ -452,12 +460,15 @@ export default function App() {
 
 
   const handleLogout = async () => {
+    isSessionExpiredModalOpenRef.current = false
+    setSessionExpiredState({ open: false, message: "" })
+    try {
+      sessionStorage.removeItem("ux_session_expired_reason")
+      localStorage.removeItem("ux_session_expired_reason")
+    } catch {}
     await logoutTeamsSession()
-
     setSession(null)
-
     setPage("overview")
-
     window.location.hash = "#overview"
   }
 
@@ -468,6 +479,12 @@ export default function App() {
       <MotionConfig reducedMotion="never">
         <LoginGate
           onAuthSuccess={(newSession) => {
+            isSessionExpiredModalOpenRef.current = false
+            setSessionExpiredState({ open: false, message: "" })
+            try {
+              sessionStorage.removeItem("ux_session_expired_reason")
+              localStorage.removeItem("ux_session_expired_reason")
+            } catch {}
             setSession(newSession)
 
             // Điều hướng tự động sau đăng nhập:
@@ -496,6 +513,10 @@ export default function App() {
   const handleLoginAgain = () => {
     isSessionExpiredModalOpenRef.current = false
     setSessionExpiredState({ open: false, message: "" })
+    try {
+      sessionStorage.removeItem("ux_session_expired_reason")
+      localStorage.removeItem("ux_session_expired_reason")
+    } catch {}
     clearSession()
     setSession(null)
   }
@@ -520,6 +541,7 @@ export default function App() {
           onNavigate={handleNavigate}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapse}
+          onLogout={handleLogout}
         />
 
         {/* Container chính: Offset theo sidebar w-60 (240px) */}
@@ -539,6 +561,7 @@ export default function App() {
             currentPage={page}
             onNavigate={handleNavigate}
             session={session}
+            onLogout={handleLogout}
             onToggleMobileMenu={() =>
               window.dispatchEvent(new Event("toggle_mobile_sidebar"))
             }
@@ -604,6 +627,7 @@ export default function App() {
           <SessionExpiredModal
             message={sessionExpiredState.message}
             onLoginAgain={handleLoginAgain}
+            onLogout={handleLogout}
           />
         )}
       </AnimatePresence>

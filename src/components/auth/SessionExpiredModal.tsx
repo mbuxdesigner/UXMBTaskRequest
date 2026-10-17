@@ -1,12 +1,14 @@
 import React from "react"
 import { motion } from "framer-motion"
-import { Clock, LogIn, ShieldCheck } from "lucide-react"
+import { Clock, LogIn, LogOut, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { IconTile } from "@/components/reui/icon-tile"
+import { cn } from "@/lib/utils"
 
 interface SessionExpiredModalProps {
   message?: string
   onLoginAgain: () => void
+  onLogout?: () => void
 }
 
 /**
@@ -22,6 +24,7 @@ interface SessionExpiredModalProps {
 export default function SessionExpiredModal({
   message,
   onLoginAgain,
+  onLogout,
 }: SessionExpiredModalProps) {
   return (
     <div
@@ -78,14 +81,28 @@ export default function SessionExpiredModal({
           <span className="leading-snug">Hệ thống bảo toàn dữ liệu bài toán và tiến độ của bạn.</span>
         </div>
 
-        {/* Nút Đăng nhập lại chuẩn ReUI Button (màu đen sang trọng) */}
-        <div className="w-full mt-6">
+        {/* Cụm hành động: Đăng xuất & Đăng nhập lại */}
+        <div className="w-full mt-6 flex flex-col sm:flex-row gap-2.5">
+          {onLogout && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onLogout}
+              className="flex-1 h-10.5 rounded-xl font-semibold text-sm border-slate-200 text-slate-700 hover:bg-slate-100 active:bg-slate-200 cursor-pointer flex items-center justify-center gap-2"
+            >
+              <LogOut className="size-4" />
+              <span>Đăng xuất</span>
+            </Button>
+          )}
           <Button
             type="button"
             variant="default"
             onClick={onLoginAgain}
             autoFocus
-            className="w-full h-10.5 rounded-xl font-semibold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950"
+            className={cn(
+              "h-10.5 rounded-xl font-semibold text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950",
+              onLogout ? "flex-1" : "w-full"
+            )}
           >
             <LogIn className="size-4" />
             <span>Đăng nhập lại</span>

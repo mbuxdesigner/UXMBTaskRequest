@@ -63,6 +63,7 @@ interface AppHeaderProps {
   currentPage: Page
   onNavigate: (page: Page) => void
   session: UserSession | null
+  onLogout?: () => void
   onToggleMobileMenu?: () => void
 }
 
@@ -82,6 +83,7 @@ export default function AppHeader({
   currentPage,
   onNavigate,
   session,
+  onLogout,
   onToggleMobileMenu,
 }: AppHeaderProps) {
   const [appsOpen, setAppsOpen] = useState(false)
@@ -406,9 +408,14 @@ export default function AppHeader({
   }
 
   const handleLogout = async () => {
+    setUserMenuOpen(false)
     await logoutTeamsSession()
-    window.location.hash = "#overview"
-    window.location.reload()
+    if (onLogout) {
+      onLogout()
+    } else {
+      window.location.hash = "#overview"
+      window.location.reload()
+    }
   }
 
   // Cấu hình trạng thái bài toán cho Smart Search
@@ -1123,7 +1130,7 @@ export default function AppHeader({
                     >
                       <div className="flex items-center gap-2.5">
                         <LogOut className="w-4 h-4 text-slate-700 shrink-0" />
-                        <span className="text-xs font-medium text-slate-900">Sign Out</span>
+                        <span className="text-xs font-medium text-slate-900">Đăng xuất (Sign Out)</span>
                       </div>
                       <span className="text-[11px] text-slate-400 font-sans tracking-wide">⇧⌘Q</span>
                     </button>
