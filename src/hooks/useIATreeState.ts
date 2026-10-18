@@ -469,7 +469,7 @@ export function getNodeEstimatedHeight(node: IANode, tierDimensions?: IATierDime
   h += 20
 
   // 3. Mô tả phụ (nếu có)
-  if (node.description && node.tier !== 1) {
+  if (node.description) {
     h += 16
   }
 

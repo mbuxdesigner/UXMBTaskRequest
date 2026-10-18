@@ -67,6 +67,7 @@ export interface UXRequest {
   /** Tên gợi nhớ do đội ngũ thiết kế đặt, dùng ưu tiên tại các danh sách task. */
   nickname?: string
   product: string
+  product_name?: string
   request_type: string
   feature_journey: string
   description: string

@@ -1,4 +1,4 @@
-import { UserRole } from "../data/mockData"
+import type { UserRole } from "../data/mockData.ts"
 
 export interface RoleNavVisibility {
   overview: boolean

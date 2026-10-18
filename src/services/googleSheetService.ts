@@ -4,10 +4,10 @@ import {
   EXPECTED_OUTPUTS as DEFAULT_EXPECTED_OUTPUTS,
   DEADLINE_REASONS as DEFAULT_DEADLINE_REASONS,
   mockSquads,
-  Squad,
-  UXRequest,
-  TaskUpdateRecord,
-  UserRole,
+  type Squad,
+  type UXRequest,
+  type TaskUpdateRecord,
+  type UserRole,
   buildPhases,
   mockRequests,
   isDemoRequest,
@@ -21,14 +21,14 @@ import {
   ROOT_DRIVE_FOLDER_ID,
   ROOT_DRIVE_FOLDER_URL,
   DRIVE_STORAGE_STRUCTURE,
-} from "../config/googleSheetConfig"
-import { getStoredSession, handleSessionExpired } from "./otpAuthService"
-import { broadcastTaskEvent } from "./realtimeSyncService"
-import { getMemberDisplayName } from "../components/common/UserAvatar"
+} from "../config/googleSheetConfig.ts"
+import { getStoredSession, handleSessionExpired } from "./otpAuthService.ts"
+import { broadcastTaskEvent } from "./realtimeSyncService.ts"
+import { getMemberDisplayName } from "../lib/userAvatarUtils.ts"
 import {
   mergeRemoteRequestsPreservingNicknames,
   preserveCachedNickname,
-} from "../lib/nicknameSync"
+} from "../lib/nicknameSync.ts"
 
 export interface RequestPayloadMeta {
   client_environment: "production" | "preview" | "development"

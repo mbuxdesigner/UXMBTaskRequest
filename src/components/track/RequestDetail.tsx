@@ -45,6 +45,7 @@ import {
 } from "@/components/reui/timeline"
 import { CAvatar29, Avatar, AvatarImage, AvatarFallback } from "@/components/reui/c-avatar-29"
 import { CCalendar15 } from "@/components/reui/c-calendar-15"
+import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
 import { AiPromptBox, MentionUser } from "@/components/jolyui/ai-prompt-box"
 import { SmartLinkChip } from "@/components/common/SmartLinkChip"
 import { 
@@ -5933,7 +5934,7 @@ export default function RequestDetail({
                                     <>
                                       {displayAuthor && <span className="font-medium text-slate-700">{displayAuthor}</span>}
                                       <span className="text-slate-500">đã đính kèm</span>
-                                      <SmartLinkChip url={event.link} customTitle={event.title} />
+                                      {event.link && <SmartLinkChip url={event.link} customTitle={event.title} />}
                                     </>
                                   )}
                                   {event.type === "status_change" && (

@@ -7561,7 +7561,7 @@ export default function QuanLyPage() {
                               Kéo thả hoặc dùng mũi tên để đổi thứ tự xuất hiện của các Squad thuộc <strong>{targetProdName}</strong>:
                             </p>
                             {filteredSquads.map((sq, sIdx) => {
-                              const sColor = getSquadColorDef(sq.name, targetProdName, sq.color)
+                              const sColor = getSquadColorDef(sq.name, targetProdName)
                               const isDragging = draggedSquadInfo?.squadId === sq.id
 
                               return (

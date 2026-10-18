@@ -102,7 +102,7 @@ import RequestDetail from "@/components/track/RequestDetail"
 import { cn } from "@/lib/utils"
 
 type PlannerView = "month" | "week" | "agenda"
-type PlannerEntryType = "deadline" | "planned" | "leave" | "team" | "personal"
+type PlannerEntryType = "deadline" | "planned" | "leave" | "team" | "personal" | "meeting"
 type QuoteAnimationPhase = "typing" | "holding" | "deleting"
 
 const WEEK_START_HOUR = 7
@@ -151,6 +151,7 @@ interface PlannerEntry {
   createdAt?: string
   request?: UXRequest
   source?: CalendarItem
+  designer?: string
 }
 
 type EventAttachment = NonNullable<TeamEvent["attachments"]>[number]
@@ -254,6 +255,7 @@ const ENTRY_META: Record<PlannerEntryType, { label: string; color: string; dot: 
   leave: { label: "Lịch nghỉ", color: "bg-[#FEF3C7] text-amber-950 border-amber-300/70", dot: "bg-amber-500" },
   team: { label: "Event team", color: "bg-[#D1FAE5] text-emerald-950 border-emerald-300/70", dot: "bg-emerald-500" },
   personal: { label: "Event của tôi", color: "bg-[#CCFBF1] text-teal-950 border-teal-300/70", dot: "bg-teal-500" },
+  meeting: { label: "Cuộc họp", color: "bg-purple-100 text-purple-950 border-purple-200/80", dot: "bg-purple-500" },
 }
 
 function formatDateLong(date: Date): string {
@@ -570,7 +572,7 @@ function PlannerEntryTooltip({
 }) {
   const meta = ENTRY_META[entry.type]
   const avatarInfo = getEntryAvatarInfo(entry)
-  const productOrSquad = entry.request?.product_name || entry.request?.squad_name || entry.location
+  const productOrSquad = entry.request?.product_name || entry.request?.product || entry.request?.squad_name || entry.location
 
   return (
     <Tooltip
@@ -801,6 +803,7 @@ export default function DesignerPlannerPage() {
     leave: true,
     team: true,
     personal: true,
+    meeting: true,
   })
   const [draggedTask, setDraggedTask] = useState<UXRequest | null>(null)
   const [dragOverDate, setDragOverDate] = useState<string | null>(null)
@@ -1223,7 +1226,7 @@ export default function DesignerPlannerPage() {
     })
     map.forEach((dayEntries) => {
       dayEntries.sort((a, b) => {
-        const order: Record<PlannerEntryType, number> = { deadline: 0, planned: 1, personal: 2, team: 3, leave: 4 }
+        const order: Record<PlannerEntryType, number> = { deadline: 0, planned: 1, meeting: 2, personal: 3, team: 4, leave: 5 }
         return order[a.type] - order[b.type]
       })
     })
@@ -1309,7 +1312,7 @@ export default function DesignerPlannerPage() {
     const meetings: PlannerEntry[] = []
     const tasks: PlannerEntry[] = []
     selectedEntries.forEach((entry) => {
-      if (entry.type === "meeting" || entry.type === "leave" || Boolean(entry.location)) {
+      if ((entry.type as string) === "meeting" || entry.type === "team" || entry.type === "leave" || Boolean(entry.location)) {
         meetings.push(entry)
       } else {
         tasks.push(entry)
@@ -2511,6 +2514,7 @@ export default function DesignerPlannerPage() {
                             leave: !allVisible,
                             team: !allVisible,
                             personal: !allVisible,
+                            meeting: !allVisible,
                           })
                         }}
                         className="text-[10px] font-semibold text-blue-600 hover:underline capitalize"
@@ -3235,7 +3239,7 @@ export default function DesignerPlannerPage() {
                         Ưu tiên cao trong tuần
                       </h3>
                     </div>
-                    <Badge variant={priorityThisWeek.length > 0 ? "rose" : "slate"} size="xs">
+                    <Badge variant={priorityThisWeek.length > 0 ? "destructive" : "secondary"} size="xs">
                       {priorityThisWeek.length}
                     </Badge>
                   </div>
@@ -3443,7 +3447,7 @@ export default function DesignerPlannerPage() {
                                   <CalendarDays className="h-3 w-3 text-blue-600" />
                                   Nhiệm vụ & Deadline
                                 </span>
-                                <Badge variant="blue" size="xs">{taskEntries.length}</Badge>
+                                <Badge variant="info" size="xs">{taskEntries.length}</Badge>
                               </div>
                             )}
                             {taskEntries.map((entry, idx) => {
@@ -3553,7 +3557,7 @@ export default function DesignerPlannerPage() {
                         Chưa xếp lịch
                       </h3>
                     </div>
-                    <Badge variant={unscheduledTasks.length > 0 ? "warning" : "slate"} size="xs">
+                    <Badge variant={unscheduledTasks.length > 0 ? "warning" : "secondary"} size="xs">
                       {unscheduledTasks.length}
                     </Badge>
                   </div>

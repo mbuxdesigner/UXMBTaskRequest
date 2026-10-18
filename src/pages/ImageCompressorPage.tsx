@@ -900,7 +900,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
                     max={100}
                     step={5}
                     value={quality}
-                    onChange={(e) => setQuality(Number(e.target.value))}
+                    onChange={setQuality}
                     color="#0F172A"
                   />
                   <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
@@ -1701,7 +1701,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
                           min={0}
                           max={100}
                           value={sliderPosition}
-                          onChange={(e) => setSliderPosition(Number(e.target.value))}
+                          onChange={setSliderPosition}
                           color="#0F172A"
                         />
                       </div>

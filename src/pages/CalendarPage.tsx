@@ -347,7 +347,7 @@ export default function CalendarPage() {
       const affected = rawRequests.filter(
         (r) =>
           r.status !== "Hoàn thành" &&
-          r.assigned_designer?.toLowerCase().includes(leave.fullName.toLowerCase())
+          Boolean(r.assigned_designer && leave.fullName && r.assigned_designer.toLowerCase().includes(leave.fullName.toLowerCase()))
       )
       return {
         leave,
@@ -1856,7 +1856,7 @@ export default function CalendarPage() {
                           {/* Column 1: Designer Info & Workload Progress */}
                           <div className="p-3 pl-4 flex flex-col justify-between space-y-2 bg-white">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <UserAvatar name={designer.name} size="default" className="shrink-0" />
+                              <UserAvatar name={designer.name} size="md" className="shrink-0" />
                               <div className="min-w-0 flex-1">
                                 <div className="font-bold text-xs text-slate-900 truncate">
                                   {designer.name}
@@ -2247,7 +2247,7 @@ export default function CalendarPage() {
                     <UserAvatar
                       name={lv.fullName}
                       avatarUrl={lv.avatarUrl}
-                      size="default"
+                      size="md"
                       className="shrink-0 border border-pink-200"
                     />
                     <div className="min-w-0 flex-1">

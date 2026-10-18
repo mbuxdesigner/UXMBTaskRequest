@@ -243,6 +243,12 @@ export async function updateTaskProgress(
     is_comment?: boolean
     is_po_edit?: boolean
     viewers?: string[]
+    pending_reason?: string
+    freeze_reason?: string
+    frozen_at?: string
+    rejected_reason?: string
+    rejected_at?: string
+    planned_work_date?: string
   }
 ) {
   return updateTaskProgressInSheet(requestId, params)

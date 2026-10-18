@@ -14,7 +14,7 @@ import {
 import { Tooltip } from "@/components/ui/tooltip"
 import { tactileProps } from "@/lib/motion"
 
-export type IADockTool = "add-node" | "settings" | "cloud" | "json" | null
+export type IADockTool = "add-node" | "data-system" | "settings" | "cloud" | "json" | null
 
 export interface IAVerticalDockProps {
   activeTool: IADockTool

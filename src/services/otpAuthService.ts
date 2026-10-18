@@ -1,10 +1,10 @@
-import { getGoogleSheetConfig, resolveApiUrl } from "../config/googleSheetConfig"
-import { UserRole } from "../data/mockData"
+import { getGoogleSheetConfig, resolveApiUrl } from "../config/googleSheetConfig.ts"
+import type { UserRole } from "../data/mockData.ts"
 import {
   fetchRequestsFromSheet,
   fetchMasterDataFromSheet,
-} from "./googleSheetService"
-import { saveNavOrderConfig, saveRoleNavConfig } from "../config/navVisibilityConfig"
+} from "./googleSheetService.ts"
+import { saveNavOrderConfig, saveRoleNavConfig } from "../config/navVisibilityConfig.ts"
 
 export type SessionPolicyType = "fixed_8h" | "sliding_24h"
 export type UserSessionPolicyOverride = "inherit" | "fixed_8h" | "sliding_24h"

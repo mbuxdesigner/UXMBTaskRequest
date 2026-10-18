@@ -13,7 +13,13 @@ export interface UserLeaveRecord {
   leave_type_raw: string;    // "Nghỉ nguyên ngày", "Nghỉ nửa ngày (chiều)"
   reason: string;            // "e xin nghỉ: du lịch", "việc cá nhân"
   user_name?: string;        // "Dương Mạnh Cường"
+  fullName?: string;         // Alias for user_name
   email: string;             // "cuongdm5@mbbank.com.vn" (Cột G Mail MB)
+  account?: string;          // Username / account identifier
+  avatarUrl?: string;        // Optional avatar URL
+  shift?: string;            // Sáng / Chiều / Cả ngày
+  fromDate?: string;         // DD/MM/YYYY
+  toDate?: string;           // DD/MM/YYYY
   synced_at?: string;
 }
 

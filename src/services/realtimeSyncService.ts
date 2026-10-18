@@ -8,7 +8,7 @@
  * 4. Perceived 0ms Latency: Optimistic updates reflected immediately with live sync status
  */
 
-import { UXRequest } from "@/data/mockData"
+import type { UXRequest } from "../data/mockData.ts"
 
 export type SyncEventType =
   | "TASK_UPDATED"

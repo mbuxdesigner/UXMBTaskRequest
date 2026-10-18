@@ -17,6 +17,7 @@ import {
   type TeamEvent,
   type EventCategoryConfig,
 } from "../config/systemConfig.ts"
+import { syncMasterDataToSheet, fetchMasterDataFromSheet } from "./googleSheetService.ts"
 export interface UserSession {
   email?: string
   displayName?: string
@@ -90,7 +91,7 @@ export interface CalendarItem {
   rawItem: UXRequest | TeamLeaveRecord | HolidayException | TeamEvent
 }
 
-export type PlannerEntryType = "deadline" | "planned" | "leave" | "team" | "personal"
+export type PlannerEntryType = "deadline" | "planned" | "leave" | "team" | "personal" | "meeting"
 
 export interface PlannerEntry {
   id: string
@@ -116,6 +117,9 @@ export interface PlannerEntry {
   request?: UXRequest
   rawItem?: any
   source?: CalendarItem
+  designer?: string
+  user_name?: string
+  user_email?: string
 }
 
 /**
@@ -356,7 +360,7 @@ export function addTeamEvent(
   })
 
   // Đồng bộ sự kiện mới lên Google Sheet Master Data
-  syncMasterDataToSheet({ team_events: updatedEvents }).catch((err) => {
+  syncMasterDataToSheet({ team_events: updatedEvents }).catch((err: unknown) => {
     console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
   })
 
@@ -385,7 +389,7 @@ export function updateTeamEvent(
   })
 
   // Đồng bộ sự kiện cập nhật lên Google Sheet Master Data
-  syncMasterDataToSheet({ team_events: events }).catch((err) => {
+  syncMasterDataToSheet({ team_events: events }).catch((err: unknown) => {
     console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
   })
 
@@ -410,7 +414,7 @@ export function deleteTeamEvent(eventId: string): boolean {
   })
 
   // Đồng bộ sự kiện sau khi xóa lên Google Sheet Master Data
-  syncMasterDataToSheet({ team_events: filtered }).catch((err) => {
+  syncMasterDataToSheet({ team_events: filtered }).catch((err: unknown) => {
     console.warn("[CalendarService] Background sync team_events to sheet failed:", err)
   })
 

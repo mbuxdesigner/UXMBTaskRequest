@@ -122,7 +122,7 @@ export function extractExecutiveIntelligence(params: {
   const { session, rawRequests, myTasks, today, todayYMD, entries, dominantPhaseText } = params
 
   // 1. User Profile & Time
-  const fullName = session?.name || session?.displayName || "Cường"
+  const fullName = session?.displayName || "Cường"
   const nameParts = fullName.trim().split(/\s+/)
   const userName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : fullName
   const userEmail = session?.teamsEmail || session?.personalEmail || ""
