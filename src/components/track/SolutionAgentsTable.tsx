@@ -863,7 +863,7 @@ export default function SolutionAgentsTable({
             <col className="w-[8.5%]" />
             <col className="w-[48px]" />
           </colgroup>
-          <thead className="bg-slate-50/60 border-b border-slate-200/70 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+          <thead className="bg-slate-50/60 border-b border-slate-200 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
             <tr className="h-9">
               <th className="px-4 sm:px-5 py-2 text-left font-medium">Yêu cầu / Task & Luồng nghiệp vụ</th>
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Created by</th>
@@ -871,7 +871,7 @@ export default function SolutionAgentsTable({
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Trạng thái</th>
               <th className="px-3 sm:px-4 py-2 text-right font-medium">Priority</th>
               <th className="px-3 sm:px-4 py-2 text-right font-medium whitespace-nowrap">Release</th>
-              <th className="px-2 sm:px-3 py-2 text-right font-medium w-[48px] min-w-[48px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] border-b border-slate-200/70" />
+              <th className="px-2 sm:px-3 py-2 text-right font-medium w-[48px] min-w-[48px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06),inset_0_-1px_0_0_#e2e8f0] border-b border-slate-200" />
             </tr>
           </thead>
           <AnimatePresence mode="wait">
@@ -1014,7 +1014,7 @@ export default function SolutionAgentsTable({
                                     }}
                                     className="h-9 bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer select-none transition-colors"
                                   >
-                                    <td colSpan={7} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle border-b border-slate-200/70">
+                                    <td colSpan={7} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle border-b border-slate-200 shadow-[inset_0_-1px_0_0_#e2e8f0]">
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <button
@@ -1082,7 +1082,7 @@ export default function SolutionAgentsTable({
                                             }}
                                             className="h-8 bg-slate-50/70 hover:bg-slate-100/80 cursor-pointer select-none transition-colors"
                                           >
-                                            <td colSpan={7} className="pl-10 sm:pl-11 pr-4 py-1.5 align-middle border-b border-slate-200/70">
+                                            <td colSpan={7} className="pl-10 sm:pl-11 pr-4 py-1.5 align-middle border-b border-slate-200 shadow-[inset_0_-1px_0_0_#e2e8f0]">
                                               <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                   <button
@@ -1163,8 +1163,12 @@ export default function SolutionAgentsTable({
 
                                               const pendingInfo = getRequestPendingClassification(req)
                                               const cellBorderClass = isHighlighted
-                                                 ? "border-b border-blue-200"
-                                                 : "border-b border-slate-200/70"
+                                                ? "border-b border-blue-200 shadow-[inset_0_-1px_0_0_#bfdbfe]"
+                                                : "border-b border-slate-200 shadow-[inset_0_-1px_0_0_#e2e8f0]"
+
+                                              const actionColBorderAndShadow = isHighlighted
+                                                ? "border-b border-blue-200 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06),inset_0_-1px_0_0_#bfdbfe]"
+                                                : "border-b border-slate-200 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06),inset_0_-1px_0_0_#e2e8f0]"
 
                                               const phaseInfo = getTaskPhaseStatus(req)
                                               const cfg = getStatusConfig(phaseInfo.name)
@@ -1180,7 +1184,6 @@ export default function SolutionAgentsTable({
                                                   initial="hidden"
                                                   animate={isMutating ? { opacity: 0.4, y: 0 } : "visible"}
                                                   exit={{ opacity: 0, y: -10, transition: { duration: 0.22, ease: "easeIn" } }}
-                                                  style={{ willChange: "opacity, transform" }}
                                                   onClick={() => !isIncoming && onSelectRequest(req)}
                                                   onMouseEnter={() => {
                                                     if (req.request_id && !isIncoming) {
@@ -1202,7 +1205,7 @@ export default function SolutionAgentsTable({
                                                   {isIncoming ? (
                                                     <>
                                                       {/* 1. Yêu cầu / Task */}
-                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         <div className="flex flex-col gap-1.5 min-w-0">
                                                           <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
                                                           <div className="flex items-center gap-2">
@@ -1213,7 +1216,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 2. Created by */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         <div className="flex items-center gap-2 min-w-0">
                                                           <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
                                                           <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
@@ -1221,7 +1224,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 3. Designer */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         <div className="flex items-center gap-2 min-w-0">
                                                           <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
                                                           <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
@@ -1229,29 +1232,29 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 4. Trạng thái */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
                                                       </td>
 
                                                       {/* 5. Priority */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden ${cellBorderClass}`}>
                                                         <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
                                                       </td>
 
                                                       {/* 6. Release */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden ${cellBorderClass}`}>
                                                         <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
                                                       </td>
 
                                                       {/* 7. Action */}
-                                                      <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] ${cellBorderClass}`}>
+                                                      <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs ${actionColBorderAndShadow}`}>
                                                         <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
                                                       </td>
                                                     </>
                                                   ) : (
                                                     <>
                                                       {/* 1. Tiêu đề + Subtitle */}
-                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1326,7 +1329,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 2. Created by */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1347,7 +1350,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 3. Designer */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1368,7 +1371,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 4. Trạng thái (Lifecycle State) */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1410,7 +1413,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 5. Priority */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1422,7 +1425,7 @@ export default function SolutionAgentsTable({
                                                       </td>
 
                                                       {/* 6. Release */}
-                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap relative overflow-hidden ${cellBorderClass}`}>
                                                         {isMutating && (
                                                           <div
                                                             className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1440,7 +1443,7 @@ export default function SolutionAgentsTable({
                                                       {/* 7. Action Menu */}
                                                       <td
                                                         className={cn(
-                                                          "px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]",
+                                                          "px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 backdrop-blur-xs",
                                                           actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-10",
                                                           isHighlighted
                                                             ? "bg-blue-50/95"
@@ -1449,7 +1452,7 @@ export default function SolutionAgentsTable({
                                                             : isMutating
                                                             ? "bg-slate-50/70"
                                                             : "bg-white/95 group-hover/run-row:bg-slate-50/95",
-                                                          cellBorderClass
+                                                          actionColBorderAndShadow
                                                         )}
                                                         onClick={(e) => e.stopPropagation()}
                                                       >
