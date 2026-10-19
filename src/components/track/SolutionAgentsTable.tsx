@@ -943,9 +943,9 @@ export default function SolutionAgentsTable({
                           data-row-id={group.id}
                           onClick={() => toggleGroup(group.id)}
                           style={{ willChange: "opacity, transform" }}
-                          className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} border-y cursor-pointer select-none transition-all group/run-row shadow-2xs`}
+                          className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} cursor-pointer select-none transition-all group/run-row shadow-2xs`}
                         >
-                          <td colSpan={7} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
+                          <td colSpan={7} className={`px-4 sm:px-5 py-2.5 align-middle ${headerIdx > 0 ? "border-t-4 border-t-slate-300" : "border-t border-slate-200/90"} border-b border-slate-300`}>
                             <div data-run-row="group" className="flex items-center justify-between">
                               {/* Left: Button + Status Dot + Group Name + Count pill */}
                               <div className="flex items-center gap-2 min-w-0">
@@ -1008,9 +1008,9 @@ export default function SolutionAgentsTable({
                                       e.stopPropagation()
                                       toggleProduct(prod.productKey)
                                     }}
-                                    className="h-9 bg-slate-100/90 hover:bg-slate-200/80 border-b border-slate-200 cursor-pointer select-none transition-colors"
+                                    className="h-9 bg-slate-100/90 hover:bg-slate-200/80 cursor-pointer select-none transition-colors"
                                   >
-                                    <td colSpan={7} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle">
+                                    <td colSpan={7} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle border-b border-slate-200/70">
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <button
@@ -1076,9 +1076,9 @@ export default function SolutionAgentsTable({
                                               e.stopPropagation()
                                               toggleSquad(squad.squadKey)
                                             }}
-                                            className="h-8 bg-slate-50/70 hover:bg-slate-100/80 border-b border-slate-200/60 cursor-pointer select-none transition-colors"
+                                            className="h-8 bg-slate-50/70 hover:bg-slate-100/80 cursor-pointer select-none transition-colors"
                                           >
-                                            <td colSpan={7} className="pl-10 sm:pl-11 pr-4 py-1.5 align-middle">
+                                            <td colSpan={7} className="pl-10 sm:pl-11 pr-4 py-1.5 align-middle border-b border-slate-200/70">
                                               <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                   <button
@@ -1158,12 +1158,9 @@ export default function SolutionAgentsTable({
                                               )
 
                                               const pendingInfo = getRequestPendingClassification(req)
-                                              const isLastRow = rowIdx === squad.tasks.length - 1
                                               const cellBorderClass = isHighlighted
-                                                ? "border-b border-blue-200"
-                                                : isLastRow
-                                                ? "border-b-2 border-slate-300"
-                                                : "border-b border-slate-200"
+                                                 ? "border-b border-blue-200"
+                                                 : "border-b border-slate-200/70"
 
                                               const phaseInfo = getTaskPhaseStatus(req)
                                               const cfg = getStatusConfig(phaseInfo.name)
