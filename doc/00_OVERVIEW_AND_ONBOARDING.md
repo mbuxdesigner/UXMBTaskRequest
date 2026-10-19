@@ -38,7 +38,8 @@ Deploy App/doc/
 │   ├── 📋 2026-09-30_DAILY_UPDATE_REPORT.md  <-- Báo cáo Chuẩn hóa ReUI Empty State (1 & 10), Tinh gọn UI Priority kéo thả, Executive Summary All-in-One 1 lần xuất toàn bộ & Sửa triệt để lỗi đơ luồng tóm tắt 4/4
 │   ├── 📋 2026-10-03_DAILY_UPDATE_REPORT.md  <-- Báo cáo Quy hoạch Google Drive, Dynamic Semantic Fallback Engine 7 kịch bản, Quy chuẩn đọc tài liệu Prompt
 │   ├── 📋 2026-10-04_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO TOÀN DIỆN 04/10: Audit AI Chats, Vá bảo mật Gateway & PII, Figma Copy Toolkit, Agentic Dynamic Router & Context Retrieval, Chuẩn hóa Persona Senior Designer
-│   └── 🔐 2026-10-05_AI_CHATS_AUDIT_AND_HARDENING_REPORT.md <-- BÁO CÁO NGHIỆM THU: Gateway fail-closed, task RBAC, private chat, grounding, test evidence và residual risks
+│   ├── 🔐 2026-10-05_AI_CHATS_AUDIT_AND_HARDENING_REPORT.md <-- BÁO CÁO NGHIỆM THU: Gateway fail-closed, task RBAC, private chat, grounding, test evidence và residual risks
+│   └── 📋 2026-10-19_DAILY_UPDATE_REPORT.md  <-- BÁO CÁO CẬP NHẬT 19/10: IA Map Disable Node & Cascade, Bỏ nút chi tiết node, Freeze & Reject Task trong Chat AI & Track, Fix Đăng xuất & Hết hạn phiên, 100% TypeScript & Build Pass
 │
 ├── 📂 features/                       <-- DANH MỤC TÍNH NĂNG TÁCH BIỆT CHI TIẾT:
 │   ├── 🔐 01_AUTH_AND_SESSION_MANAGEMENT.md
@@ -80,8 +81,11 @@ Deploy App/doc/
 │   ├── 📅 13_UX_TEAM_PLANNER_AND_CALENDAR.md
 │   │   └── Đọc khi: Sửa Planner/Calendar 4 tầng, Designer Planner cá nhân, ReUI Empty State (1 & 10), Kéo thả task xếp ngày, Agent Activity Trace, Executive Summary All-in-One typewriter streaming & deep-link, KPI cá nhân, Right-Sheet, hoặc cấu hình lịch Admin.
 │   │
-│   └── 🤖 14_AI_CHATS_AND_INTELLIGENT_COPILOT.md
-│       └── Đọc khi: Sửa Trợ lý AI read-only tra cứu Task và Quy định, task grounding, approved artifacts, cloud sync, Mermaid, AI Gateway, Upstash hoặc GAS security.
+│   ├── 🤖 14_AI_CHATS_AND_INTELLIGENT_COPILOT.md
+│   │   └── Đọc khi: Sửa Trợ lý AI read-only tra cứu Task và Quy định, task grounding, approved artifacts, cloud sync, Mermaid, AI Gateway, Upstash hoặc GAS security.
+│   │
+│   └── 📚 15_ALL_APPS_AND_SYSTEM_FEATURES_DOCUMENTATION.md
+│       └── Đọc khi: Tra cứu tổng thể kiến trúc và đặc tả chi tiết toàn bộ 9 phân hệ ứng dụng (Dashboard, Track, Planner, Create, Admin, Test, Compressor, IA Map, AI Copilot).
 ```
 
 ---

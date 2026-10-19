@@ -335,8 +335,30 @@ flowchart LR
 | Canvas UI | `src/pages/IAPage.tsx`, `src/components/ia/*` | Level color, fixed dock, compact slide-over |
 | Backend RBAC | `google-apps-script-backend.js` | `cap-ia-edit` chỉ được sync payload IA-only |
 
-Kiểm thử chính: `tests/test-task-ia-linking.mjs`, `tests/test-ia-map-magnific.mjs`, `tests/test-ia-squad-filter.mjs`, `tests/test-ia-bottom-dock.mjs` và `test-ia-cloud-autochunk-and-sanitizer.mjs`.
+---
 
-**Last Updated:** 27/09/2026
-**Changelog:** Bổ sung liên kết Task ↔ IA, dirty-product cloud merge, màu node theo level và chuẩn hóa công cụ canvas.
+## 10. TÍNH NĂNG VÔ HIỆU HÓA NODE (DISABLE NODE) & TINH GIẢN TOOLBAR
+
+### 10.1. Vô hiệu hóa Node và Lan truyền phân cấp (Cascade to Descendants)
+
+- **Quy chuẩn thị giác (Visual Standards):**
+  - Khi một Node bị vô hiệu hóa (`disabled: true`), thẻ node chuyển sang màu nền xám mờ (`#f1f5f9`), đường viền `border-slate-300`, loại bỏ hoàn toàn đổ bóng (`shadow-none`).
+  - Độ trong suốt của thẻ node giảm xuống **70%** (`opacity-70`).
+  - Tiêu đề node bị gạch ngang chữ (`line-through`) với màu chữ xám `text-slate-400`.
+  - Hiển thị Badge chip nhãn *"Đã tắt"* cạnh cấp độ Lv của node.
+  - Các đường kết nối Bezier (`IABezierConnectors.tsx`) dẫn tới hoặc xuất phát từ node bị tắt chuyển thành nét đứt (`stroke-dasharray="4 4"`) với sắc độ mờ.
+- **Cơ chế Lan truyền (Cascade Rule):**
+  - Khi vô hiệu hóa một Node cha (ví dụ Module Lv2 hoặc Journey Lv3), toàn bộ các node con, cháu trực thuộc nhánh bên dưới cũng tự động bị vô hiệu hóa theo.
+  - Khi kích hoạt lại (Re-enable) node cha, toàn bộ cây con sẽ được khôi phục trạng thái hoạt động.
+  - **Bảo toàn cây độc lập:** Quá trình duyệt đệ quy trong `useIATreeState.ts` kiểm soát nghiêm ngặt `parentId`, không làm ảnh hưởng sang các Root Node khác hoặc các Node anh em cùng cấp.
+
+### 10.2. Tinh giản thanh công cụ nổi (Floating Toolbar)
+
+- Lược bỏ nút *"Xem chi tiết node"* khỏi thanh công cụ nổi `IANodeFloatingToolbar` nhằm tạo không gian làm việc khoáng đạt, tối giản cho Designer.
+- Toàn bộ thao tác chỉnh sửa thuộc tính, màu sắc, icon và bật/tắt trạng thái Disable được tích hợp trực quan trên Floating Toolbar và Modal chỉnh sửa node (`IANodeEditorModal.tsx`).
+
+Kiểm thử chính: `tests/test-task-ia-linking.mjs`, `tests/test-ia-map-magnific.mjs`, `tests/test-ia-squad-filter.mjs`, `tests/test-ia-bottom-dock.mjs`, `test-ia-cloud-autochunk-and-sanitizer.mjs`, `tests/test-ia-node-disabled.mjs`.
+
+**Last Updated:** 19/10/2026  
+**Changelog:** Bổ sung tính năng Disable Node kèm hiệu ứng lan truyền phân cấp (Cascade), nét đứt Bezier connector, và tinh giản floating toolbar.
 

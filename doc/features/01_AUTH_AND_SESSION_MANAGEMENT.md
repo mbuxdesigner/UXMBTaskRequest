@@ -264,3 +264,15 @@ export interface UserSession {
     - Nếu là **`PO`**, **`Business`**, **`Developer`**, hoặc **`Requester`**: Tự động chuyển hướng vào màn hình **Tổng quan** (`#overview`).
   - Hỗ trợ bí danh URL hash `#planner` tương đương `#calendar`.
 
+### 7.6. Sửa Triệt Để Lỗi Đăng Xuất & Khắc Phục Vòng Lặp Hết Hạn Phiên (19/10/2026)
+- **Dọn dẹp triệt để bộ nhớ (`clearSession`):**
+  - Xóa toàn diện cả `localStorage` lẫn `sessionStorage` cho tất cả các khóa: `ux_portal_session_auth`, `ux_portal_session`, `mbbank_user_session`, `mbbank_team_members`.
+  - Phát sự kiện `storage` và `ux_portal_session_expired` để các tab khác tự động chuyển về màn hình đăng nhập.
+- **Truyền sự kiện `onLogout` thông suốt:**
+  - Kết nối prop `onLogout` từ `App.tsx` vào cả `AppHeader.tsx` và `Sidebar.tsx`, đảm bảo mọi vị trí người dùng bấm nút Đăng xuất đều được xử lý chuẩn xác.
+- **Thoát nhanh từ Session Expired Modal:**
+  - Bổ sung nút bấm phụ "Đăng xuất" trực tiếp trên `SessionExpiredModal.tsx` để người dùng có thể thoát ra màn hình login nếu không muốn gia hạn tiếp.
+- **Khử bỏ hiện tượng kẹt modal sau khi đăng nhập lại:**
+  - Khi người dùng đăng nhập lại thành công qua OTP, `App.tsx` reset `isSessionExpiredModalOpenRef.current = false` và `setSessionExpiredState({ open: false, message: "" })`, xóa sạch màn hình mờ backdrop mà không cần người dùng phải bấm `Ctrl + Shift + F5`.
+
+
