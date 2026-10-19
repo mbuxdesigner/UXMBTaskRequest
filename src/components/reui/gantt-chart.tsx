@@ -263,10 +263,10 @@ export default function ReUIGanttChart({
   const allSquadOptions = useMemo(() => {
     const set = new Set<string>()
     requests.forEach((r) => {
-      const sq = (r.preferred_squad || r.product || "").trim()
-      if (sq) set.add(sq)
+      const sq = (r.squad_name || r.preferred_squad || "").trim()
+      if (sq && sq !== "Chưa phân công" && sq !== "Triage Squad" && sq !== "Khác") set.add(sq)
     })
-    return Array.from(set)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"))
   }, [requests])
 
   // Assignee user list from requests
@@ -389,7 +389,11 @@ export default function ReUIGanttChart({
     const prodMap = new Map<string, Map<string, UXRequest[]>>()
 
     filteredRequests.forEach((req) => {
-      const prod = (req.product || req.preferred_squad || "Khác").trim() || "Khác"
+      let prod = (req.product || req.preferred_squad || "Khác").trim() || "Khác"
+      const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
+      if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") {
+        prod = "APP MB"
+      }
       const squad = (req.preferred_squad || req.squad_name || req.squad || "Squad Chung").trim() || "Squad Chung"
 
       if (!prodMap.has(prod)) {
@@ -627,13 +631,16 @@ export default function ReUIGanttChart({
       return Math.max(0.0005, Math.min(0.9995, r))
     }
 
-    const dueDate = parseDate(req.release_date || req.expected_deadline)
+    const hasExplicitDeadline = Boolean(req.release_date || req.expected_deadline || req.design_deadline)
+    const dueDate = parseDate(req.release_date || req.expected_deadline || req.design_deadline)
     let endMs = dueDate.getTime()
     let startMs = req.submitted_at ? parseDate(req.submitted_at).getTime() : endMs - 5 * msPerDay
 
-    const isOverdue = dueDate.getTime() < today.getTime() && req.status !== "Hoàn thành" && req.status !== "Done"
+    const isOverdue = hasExplicitDeadline && dueDate.getTime() < today.getTime() && req.status !== "Hoàn thành" && req.status !== "Done"
 
-    if (endMs <= startMs) {
+    if (!hasExplicitDeadline) {
+      endMs = startMs + 14 * msPerDay
+    } else if (endMs <= startMs) {
       endMs = startMs + 3 * msPerDay
     }
 

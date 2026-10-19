@@ -77,7 +77,11 @@ export default function TaskFilterPopover({
   const productCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
-      const prod = (r.product && r.product.trim()) || "Khác"
+      let prod = (r.product && r.product.trim()) || "Khác"
+      const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
+      if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") {
+        prod = "APP MB"
+      }
       counts[prod] = (counts[prod] || 0) + 1
     })
     return counts

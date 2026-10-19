@@ -9,7 +9,7 @@ const TASKS_DATA = [
   {
     stt: 1,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Audit nâng cấp thường nhật UI thẻ',
     request_type: 'Tính năng',
     description: `Đã thực hiện:
@@ -30,7 +30,7 @@ const TASKS_DATA = [
   {
     stt: 2,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Offer hạn mức tại trang pre-login',
     request_type: 'Kinh doanh',
     description: 'Đã tạo demo - Đang order kinh doanh gửi đầu bài APP',
@@ -43,7 +43,7 @@ const TASKS_DATA = [
   {
     stt: 3,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Bán chéo thẻ VETC',
     request_type: 'Kinh doanh',
     description: 'Đã chốt phương án - đang lên UI',
@@ -56,7 +56,7 @@ const TASKS_DATA = [
   {
     stt: 4,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Thông tin người liên quan',
     request_type: 'Tuân thủ',
     description: 'Đã test UI, tuần này order sửa lại từ dev',
@@ -69,7 +69,7 @@ const TASKS_DATA = [
   {
     stt: 5,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Gia hạn thanh toán',
     request_type: 'Tính năng',
     description: 'Đang test UI, tuần này golive hoặc delay (chưa chắc đc)',
@@ -82,7 +82,7 @@ const TASKS_DATA = [
   {
     stt: 6,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Thẻ liên kết tiền gửi',
     request_type: 'Kinh doanh',
     description: 'Đang chốt lại với bên tiền gửi',
@@ -95,7 +95,7 @@ const TASKS_DATA = [
   {
     stt: 7,
     squad: 'Card',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Định danh thẻ HỘ KINH DOANH',
     request_type: 'Kinh doanh',
     description: 'Đang test UI',
@@ -108,7 +108,7 @@ const TASKS_DATA = [
   {
     stt: 8,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: '[Vay BĐS] Đăng ký vay mua nhà dự án Bcons',
     request_type: 'Kinh doanh',
     description: '[Vay BĐS] Đăng ký vay mua nhà dự án Bcons',
@@ -121,7 +121,7 @@ const TASKS_DATA = [
   {
     stt: 9,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'LD Vay linh hoạt',
     request_type: 'Kinh doanh',
     description: 'Đã confrim wf, đang làm UI',
@@ -134,7 +134,7 @@ const TASKS_DATA = [
   {
     stt: 10,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: '[General] Home Vay + Khoản vay của tôi',
     request_type: 'Kinh doanh',
     description: '[General] Home Vay + Khoản vay của tôi',
@@ -147,7 +147,7 @@ const TASKS_DATA = [
   {
     stt: 11,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: '[Trạm sạc tài chính] Nhận HM khung',
     request_type: 'Kinh doanh',
     description: '[Trạm sạc tài chính] Nhận HM khung',
@@ -160,7 +160,7 @@ const TASKS_DATA = [
   {
     stt: 12,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Đặc quyền + Voucher Vay Tiêu dùng có TSDB/ BĐS',
     request_type: 'Kinh doanh',
     description: 'Đã gửi WF, chưa có lịch phát triển',
@@ -173,7 +173,7 @@ const TASKS_DATA = [
   {
     stt: 13,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: '[Hoperun LOS Client] - Đánh giá trải nghiệm',
     request_type: 'Kinh doanh',
     description: 'Đánh giá trải nghiệm',
@@ -186,7 +186,7 @@ const TASKS_DATA = [
   {
     stt: 14,
     squad: 'Lending',
-    product: 'App MBBank',
+    product: 'APP MB',
     title: 'Đồng bộ, cải tiến trải nghiệm toàn bộ sản phẩm vay',
     request_type: 'Đề xuất cải tiến',
     description: 'Rà soát đồng bộ luồng đăng ký, giải ngân, truy vấn',

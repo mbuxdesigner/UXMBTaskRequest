@@ -550,7 +550,11 @@ export default function SolutionAgentsTable({
       const prodMap = new Map<string, Map<string, UXRequest[]>>()
 
       items.forEach((req) => {
-        const prod = (req.product || "Khác").trim() || "Khác"
+        let prod = (req.product || "Khác").trim() || "Khác"
+        const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
+        if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") {
+          prod = "APP MB"
+        }
         const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
         const hasSquad = Boolean(
           rawSquad &&

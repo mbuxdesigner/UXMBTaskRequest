@@ -389,7 +389,11 @@ export function normalizeSheetRequest(data: any): UXRequest {
     })
   }
 
-  const rawProduct = String(data.product || "Khác").trim()
+  let rawProduct = String(data.product || "Khác").trim()
+  const pLower = rawProduct.toLowerCase().replace(/[\s\-_]+/g, "")
+  if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") {
+    rawProduct = "APP MB"
+  }
   const rawPreferredSquad = String(data.preferred_squad || "").trim()
   const rawSquadName = String(data.squad_name || "").trim()
 

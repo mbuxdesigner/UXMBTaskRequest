@@ -586,7 +586,12 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
     // 3. Lọc theo Sản phẩm
     if (selectedProducts.length > 0) {
-      list = list.filter((r) => selectedProducts.includes((r.product && r.product.trim()) || "Khác"))
+      list = list.filter((r) => {
+        let p = (r.product && r.product.trim()) || "Khác"
+        const pLower = p.toLowerCase().replace(/[\s\-_]+/g, "")
+        if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") p = "APP MB"
+        return selectedProducts.includes(p)
+      })
     }
 
     // 4. Lọc theo Squad
@@ -620,8 +625,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         return false
       }
 
-      if (selectedProducts.length > 0 && !selectedProducts.includes((req.product && req.product.trim()) || "Khác")) {
-        return false
+      if (selectedProducts.length > 0) {
+        let p = (req.product && req.product.trim()) || "Khác"
+        const pLower = p.toLowerCase().replace(/[\s\-_]+/g, "")
+        if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") p = "APP MB"
+        if (!selectedProducts.includes(p)) return false
       }
 
       if (selectedSquads.length > 0 && !selectedSquads.includes(req.squad_name || req.preferred_squad || "Khác")) {
