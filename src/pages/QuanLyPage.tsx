@@ -300,6 +300,20 @@ export const AVAILABLE_SQUADS_LIST = [
 // Initial Mock Data (loại bỏ mock user)
 const INITIAL_TEAM_MEMBERS: TeamMember[] = [
   {
+    id: "mem-cuong",
+    name: "Dương Mạnh Cường",
+    email: "cuongdm5@mbbank.com.vn",
+    role: "PO",
+    squad: "Card & Lending",
+    squads: ["Card", "Lending", "Cards & Thanh toán số", "Lending & Vay vốn"],
+    products: ["App MBBank"],
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+    activeTasks: 14,
+    capacityLimit: 20,
+    status: "Active",
+    permissions: { canAssign: true, canApprovePo: true, canExport: true, canManageSystem: true },
+  },
+  {
     id: "mem-3",
     name: "Trần Mai Lan",
     email: "lan.po@mbbank.com.vn",

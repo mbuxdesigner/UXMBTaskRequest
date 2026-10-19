@@ -84,6 +84,17 @@ export const DEMO_ACCOUNTS: Array<{
     products: ["App MBBank", "Lending & Vay vốn", "Cards & Digital Payment", "Digital Wealth", "Private Banking & VIP", "SME Banking"],
   },
   {
+    name: "Dương Mạnh Cường",
+    displayName: "Dương Mạnh Cường (PO)",
+    personalEmail: "cuongdm5@gmail.com",
+    teamsEmail: "cuongdm5@mbbank.com.vn",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    role: "PO",
+    squad: "Card & Lending",
+    squads: ["Card", "Lending", "Cards & Thanh toán số", "Lending & Vay vốn"],
+    products: ["App MBBank", "Cards & Digital Payment", "Lending & Vay vốn"],
+  },
+  {
     name: "Nguyễn Văn Cường",
     displayName: "Nguyễn Văn Cường",
     personalEmail: "lead.cuong@gmail.com",
