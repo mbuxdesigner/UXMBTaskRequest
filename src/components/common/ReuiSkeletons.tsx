@@ -710,7 +710,7 @@ export interface DesignerPlannerSkeletonProps {
 
 export function DesignerPlannerWeeklyCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] max-w-[640px] w-full min-w-0 shadow-2xs">
+    <div className="rounded-2xl border border-neutral-200/80 bg-neutral-100/60 p-1.5 flex flex-col h-[275px] max-w-[560px] w-full min-w-0 shadow-2xs">
       <div className="flex items-center justify-between px-3.5 py-1.5 min-w-0">
         <Skeleton className="h-4 w-28 rounded-md bg-neutral-200/80" />
         <Skeleton className="h-6 w-24 rounded-md bg-white" />
