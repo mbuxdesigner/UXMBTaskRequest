@@ -375,6 +375,16 @@ export default function SolutionAgentsTable({
     return initial
   })
 
+  // State to track collapsed squad sub-groups within status groups (all expanded by default)
+  const [collapsedSquads, setCollapsedSquads] = useState<Record<string, boolean>>({})
+
+  const toggleSquad = useCallback((squadKey: string) => {
+    setCollapsedSquads((prev) => ({
+      ...prev,
+      [squadKey]: !prev[squadKey],
+    }))
+  }, [])
+
   // Group incoming tasks by status group for TableRowSkeletonPlaceholder insertion (R3)
   const incomingTasksByGroup = useMemo(() => {
     const map: Record<TaskGroupId, UXRequest[]> = {
@@ -496,12 +506,48 @@ export default function SolutionAgentsTable({
         })
 
       const isGraceActive = !hasActiveFilters && graceGroupIds.has(group.id)
+
+      // Sub-group items by Squad within this status group (matching Gantt chart structure)
+      const squadMap = new Map<string, { squadKey: string; squadName: string; productName: string; tasks: UXRequest[] }>()
+
+      items.forEach((req) => {
+        const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
+        const hasSquad = Boolean(
+          rawSquad &&
+          rawSquad !== "Chưa phân công" &&
+          rawSquad !== "Chưa có squad" &&
+          rawSquad !== "Chưa phân squad" &&
+          rawSquad !== "Triage Squad" &&
+          rawSquad !== ""
+        )
+        const squadName = hasSquad ? rawSquad : "Chưa phân squad"
+        const prodName = (req.product || "Khác").trim()
+        const squadKey = `${group.id}::${squadName}`
+
+        if (!squadMap.has(squadName)) {
+          squadMap.set(squadName, {
+            squadKey,
+            squadName,
+            productName: prodName,
+            tasks: [],
+          })
+        }
+        squadMap.get(squadName)!.tasks.push(req)
+      })
+
+      const squadGroups = Array.from(squadMap.values()).sort((a, b) => {
+        if (a.squadName === "Chưa phân squad") return 1
+        if (b.squadName === "Chưa phân squad") return -1
+        return a.squadName.localeCompare(b.squadName, "vi", { sensitivity: "base" })
+      })
+
       return {
         ...group,
         items,
         count: items.length,
         incomingExternal,
         hasVisibleItems: items.length > 0 || incomingExternal.length > 0 || isGraceActive,
+        squadGroups,
       }
     })
   }, [requests, incomingTasksByGroup, graceGroupIds, hasActiveFilters])
@@ -835,12 +881,75 @@ export default function SolutionAgentsTable({
                               />
                             ))}
 
-                            {/* 2. Group items with layout & cross-group animation (R2, R4) */}
-                            {group.items.map((req, rowIdx) => {
-                              const currentRowIdx = globalRowIdx++
-                              const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
-                              const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
-                              const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
+                            {/* 2. Squad Sub-groups within status group (matching Gantt chart structure) */}
+                            {group.squadGroups.map((squad) => {
+                              const isSquadCollapsed = Boolean(collapsedSquads[squad.squadKey])
+                              const squadColorDef = getSquadColorDef(squad.squadName, squad.productName)
+
+                              return (
+                                <React.Fragment key={squad.squadKey}>
+                                  {/* Squad Subgroup Row */}
+                                  <motion.tr
+                                    custom={globalRowIdx++}
+                                    variants={cascadeWaveTableRowVariants}
+                                    data-row-id={squad.squadKey}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleSquad(squad.squadKey)
+                                    }}
+                                    className="h-8 bg-slate-50/70 hover:bg-slate-100/80 border-b border-slate-200/60 cursor-pointer select-none transition-colors"
+                                  >
+                                    <td colSpan={8} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              toggleSquad(squad.squadKey)
+                                            }}
+                                            className="size-5 inline-flex items-center justify-center rounded hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                                          >
+                                            <ChevronRight
+                                              className={`size-3.5 transition-transform duration-150 ${
+                                                !isSquadCollapsed ? "rotate-90 text-slate-700" : "text-slate-400"
+                                              }`}
+                                            />
+                                          </button>
+
+                                          {/* Squad Color Dot */}
+                                          <span
+                                            className={`size-2 rounded-full shrink-0 ${squadColorDef?.dotClass || "bg-blue-600"}`}
+                                            style={squadColorDef?.hex ? { backgroundColor: squadColorDef.hex } : undefined}
+                                          />
+
+                                          {/* Squad Name */}
+                                          <span className="text-[12.5px] font-semibold text-slate-700 truncate">
+                                            {squad.squadName}
+                                          </span>
+
+                                          {/* Task count pill */}
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-mono font-medium border border-blue-100/80 shadow-2xs">
+                                            {squad.tasks.length}
+                                          </span>
+                                        </div>
+
+                                        {squad.productName && squad.productName !== "Khác" && squad.productName.toLowerCase() !== squad.squadName.toLowerCase() && (
+                                          <span className="text-[11px] text-slate-400 font-normal hidden md:inline-block pr-2">
+                                            {squad.productName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </motion.tr>
+
+                                  {/* Task Rows under this Squad */}
+                                  {!isSquadCollapsed &&
+                                    squad.tasks.map((req, rowIdx) => {
+                                      const currentRowIdx = globalRowIdx++
+                                      const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
+                                      const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
+                                      const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
 
                               const rawDesigner =
                                 req.assigned_designer ||
@@ -876,7 +985,7 @@ export default function SolutionAgentsTable({
                               )
 
                               const pendingInfo = getRequestPendingClassification(req)
-                              const isLastRow = rowIdx === group.items.length - 1
+                              const isLastRow = rowIdx === squad.tasks.length - 1
                               const cellBorderClass = isHighlighted
                                 ? "border-b border-blue-200"
                                 : isLastRow
@@ -933,7 +1042,7 @@ export default function SolutionAgentsTable({
                               {isIncoming ? (
                                 <>
                                   {/* 1. Yêu cầu / Task */}
-                                  <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                  <td className={`pl-8 sm:pl-10 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
                                     <div className="flex flex-col gap-1.5 min-w-0">
                                       <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
                                       <div className="flex items-center gap-2">
@@ -990,7 +1099,7 @@ export default function SolutionAgentsTable({
                               ) : (
                                 <>
                               {/* 1. Tiêu đề + Subtitle */}
-                              <td className={`px-4 sm:px-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                              <td className={`pl-8 sm:pl-10 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
                                 {isMutating && (
                                   <div
                                     className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
@@ -1258,6 +1367,9 @@ export default function SolutionAgentsTable({
                         </motion.tr>
                           )
                         })}
+                                </React.Fragment>
+                              )
+                            })}
                       </AnimatePresence>
                     )}
                   </React.Fragment>
