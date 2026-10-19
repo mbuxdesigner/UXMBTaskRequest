@@ -107,29 +107,42 @@ function parseEndOfDayMs(dateStr?: string): number {
   return isNaN(parsed) ? 0 : parsed
 }
 
-export type TaskGroupId = "overload" | "unassigned" | "running" | "pending" | "completed"
+export type TaskGroupId = "overload" | "unassigned" | "running" | "pending" | "completed" | "frozen_rejected"
 
 export function getTaskGroup(r: UXRequest): TaskGroupId {
   const status = (r.status || "").toLowerCase().trim()
   const progress = typeof r.progress === "number" ? r.progress : 0
   const phaseLower = (r.current_phase || "").toLowerCase().trim()
+  const pendingInfo = getRequestPendingClassification(r)
 
-  // 1. Hoàn thành & Từ chối (Nhóm đóng / kết thúc bài toán)
+  // 1. Tạm dừng & Từ chối (Toàn bộ task reject và freeze / tạm dừng)
+  const isRejectOrFreeze =
+    pendingInfo.type === "rejected" ||
+    pendingInfo.type === "frozen" ||
+    status === "từ chối" ||
+    status === "rejected" ||
+    status === "tạm dừng" ||
+    status === "freeze" ||
+    status === "frozen" ||
+    Boolean(r.rejected_reason && status !== "đang thực hiện" && status !== "hoàn thành" && status !== "done") ||
+    Boolean(r.freeze_reason && status !== "đang thực hiện" && status !== "hoàn thành" && status !== "done")
+
+  if (isRejectOrFreeze) {
+    return "frozen_rejected"
+  }
+
+  // 2. Hoàn thành (Chỉ các task thực sự hoàn thành/done/progress >= 100)
   if (
     status === "hoàn thành" ||
     status === "done" ||
-    status === "từ chối" ||
-    status === "rejected" ||
-    Boolean(r.rejected_reason && status !== "đang thực hiện") ||
     progress >= 100
   ) {
     return "completed"
   }
 
-  // 2. Pending (Chờ PO duyệt nghiệm thu / phản hồi / tạm dừng):
+  // 3. Pending (Chờ PO duyệt nghiệm thu / phản hồi):
   // User: "chỗ danh sách task pending thì vẫn ở cụm pending"
   // Ưu tiên cao hơn Overload: các bài toán đang Pending luôn nằm ở cụm Pending
-  const pendingInfo = getRequestPendingClassification(r)
   const isPendingTask =
     pendingInfo.isPending ||
     status === "pending" ||
@@ -143,7 +156,7 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
     return "pending"
   }
 
-  // 3. Overload (Theo quy tắc mới):
+  // 4. Overload (Theo quy tắc mới):
   // Loại 1: Thuộc trạng thái/khâu "Chờ xác nhận" và ngày hiện tại > ngày release
   const isChoXacNhan =
     phaseLower.includes("chờ xác nhận") ||
@@ -177,7 +190,7 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
     return "overload"
   }
 
-  // 4. Chờ phân bổ (Chưa có Designer hoặc khâu tiếp nhận/phân loại/chờ xác nhận)
+  // 5. Chờ phân bổ (Chưa có Designer hoặc khâu tiếp nhận/phân loại/chờ xác nhận)
   const isUnassigned =
     !r.assigned_designer ||
     r.assigned_designer === "Chưa phân công" ||
@@ -200,7 +213,7 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
     return "unassigned"
   }
 
-  // 5. Đang thực hiện (Tất cả các task còn lại)
+  // 6. Đang thực hiện (Tất cả các task còn lại)
   return "running"
 }
 
@@ -274,6 +287,20 @@ const STATUS_GROUPS: StatusGroupDef[] = [
     labelClass: "text-emerald-950 font-bold",
     countBadgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold",
     match: (r) => getTaskGroup(r) === "completed",
+  },
+  {
+    id: "frozen_rejected",
+    label: "Tạm dừng & Từ chối",
+    summary: "Các bài toán đã đóng băng tiến độ hoặc từ chối thực hiện theo yêu cầu",
+    focus: "Đóng / Dừng",
+    order: 6,
+    dotClass: "bg-slate-500",
+    headerBg: "bg-slate-100/90 hover:bg-slate-200/80 border-slate-200/90",
+    headerBorderLeft: "border-l-4 border-l-slate-500",
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
+    labelClass: "text-slate-900 font-bold",
+    countBadgeClass: "bg-slate-200 text-slate-700 border-slate-300 font-bold",
+    match: (r) => getTaskGroup(r) === "frozen_rejected",
   },
 ]
 
@@ -404,6 +431,7 @@ export default function SolutionAgentsTable({
       running: [],
       pending: [],
       completed: [],
+      frozen_rejected: [],
     }
     if (!incomingTasks || incomingTasks.size === 0) return map
 
@@ -548,6 +576,9 @@ export default function SolutionAgentsTable({
         productKey: string
         productName: string
         allTasks: UXRequest[]
+        totalTasks: number
+        completedTasks: number
+        progress: number
         squads: Array<{
           squadKey: string
           squadName: string
@@ -582,10 +613,20 @@ export default function SolutionAgentsTable({
           return a.squadName.localeCompare(b.squadName, "vi", { sensitivity: "base" })
         })
 
+        const totalTasks = allTasks.length
+        const completedTasks = allTasks.filter((r) => {
+          const s = (r.status || "").toLowerCase().trim()
+          return s === "hoàn thành" || s === "done" || (typeof r.progress === "number" && r.progress >= 100)
+        }).length
+        const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
         productGroups.push({
           productKey: `${group.id}::${prodName}`,
           productName: prodName,
           allTasks,
+          totalTasks,
+          completedTasks,
+          progress,
           squads,
         })
       })
@@ -742,6 +783,23 @@ export default function SolutionAgentsTable({
         label: "Hoàn thành",
         bgClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
         dotClass: "bg-emerald-500",
+      }
+    }
+    if (
+      s === "tạm dừng" ||
+      s === "freeze" ||
+      s === "frozen" ||
+      s === "từ chối" ||
+      s === "rejected" ||
+      group === "frozen_rejected"
+    ) {
+      const isRej = s.includes("từ chối") || s.includes("rejected")
+      return {
+        label: isRej ? "Từ chối" : "Tạm dừng",
+        bgClass: isRej
+          ? "bg-rose-50 text-rose-800 border-rose-200"
+          : "bg-cyan-50 text-cyan-800 border-cyan-200",
+        dotClass: isRej ? "bg-rose-600" : "bg-cyan-600",
       }
     }
     if (s.includes("pending") || s.includes("chờ duyệt") || s.includes("đã gửi po") || group === "pending") {
