@@ -10,7 +10,6 @@ import {
   AtSign,
   Command as CommandIcon,
 } from "lucide-react"
-import { Kbd } from "@/components/ui/kbd"
 import { UserAvatar } from "@/components/common/UserAvatar"
 
 // Embedded CSS for minimal custom scrollbar styles as in JolyUI
@@ -919,23 +918,8 @@ export function AiPromptBox({
 
           </div>
 
-          {/* Right Action: Instructions Hint & Send Button */}
+          {/* Right Action: Send Button */}
           <div className="flex items-center gap-3">
-            {/* Keyboard Shortcuts Hint */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 select-none">
-              <span className="inline-flex items-center gap-1">
-                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none">↵</Kbd>
-                <span className="text-[10px] text-slate-400">gửi</span>
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="inline-flex items-center gap-1">
-                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs">Shift</Kbd>
-                <span className="text-slate-400 text-[10px]">+</span>
-                <Kbd size="xs" className="bg-slate-100 text-slate-600 border border-slate-200/90 shadow-2xs font-sans text-[11px] leading-none">↵</Kbd>
-                <span className="text-[10px] text-slate-400">xuống dòng</span>
-              </span>
-            </div>
-
             <button
               type="button"
               onClick={() => onSubmit()}
