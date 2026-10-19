@@ -272,11 +272,6 @@ export function TableRowsSkeleton({ rowCount = 6 }: { rowCount?: number }) {
             </div>
           </td>
 
-          {/* Squad */}
-          <td className="px-3 py-3">
-            <Skeleton className="h-6 w-24 rounded-full" />
-          </td>
-
           {/* Created by */}
           <td className="px-3 py-3">
             <div className="flex items-center gap-2">
@@ -656,15 +651,7 @@ export function TableRowSkeletonPlaceholder({ className }: { className?: string 
         </div>
       </td>
 
-      {/* 2. Squad / Sản phẩm */}
-      <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <Skeleton className="h-4 w-20 rounded-md" />
-          <Skeleton className="h-3 w-14 rounded-md" />
-        </div>
-      </td>
-
-      {/* 3. Created by */}
+      {/* 2. Created by */}
       <td className="px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint">
         <div className="flex items-center gap-2 min-w-0">
           <Skeleton className="size-6 rounded-full shrink-0" />

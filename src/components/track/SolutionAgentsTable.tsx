@@ -40,6 +40,7 @@ import {
   Check,
   Plus,
   RefreshCw,
+  Folder,
 } from "lucide-react"
 
 export interface SolutionAgentsTableProps {
@@ -375,6 +376,16 @@ export default function SolutionAgentsTable({
     return initial
   })
 
+  // State to track collapsed product sub-groups within status groups (all expanded by default)
+  const [collapsedProds, setCollapsedProds] = useState<Record<string, boolean>>({})
+
+  const toggleProduct = useCallback((prodKey: string) => {
+    setCollapsedProds((prev) => ({
+      ...prev,
+      [prodKey]: !prev[prodKey],
+    }))
+  }, [])
+
   // State to track collapsed squad sub-groups within status groups (all expanded by default)
   const [collapsedSquads, setCollapsedSquads] = useState<Record<string, boolean>>({})
 
@@ -507,10 +518,11 @@ export default function SolutionAgentsTable({
 
       const isGraceActive = !hasActiveFilters && graceGroupIds.has(group.id)
 
-      // Sub-group items by Squad within this status group (matching Gantt chart structure)
-      const squadMap = new Map<string, { squadKey: string; squadName: string; productName: string; tasks: UXRequest[] }>()
+      // Sub-group items: Product -> Squad -> Tasks (matching Gantt chart structure)
+      const prodMap = new Map<string, Map<string, UXRequest[]>>()
 
       items.forEach((req) => {
+        const prod = (req.product || "Khác").trim() || "Khác"
         const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
         const hasSquad = Boolean(
           rawSquad &&
@@ -520,25 +532,69 @@ export default function SolutionAgentsTable({
           rawSquad !== "Triage Squad" &&
           rawSquad !== ""
         )
-        const squadName = hasSquad ? rawSquad : "Chưa phân squad"
-        const prodName = (req.product || "Khác").trim()
-        const squadKey = `${group.id}::${squadName}`
+        const squad = hasSquad ? rawSquad : "Chưa phân squad"
 
-        if (!squadMap.has(squadName)) {
-          squadMap.set(squadName, {
-            squadKey,
-            squadName,
-            productName: prodName,
-            tasks: [],
-          })
+        if (!prodMap.has(prod)) {
+          prodMap.set(prod, new Map())
         }
-        squadMap.get(squadName)!.tasks.push(req)
+        const squadMap = prodMap.get(prod)!
+        if (!squadMap.has(squad)) {
+          squadMap.set(squad, [])
+        }
+        squadMap.get(squad)!.push(req)
       })
 
-      const squadGroups = Array.from(squadMap.values()).sort((a, b) => {
-        if (a.squadName === "Chưa phân squad") return 1
-        if (b.squadName === "Chưa phân squad") return -1
-        return a.squadName.localeCompare(b.squadName, "vi", { sensitivity: "base" })
+      const productGroups: Array<{
+        productKey: string
+        productName: string
+        allTasks: UXRequest[]
+        squads: Array<{
+          squadKey: string
+          squadName: string
+          productName: string
+          tasks: UXRequest[]
+        }>
+      }> = []
+
+      prodMap.forEach((squadMap, prodName) => {
+        const allTasks: UXRequest[] = []
+        const squads: Array<{
+          squadKey: string
+          squadName: string
+          productName: string
+          tasks: UXRequest[]
+        }> = []
+
+        squadMap.forEach((tasks, squadName) => {
+          allTasks.push(...tasks)
+          squads.push({
+            squadKey: `${group.id}::${prodName}::${squadName}`,
+            squadName,
+            productName: prodName,
+            tasks,
+          })
+        })
+
+        // Sort squads alphabetically, "Chưa phân squad" at the end
+        squads.sort((a, b) => {
+          if (a.squadName === "Chưa phân squad") return 1
+          if (b.squadName === "Chưa phân squad") return -1
+          return a.squadName.localeCompare(b.squadName, "vi", { sensitivity: "base" })
+        })
+
+        productGroups.push({
+          productKey: `${group.id}::${prodName}`,
+          productName: prodName,
+          allTasks,
+          squads,
+        })
+      })
+
+      // Sort product groups alphabetically, "Khác" at the end
+      productGroups.sort((a, b) => {
+        if (a.productName === "Khác") return 1
+        if (b.productName === "Khác") return -1
+        return a.productName.localeCompare(b.productName, "vi", { sensitivity: "base" })
       })
 
       return {
@@ -547,7 +603,7 @@ export default function SolutionAgentsTable({
         count: items.length,
         incomingExternal,
         hasVisibleItems: items.length > 0 || incomingExternal.length > 0 || isGraceActive,
-        squadGroups,
+        productGroups,
       }
     })
   }, [requests, incomingTasksByGroup, graceGroupIds, hasActiveFilters])
@@ -737,10 +793,9 @@ export default function SolutionAgentsTable({
       <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
         <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
           <colgroup>
-            <col className="w-[32%]" />
-            <col className="w-[14%]" />
-            <col className="w-[13%]" />
-            <col className="w-[13%]" />
+            <col className="w-[42%]" />
+            <col className="w-[15%]" />
+            <col className="w-[15%]" />
             <col className="w-[12%]" />
             <col className="w-[7.5%]" />
             <col className="w-[8.5%]" />
@@ -749,7 +804,6 @@ export default function SolutionAgentsTable({
           <thead className="bg-slate-50/60 border-b border-slate-200/70 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
             <tr className="h-9">
               <th className="px-4 sm:px-5 py-2 text-left font-medium">Yêu cầu / Task & Luồng nghiệp vụ</th>
-              <th className="px-3 sm:px-4 py-2 text-left font-medium">Squad</th>
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Created by</th>
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Designer</th>
               <th className="px-3 sm:px-4 py-2 text-left font-medium">Trạng thái</th>
@@ -780,7 +834,7 @@ export default function SolutionAgentsTable({
                 data-slot="data-grid-table-body"
               >
                 <tr>
-                  <td colSpan={8} className="py-12 px-4 text-center bg-white">
+                  <td colSpan={7} className="py-12 px-4 text-center bg-white">
                     <EmptyState
                       title="Không tìm thấy bài toán nào"
                       description="Không có bài toán nào khớp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc xóa bộ lọc."
@@ -833,7 +887,7 @@ export default function SolutionAgentsTable({
                           style={{ willChange: "opacity, transform" }}
                           className={`h-11 ${group.headerBg || "bg-slate-50/80"} ${group.headerBorderLeft || "border-l-4 border-l-slate-400"} border-y cursor-pointer select-none transition-all group/run-row shadow-2xs`}
                         >
-                          <td colSpan={8} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
+                          <td colSpan={7} className="px-4 sm:px-5 py-2.5 align-middle border-y border-slate-200/90">
                             <div data-run-row="group" className="flex items-center justify-between">
                               {/* Left: Button + Status Dot + Group Name + Count pill */}
                               <div className="flex items-center gap-2 min-w-0">
@@ -881,501 +935,516 @@ export default function SolutionAgentsTable({
                               />
                             ))}
 
-                            {/* 2. Squad Sub-groups within status group (matching Gantt chart structure) */}
-                            {group.squadGroups.map((squad) => {
-                              const isSquadCollapsed = Boolean(collapsedSquads[squad.squadKey])
-                              const squadColorDef = getSquadColorDef(squad.squadName, squad.productName)
+                            {/* 2. Product Groups within status group (Hierarchy: Status -> Product -> Squad -> Tasks) */}
+                            {group.productGroups.map((prod) => {
+                              const isProdCollapsed = Boolean(collapsedProds[prod.productKey])
 
                               return (
-                                <React.Fragment key={squad.squadKey}>
-                                  {/* Squad Subgroup Row */}
+                                <React.Fragment key={prod.productKey}>
+                                  {/* Level 2: Product Subgroup Row */}
                                   <motion.tr
                                     custom={globalRowIdx++}
                                     variants={cascadeWaveTableRowVariants}
-                                    data-row-id={squad.squadKey}
+                                    data-row-id={prod.productKey}
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      toggleSquad(squad.squadKey)
+                                      toggleProduct(prod.productKey)
                                     }}
-                                    className="h-8 bg-slate-50/70 hover:bg-slate-100/80 border-b border-slate-200/60 cursor-pointer select-none transition-colors"
+                                    className="h-9 bg-slate-100/90 hover:bg-slate-200/80 border-b border-slate-200 cursor-pointer select-none transition-colors"
                                   >
-                                    <td colSpan={8} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle">
+                                    <td colSpan={7} className="pl-6 sm:pl-7 pr-4 py-1.5 align-middle">
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation()
-                                              toggleSquad(squad.squadKey)
+                                              toggleProduct(prod.productKey)
                                             }}
-                                            className="size-5 inline-flex items-center justify-center rounded hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                                            className="size-5 inline-flex items-center justify-center rounded hover:bg-black/5 text-slate-500 hover:text-slate-800 transition-colors shrink-0"
                                           >
                                             <ChevronRight
                                               className={`size-3.5 transition-transform duration-150 ${
-                                                !isSquadCollapsed ? "rotate-90 text-slate-700" : "text-slate-400"
+                                                !isProdCollapsed ? "rotate-90 text-slate-800" : "text-slate-500"
                                               }`}
                                             />
                                           </button>
 
-                                          {/* Squad Color Dot */}
-                                          <span
-                                            className={`size-2 rounded-full shrink-0 ${squadColorDef?.dotClass || "bg-blue-600"}`}
-                                            style={squadColorDef?.hex ? { backgroundColor: squadColorDef.hex } : undefined}
-                                          />
+                                          {/* Folder Icon */}
+                                          <Folder className="size-4 text-slate-500 shrink-0" />
 
-                                          {/* Squad Name */}
-                                          <span className="text-[12.5px] font-semibold text-slate-700 truncate">
-                                            {squad.squadName}
+                                          {/* Product Name */}
+                                          <span className="text-[13px] font-bold text-slate-800 truncate">
+                                            {prod.productName}
                                           </span>
 
                                           {/* Task count pill */}
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-mono font-medium border border-blue-100/80 shadow-2xs">
-                                            {squad.tasks.length}
+                                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/90 text-slate-700 font-mono font-semibold border border-slate-300/60 shadow-2xs">
+                                            {prod.totalTasks}
                                           </span>
                                         </div>
 
-                                        {squad.productName && squad.productName !== "Khác" && squad.productName.toLowerCase() !== squad.squadName.toLowerCase() && (
-                                          <span className="text-[11px] text-slate-400 font-normal hidden md:inline-block pr-2">
-                                            {squad.productName}
+                                        {/* Progress wheel / percentage */}
+                                        <div className="flex items-center gap-2 pr-2">
+                                          <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
+                                            {prod.completedTasks}/{prod.totalTasks} hoàn thành
                                           </span>
-                                        )}
+                                          <div
+                                            className="relative size-4 rounded-full border border-slate-300 shrink-0"
+                                            style={{
+                                              background: `conic-gradient(#1057FB ${prod.progress * 3.6}deg, #e2e8f0 0deg)`,
+                                            }}
+                                            title={`Tiến độ sản phẩm: ${prod.progress}%`}
+                                          />
+                                        </div>
                                       </div>
                                     </td>
                                   </motion.tr>
 
-                                  {/* Task Rows under this Squad */}
-                                  {!isSquadCollapsed &&
-                                    squad.tasks.map((req, rowIdx) => {
-                                      const currentRowIdx = globalRowIdx++
-                                      const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
-                                      const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
-                                      const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
+                                  {/* Level 3: Squads under this Product */}
+                                  {!isProdCollapsed &&
+                                    prod.squads.map((squad) => {
+                                      const isSquadCollapsed = Boolean(collapsedSquads[squad.squadKey])
+                                      const squadColorDef = getSquadColorDef(squad.squadName, squad.productName)
 
-                              const rawDesigner =
-                                req.assigned_designer ||
-                                (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
-                                  ? req.ux_owner
-                                  : "") ||
-                                ""
-                              const isAssigned = Boolean(
-                                rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
-                              )
-                              const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
-                              const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
+                                      return (
+                                        <React.Fragment key={squad.squadKey}>
+                                          {/* Squad Subgroup Row */}
+                                          <motion.tr
+                                            custom={globalRowIdx++}
+                                            variants={cascadeWaveTableRowVariants}
+                                            data-row-id={squad.squadKey}
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              toggleSquad(squad.squadKey)
+                                            }}
+                                            className="h-8 bg-slate-50/70 hover:bg-slate-100/80 border-b border-slate-200/60 cursor-pointer select-none transition-colors"
+                                          >
+                                            <td colSpan={7} className="pl-10 sm:pl-11 pr-4 py-1.5 align-middle">
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      toggleSquad(squad.squadKey)
+                                                    }}
+                                                    className="size-5 inline-flex items-center justify-center rounded hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                                                  >
+                                                    <ChevronRight
+                                                      className={`size-3.5 transition-transform duration-150 ${
+                                                        !isSquadCollapsed ? "rotate-90 text-slate-700" : "text-slate-400"
+                                                      }`}
+                                                    />
+                                                  </button>
 
-                              // Created by
-                              const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
-                              const displayCreator = getMemberDisplayName(rawCreator, req.requester_email) || (
-                                rawCreator.includes("@")
-                                  ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
-                                  : rawCreator
-                              )
-                              const creatorAvatar = getDesignerAvatar(displayCreator, req.requester_email) || getDesignerAvatar(rawCreator, req.requester_email)
+                                                  {/* Squad Color Dot */}
+                                                  <span
+                                                    className={`size-2 rounded-full shrink-0 ${squadColorDef?.dotClass || "bg-blue-600"}`}
+                                                    style={squadColorDef?.hex ? { backgroundColor: squadColorDef.hex } : undefined}
+                                                  />
 
-                              const priorityInfo = formatPriority(req.priority)
+                                                  {/* Squad Name */}
+                                                  <span className="text-[12.5px] font-semibold text-slate-700 truncate">
+                                                    {squad.squadName}
+                                                  </span>
 
-                              // Dates
-                              const releaseDate = req.release_date || req.expected_deadline
-                              const designDoneDate = req.design_deadline || req.expected_deadline
-                              const isOverdue = Boolean(
-                                designDoneDate &&
-                                new Date(designDoneDate).getTime() < Date.now() &&
-                                req.status !== "Hoàn thành" &&
-                                req.status !== "Done"
-                              )
+                                                  {/* Task count pill */}
+                                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-mono font-medium border border-blue-100/80 shadow-2xs">
+                                                    {squad.tasks.length}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </motion.tr>
 
-                              const pendingInfo = getRequestPendingClassification(req)
-                              const isLastRow = rowIdx === squad.tasks.length - 1
-                              const cellBorderClass = isHighlighted
-                                ? "border-b border-blue-200"
-                                : isLastRow
-                                ? "border-b-2 border-slate-300"
-                                : "border-b border-slate-200"
+                                          {/* Level 4: Task Rows under this Squad */}
+                                          {!isSquadCollapsed &&
+                                            squad.tasks.map((req, rowIdx) => {
+                                              const currentRowIdx = globalRowIdx++
+                                              const isMutating = mutatingTaskIds?.has(req.request_id) ?? false
+                                              const isHighlighted = highlightedTaskIds?.has(req.request_id) ?? false
+                                              const isIncoming = (incomingTaskIds?.has(req.request_id) || incomingTasks?.has(req.request_id)) ?? false
 
-                              const prodName = (req.product || "Khác").trim()
-                              const rawSquad = (req.squad_name || req.preferred_squad || "").trim()
-                              const hasSquad = Boolean(
-                                rawSquad &&
-                                rawSquad !== "Chưa phân công" &&
-                                rawSquad !== "Chưa có squad" &&
-                                rawSquad !== "Chưa phân squad" &&
-                                rawSquad !== "Triage Squad" &&
-                                rawSquad !== ""
-                              )
-                              const projectDisplay = hasSquad
-                                ? (rawSquad.toLowerCase() === prodName.toLowerCase() ? prodName : `${prodName} · ${rawSquad}`)
-                                : prodName
+                                              const rawDesigner =
+                                                req.assigned_designer ||
+                                                (req.ux_owner !== "Chưa phân công" && req.ux_owner !== "Đang phân công"
+                                                  ? req.ux_owner
+                                                  : "") ||
+                                                ""
+                                              const isAssigned = Boolean(
+                                                rawDesigner && rawDesigner !== "Chưa phân công" && rawDesigner !== "Đang phân công"
+                                              )
+                                              const displayName = isAssigned ? formatDesignerDisplayName(rawDesigner) : "Chưa phân công"
+                                              const designerAvatar = isAssigned ? getDesignerAvatar(displayName) : ""
 
-                              const phaseInfo = getTaskPhaseStatus(req)
-                              const cfg = getStatusConfig(phaseInfo.name)
+                                              // Created by
+                                              const rawCreator = (req.requester_name || req.requester_email || "PO").trim()
+                                              const displayCreator = getMemberDisplayName(rawCreator, req.requester_email) || (
+                                                rawCreator.includes("@")
+                                                  ? rawCreator.split("@")[0].charAt(0).toUpperCase() + rawCreator.split("@")[0].slice(1)
+                                                  : rawCreator
+                                              )
+                                              const creatorAvatar = getDesignerAvatar(displayCreator, req.requester_email) || getDesignerAvatar(rawCreator, req.requester_email)
 
-                              return (
-                                <motion.tr
-                                  layout="position"
-                                  key={`${group.id}-${req.request_id || rowIdx}`}
-                                  data-row-id={req.request_id}
-                                  data-depth="1"
-                                  custom={currentRowIdx}
-                                  variants={cascadeWaveTableRowVariants}
-                                  initial="hidden"
-                                  animate={isMutating ? { opacity: 0.4, y: 0 } : "visible"}
-                                  exit={{ opacity: 0, y: -10, transition: { duration: 0.22, ease: "easeIn" } }}
-                                  style={{ willChange: "opacity, transform" }}
-                                  onClick={() => !isIncoming && onSelectRequest(req)}
-                                  onMouseEnter={() => {
-                                    if (req.request_id && !isIncoming) {
-                                      fetchSingleTaskUpdate(req.request_id)
-                                    }
-                                  }}
-                              className={cn(
-                                "transition-colors duration-500 group/run-row cursor-pointer relative",
-                                actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-0",
-                                isHighlighted
-                                  ? "bg-blue-50/80 ring-1 ring-blue-300/80 ring-inset shadow-2xs"
-                                  : isIncoming
-                                  ? "bg-blue-50/20"
-                                  : isMutating
-                                  ? "bg-slate-50/40 opacity-40"
-                                  : "bg-white hover:bg-slate-50/90"
-                              )}
-                            >
-                              {isIncoming ? (
-                                <>
-                                  {/* 1. Yêu cầu / Task */}
-                                  <td className={`pl-8 sm:pl-10 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <div className="flex flex-col gap-1.5 min-w-0">
-                                      <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
-                                      <div className="flex items-center gap-2">
-                                        <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
-                                        <Skeleton className="h-3 w-24 rounded-md bg-slate-200/60 animate-pulse" />
-                                      </div>
-                                    </div>
-                                  </td>
+                                              const priorityInfo = formatPriority(req.priority)
 
-                                  {/* 2. Squad / Sản phẩm */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <div className="flex flex-col gap-1.5 min-w-0">
-                                      <Skeleton className="h-4 w-20 rounded-md bg-slate-200/70 animate-pulse" />
-                                      <Skeleton className="h-3 w-14 rounded-md bg-slate-200/50 animate-pulse" />
-                                    </div>
-                                  </td>
+                                              // Dates
+                                              const releaseDate = req.release_date || req.expected_deadline
+                                              const designDoneDate = req.design_deadline || req.expected_deadline
+                                              const isOverdue = Boolean(
+                                                designDoneDate &&
+                                                new Date(designDoneDate).getTime() < Date.now() &&
+                                                req.status !== "Hoàn thành" &&
+                                                req.status !== "Done"
+                                              )
 
-                                  {/* 3. Created by */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
-                                      <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
-                                    </div>
-                                  </td>
+                                              const pendingInfo = getRequestPendingClassification(req)
+                                              const isLastRow = rowIdx === squad.tasks.length - 1
+                                              const cellBorderClass = isHighlighted
+                                                ? "border-b border-blue-200"
+                                                : isLastRow
+                                                ? "border-b-2 border-slate-300"
+                                                : "border-b border-slate-200"
 
-                                  {/* 4. Designer */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
-                                      <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
-                                    </div>
-                                  </td>
+                                              const phaseInfo = getTaskPhaseStatus(req)
+                                              const cfg = getStatusConfig(phaseInfo.name)
 
-                                  {/* 5. Trạng thái */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
-                                  </td>
+                                              return (
+                                                <motion.tr
+                                                  layout="position"
+                                                  key={`${group.id}-${req.request_id || rowIdx}`}
+                                                  data-row-id={req.request_id}
+                                                  data-depth="1"
+                                                  custom={currentRowIdx}
+                                                  variants={cascadeWaveTableRowVariants}
+                                                  initial="hidden"
+                                                  animate={isMutating ? { opacity: 0.4, y: 0 } : "visible"}
+                                                  exit={{ opacity: 0, y: -10, transition: { duration: 0.22, ease: "easeIn" } }}
+                                                  style={{ willChange: "opacity, transform" }}
+                                                  onClick={() => !isIncoming && onSelectRequest(req)}
+                                                  onMouseEnter={() => {
+                                                    if (req.request_id && !isIncoming) {
+                                                      fetchSingleTaskUpdate(req.request_id)
+                                                    }
+                                                  }}
+                                                  className={cn(
+                                                    "transition-colors duration-500 group/run-row cursor-pointer relative",
+                                                    actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-0",
+                                                    isHighlighted
+                                                      ? "bg-blue-50/80 ring-1 ring-blue-300/80 ring-inset shadow-2xs"
+                                                      : isIncoming
+                                                      ? "bg-blue-50/20"
+                                                      : isMutating
+                                                      ? "bg-slate-50/40 opacity-40"
+                                                      : "bg-white hover:bg-slate-50/90"
+                                                  )}
+                                                >
+                                                  {isIncoming ? (
+                                                    <>
+                                                      {/* 1. Yêu cầu / Task */}
+                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <div className="flex flex-col gap-1.5 min-w-0">
+                                                          <Skeleton className="h-4 w-4/5 rounded-md bg-blue-100/70 animate-pulse" />
+                                                          <div className="flex items-center gap-2">
+                                                            <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+                                                            <Skeleton className="h-3 w-24 rounded-md bg-slate-200/60 animate-pulse" />
+                                                          </div>
+                                                        </div>
+                                                      </td>
 
-                                  {/* 6. Priority */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
-                                  </td>
+                                                      {/* 2. Created by */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+                                                          <Skeleton className="h-3 w-16 rounded-md bg-slate-200/70 animate-pulse" />
+                                                        </div>
+                                                      </td>
 
-                                  {/* 7. Release */}
-                                  <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                    <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
-                                  </td>
+                                                      {/* 3. Designer */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <Skeleton className="size-6 rounded-full bg-slate-200/70 animate-pulse shrink-0" />
+                                                          <Skeleton className="h-3 w-20 rounded-md bg-slate-200/70 animate-pulse" />
+                                                        </div>
+                                                      </td>
 
-                                  {/* 8. Action */}
-                                  <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] ${cellBorderClass}`}>
-                                    <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
-                                  </td>
-                                </>
-                              ) : (
-                                <>
-                              {/* 1. Tiêu đề + Subtitle */}
-                              <td className={`pl-8 sm:pl-10 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                <div data-run-row="run" className="flex min-w-0 flex-col gap-0.5">
-                                  <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
-                                    <span
-                                      className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
-                                      title={capitalizeFirstLetter(getRequestDisplayTitle(req))}
-                                    >
-                                      {capitalizeFirstLetter(getRequestDisplayTitle(req))}
-                                    </span>
-                                    {pendingInfo.isPending && group.id !== "pending" && (
-                                      <span
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
-                                          pendingInfo.type === "po_pending"
-                                            ? "bg-amber-50 text-amber-800 border-amber-300"
-                                            : pendingInfo.type === "frozen"
-                                            ? "bg-cyan-50 text-cyan-800 border-cyan-300"
-                                            : pendingInfo.type === "rejected"
-                                            ? "bg-rose-50 text-rose-800 border-rose-300"
-                                            : "bg-slate-100 text-slate-700 border-slate-300"
-                                        }`}
-                                        title={
-                                          pendingInfo.type === "po_pending" 
-                                            ? "PO Pending: Quá hạn 24h PO chưa duyệt" 
-                                            : pendingInfo.type === "frozen"
-                                            ? `Tạm dừng: ${pendingInfo.reason || "Đóng băng tiến độ"}`
-                                            : pendingInfo.type === "rejected"
-                                            ? `Từ chối: ${pendingInfo.reason || "Đã từ chối bài toán"}`
-                                            : `Pending: ${pendingInfo.reason}`
-                                        }
-                                      >
-                                        <span className={`size-1.5 rounded-full shrink-0 ${
-                                          pendingInfo.type === "po_pending" 
-                                            ? "bg-amber-500" 
-                                            : pendingInfo.type === "frozen"
-                                            ? "bg-cyan-500"
-                                            : pendingInfo.type === "rejected"
-                                            ? "bg-rose-500"
-                                            : "bg-slate-500"
-                                        }`} />
-                                        <span>{pendingInfo.label}</span>
-                                      </span>
-                                    )}
-                                    <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
-                                  </div>
+                                                      {/* 4. Trạng thái */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <Skeleton className="h-6 w-24 rounded-4xl bg-purple-100/80 animate-pulse" />
+                                                      </td>
 
-                                  {/* Dòng lý do Pending */}
-                                  {pendingInfo.isPending && Boolean(pendingInfo.reason || req.pending_reason) && (
-                                    <div className="flex items-center gap-1.5 text-xs min-w-0 my-0.5">
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0 leading-none">
-                                        Lí do
-                                      </span>
-                                      <span 
-                                        className="text-[#1057FB] text-xs font-normal truncate max-w-sm sm:max-w-md lg:max-w-lg" 
-                                        title={pendingInfo.reason || req.pending_reason}
-                                      >
-                                        {pendingInfo.reason || req.pending_reason}
-                                      </span>
-                                    </div>
-                                  )}
+                                                      {/* 5. Priority */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <Skeleton className="h-6 w-14 rounded-4xl bg-slate-200/70 animate-pulse ml-auto" />
+                                                      </td>
 
-                                  {/* Subtitle / Step / Context */}
-                                  <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
-                                    <span className="font-normal text-slate-500">{req.request_id}</span>
-                                    <span>·</span>
-                                    <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
-                                  </p>
-                                </div>
-                              </td>
+                                                      {/* 6. Release */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        <Skeleton className="h-3.5 w-16 rounded-md bg-slate-200/70 animate-pulse ml-auto" />
+                                                      </td>
 
-                              {/* 2. Squad / Sản phẩm (2 dòng theo UI cột title: chữ to trên squad, chữ bé dưới sản phẩm) */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                <div className="flex min-w-0 flex-col gap-0.5">
-                                  {/* Chữ to trên: Squad */}
-                                  <div className="min-w-0 text-sm leading-5 font-medium">
-                                    <span
-                                      className={`truncate block text-sm font-medium ${
-                                        hasSquad ? "text-slate-800" : "text-slate-400 italic"
-                                      }`}
-                                      title={hasSquad ? rawSquad : "Chưa phân squad"}
-                                    >
-                                      {hasSquad ? rawSquad : "Chưa phân squad"}
-                                    </span>
-                                  </div>
+                                                      {/* 7. Action */}
+                                                      <td className={`px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 z-10 bg-white/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)] ${cellBorderClass}`}>
+                                                        <Skeleton className="size-7 rounded-4xl bg-slate-200/60 animate-pulse ml-auto" />
+                                                      </td>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      {/* 1. Tiêu đề + Subtitle */}
+                                                      <td className={`pl-14 sm:pl-16 pr-4 sm:pr-5 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        <div data-run-row="run" className="flex min-w-0 flex-col gap-0.5">
+                                                          <div className="min-w-0 text-sm leading-5 font-medium flex items-center gap-1.5">
+                                                            <span
+                                                              className="text-slate-900 group-hover/run-row:text-[#1057FB] truncate transition-colors text-sm font-medium"
+                                                              title={capitalizeFirstLetter(getRequestDisplayTitle(req))}
+                                                            >
+                                                              {capitalizeFirstLetter(getRequestDisplayTitle(req))}
+                                                            </span>
+                                                            {pendingInfo.isPending && group.id !== "pending" && (
+                                                              <span
+                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-4xl text-[10px] font-medium shrink-0 border ${
+                                                                  pendingInfo.type === "po_pending"
+                                                                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                                                                    : pendingInfo.type === "frozen"
+                                                                    ? "bg-cyan-50 text-cyan-800 border-cyan-300"
+                                                                    : pendingInfo.type === "rejected"
+                                                                    ? "bg-rose-50 text-rose-800 border-rose-300"
+                                                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                                                                }`}
+                                                                title={
+                                                                  pendingInfo.type === "po_pending" 
+                                                                    ? "PO Pending: Quá hạn 24h PO chưa duyệt" 
+                                                                    : pendingInfo.type === "frozen"
+                                                                    ? `Tạm dừng: ${pendingInfo.reason || "Đóng băng tiến độ"}`
+                                                                    : pendingInfo.type === "rejected"
+                                                                    ? `Từ chối: ${pendingInfo.reason || "Đã từ chối bài toán"}`
+                                                                    : `Pending: ${pendingInfo.reason}`
+                                                                }
+                                                              >
+                                                                <span className={`size-1.5 rounded-full shrink-0 ${
+                                                                  pendingInfo.type === "po_pending" 
+                                                                    ? "bg-amber-500" 
+                                                                    : pendingInfo.type === "frozen"
+                                                                    ? "bg-cyan-500"
+                                                                    : pendingInfo.type === "rejected"
+                                                                    ? "bg-rose-500"
+                                                                    : "bg-slate-500"
+                                                                }`} />
+                                                                <span>{pendingInfo.label}</span>
+                                                              </span>
+                                                            )}
+                                                            <ArrowRight className="size-3 text-[#1057FB] shrink-0 -translate-x-1 opacity-0 transition-all group-hover/run-row:translate-x-0 group-hover/run-row:opacity-100 hidden sm:inline-block" />
+                                                          </div>
 
-                                  {/* Chữ bé dưới: Sản phẩm */}
-                                  <p className="text-slate-400 truncate text-xs leading-4 font-normal" title={prodName}>
-                                    <span className="truncate">{prodName}</span>
-                                  </p>
-                                </div>
-                              </td>
+                                                          {/* Dòng lý do Pending */}
+                                                          {pendingInfo.isPending && Boolean(pendingInfo.reason || req.pending_reason) && (
+                                                            <div className="flex items-center gap-1.5 text-xs min-w-0 my-0.5">
+                                                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0 leading-none">
+                                                                Lí do
+                                                              </span>
+                                                              <span 
+                                                                className="text-[#1057FB] text-xs font-normal truncate max-w-sm sm:max-w-md lg:max-w-lg" 
+                                                                title={pendingInfo.reason || req.pending_reason}
+                                                              >
+                                                                {pendingInfo.reason || req.pending_reason}
+                                                              </span>
+                                                            </div>
+                                                          )}
 
-                              {/* 3. Created by */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                {displayCreator ? (
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" />
-                                    <span className="text-xs text-slate-700 font-normal truncate" title={displayCreator}>
-                                      {displayCreator}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400 italic font-normal">
-                                    -
-                                  </span>
-                                )}
-                              </td>
+                                                          {/* Subtitle / Step / Context */}
+                                                          <p className="text-slate-400 truncate text-xs leading-4 flex items-center gap-1.5 font-normal">
+                                                            <span className="font-normal text-slate-500">{req.request_id}</span>
+                                                            <span>·</span>
+                                                            <span>Cập nhật {formatDateLabel(req.last_updated)}</span>
+                                                          </p>
+                                                        </div>
+                                                      </td>
 
-                              {/* 4. Designer */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                {isAssigned ? (
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
-                                    <span className="text-xs text-slate-700 font-normal truncate" title={displayName}>
-                                      {displayName}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400 italic font-normal">
-                                    Chưa phân công
-                                  </span>
-                                )}
-                              </td>
+                                                      {/* 2. Created by */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        {displayCreator ? (
+                                                          <div className="flex items-center gap-2 min-w-0">
+                                                            <UserAvatar name={displayCreator} avatarUrl={creatorAvatar} size="xs" />
+                                                            <span className="text-xs text-slate-700 font-normal truncate" title={displayCreator}>
+                                                              {displayCreator}
+                                                            </span>
+                                                          </div>
+                                                        ) : (
+                                                          <span className="text-xs text-slate-400 italic font-normal">
+                                                            -
+                                                          </span>
+                                                        )}
+                                                      </td>
 
-                              {/* 5. Trạng thái (Lifecycle State) */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                {pendingInfo.isPending ? (
-                                  <span
-                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${
-                                      pendingInfo.type === "po_pending"
-                                        ? "bg-amber-50 text-amber-800 border-amber-300"
-                                        : pendingInfo.type === "frozen"
-                                        ? "bg-cyan-50 text-cyan-800 border-cyan-300"
-                                        : pendingInfo.type === "rejected"
-                                        ? "bg-rose-50 text-rose-800 border-rose-300"
-                                        : "bg-slate-100 text-slate-800 border-slate-300"
-                                    }`}
-                                    title={`Trạng thái: ${pendingInfo.label}${pendingInfo.reason ? ` (${pendingInfo.reason})` : ""}`}
-                                  >
-                                    <span className={`size-1.5 rounded-full shrink-0 ${
-                                      pendingInfo.type === "po_pending"
-                                        ? "bg-amber-500"
-                                        : pendingInfo.type === "frozen"
-                                        ? "bg-cyan-500"
-                                        : pendingInfo.type === "rejected"
-                                        ? "bg-rose-500"
-                                        : "bg-slate-500"
-                                    }`} />
-                                    <span className="truncate">{pendingInfo.label || phaseInfo.name}</span>
-                                  </span>
-                                ) : (
-                                  <span
-                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
-                                    title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
-                                  >
-                                    <span className={`size-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
-                                    <span className="truncate">{phaseInfo.name}</span>
-                                  </span>
-                                )}
-                              </td>
+                                                      {/* 3. Designer */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        {isAssigned ? (
+                                                          <div className="flex items-center gap-2 min-w-0">
+                                                            <UserAvatar name={displayName} avatarUrl={designerAvatar} size="xs" />
+                                                            <span className="text-xs text-slate-700 font-normal truncate" title={displayName}>
+                                                              {displayName}
+                                                            </span>
+                                                          </div>
+                                                        ) : (
+                                                          <span className="text-xs text-slate-400 italic font-normal">
+                                                            Chưa phân công
+                                                          </span>
+                                                        )}
+                                                      </td>
 
-                              {/* 6. Priority */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-4xl text-xs font-medium border h-6 whitespace-nowrap ${priorityInfo.badgeClass}`}>
-                                  {priorityInfo.label}
-                                </span>
-                              </td>
+                                                      {/* 4. Trạng thái (Lifecycle State) */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        {pendingInfo.isPending ? (
+                                                          <span
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${
+                                                              pendingInfo.type === "po_pending"
+                                                                ? "bg-amber-50 text-amber-800 border-amber-300"
+                                                                : pendingInfo.type === "frozen"
+                                                                ? "bg-cyan-50 text-cyan-800 border-cyan-300"
+                                                                : pendingInfo.type === "rejected"
+                                                                ? "bg-rose-50 text-rose-800 border-rose-300"
+                                                                : "bg-slate-100 text-slate-800 border-slate-300"
+                                                            }`}
+                                                            title={`Trạng thái: ${pendingInfo.label}${pendingInfo.reason ? ` (${pendingInfo.reason})` : ""}`}
+                                                          >
+                                                            <span className={`size-1.5 rounded-full shrink-0 ${
+                                                              pendingInfo.type === "po_pending"
+                                                                ? "bg-amber-500"
+                                                                : pendingInfo.type === "frozen"
+                                                                ? "bg-cyan-500"
+                                                                : pendingInfo.type === "rejected"
+                                                                ? "bg-rose-500"
+                                                                : "bg-slate-500"
+                                                            }`} />
+                                                            <span className="truncate">{pendingInfo.label || phaseInfo.name}</span>
+                                                          </span>
+                                                        ) : (
+                                                          <span
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-4xl text-xs font-medium border shadow-2xs whitespace-nowrap h-6 ${cfg.inlineClasses.bg} ${cfg.inlineClasses.text} ${cfg.inlineClasses.border}`}
+                                                            title={`Trạng thái: ${phaseInfo.name}${phaseInfo.progress ? ` (${phaseInfo.progress}%)` : ""}`}
+                                                          >
+                                                            <span className={`size-1.5 rounded-full ${cfg.inlineClasses.dot} shrink-0`} />
+                                                            <span className="truncate">{phaseInfo.name}</span>
+                                                          </span>
+                                                        )}
+                                                      </td>
 
-                              {/* 7. Release */}
-                              <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap relative overflow-hidden contain-paint ${cellBorderClass}`}>
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                {releaseDate ? (
-                                  <span className="text-xs tabular-nums font-normal text-rose-600">
-                                    {formatDisplayDate(releaseDate)}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 text-xs">-</span>
-                                )}
-                              </td>
+                                                      {/* 5. Priority */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-4xl text-xs font-medium border h-6 whitespace-nowrap ${priorityInfo.badgeClass}`}>
+                                                          {priorityInfo.label}
+                                                        </span>
+                                                      </td>
 
-                              {/* 8. Action Menu */}
-                              <td
-                                className={cn(
-                                  "px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]",
-                                  actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-10",
-                                  isHighlighted
-                                    ? "bg-blue-50/95"
-                                    : isIncoming
-                                    ? "bg-blue-50/40"
-                                    : isMutating
-                                    ? "bg-slate-50/70"
-                                    : "bg-white/95 group-hover/run-row:bg-slate-50/95",
-                                  cellBorderClass
-                                )}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {isMutating && (
-                                  <div
-                                    className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
-                                  />
-                                )}
-                                <div className="relative inline-block text-left">
-                                  <motion.button
-                                    type="button"
-                                    whileHover={{ scale: 1.08 }}
-                                    whileTap={{ scale: 0.88 }}
-                                    transition={springs.snappy}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (actionMenuAnchor?.requestId === req.request_id) {
-                                        setActionMenuAnchor(null)
-                                      } else {
-                                        const rect = e.currentTarget.getBoundingClientRect()
-                                        setActionMenuAnchor({
-                                          requestId: req.request_id,
-                                          rect,
-                                          req,
-                                        })
-                                      }
-                                    }}
-                                    className={cn(
-                                      "size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer",
-                                      actionMenuAnchor?.requestId === req.request_id && "bg-slate-100 text-slate-800"
-                                    )}
-                                    title="Thao tác nhanh"
-                                  >
-                                    <MoreHorizontal className="size-4" />
-                                  </motion.button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </motion.tr>
-                          )
-                        })}
+                                                      {/* 6. Release */}
+                                                      <td className={`px-3 sm:px-4 py-3.5 sm:py-4 align-middle text-right whitespace-nowrap relative overflow-hidden contain-paint ${cellBorderClass}`}>
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        {releaseDate ? (
+                                                          <span className="text-xs tabular-nums font-normal text-rose-600">
+                                                            {formatDisplayDate(releaseDate)}
+                                                          </span>
+                                                        ) : (
+                                                          <span className="text-slate-300 text-xs">-</span>
+                                                        )}
+                                                      </td>
+
+                                                      {/* 7. Action Menu */}
+                                                      <td
+                                                        className={cn(
+                                                          "px-2 sm:px-3 py-3.5 sm:py-4 align-middle text-right w-[48px] min-w-[48px] sticky right-0 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06)]",
+                                                          actionMenuAnchor?.requestId === req.request_id ? "z-30" : "z-10",
+                                                          isHighlighted
+                                                            ? "bg-blue-50/95"
+                                                            : isIncoming
+                                                            ? "bg-blue-50/40"
+                                                            : isMutating
+                                                            ? "bg-slate-50/70"
+                                                            : "bg-white/95 group-hover/run-row:bg-slate-50/95",
+                                                          cellBorderClass
+                                                        )}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                      >
+                                                        {isMutating && (
+                                                          <div
+                                                            className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/20 to-transparent pointer-events-none z-10 animate-shimmer-sweep"
+                                                          />
+                                                        )}
+                                                        <div className="relative inline-block text-left">
+                                                          <motion.button
+                                                            type="button"
+                                                            whileHover={{ scale: 1.08 }}
+                                                            whileTap={{ scale: 0.88 }}
+                                                            transition={springs.snappy}
+                                                            onClick={(e) => {
+                                                              e.stopPropagation()
+                                                              if (actionMenuAnchor?.requestId === req.request_id) {
+                                                                setActionMenuAnchor(null)
+                                                              } else {
+                                                                const rect = e.currentTarget.getBoundingClientRect()
+                                                                setActionMenuAnchor({
+                                                                  requestId: req.request_id,
+                                                                  rect,
+                                                                  req,
+                                                                })
+                                                              }
+                                                            }}
+                                                            className={cn(
+                                                              "size-7 inline-flex items-center justify-center rounded-4xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer",
+                                                              actionMenuAnchor?.requestId === req.request_id && "bg-slate-100 text-slate-800"
+                                                            )}
+                                                            title="Thao tác nhanh"
+                                                          >
+                                                            <MoreHorizontal className="size-4" />
+                                                          </motion.button>
+                                                        </div>
+                                                      </td>
+                                                    </>
+                                                  )}
+                                                </motion.tr>
+                                              )
+                                            })}
+                                        </React.Fragment>
+                                      )
+                                    })}
                                 </React.Fragment>
                               )
                             })}
-                      </AnimatePresence>
-                    )}
-                  </React.Fragment>
-                )
-              })
-            })()}
+                          </AnimatePresence>
+                        )}
+                      </React.Fragment>
+                    )
+                  })
+                })()}
             </motion.tbody>
           )}
         </AnimatePresence>
