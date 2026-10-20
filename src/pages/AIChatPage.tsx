@@ -3219,6 +3219,42 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   aria-label="Lịch sử tin nhắn cuộc trò chuyện"
                   className="mx-auto max-w-4xl lg:max-w-5xl space-y-4 py-1"
                 >
+                  {/* Single ReUI Sticky Top Box for active question */}
+                  {(() => {
+                    const latestUserMsg = [...activeThread.messages]
+                      .reverse()
+                      .find((m) => m.sender === "user" || m.senderName !== "Echo Assistant");
+                    if (!latestUserMsg) return null;
+                    return (
+                      <div
+                        className="sticky top-0 z-20 w-full rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-md px-3.5 py-2 shadow-xs transition-all"
+                        aria-label="Câu hỏi đang đọc"
+                        data-testid="sticky-user-question"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200/70 dark:border-blue-800 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 select-none">
+                              <MessageSquare className="size-3 text-blue-600 dark:text-blue-400" />
+                              <span>Câu hỏi đang đọc</span>
+                            </span>
+                            <span
+                              className="truncate text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200"
+                              title={latestUserMsg.content}
+                            >
+                              {latestUserMsg.content}
+                            </span>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <EchoUserAvatar
+                              name={latestUserMsg.senderName}
+                              avatarUrl={latestUserMsg.senderAvatar}
+                              className="size-6"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {activeThread.messages.map((m, idx) => (
                     <EchoMessageRow
                       key={m.id || `msg-${idx}`}
@@ -6028,12 +6064,8 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
   if (isUser) {
     return (
-      <div
-        className="sticky top-0 z-20 flex items-end justify-end gap-2.5 py-1 pointer-events-none"
-        aria-label="Câu hỏi đang đọc"
-        data-testid="sticky-user-question"
-      >
-        <div className="pointer-events-auto flex max-w-[85%] flex-col items-end">
+      <div className="flex items-end justify-end gap-2.5">
+        <div className="flex max-w-[85%] flex-col items-end">
           <EchoUserMessageBubble
             message={message}
             isStreaming={isStreaming}
@@ -6044,13 +6076,11 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         </div>
 
         {/* User Avatar: Displays the avatar of whoever sent this message */}
-        <div className="pointer-events-auto shrink-0">
-          <EchoUserAvatar
-            name={message.senderName}
-            avatarUrl={message.senderAvatar}
-            className="size-8"
-          />
-        </div>
+        <EchoUserAvatar
+          name={message.senderName}
+          avatarUrl={message.senderAvatar}
+          className="size-8 shrink-0"
+        />
       </div>
     )
   }
