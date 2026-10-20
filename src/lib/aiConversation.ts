@@ -28,7 +28,7 @@ export interface TaskEntityScope extends TaskEntityOption {}
 
 export interface AggregateTaskResolution {
   mode: "all" | "filtered" | "clarify" | "none"
-  operation: "count" | "list" | "summary"
+  operation: "count" | "list" | "summary" | "risk"
   tasks: UXRequest[]
   options: TaskEntityOption[]
   scope?: TaskEntityScope
@@ -47,6 +47,16 @@ export interface TaskReferenceResolution {
 export interface GroundedAIResponse {
   content: string
   unknownTaskReferences: string[]
+}
+
+export type TaskHealthLevel = "critical" | "at_risk" | "watch" | "on_track" | "completed" | "unknown"
+
+export interface TaskHealthAssessment {
+  level: TaskHealthLevel
+  score: number
+  daysToDeadline: number | null
+  staleDays: number | null
+  signals: string[]
 }
 
 export const STOP_WORDS = new Set([
@@ -84,7 +94,7 @@ export function tokens(value: unknown): string[] {
 
 export function isAggregateTaskQuery(query: string): boolean {
   const q = normalizeConversationText(query)
-  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|so luong|dem|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|tung bai|tung task|cong viec gi|dang lam gi|lam cong viec gi|co nhung|squad|team|khau \d|khâu \d)\b/.test(q)
+  return /\b(tat ca|toan bo|danh sach|tong hop|bao nhieu|so luong|dem|phan bo|thong ke|cac bai|cac task|nhung bai|nhung task|bai nao|task nao|tung bai|tung task|cong viec gi|dang lam gi|lam cong viec gi|co nhung|squad|team|khau \d|khâu \d|task rui ro|task co nguy co|task sap tre|task qua han)\b/.test(q)
 }
 
 export function shouldResolveTaskQuery(
@@ -119,6 +129,7 @@ const AGGREGATE_QUERY_WORDS = new Set([
   "hanh", "trinh", "khau", "giai", "doan", "phase", "trang", "thai", "status", "chua",
   "chart", "bieudo", "bieu", "do", "ve", "truc", "quan", "phan", "bo", "tiendo",
   "hom", "nay", "lam", "gi", "moc", "thoi", "gian", "deadline", "tung", "phan", "dung", "lai", "buoc",
+  "rui", "ro", "nguy", "co", "tre", "han", "qua", "sap", "can", "chu", "y",
 ])
 
 function entityFieldValues(task: UXRequest): Array<{ field: TaskEntityField; value: string }> {
@@ -149,6 +160,7 @@ function detectRequestedEntityField(query: string): TaskEntityField | undefined 
 
 function aggregateOperation(query: string): AggregateTaskResolution["operation"] {
   const q = normalizeConversationText(query)
+  if (/\b(rui ro|nguy co|tre han|qua han|sap tre|can chu y)\b/.test(q)) return "risk"
   if (/\b(bao nhieu|so luong|dem)\b/.test(q)) return "count"
   if (/\b(danh sach|liet ke|nhung task|nhung bai|task nao|bai nao|tung task|tung bai|cong viec gi|dang lam gi|lam cong viec gi|co nhung)\b/.test(q)) return "list"
   return "summary"
@@ -190,6 +202,26 @@ function optionFromSelection(option: TaskEntityOption, tasks: UXRequest[]): Aggr
   }
 }
 
+function isActiveTask(task: UXRequest): boolean {
+  const status = normalizeConversationText(task.status)
+  return Number(task.progress || 0) < 100 && !/\b(hoan thanh|completed|done|closed|rejected|tu choi)\b/.test(status)
+}
+
+function applyAggregateQueryFilters(resolution: AggregateTaskResolution, query: string): AggregateTaskResolution {
+  const normalized = normalizeConversationText(query)
+  const activeOnly = /\b(dang doing|dang lam|dang thuc hien|in progress|chua hoan thanh|dang chay)\b/.test(normalized)
+  if (!activeOnly || (resolution.mode !== "filtered" && resolution.mode !== "all")) return resolution
+  const filteredTasks = resolution.tasks.filter(isActiveTask)
+  return {
+    ...resolution,
+    mode: resolution.mode === "all" ? "filtered" : resolution.mode,
+    tasks: filteredTasks,
+    scope: resolution.scope
+      ? { ...resolution.scope, label: `${resolution.scope.label} · đang thực hiện`, taskIds: filteredTasks.map(taskId) }
+      : resolution.scope,
+  }
+}
+
 export function resolveAggregateTaskQuery(
   query: string,
   tasks: UXRequest[],
@@ -216,10 +248,11 @@ export function resolveAggregateTaskQuery(
     }
   }
 
-  const referencesActiveScope = /\b(so do|trong so do|cac task nay|nhung task nay|tung task|tung bai|cac phan nay|nhung phan nay|cac bai do|nhung bai do|pham vi nay|nhom nay|chung)\b/.test(normalizedQuery)
+  const requestedField = detectRequestedEntityField(query)
+  const referencesActiveScope = /\b(so do|trong so do|cac task nay|nhung task nay|tung task|tung bai|cac phan nay|nhung phan nay|cac bai do|nhung bai do|pham vi nay|nhom nay|chung|chi tiet|tien do|cac task dang|task dang doing|dang doing)\b/.test(normalizedQuery)
   const queryTerm = extractAggregateEntityTerm(query)
-  if (activeScope && (referencesActiveScope || !queryTerm)) {
-    return { ...optionFromSelection(activeScope, tasks), operation }
+  if (activeScope && !requestedField && (referencesActiveScope || !queryTerm)) {
+    return applyAggregateQueryFilters({ ...optionFromSelection(activeScope, tasks), operation }, query)
   }
 
   const explicitlyAll = /\b(tat ca|toan bo|ca team|toan team)\b/.test(normalizedQuery)
@@ -230,7 +263,6 @@ export function resolveAggregateTaskQuery(
     return { mode: "all", operation, tasks, options: [], queryTerm: "", confidence: 0.9 }
   }
 
-  const requestedField = detectRequestedEntityField(query)
   const grouped = new Map<string, { field: TaskEntityField; value: string; tasks: UXRequest[]; score: number }>()
   for (const task of tasks) {
     for (const entry of entityFieldValues(task)) {
@@ -292,7 +324,7 @@ export function resolveAggregateTaskQuery(
 
   const selected = options[0]
   const resolved = optionFromSelection(selected, tasks)
-  return { ...resolved, operation, confidence: Math.min(0.98, bestScore / 100) }
+  return applyAggregateQueryFilters({ ...resolved, operation, confidence: Math.min(0.98, bestScore / 100) }, query)
 }
 
 export function buildAggregateClarification(resolution: AggregateTaskResolution): string {
@@ -307,12 +339,224 @@ export function buildAggregateClarification(resolution: AggregateTaskResolution)
   return `Mình thấy **“${resolution.queryTerm}”** có thể chỉ nhiều phạm vi:\n\n${choices}\n\nBạn muốn mình dùng phạm vi nào?\n\n\`\`\`suggestions\n${suggestions}\n\`\`\``
 }
 
+function parseTaskDate(value: unknown): Date | null {
+  const raw = String(value || "").trim()
+  if (!raw) return null
+
+  const dmy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s|$)/)
+  if (dmy) {
+    const parsed = new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])))
+    return parsed.getUTCFullYear() === Number(dmy[3])
+      && parsed.getUTCMonth() === Number(dmy[2]) - 1
+      && parsed.getUTCDate() === Number(dmy[1])
+      ? parsed
+      : null
+  }
+
+  const ymd = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T|\s|$)/)
+  if (ymd) {
+    const parsed = new Date(Date.UTC(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])))
+    return parsed.getUTCFullYear() === Number(ymd[1])
+      && parsed.getUTCMonth() === Number(ymd[2]) - 1
+      && parsed.getUTCDate() === Number(ymd[3])
+      ? parsed
+      : null
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function startOfUtcDay(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()))
+}
+
+function daysBetween(from: Date, to: Date): number {
+  return Math.ceil((startOfUtcDay(to).getTime() - startOfUtcDay(from).getTime()) / 86_400_000)
+}
+
+function latestTaskActivityDate(task: UXRequest): Date | null {
+  const candidates = [
+    task.last_updated,
+    task.latest_update?.date,
+    ...(task.task_updates || []).map((update) => update.timestamp),
+  ]
+    .map(parseTaskDate)
+    .filter((value): value is Date => Boolean(value))
+    .sort((a, b) => b.getTime() - a.getTime())
+  return candidates[0] || null
+}
+
+export function assessTaskHealth(task: UXRequest, now: Date = new Date()): TaskHealthAssessment {
+  const progress = Math.max(0, Math.min(100, Number(task.progress) || 0))
+  const status = normalizeConversationText(task.status)
+  const phase = normalizeConversationText(task.current_phase)
+  const deadline = parseTaskDate(task.design_deadline || task.expected_deadline)
+  const latestActivity = latestTaskActivityDate(task)
+  const daysToDeadline = deadline ? daysBetween(now, deadline) : null
+  const staleDays = latestActivity ? Math.max(0, daysBetween(latestActivity, now)) : null
+  const signals: string[] = []
+  let score = 0
+
+  const isCompleted = progress >= 100 || /\b(hoan thanh|completed|done|closed)\b/.test(status)
+  if (isCompleted) {
+    return { level: "completed", score: 0, daysToDeadline, staleDays, signals: ["Task đã hoàn thành"] }
+  }
+
+  if (/\b(reject|rejected|tu choi)\b/.test(status)) {
+    score += 100
+    signals.push("Task đang ở trạng thái từ chối")
+  } else if (/\b(freeze|frozen|tam dung|dong bang|blocked)\b/.test(`${status} ${phase}`)) {
+    score += 80
+    signals.push("Task đang bị tạm dừng hoặc chặn")
+  } else if (/\b(pending|cho phan hoi|cho duyet|cho po)\b/.test(`${status} ${phase}`)) {
+    score += 30
+    signals.push("Task đang chờ xử lý hoặc phản hồi")
+  }
+
+  if (daysToDeadline !== null) {
+    if (daysToDeadline < 0) {
+      score += 100
+      signals.push(`Quá hạn ${Math.abs(daysToDeadline)} ngày với tiến độ ${progress}%`)
+    } else if (daysToDeadline <= 2 && progress < 90) {
+      score += 75
+      signals.push(`Còn ${daysToDeadline} ngày nhưng tiến độ mới ${progress}%`)
+    } else if (daysToDeadline <= 7 && progress < 70) {
+      score += 50
+      signals.push(`Còn ${daysToDeadline} ngày và tiến độ ${progress}%`)
+    } else if (daysToDeadline <= 14 && progress < 40) {
+      score += 25
+      signals.push(`Còn ${daysToDeadline} ngày nhưng tiến độ dưới 40%`)
+    }
+  } else {
+    signals.push("Chưa có deadline để đánh giá rủi ro thời gian")
+  }
+
+  if (!task.assigned_designer?.trim()) {
+    score += 35
+    signals.push("Chưa có Designer phụ trách")
+  }
+  if (staleDays !== null && staleDays >= 14) {
+    score += 35
+    signals.push(`Chưa có cập nhật mới trong ${staleDays} ngày`)
+  } else if (staleDays !== null && staleDays >= 7) {
+    score += 15
+    signals.push(`Cập nhật gần nhất cách đây ${staleDays} ngày`)
+  }
+
+  const level: TaskHealthLevel = score >= 80
+    ? "critical"
+    : score >= 50
+    ? "at_risk"
+    : score >= 20
+    ? "watch"
+    : deadline || latestActivity
+    ? "on_track"
+    : "unknown"
+
+  if (signals.length === 0) signals.push("Chưa phát hiện tín hiệu rủi ro theo dữ liệu hiện có")
+  return { level, score, daysToDeadline, staleDays, signals }
+}
+
+export function isTaskHealthQuery(query: string): boolean {
+  const q = normalizeConversationText(query)
+  return /\b(rui ro|nguy co|tre han|qua han|sap tre|deadline|han hoan thanh|can chu y|co van de)\b/.test(q)
+}
+
+const HEALTH_LABELS: Record<TaskHealthLevel, string> = {
+  critical: "Nguy cấp",
+  at_risk: "Có rủi ro",
+  watch: "Cần theo dõi",
+  on_track: "Đang trong tầm kiểm soát",
+  completed: "Đã hoàn thành",
+  unknown: "Chưa đủ dữ liệu",
+}
+
+export function buildDeterministicTaskHealthAnswer(
+  query: string,
+  task: UXRequest,
+  now: Date = new Date()
+): string {
+  if (!isTaskHealthQuery(query)) return ""
+  const assessment = assessTaskHealth(task, now)
+  const id = taskId(task)
+  const deadline = task.design_deadline || task.expected_deadline || "Chưa có"
+  const progress = Math.max(0, Math.min(100, Number(task.progress) || 0))
+  const facts = [
+    `Tiến độ: **${progress}%**`,
+    `Deadline: **${deadline}**`,
+    `Trạng thái: **${task.status || "Chưa cập nhật"}**`,
+    `Khâu hiện tại: **${task.current_phase || "Chưa cập nhật"}**`,
+  ]
+  const recommendation = assessment.level === "critical"
+    ? "Cần kiểm tra blocker và thống nhất lại mốc xử lý ngay."
+    : assessment.level === "at_risk"
+    ? "Nên rà soát blocker, khối lượng còn lại và xác nhận khả năng giữ deadline."
+    : assessment.level === "watch"
+    ? "Nên cập nhật tiến độ và theo dõi sát ở lần kiểm tra tiếp theo."
+    : assessment.level === "unknown"
+    ? "Cần bổ sung deadline, người phụ trách hoặc cập nhật gần nhất trước khi kết luận."
+    : "Tiếp tục theo dõi theo nhịp cập nhật hiện tại."
+
+  return `## [${id}] ${task.nickname || task.title}\n\n` +
+    `**Đánh giá:** ${HEALTH_LABELS[assessment.level]}\n\n` +
+    `### Dữ kiện\n${facts.map((fact) => `- ${fact}`).join("\n")}\n\n` +
+    `### Tín hiệu đánh giá\n${assessment.signals.map((signal) => `- ${signal}`).join("\n")}\n\n` +
+    `### Đề xuất\n- ${recommendation}\n\n` +
+    `_Đây là đánh giá theo quy tắc từ dữ liệu hiện có, không phải thay đổi trạng thái task._\n\n` +
+    `---\n**Nguồn tham chiếu đã nạp:** [${id}]\n\n` +
+    `\`\`\`suggestions\n- Xem cập nhật gần nhất\n- Kiểm tra blocker\n- So sánh task liên quan\n\`\`\``
+}
+
 export function buildDeterministicAggregateAnswer(
   resolution: AggregateTaskResolution,
-  totalAccessibleTasks: number
+  totalAccessibleTasks: number,
+  now: Date = new Date()
 ): string {
   if (resolution.mode !== "filtered" && resolution.mode !== "all") return ""
   const count = resolution.tasks.length
+  if (resolution.operation === "risk") {
+    const riskyTasks = resolution.tasks
+      .map((task) => ({ task, health: assessTaskHealth(task, now) }))
+      .filter(({ health }) => ["critical", "at_risk", "watch"].includes(health.level))
+      .sort((a, b) => b.health.score - a.health.score || taskId(a.task).localeCompare(taskId(b.task)))
+    const scope = resolution.scope?.label || "phạm vi được phép truy cập"
+    if (riskyTasks.length === 0) {
+      return `Chưa phát hiện task có tín hiệu rủi ro rõ ràng trong **${scope}** theo deadline, tiến độ, trạng thái chặn và độ mới cập nhật.\n\n_Đánh giá này chỉ dựa trên dữ liệu hiện có._\n\n\`\`\`suggestions\n- Xem toàn bộ task\n- Kiểm tra deadline\n- Lọc theo Designer\n\`\`\``
+    }
+    const rows = riskyTasks.slice(0, 12).map(({ task, health }, index) =>
+      `${index + 1}. **[${taskId(task)}] ${task.nickname || task.title}** — ${HEALTH_LABELS[health.level]}\n   - ${health.signals.join("; ")}`
+    )
+    const remaining = Math.max(0, riskyTasks.length - 12)
+    return `Có **${riskyTasks.length}/${count} task** cần chú ý trong **${scope}**:\n\n${rows.join("\n")}` +
+      (remaining > 0 ? `\n\n_Còn ${remaining} task khác có tín hiệu rủi ro._` : "") +
+      `\n\n_Đánh giá được tính bằng quy tắc từ deadline, tiến độ, trạng thái chặn và độ mới cập nhật; AI không tự suy đoán số liệu._` +
+      `\n\n---\n**Nguồn tham chiếu đã nạp:** ${riskyTasks.map(({ task }) => `[${taskId(task)}]`).join(", ")}` +
+      `\n\n\`\`\`suggestions\n- Xem task nguy cấp nhất\n- Lọc theo Designer\n- So sánh deadline\n\`\`\``
+  }
+  if (resolution.operation === "summary") {
+    const scope = resolution.scope?.label || "phạm vi được phép truy cập"
+    const progressValues = resolution.tasks.map((task) => Math.max(0, Math.min(100, Number(task.progress) || 0)))
+    const averageProgress = count > 0
+      ? Math.round(progressValues.reduce((sum, progress) => sum + progress, 0) / count)
+      : 0
+    const completedCount = resolution.tasks.filter((task) => !isActiveTask(task)).length
+    const rows = resolution.tasks.slice(0, 12).map((task) => {
+      const deadline = task.design_deadline || task.expected_deadline || "Chưa có"
+      const phase = task.current_phase || "Chưa cập nhật"
+      const status = task.status || "Chưa cập nhật"
+      const progress = Math.max(0, Math.min(100, Number(task.progress) || 0))
+      return `| [${taskId(task)}] | ${task.nickname || task.title} | ${progress}% | ${phase} | ${status} | ${deadline} |`
+    })
+    const remaining = Math.max(0, count - 12)
+    const sourceIds = resolution.tasks.slice(0, 12).map((task) => `[${taskId(task)}]`).join(", ")
+    return `Có **${count} task** thuộc **${scope}**, tiến độ trung bình **${averageProgress}%**${completedCount > 0 ? `; ${completedCount} task đã hoàn thành/dừng` : ""}.\n\n` +
+      `| Mã task | Bài toán | Tiến độ | Khâu hiện tại | Trạng thái | Deadline |\n` +
+      `|---|---|---:|---|---|---|\n${rows.join("\n")}` +
+      (remaining > 0 ? `\n\n_Còn ${remaining} task khác trong cùng phạm vi._` : "") +
+      `\n\n---\n**Nguồn tham chiếu đã nạp:** ${sourceIds}` +
+      `\n\n\`\`\`suggestions\n- Xem task đang thực hiện\n- Phân tích task rủi ro\n- So sánh deadline\n\`\`\``
+  }
   if (resolution.operation === "list") {
     const visibleTasks = resolution.tasks.slice(0, 12)
     const rows = visibleTasks.map((task, index) => {
@@ -486,11 +730,42 @@ export function resolveTaskReference(
   if (explicitId) {
     return { task: explicitId, candidates: [explicitId], confidence: 1, method: "request_id", isFollowUp: followUp }
   }
+  const hasUnresolvedExplicitId = /\b[A-Z]{2,12}[\s_-]*\d{1,12}\b/i.test(query)
+  if (hasUnresolvedExplicitId) {
+    return { task: null, candidates: [], confidence: 1, method: "none", isFollowUp: followUp }
+  }
 
   const coreTopic = extractCoreTopic(query)
   const topicNorm = normalizeConversationText(coreTopic)
   const queryTokens = new Set(tokens(query))
   const topicTokens = new Set(tokens(coreTopic))
+
+  // Khi người dùng nêu rõ "sản phẩm", phạm vi đúng là mọi task thuộc product đó.
+  // Không để một nickname/title có điểm cao hơn khiến resolver tự chọn sai một task đơn lẻ.
+  if (/\b(san pham|product)\b/.test(q) && topicNorm.length >= 2) {
+    const productMatches = tasks.filter((task) => {
+      const product = normalizeConversationText(task.product || task.product_name)
+      return product === topicNorm || product.includes(topicNorm) || topicNorm.includes(product)
+    })
+    if (productMatches.length > 1) {
+      return {
+        task: null,
+        candidates: productMatches.slice(0, 5),
+        confidence: 0.9,
+        method: "ambiguous",
+        isFollowUp: followUp,
+      }
+    }
+    if (productMatches.length === 1) {
+      return {
+        task: productMatches[0],
+        candidates: productMatches,
+        confidence: 0.95,
+        method: "semantic",
+        isFollowUp: followUp,
+      }
+    }
+  }
 
   // Extract phase filter if any (khâu 1 -> 7)
   const khauMatch = q.match(/khau\s*([1-7])/)

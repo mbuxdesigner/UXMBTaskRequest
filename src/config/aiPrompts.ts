@@ -333,9 +333,10 @@ export function computeTaskMetrics(tasks: UXRequest[], now = new Date()): Precom
 export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): UXArtifact[] {
   if (!query || !artifacts || artifacts.length === 0) return []
 
-  // Cho phép tra cứu cả tài liệu mặc định lẫn tài liệu do người dùng tải lên (ngoại trừ tài liệu đã retired)
+  // Tài liệu hệ thống mặc định được phép tra cứu; tài liệu custom phải được duyệt rõ ràng.
   const candidateArtifacts = artifacts.filter(
     (artifact) => artifact.approvalStatus !== "retired"
+      && (!artifact.isCustomUploaded || artifact.approvalStatus === "approved")
   )
   
   const q = query.toLowerCase().trim()

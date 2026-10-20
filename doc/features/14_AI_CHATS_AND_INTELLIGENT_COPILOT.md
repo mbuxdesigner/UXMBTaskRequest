@@ -4,7 +4,7 @@
 > **Owner:** UX Platform / Design Ops
 > **Thời gian đọc mục tiêu:** 15 phút
 > **Trạng thái:** Read-only, gateway-managed, fail-closed
-> **Last Updated:** 2026-10-05
+> **Last Updated:** 2026-10-20
 
 ## 1. Tổng quan và kiến trúc
 
@@ -67,6 +67,33 @@ flowchart LR
 7. `groundAIResponse` kiểm tra mã task và gắn danh sách nguồn tham chiếu đã nạp.
 8. Thread được lưu cục bộ; chỉ đồng bộ cloud sau khi người dùng chủ động bật.
 
+### Phân tích sức khỏe task có thể kiểm chứng
+
+Các câu hỏi về deadline, nguy cơ trễ hoặc task cần chú ý được xử lý trước bằng rule engine trong `aiConversation.ts`, thay vì yêu cầu mô hình tự suy đoán số liệu:
+
+- Chuẩn hóa deadline dạng `DD/MM/YYYY`, `YYYY-MM-DD` hoặc ISO và loại ngày không hợp lệ.
+- Đối chiếu số ngày còn lại với tiến độ hiện tại.
+- Phát hiện trạng thái `Pending`, `Freeze`, `Blocked` hoặc `Rejected`.
+- Kiểm tra task chưa có Designer và thời gian từ cập nhật gần nhất.
+- Phân loại `Nguy cấp`, `Có rủi ro`, `Cần theo dõi`, `Trong tầm kiểm soát`, `Đã hoàn thành` hoặc `Chưa đủ dữ liệu`.
+- Trả lời tách biệt dữ kiện, tín hiệu đánh giá và đề xuất; luôn giữ chế độ read-only.
+
+Ngưỡng hiện tại: quá hạn hoặc bị từ chối là nguy cấp; còn tối đa 2 ngày với tiến độ dưới 90% là nguy cấp; còn tối đa 7 ngày với tiến độ dưới 70% là có rủi ro; không cập nhật từ 7/14 ngày lần lượt làm tăng mức cần theo dõi/rủi ro.
+
+### Vòng lặp tự đánh giá offline
+
+`scripts/run-ai-evaluation.mjs` chạy dataset `tests/fixtures/ai-evaluation-cases.json` mà không gọi provider hoặc dùng secrets. Bộ đánh giá hiện bao phủ resolver, follow-up memory, ambiguity, aggregate scope, task health, grounding, task access scope, chính sách tài liệu custom approved-only và hội thoại thực tế nhiều lượt.
+
+Mỗi lần chạy sẽ:
+
+1. Cố định thời điểm đánh giá để kết quả deadline không thay đổi theo ngày chạy.
+2. Chấm từng case và từng nhóm chất lượng.
+3. Bắt buộc nhóm `security` và `grounding` đạt 100%; tổng điểm tối thiểu 95%.
+4. Xuất báo cáo cục bộ tại `scratch/ai-evaluation/latest.md` và `latest.json`.
+5. Trả exit code khác 0 khi không qua quality gate để CI chặn build/deploy.
+
+Khi phát hiện lỗi thực tế, thêm một case tái hiện vào fixture trước khi sửa code. Case đó trở thành regression test vĩnh viễn cho các lần nâng cấp sau.
+
 ### Storage và giới hạn
 
 | Dữ liệu | Nơi lưu | Chính sách |
@@ -85,6 +112,7 @@ flowchart LR
 | `EMPTY_STATE_CATEGORIES` | Empty state và OP cho Designer | Kiểm tra chỉ còn Task và Quy định |
 | `CORE_SYSTEM_PROMPT` | Phạm vi và cách AI trả lời | Test out-of-scope, prompt injection, không tạo action |
 | `resolveTaskReference` | Câu hỏi nối tiếp và task mơ hồ | `pnpm run test:ai-intelligence` |
+| `assessTaskHealth` | Deadline, tiến độ và phân loại rủi ro | Test ngày quá hạn/sắp hạn, task hoàn thành, stale update và dữ liệu thiếu |
 | `groundAIResponse` | Citation và chống bịa mã | Test mã task không tồn tại |
 | `streamAICompletion` | Mọi phản hồi LLM | Audit 401/429/503, abort và retry |
 | `verifySessionToken` | Toàn bộ AI gateway | Test token thật, token giả và cache invalidation |
@@ -110,6 +138,7 @@ flowchart LR
 ```powershell
 pnpm install --frozen-lockfile
 pnpm run test:ai-intelligence
+pnpm run test:ai-eval
 node --experimental-strip-types tests/test-ai-chats-e2e-and-audit.mjs
 pnpm run build
 pnpm audit --prod
@@ -118,8 +147,9 @@ git diff --check
 
 Kỳ vọng hiện tại:
 
-- Conversation intelligence: `15/15`.
-- AI E2E & security audit: `176/176`.
+- Conversation intelligence: `47/47`.
+- Offline evaluation quality gate: `18/18`, tổng điểm `100%`, security và grounding `100%`.
+- AI E2E & security audit: `177/177`.
 - Production build: pass.
 - Production dependency audit: không có vulnerability đã biết.
 
@@ -135,4 +165,7 @@ Kỳ vọng hiện tại:
 
 ### Changelog
 
+- `2026-10-20`: Bổ sung rule engine phân tích sức khỏe task, trả lời deterministic cho câu hỏi deadline/rủi ro và tổng hợp task cần chú ý; thêm kiểm thử ngày, tiến độ, stale update và grounding nguồn task.
+- `2026-10-20`: Bổ sung evaluation harness offline, báo cáo tự động và CI quality gate; sửa resolver phạm vi sản phẩm và chặn tài liệu custom `draft` khỏi retrieval quy định.
+- `2026-10-20`: Bổ sung regression case từ hội thoại thật “tổng hợp task của Phong”; thêm deterministic summary dạng bảng và giữ entity scope cho câu hỏi nối tiếp về chi tiết/tiến độ/task đang thực hiện.
 - `2026-10-05`: Thu hẹp phạm vi về Task + Quy định; chuyển toàn bộ provider access qua gateway; bổ sung auth, distributed rate limit, private cloud chat, approved-document retrieval, Mermaid sanitization và test gates.

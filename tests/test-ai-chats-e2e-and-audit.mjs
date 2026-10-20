@@ -2149,8 +2149,8 @@ if (fs.existsSync(aiPromptsPath) && fs.existsSync(aiArtifactsPath)) {
     assert.ok(systemMsg.content.includes("Design Ops Copilot") || systemMsg.content.includes("MBBank"), "System message must contain MB persona")
   })
 
-  // INT-PROMPT-05: searchArtifactsByQuery matches custom-uploaded documents without approvalStatus restriction
-  runTest("Integration", "INT-PROMPT-05", "src/config/aiPrompts.ts: searchArtifactsByQuery automatically matches custom uploaded docs (e.g. Nguye_tac_lam_viec.md)", () => {
+  // INT-PROMPT-05: approved custom documents are searchable; unapproved custom docs are excluded.
+  runTest("Integration", "INT-PROMPT-05", "src/config/aiPrompts.ts: searchArtifactsByQuery matches approved custom uploaded docs", () => {
     const mockArtifacts = [
       {
         id: "art-custom-1",
@@ -2159,6 +2159,7 @@ if (fs.existsSync(aiPromptsPath) && fs.existsSync(aiArtifactsPath)) {
         summary: "Quy định và nguyên tắc làm việc đội ngũ",
         tags: ["Nguyên tắc", "Quy định"],
         isCustomUploaded: true,
+        approvalStatus: "approved",
       },
       {
         id: "art-seed-1",
@@ -2762,6 +2763,21 @@ runTest("Integration", "INT-SIDEBAR-PORTAL-01", "EchoSidebarRow: verify thread a
   assert.ok(pageSrc.includes("thread-menu-popover-"), "Must define portal-based popover element")
   assert.ok(pageSrc.includes("position: \"fixed\""), "Must use fixed position for dropdown")
   assert.ok(pageSrc.includes("zIndex: 99999"), "Must elevate dropdown z-index to top level")
+})
+
+runTest("UX", "UX-READING-SPACE-01", "AIChatPage: keep the active user question visible while reading a long answer", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(pageSrc.includes('data-testid="sticky-user-question"'), "Must expose a stable sticky-question hook")
+  assert.ok(pageSrc.includes('className="sticky top-0'), "User question must stick to the top of the chat viewport")
+  assert.ok(pageSrc.includes('aria-label="Câu hỏi đang đọc"'), "Sticky question must have an accessible label")
+})
+
+runTest("UX", "UX-READING-SPACE-02", "AIChatPage: collapse supporting evidence and lay follow-up suggestions out compactly", () => {
+  const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.match(pageSrc, /<details[^>]+data-testid="ai-grounding-sources"/)
+  assert.ok(pageSrc.includes("group-open:rotate-180"), "Grounding disclosure must communicate expanded state")
+  assert.ok(pageSrc.includes("flex flex-wrap items-center justify-end"), "Follow-up suggestions must use a compact wrapping row")
+  assert.ok(pageSrc.includes("Math.min(textareaRef.current.scrollHeight, 140)"), "Composer growth must be capped to preserve reading space")
 })
 
 // ==============================================================================

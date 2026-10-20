@@ -1,14 +1,17 @@
 import assert from "node:assert/strict"
 import fs from "node:fs"
 import {
+  assessTaskHealth,
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
   buildDeterministicTaskDetailAnswer,
+  buildDeterministicTaskHealthAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
   isAggregateTaskQuery,
   isContextualFollowUp,
+  isTaskHealthQuery,
   normalizeConversationText,
   resolveAggregateTaskQuery,
   resolveTaskReference,
@@ -134,6 +137,57 @@ test("Nội dung task được trả trực tiếp từ ba trường nghiệp v�
   assert.match(answer, /Giảm thời gian vận hành/)
 })
 
+test("Đánh giá sức khỏe task dùng deadline, tiến độ và độ mới cập nhật", () => {
+  const riskyTask = {
+    ...tasks[0],
+    progress: 35,
+    expected_deadline: "18/10/2026",
+    last_updated: "01/10/2026",
+    status: "Đang xử lý",
+  }
+  const health = assessTaskHealth(riskyTask, new Date("2026-10-20T00:00:00.000Z"))
+  assert.equal(health.level, "critical")
+  assert.equal(health.daysToDeadline, -2)
+  assert.equal(health.staleDays, 19)
+  assert.ok(health.signals.some((signal) => signal.includes("Quá hạn 2 ngày")))
+})
+
+test("Câu hỏi rủi ro được trả lời bằng dữ kiện có cấu trúc", () => {
+  const riskyTask = {
+    ...tasks[0],
+    progress: 50,
+    expected_deadline: "22/10/2026",
+    last_updated: "19/10/2026",
+    status: "Đang xử lý",
+  }
+  assert.equal(isTaskHealthQuery("Task này có nguy cơ trễ không?"), true)
+  const answer = buildDeterministicTaskHealthAnswer(
+    "Task này có nguy cơ trễ không?",
+    riskyTask,
+    new Date("2026-10-20T00:00:00.000Z")
+  )
+  assert.match(answer, /\[UXMB-101\]/)
+  assert.match(answer, /Còn 2 ngày nhưng tiến độ mới 50%/)
+  assert.match(answer, /Nguồn tham chiếu đã nạp/)
+  assert.match(answer, /không phải thay đổi trạng thái task/)
+})
+
+test("Tổng hợp task rủi ro được tính bằng quy tắc thay vì để AI tự đoán", () => {
+  const healthTasks = [
+    { ...tasks[0], progress: 25, expected_deadline: "19/10/2026", last_updated: "18/10/2026", status: "Đang xử lý" },
+    { ...tasks[1], progress: 100, expected_deadline: "25/10/2026", last_updated: "19/10/2026", status: "Hoàn thành" },
+  ]
+  assert.equal(isAggregateTaskQuery("Task nào có nguy cơ trễ?"), true)
+  const resolution = resolveAggregateTaskQuery("Task nào có nguy cơ trễ?", healthTasks)
+  assert.equal(resolution.mode, "all")
+  assert.equal(resolution.operation, "risk")
+  const answer = buildDeterministicAggregateAnswer(resolution, healthTasks.length, new Date("2026-10-20T00:00:00.000Z"))
+  assert.match(answer, /1\/2 task/)
+  assert.match(answer, /UXMB-101/)
+  assert.doesNotMatch(answer, /UXMB-102/)
+  assert.match(answer, /AI không tự suy đoán số liệu/)
+})
+
 test("Task đã resolve được giữ trong structured tool dù follow-up không trùng từ khóa", () => {
   const plan = createQueryPlan("nội dung triển khai là gì", "task_analysis")
   const result = executeQueryPlan(plan, [tasks[0]], [], { trustedTaskScope: true })
@@ -234,6 +288,13 @@ test("Không match bừa câu hỏi general vào task", () => {
   const result = resolveTaskReference("Hôm nay là thứ mấy?", tasks)
   assert.equal(result.task, null)
   assert.equal(result.method, "none")
+})
+
+test("Mã task không tồn tại trong scope không được fuzzy-match sang task khác", () => {
+  const result = resolveTaskReference("Mở task SEC-999", tasks)
+  assert.equal(result.task, null)
+  assert.equal(result.method, "none")
+  assert.deepEqual(result.candidates, [])
 })
 
 test("Grounding tự thêm nguồn task và tài liệu", () => {
@@ -392,6 +453,38 @@ test("Câu hỏi một người đang làm gì được hiểu là danh sách ta
   )
   assert.equal(followUp.mode, "filtered")
   assert.deepEqual(followUp.tasks.map((item) => item.request_id).sort(), ["P-001", "P-002"])
+})
+
+test("Hội thoại thật của Phong giữ phạm vi và trả chi tiết tiến độ thay vì tìm cả câu như tên task", () => {
+  const phongTasks = [
+    task("UXMB-20261005-002", "CCQ Thay đổi tài khoản", "TransferD", { assigned_designer: "Phong", progress: 40, current_phase: "User Flow", status: "Đang thực hiện", expected_deadline: "30/10/2026" }),
+    task("UXMB-20261002-001", "Update UI chuyển nhượng CDs", "TransferD", { assigned_designer: "Phong", progress: 70, current_phase: "UI Design", status: "Đang thực hiện", expected_deadline: "31/12/2026" }),
+    task("UXMB-20260923-001", "Tích hợp DIGI x BeeRich", "BeeRich", { assigned_designer: "Phong", progress: 100, current_phase: "Hoàn thành", status: "Hoàn thành", expected_deadline: "30/09/2026" }),
+  ]
+
+  const first = resolveAggregateTaskQuery("tổng hợp task của Phong", phongTasks)
+  assert.equal(first.mode, "filtered")
+  assert.equal(first.operation, "summary")
+  assert.equal(first.scope?.field, "assignee")
+  const firstAnswer = buildDeterministicAggregateAnswer(first, phongTasks.length, new Date("2026-10-20T00:00:00.000Z"))
+  assert.match(firstAnswer, /Có \*\*3 task\*\*/)
+  assert.match(firstAnswer, /CCQ Thay đổi tài khoản/)
+  assert.match(firstAnswer, /70%/)
+
+  const followUp = resolveAggregateTaskQuery(
+    "tôi muốn biết chi tiết và tiến độ các task đang doing",
+    phongTasks,
+    [],
+    first.scope
+  )
+  assert.equal(followUp.mode, "filtered")
+  assert.equal(followUp.scope?.field, "assignee")
+  assert.deepEqual(followUp.tasks.map((item) => item.request_id).sort(), ["UXMB-20261002-001", "UXMB-20261005-002"])
+  const followUpAnswer = buildDeterministicAggregateAnswer(followUp, phongTasks.length, new Date("2026-10-20T00:00:00.000Z"))
+  assert.match(followUpAnswer, /CCQ Thay đổi tài khoản/)
+  assert.match(followUpAnswer, /Update UI chuyển nhượng CDs/)
+  assert.doesNotMatch(followUpAnswer, /Tích hợp DIGI x BeeRich/)
+  assert.doesNotMatch(followUpAnswer, /chưa tìm thấy task nào/i)
 })
 
 test("File đang xem được tách khỏi file chủ động gắn vào chat", () => {

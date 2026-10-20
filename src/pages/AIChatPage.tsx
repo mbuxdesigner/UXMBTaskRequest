@@ -71,6 +71,7 @@ import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
   buildDeterministicTaskDetailAnswer,
+  buildDeterministicTaskHealthAnswer,
   buildTaskRetrievalQuery,
   createConversationMemory,
   groundAIResponse,
@@ -1747,7 +1748,10 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const deterministicTaskDetailAnswer = resolvedTask
       ? buildDeterministicTaskDetailAnswer(cleanText, resolvedTask)
       : ""
-    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || deterministicTaskDetailAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
+    const deterministicTaskHealthAnswer = resolvedTask
+      ? buildDeterministicTaskHealthAnswer(cleanText, resolvedTask)
+      : ""
+    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || deterministicTaskDetailAnswer || deterministicTaskHealthAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
       ? `Mình tìm thấy nhiều bài toán phù hợp:\n\n${taskResolution.candidates
           .map((task, index) => `${index + 1}. **[${task.request_id}]** ${task.nickname || task.title}`)
           .join("\n")}\n\nBạn muốn mình phân tích bài toán nào?`
@@ -3075,7 +3079,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               className="flex-1 min-h-0 flex flex-col overflow-hidden w-full h-full relative"
             >
             {/* Scrollable Message Viewport */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 sm:px-5">
               {!activeThread?.messages || activeThread.messages.length === 0 ? (
                 /* Empty State (Exact match to Echo Chat UI with 100% MBBank UX Domain Content) */
                 <div className="mx-auto flex w-full max-w-4xl lg:max-w-5xl flex-col justify-center py-6 sm:py-10">
@@ -3213,7 +3217,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   aria-live="polite"
                   aria-relevant="additions text"
                   aria-label="Lịch sử tin nhắn cuộc trò chuyện"
-                  className="mx-auto max-w-4xl lg:max-w-5xl space-y-6 py-2"
+                  className="mx-auto max-w-4xl lg:max-w-5xl space-y-4 py-1"
                 >
                   {activeThread.messages.map((m, idx) => (
                     <EchoMessageRow
@@ -3250,7 +3254,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             {/* ───────────────────────────────────────────────────────────── */}
             {/* COMPOSER (SEAMLESS DOCK BAR WITH RESTORED USAGE BAR)           */}
             {/* ───────────────────────────────────────────────────────────── */}
-            <div className="shrink-0 px-4 sm:px-6 lg:px-8 pb-3.5 pt-1 z-20">
+            <div className="shrink-0 px-3 sm:px-5 lg:px-6 pb-2 pt-1 z-20 bg-gradient-to-t from-[#FCFCFD] via-[#FCFCFD] to-transparent">
               <div className="mx-auto w-full max-w-4xl lg:max-w-5xl">
                 {/* Real-time MBBank AI Quota Status (Cursor-style Model Group Separation) */}
                 {showUsageNotice && (
@@ -5252,7 +5256,7 @@ function EchoFollowUpSuggestions({
       variants={staggerContainerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col items-end gap-1.5 pt-3"
+      className="flex flex-wrap items-center justify-end gap-1.5 pt-2"
     >
       {suggestions.map((sug, idx) => (
         <motion.button
@@ -6024,14 +6028,23 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
   if (isUser) {
     return (
-      <div className="flex items-end justify-end gap-2.5">
-        <EchoUserMessageBubble
-          message={message}
-          isStreaming={isStreaming}
-          onEditAndResend={(newText) => {
-            if (onEditPrompt) onEditPrompt(newText)
-          }}
-        />
+      <div
+        className="sticky top-0 z-30 -mx-2 flex items-end justify-end gap-2.5 border-b border-slate-200/70 bg-white/95 px-2 py-2 shadow-[0_8px_18px_-18px_rgba(15,23,42,0.65)] backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/90"
+        aria-label="Câu hỏi đang đọc"
+        data-testid="sticky-user-question"
+      >
+        <div className="flex min-w-0 flex-1 flex-col items-end">
+          <span className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+            Câu hỏi đang đọc
+          </span>
+          <EchoUserMessageBubble
+            message={message}
+            isStreaming={isStreaming}
+            onEditAndResend={(newText) => {
+              if (onEditPrompt) onEditPrompt(newText)
+            }}
+          />
+        </div>
 
         {/* User Avatar: Displays the avatar of whoever sent this message */}
         <EchoUserAvatar
@@ -6072,7 +6085,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
       <div className="flex-1 min-w-0 pt-0.5">
         {/* Khối quy trình phân tích & mạch suy nghĩ (AgentActivityTrace của Executive Summary) */}
         {(isStreaming || message.traceData || message.isThinkingComplete || message.processSteps) && (
-          <div className="mb-3 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 p-3 shadow-2xs overflow-hidden">
+          <div className="mb-2 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 p-2 shadow-2xs overflow-hidden">
             <AgentActivityTrace
               activeTasks={message.traceData ? message.traceData.activeTasks : (intelligence?.activeAssignedTasks || tasks || [])}
               summaryProjects={message.traceData ? message.traceData.summaryProjects : (intelligence?.activeAssignedTasks || tasks || [])}
@@ -6123,15 +6136,21 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         )}
 
         {message.grounding && message.content && (
-          <div className="mt-3 rounded-lg border border-border/70 bg-muted/35 px-3 py-2 text-xs" data-testid="ai-grounding-sources">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-foreground">Nguồn kiểm chứng</span>
-              <span className="text-muted-foreground">
-                Độ tin cậy {Math.round(message.grounding.confidence * 100)}%
+          <details className="group mt-2 rounded-lg border border-border/70 bg-muted/35 text-xs" data-testid="ai-grounding-sources">
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-foreground outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-slate-900/20 [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex min-w-0 items-center gap-2 font-medium">
+                <span>Nguồn kiểm chứng</span>
+                <span className="rounded-full bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-border">
+                  {message.grounding.sources?.length || 0}
+                </span>
               </span>
-            </div>
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground">
+                Độ tin cậy {Math.round(message.grounding.confidence * 100)}%
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </span>
+            </summary>
             {message.grounding.sources && message.grounding.sources.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 border-t border-border/70 px-3 py-2.5">
                 {message.grounding.sources.map((source) => (
                   <span
                     key={`${message.id}-${source.id}`}
@@ -6145,9 +6164,9 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
                 ))}
               </div>
             ) : (
-              <div className="mt-1 text-muted-foreground">Không sử dụng dữ liệu nội bộ cho câu trả lời này.</div>
+              <div className="border-t border-border/70 px-3 py-2.5 text-muted-foreground">Không sử dụng dữ liệu nội bộ cho câu trả lời này.</div>
             )}
-          </div>
+          </details>
         )}
 
         {/* Assistant Action Bar */}
@@ -6351,7 +6370,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 140)}px`
     }
   }, [text])
 
@@ -6668,7 +6687,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
           }
         }}
         className={cn(
-          "relative rounded-2xl border bg-white dark:bg-card p-2.5 shadow-xs transition-all duration-200 focus-within:ring-2 focus-within:ring-slate-900/10 cursor-text",
+          "relative rounded-2xl border bg-white dark:bg-card p-2 shadow-xs transition-all duration-200 focus-within:ring-2 focus-within:ring-slate-900/10 cursor-text",
           isDraggingOver
             ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/20"
             : "border-slate-200/90 dark:border-neutral-800 focus-within:border-slate-300 dark:focus-within:border-neutral-700"
@@ -6795,7 +6814,7 @@ const EchoComposerForm = React.memo(function EchoComposerForm({
               ? `Hỏi AI bất kỳ điều gì về ${activeArtifact.name}...`
               : "Nhập nội dung trao đổi, hoặc dán ảnh chụp màn hình (Ctrl+V)... (Gõ / để gọi lệnh)"
           }
-          className="flex min-h-[46px] max-h-52 w-full resize-none rounded-md border-none bg-transparent px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
+          className="flex min-h-10 max-h-36 w-full resize-none rounded-md border-none bg-transparent px-3 py-1.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none leading-relaxed"
         />
 
         {/* Actions Toolbar: Exact Match to Image 1 */}

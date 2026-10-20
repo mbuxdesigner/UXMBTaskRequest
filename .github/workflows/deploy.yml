@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test AI retrieval and grounding
-        run: pnpm run test:ai-intelligence
+        run: pnpm run test:ai
 
       - name: Build project
         run: pnpm run build

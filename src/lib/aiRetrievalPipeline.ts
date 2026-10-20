@@ -173,7 +173,10 @@ export function executeQueryPlan(
     : plan.sources.includes("tasks")
     ? semanticSearch(plan.query, tasks, taskSearchText, 8)
     : []
-  const approvedArtifacts = artifacts.filter((artifact) => artifact.approvalStatus !== "retired")
+  const approvedArtifacts = artifacts.filter((artifact) =>
+    artifact.approvalStatus !== "retired"
+    && (!artifact.isCustomUploaded || artifact.approvalStatus === "approved")
+  )
   const rankedDocuments = plan.sources.includes("documents")
     ? semanticSearch(plan.query, approvedArtifacts, artifactText, 4)
     : []

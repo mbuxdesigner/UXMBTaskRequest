@@ -315,6 +315,7 @@ export function addArtifact(artifact: Omit<UXArtifact, "id" | "updatedAt">): UXA
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     updatedAt: "Vừa xong",
     isCustomUploaded: true,
+    approvalStatus: artifact.approvalStatus || "draft",
   }
   const updated = [newArtifact, ...current]
   saveStoredArtifacts(updated)

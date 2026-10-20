@@ -1,0 +1,345 @@
+{
+  "schema": "uxmb.ai-evaluation.v1",
+  "evaluationNow": "2026-10-20T00:00:00.000Z",
+  "qualityGates": {
+    "minimumOverallPercent": 95,
+    "requiredCategoryPercent": {
+      "security": 100,
+      "grounding": 100
+    }
+  },
+  "tasks": [
+    {
+      "request_id": "UXMB-101",
+      "title": "Thiết kế luồng mở sổ tiết kiệm trực tuyến",
+      "nickname": "Tiền gửi Online",
+      "product": "Tiền gửi",
+      "feature_journey": "Mở sổ tiết kiệm",
+      "squad_name": "Digital Banking",
+      "assigned_designer": "Nguyễn Văn Cường",
+      "current_phase": "User Flow",
+      "status": "Đang xử lý",
+      "progress": 35,
+      "expected_deadline": "18/10/2026",
+      "last_updated": "01/10/2026"
+    },
+    {
+      "request_id": "UXMB-102",
+      "title": "Tái tục khoản tiền gửi siêu lãi",
+      "nickname": "Tiền gửi Siêu Lãi",
+      "product": "Tiền gửi",
+      "feature_journey": "Tái tục khoản gửi",
+      "squad_name": "Wealth",
+      "assigned_designer": "Trần Thị Mai",
+      "current_phase": "Bàn giao",
+      "status": "Hoàn thành",
+      "progress": 100,
+      "expected_deadline": "25/10/2026",
+      "last_updated": "19/10/2026"
+    },
+    {
+      "request_id": "UXMB-205",
+      "title": "Luồng mở thẻ tín dụng",
+      "nickname": "Mở thẻ tín dụng",
+      "product": "Thẻ tín dụng",
+      "feature_journey": "Đăng ký thẻ",
+      "squad_name": "Digital Banking",
+      "assigned_designer": "Nguyễn Văn Cường",
+      "current_phase": "UI Design",
+      "status": "PO Pending",
+      "progress": 55,
+      "expected_deadline": "24/10/2026",
+      "last_updated": "05/10/2026"
+    },
+    {
+      "request_id": "REQ-001",
+      "title": "Mở tài khoản thanh toán CASA",
+      "nickname": "Mở tài khoản CASA",
+      "product": "App MBBank",
+      "feature_journey": "CASA Onboarding",
+      "squad_name": "Core Banking",
+      "assigned_designer": "Lê Văn An",
+      "current_phase": "Prototype",
+      "status": "Đang xử lý",
+      "progress": 70,
+      "expected_deadline": "30/10/2026",
+      "last_updated": "18/10/2026"
+    },
+    {
+      "request_id": "UXMB-INVALID-DATE",
+      "title": "Task dữ liệu deadline lỗi",
+      "nickname": "Deadline lỗi",
+      "product": "Kiểm thử",
+      "feature_journey": "Data Quality",
+      "squad_name": "Platform",
+      "assigned_designer": "Phạm Thị Bình",
+      "current_phase": "Discovery",
+      "status": "Đang xử lý",
+      "progress": 20,
+      "expected_deadline": "31/02/2026",
+      "last_updated": "19/10/2026"
+    },
+    {
+      "request_id": "UXMB-20261005-002",
+      "title": "CCQ Thay đổi tài khoản",
+      "nickname": "CCQ Thay đổi tài khoản",
+      "product": "TransferD",
+      "feature_journey": "Chuyển nhượng",
+      "squad_name": "TransferD",
+      "assigned_designer": "Phong",
+      "current_phase": "User Flow",
+      "status": "Đang thực hiện",
+      "progress": 40,
+      "expected_deadline": "30/10/2026",
+      "last_updated": "18/10/2026"
+    },
+    {
+      "request_id": "UXMB-20261002-001",
+      "title": "Update UI chuyển nhượng CDs",
+      "nickname": "Update UI chuyển nhượng CDs",
+      "product": "TransferD",
+      "feature_journey": "Chuyển nhượng CDs",
+      "squad_name": "TransferD",
+      "assigned_designer": "Phong",
+      "current_phase": "UI Design",
+      "status": "Đang thực hiện",
+      "progress": 70,
+      "expected_deadline": "31/12/2026",
+      "last_updated": "19/10/2026"
+    },
+    {
+      "request_id": "UXMB-20260923-001",
+      "title": "Tích hợp DIGI x BeeRich",
+      "nickname": "Tích hợp DIGI x BeeRich",
+      "product": "BeeRich",
+      "feature_journey": "Tích hợp DIGI",
+      "squad_name": "BeeRich",
+      "assigned_designer": "Phong",
+      "current_phase": "Hoàn thành",
+      "status": "Hoàn thành",
+      "progress": 100,
+      "expected_deadline": "30/09/2026",
+      "last_updated": "30/09/2026"
+    },
+    {
+      "request_id": "SEC-999",
+      "title": "Tái cấu trúc hệ thống nội bộ hạn chế",
+      "nickname": "Restricted Core",
+      "product": "Internal",
+      "feature_journey": "Restricted",
+      "squad_name": "Security",
+      "assigned_designer": "Admin Only",
+      "current_phase": "Discovery",
+      "status": "Đang xử lý",
+      "progress": 10,
+      "expected_deadline": "31/12/2026",
+      "last_updated": "19/10/2026",
+      "isRestricted": true
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "doc-approved-handoff",
+      "name": "Quy định bàn giao thiết kế chính thức.md",
+      "fileType": "markdown",
+      "size": "2 KB",
+      "updatedAt": "2026-10-18",
+      "content": "Quy định bàn giao yêu cầu checklist, Figma và biên bản UAT.",
+      "summary": "Quy định bàn giao thiết kế đã được phê duyệt.",
+      "tags": ["bàn giao", "UAT"],
+      "isCustomUploaded": true,
+      "approvalStatus": "approved"
+    },
+    {
+      "id": "doc-draft-handoff",
+      "name": "DRAFT quy định bàn giao tuyệt mật.md",
+      "fileType": "markdown",
+      "size": "2 KB",
+      "updatedAt": "2026-10-19",
+      "content": "Bản nháp bàn giao tuyệt mật chưa được phê duyệt và không được dùng làm quy chuẩn.",
+      "summary": "Bản nháp bàn giao chưa phê duyệt.",
+      "tags": ["bàn giao", "tuyệt mật"],
+      "isCustomUploaded": true,
+      "approvalStatus": "draft"
+    },
+    {
+      "id": "doc-seed-process",
+      "name": "Quy trình 7 khâu UX MBBank.md",
+      "fileType": "markdown",
+      "size": "5 KB",
+      "updatedAt": "2026-10-01",
+      "content": "Quy trình chính thức gồm Tiếp nhận, Phân loại, Discovery, User Flow, UI Design, Prototype và Bàn giao.",
+      "summary": "Tài liệu hệ thống mặc định về quy trình UX.",
+      "tags": ["7 khâu", "quy trình"],
+      "isCustomUploaded": false
+    },
+    {
+      "id": "doc-retired",
+      "name": "Quy định SLA cũ.md",
+      "fileType": "markdown",
+      "size": "1 KB",
+      "updatedAt": "2025-01-01",
+      "content": "Quy định SLA cũ đã ngừng áp dụng.",
+      "summary": "Tài liệu đã retired.",
+      "tags": ["SLA"],
+      "isCustomUploaded": true,
+      "approvalStatus": "retired"
+    }
+  ],
+  "cases": [
+    {
+      "id": "RES-001",
+      "category": "resolution",
+      "kind": "task_resolution",
+      "query": "Kiểm tra giúp UXMB-205",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "taskId": "UXMB-205", "method": "request_id" }
+    },
+    {
+      "id": "RES-002",
+      "category": "resolution",
+      "kind": "task_resolution",
+      "query": "Tiền gửi Siêu Lãi đang đến đâu?",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "taskId": "UXMB-102" }
+    },
+    {
+      "id": "RES-003",
+      "category": "resolution",
+      "kind": "task_resolution",
+      "query": "Nó có nguy cơ trễ không?",
+      "previousTaskId": "UXMB-101",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "taskId": "UXMB-101", "method": "memory", "isFollowUp": true }
+    },
+    {
+      "id": "RES-004",
+      "category": "resolution",
+      "kind": "task_resolution",
+      "query": "Tình hình sản phẩm tiền gửi thế nào?",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "requiresClarification": true, "candidateTaskIds": ["UXMB-101", "UXMB-102"] }
+    },
+    {
+      "id": "RES-005",
+      "category": "resolution",
+      "kind": "task_resolution",
+      "query": "2",
+      "pendingTaskIds": ["UXMB-101", "UXMB-102"],
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102"],
+      "expected": { "taskId": "UXMB-102" }
+    },
+    {
+      "id": "SEC-001",
+      "category": "security",
+      "kind": "task_resolution",
+      "query": "Mở task SEC-999",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "taskId": null, "method": "none", "candidateTaskIds": [], "forbiddenTaskIds": ["SEC-999"] }
+    },
+    {
+      "id": "AGG-001",
+      "category": "aggregation",
+      "kind": "aggregate",
+      "query": "Sản phẩm Tiền gửi có bao nhiêu task?",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "mode": "filtered", "operation": "count", "taskIds": ["UXMB-101", "UXMB-102"], "answerContains": ["2 task"] }
+    },
+    {
+      "id": "AGG-002",
+      "category": "aggregation",
+      "kind": "aggregate",
+      "query": "Cường đang làm công việc gì?",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "mode": "filtered", "operation": "list", "taskIds": ["UXMB-101", "UXMB-205"] }
+    },
+    {
+      "id": "AGG-003",
+      "category": "risk",
+      "kind": "aggregate",
+      "query": "Task nào có nguy cơ trễ?",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "mode": "all", "operation": "risk", "answerContains": ["UXMB-101", "UXMB-205"], "answerExcludes": ["UXMB-102", "REQ-001"] }
+    },
+    {
+      "id": "REAL-001",
+      "category": "conversation_quality",
+      "kind": "aggregate_follow_up",
+      "firstQuery": "tổng hợp task của Phong",
+      "query": "tôi muốn biết chi tiết và tiến độ các task đang doing",
+      "accessibleTaskIds": ["UXMB-20261005-002", "UXMB-20261002-001", "UXMB-20260923-001"],
+      "expected": {
+        "firstTaskIds": ["UXMB-20261005-002", "UXMB-20261002-001", "UXMB-20260923-001"],
+        "followUpTaskIds": ["UXMB-20261005-002", "UXMB-20261002-001"],
+        "firstAnswerContains": ["CCQ Thay đổi tài khoản", "Update UI chuyển nhượng CDs", "Tích hợp DIGI x BeeRich"],
+        "followUpAnswerContains": ["CCQ Thay đổi tài khoản", "Update UI chuyển nhượng CDs", "40%", "70%"],
+        "followUpAnswerExcludes": ["Tích hợp DIGI x BeeRich", "chưa tìm thấy task nào"]
+      }
+    },
+    {
+      "id": "HLT-001",
+      "category": "risk",
+      "kind": "health",
+      "query": "Task này có nguy cơ trễ không?",
+      "taskId": "UXMB-101",
+      "expected": { "level": "critical", "answerContains": ["Quá hạn 2 ngày", "Nguồn tham chiếu đã nạp"] }
+    },
+    {
+      "id": "HLT-002",
+      "category": "risk",
+      "kind": "health",
+      "query": "Deadline task này thế nào?",
+      "taskId": "UXMB-102",
+      "expected": { "level": "completed", "answerContains": ["Đã hoàn thành"] }
+    },
+    {
+      "id": "HLT-003",
+      "category": "data_quality",
+      "kind": "health",
+      "query": "Deadline task này có vấn đề không?",
+      "taskId": "UXMB-INVALID-DATE",
+      "expected": { "level": "on_track", "daysToDeadline": null, "answerContains": ["Chưa có deadline để đánh giá"] }
+    },
+    {
+      "id": "GRD-001",
+      "category": "grounding",
+      "kind": "grounding",
+      "content": "Theo UXMB-999, tiến độ là 80%.",
+      "allowedTaskIds": ["UXMB-101"],
+      "expected": { "rejectedTaskIds": ["UXMB-999"], "answerExcludes": ["UXMB-999"], "answerContains": ["mã task chưa xác minh"] }
+    },
+    {
+      "id": "GRD-002",
+      "category": "grounding",
+      "kind": "grounding",
+      "content": "[UXMB-101] đang ở User Flow.",
+      "allowedTaskIds": ["UXMB-101"],
+      "documentNames": ["Quy trình 7 khâu UX MBBank.md"],
+      "expected": { "rejectedTaskIds": [], "answerContains": ["UXMB-101", "Quy trình 7 khâu UX MBBank.md"] }
+    },
+    {
+      "id": "RET-001",
+      "category": "retrieval",
+      "kind": "retrieval",
+      "query": "deadline task mở thẻ tín dụng",
+      "accessibleTaskIds": ["UXMB-101", "UXMB-102", "UXMB-205", "REQ-001"],
+      "expected": { "sourceTypes": ["task"], "taskIds": ["UXMB-205"] }
+    },
+    {
+      "id": "SEC-002",
+      "category": "security",
+      "kind": "retrieval",
+      "query": "quy định bàn giao tuyệt mật",
+      "accessibleTaskIds": [],
+      "expected": { "sourceTypes": ["document"], "documentIds": ["doc-approved-handoff"], "forbiddenDocumentIds": ["doc-draft-handoff", "doc-retired"] }
+    },
+    {
+      "id": "RET-002",
+      "category": "retrieval",
+      "kind": "retrieval",
+      "query": "quy trình 7 khâu UX",
+      "accessibleTaskIds": [],
+      "expected": { "sourceTypes": ["document"], "documentIds": ["doc-seed-process"], "forbiddenDocumentIds": ["doc-retired"] }
+    }
+  ]
+}
