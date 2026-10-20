@@ -27,6 +27,7 @@
     "robot-heads": "^0.3.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
+    "upng-js": "^2.1.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
@@ -35,6 +36,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/upng-js": "^2.1.5",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^6.0.0",
     "chrome-launcher": "^1.2.1",

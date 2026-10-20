@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import JSZip from "jszip"
+import UPNG from "upng-js"
 import { Frame, FrameHeader, FrameTitle, FrameDescription, FrameActions } from "@/components/reui/frame"
 import { IconTile } from "@/components/reui/icon-tile"
 import { IconStackLarge } from "@/components/reui/c-icon-stack-2"
@@ -87,10 +88,10 @@ const OUTPUT_FORMAT_OPTIONS: DropdownOption[] = [
   },
   {
     value: "image/png",
-    label: "PNG (Không nén giảm chi tiết / Giữ nền trong suốt)",
+    label: "PNG (Chuẩn nén TinyPNG 8-bit / Giữ nền trong suốt)",
     badge: (
       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">
-        Lossless
+        TinyPNG Quantize
       </span>
     ),
   },
@@ -318,11 +319,11 @@ export default function ImageCompressorPage() {
         const reader = new FileReader()
         reader.onload = (e) => {
           const img = new Image()
-          img.onload = () => {
+          img.onload = async () => {
             const canvas = document.createElement("canvas")
             canvas.width = img.naturalWidth
             canvas.height = img.naturalHeight
-            const ctx = canvas.getContext("2d")
+            const ctx = canvas.getContext("2d", { willReadFrequently: true })
             if (!ctx) {
               reject(new Error("Canvas context error"))
               return
@@ -336,11 +337,52 @@ export default function ImageCompressorPage() {
             ctx.drawImage(img, 0, 0)
 
             try {
-              const qualityRatio = quality / 100
-              const dataUrl = canvas.toDataURL(outputFormat, qualityRatio)
+              let blob: Blob | null = null
+              let dataUrl = ""
+              let approxSize = 0
 
-              if (!dataUrl || dataUrl === "data:,") {
-                throw new Error("Không trích xuất được dữ liệu ảnh từ canvas")
+              if (outputFormat === "image/png" && quality < 100) {
+                // Thuật toán nén lượng tử hóa màu tương tự TinyPNG (Color Quantization)
+                // Chuyển 32-bit RGBA sang 8-bit Indexed Color với tối đa 256 màu, bảo toàn kênh alpha
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+                let cnum = 256
+                if (quality >= 85) {
+                  cnum = 256 // Chuẩn TinyPNG: 256 màu chất lượng cao nhất
+                } else {
+                  cnum = Math.max(16, Math.min(256, Math.round((quality / 85) * 256)))
+                }
+
+                const compressedBuffer = UPNG.encode([imgData.data.buffer], canvas.width, canvas.height, cnum)
+                blob = new Blob([compressedBuffer], { type: "image/png" })
+                approxSize = blob.size
+
+                dataUrl = await new Promise<string>((res, rej) => {
+                  const r = new FileReader()
+                  r.onloadend = () => res(r.result as string)
+                  r.onerror = () => rej(new Error("Lỗi chuyển đổi Blob sang DataURL"))
+                  r.readAsDataURL(blob!)
+                })
+              } else {
+                const qualityRatio = quality / 100
+                dataUrl = canvas.toDataURL(outputFormat, qualityRatio)
+
+                if (!dataUrl || dataUrl === "data:,") {
+                  throw new Error("Không trích xuất được dữ liệu ảnh từ canvas")
+                }
+
+                blob = dataURLtoBlob(dataUrl)
+                if (blob) {
+                  approxSize = blob.size
+                } else {
+                  const base64Content = dataUrl.split(",")[1]
+                  approxSize = Math.round((base64Content.length * 3) / 4)
+                }
+              }
+
+              // Chuẩn TinyPNG: Nếu xuất PNG và file nén bị lớn hơn file gốc -> giữ nguyên file gốc
+              if (outputFormat === "image/png" && (item.file.type.includes("png") || item.name.toLowerCase().endsWith(".png")) && approxSize > item.size) {
+                blob = item.file;
+                approxSize = item.size;
               }
 
               let newExt = ".webp"
@@ -349,11 +391,6 @@ export default function ImageCompressorPage() {
 
               const newFileName = `${item.cleanName}${newExt}`
 
-              // Tính kích thước xấp xỉ từ base64
-              const base64Content = dataUrl.split(",")[1]
-              const approxSize = Math.round((base64Content.length * 3) / 4)
-
-              const blob = dataURLtoBlob(dataUrl)
               const blobUrl = blob ? URL.createObjectURL(blob) : dataUrl
               if (blob) activeUrlsRef.current.add(blobUrl)
 
@@ -597,8 +634,8 @@ export default function ImageCompressorPage() {
   const totalConvertedSize = convertedImages.reduce((sum, i) => sum + i.convertedSize, 0)
   const totalSavedBytes = Math.max(0, totalOriginalSize - totalConvertedSize)
   const totalReductionPercent =
-totalOriginalSize > 0 && convertedImages.length > 0
-      ? Math.round(((totalOriginalSize - totalConvertedSize) / totalOriginalSize) * 100)
+    totalOriginalSize > 0 && convertedImages.length > 0
+      ? Math.max(0, Math.round(((totalOriginalSize - totalConvertedSize) / totalOriginalSize) * 100))
       : 0
 
   const priorityAssetCount = originalImages.filter((i) => i.isPriority).length
@@ -860,7 +897,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { format: "image/webp", label: "WebP", desc: "Tối ưu nhất" },
-                      { format: "image/png", label: "PNG", desc: "Trong suốt" },
+                      { format: "image/png", label: "PNG", desc: "Chuẩn TinyPNG" },
                       { format: "image/jpeg", label: "JPG", desc: "Nền trắng" },
                     ].map((item) => {
                       const active = outputFormat === item.format
@@ -944,7 +981,7 @@ totalOriginalSize > 0 && convertedImages.length > 0
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span className="text-slate-500">Thuật toán xử lý</span>
-                    <span className="font-medium text-slate-900">Canvas 100% Offline</span>
+                    <span className="font-medium text-slate-900">{outputFormat === "image/png" ? "TinyPNG Quantize (UPNG)" : "Canvas WebP/JPEG Engine"}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span className="text-slate-500">Bảo mật dữ liệu</span>
