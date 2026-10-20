@@ -160,7 +160,7 @@ export function EchoUserMessageBubble({
       )}
 
       <div className="relative">
-        <div className="rounded-2xl rounded-br-xs bg-slate-100 text-slate-800 border border-slate-200/80 px-4 py-2.5 text-[13.5px] sm:text-sm leading-relaxed select-text shadow-2xs">
+        <div className="rounded-2xl rounded-br-xs bg-slate-100/95 dark:bg-neutral-800/95 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-neutral-700/80 px-4 py-2.5 text-[13.5px] sm:text-sm leading-relaxed select-text shadow-2xs backdrop-blur-md">
           {message.content}
         </div>
 

@@ -6029,14 +6029,11 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   if (isUser) {
     return (
       <div
-        className="sticky top-0 z-30 -mx-2 flex items-end justify-end gap-2.5 border-b border-slate-200/70 bg-white/95 px-2 py-2 shadow-[0_8px_18px_-18px_rgba(15,23,42,0.65)] backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-950/90"
+        className="sticky top-0 z-20 flex items-end justify-end gap-2.5 py-1 pointer-events-none"
         aria-label="Câu hỏi đang đọc"
         data-testid="sticky-user-question"
       >
-        <div className="flex min-w-0 flex-1 flex-col items-end">
-          <span className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-            Câu hỏi đang đọc
-          </span>
+        <div className="pointer-events-auto flex max-w-[85%] flex-col items-end">
           <EchoUserMessageBubble
             message={message}
             isStreaming={isStreaming}
@@ -6047,11 +6044,13 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
         </div>
 
         {/* User Avatar: Displays the avatar of whoever sent this message */}
-        <EchoUserAvatar
-          name={message.senderName}
-          avatarUrl={message.senderAvatar}
-          className="size-8"
-        />
+        <div className="pointer-events-auto shrink-0">
+          <EchoUserAvatar
+            name={message.senderName}
+            avatarUrl={message.senderAvatar}
+            className="size-8"
+          />
+        </div>
       </div>
     )
   }
