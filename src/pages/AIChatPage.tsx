@@ -70,6 +70,7 @@ import { MBRobotHead, type RobotHeadState } from "@/components/common/MBRobotHea
 import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
+  buildDeterministicDocumentOutlineAnswer,
   buildDeterministicTaskDetailAnswer,
   buildDeterministicTaskHealthAnswer,
   buildTaskRetrievalQuery,
@@ -1684,8 +1685,22 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       allArtifacts,
       { trustedTaskScope: Boolean(resolvedTask || hasResolvedAggregateScope) }
     )
-    const retrievalConfidence = toolResult.sources.length > 0
-      ? toolResult.sources.reduce((sum, source) => sum + source.confidence, 0) / toolResult.sources.length
+    const attachedArtifact = attachedDocName
+      ? allArtifacts.find((artifact) => artifact.name.toLowerCase() === attachedDocName.toLowerCase())
+      : undefined
+    const attachedDocumentSource: AISourceReference | null = attachedDocName
+      ? {
+          id: "D0",
+          type: "document",
+          label: `${attachedDocName} (đính kèm)`,
+          confidence: 1,
+        }
+      : null
+    const answerSources = attachedDocumentSource
+      ? [attachedDocumentSource, ...toolResult.sources.filter((source) => source.label !== attachedDocName)]
+      : toolResult.sources
+    const retrievalConfidence = answerSources.length > 0
+      ? answerSources.reduce((sum, source) => sum + source.confidence, 0) / answerSources.length
       : retrievalPlan.confidence
     let loadedDocNames: string[] = []
     let activeArtifactIds: string[] = previousMemory?.activeArtifactIds || []
@@ -1751,7 +1766,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     const deterministicTaskHealthAnswer = resolvedTask
       ? buildDeterministicTaskHealthAnswer(cleanText, resolvedTask)
       : ""
-    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || deterministicTaskDetailAnswer || deterministicTaskHealthAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
+    const deterministicDocumentAnswer = attachedDocName
+      ? buildDeterministicDocumentOutlineAnswer(cleanText, attachedArtifact || {
+          name: attachedDocName,
+          content: customContext,
+          approvalStatus: "draft",
+        })
+      : ""
+    const clarificationText = aggregateClarificationText || deterministicAggregateAnswer || deterministicTaskDetailAnswer || deterministicTaskHealthAnswer || deterministicDocumentAnswer || (!aggregateTaskQuery && taskResolution.method === "ambiguous"
       ? `Mình tìm thấy nhiều bài toán phù hợp:\n\n${taskResolution.candidates
           .map((task, index) => `${index + 1}. **[${task.request_id}]** ${task.nickname || task.title}`)
           .join("\n")}\n\nBạn muốn mình phân tích bài toán nào?`
@@ -1802,9 +1824,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             taskIds: aggregateResolution?.mode === "clarify"
               ? aggregateResolution.options.flatMap((option) => option.taskIds)
               : focusedTasks.map((task) => task.request_id),
-            documentNames: [],
+            documentNames: deterministicDocumentAnswer && attachedDocName ? [attachedDocName] : [],
             confidence: aggregateResolution?.confidence ?? retrievalConfidence,
-            sources: toolResult.sources,
+            sources: answerSources,
           }
         : undefined,
     }
@@ -1983,6 +2005,9 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           `\n\nYÊU CẦU: Tổng hợp thông tin task có căn cứ, nêu rõ rủi ro nếu có. Chỉ đọc; không tạo hành động cập nhật, phê duyệt hoặc gửi thông báo.`
       } else if (customContext) {
         // Custom context (ví dụ: chat với artifact cụ thể được chọn/đính kèm)
+        const activeAttachmentContext = attachedDocName
+          ? `=== ACTIVE_ATTACHMENT ===\nTên tài liệu: ${attachedDocName}\nTrạng thái phê duyệt: ${attachedArtifact?.approvalStatus || "draft"}\n\n${attachedArtifact?.content || customContext}\n=== END_ACTIVE_ATTACHMENT ===`
+          : customContext
         contextStr = buildEnrichedContext({
           intelligence,
           tasks: focusedTasks,
@@ -1990,7 +2015,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           userName,
           userRole: session?.role,
           userQuery: retrievalQuery,
-        }) + `\n\n${customContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời đầy đủ, trực tiếp câu hỏi của người dùng. Trích xuất chính xác nguyên văn các nguyên tắc, điều khoản hoặc quy định được hỏi. Trả lời chi tiết, có cấu trúc rõ ràng.`
+        }) + `\n\n${activeAttachmentContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời trực tiếp câu hỏi của người dùng. Phân biệt chính xác khái niệm được hỏi; không thay “nguyên tắc” bằng “khâu”, “quy trình” hoặc kiến thức nền khác. Khi câu hỏi hỏi số lượng, hãy đếm các đề mục cấp cao nhất trong chính tài liệu rồi liệt kê tên từng mục. Tài liệu draft được phép dùng để trả lời về chính nội dung của nó, nhưng không được mô tả là quy định chính thức đã phê duyệt.`
       } else if (autoFoundDocs.length > 0) {
         // Tự động tìm kiếm và nạp tài liệu phù hợp từ kho Artifacts khi không có tài liệu gắn kèm cụ thể
         const docsSummary = serializeArtifactsContext(autoFoundDocs, "full")
@@ -2124,7 +2149,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   documentNames: loadedDocNames,
                   confidence: resolvedTask ? taskResolution.confidence : (taskResolution.method === "ambiguous" ? 0.5 : retrievalConfidence),
                   rejectedReferences: grounded.unknownTaskReferences,
-                  sources: toolResult.sources,
+                  sources: answerSources,
                 },
               })
               resolve()
@@ -6064,22 +6089,15 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
 
   if (isUser) {
     return (
-      <div className="flex items-end justify-end gap-2.5">
-        <div className="flex max-w-[85%] flex-col items-end">
-          <EchoUserMessageBubble
-            message={message}
-            isStreaming={isStreaming}
-            onEditAndResend={(newText) => {
-              if (onEditPrompt) onEditPrompt(newText)
-            }}
-          />
-        </div>
-
-        {/* User Avatar: Displays the avatar of whoever sent this message */}
-        <EchoUserAvatar
-          name={message.senderName}
-          avatarUrl={message.senderAvatar}
-          className="size-8 shrink-0"
+      <div className="w-full">
+        <EchoUserMessageBubble
+          message={message}
+          senderName={message.senderName}
+          senderAvatar={message.senderAvatar}
+          isStreaming={isStreaming}
+          onEditAndResend={(newText) => {
+            if (onEditPrompt) onEditPrompt(newText)
+          }}
         />
       </div>
     )

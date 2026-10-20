@@ -4,6 +4,7 @@ import {
   assessTaskHealth,
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
+  buildDeterministicDocumentOutlineAnswer,
   buildDeterministicTaskDetailAnswer,
   buildDeterministicTaskHealthAnswer,
   buildTaskRetrievalQuery,
@@ -135,6 +136,36 @@ test("Nội dung task được trả trực tiếp từ ba trường nghiệp v�
   assert.match(answer, /Luồng thay đổi tài khoản/)
   assert.match(answer, /Khách hàng phải ra quầy/)
   assert.match(answer, /Giảm thời gian vận hành/)
+})
+
+test("Câu hỏi đếm nguyên tắc đọc đề mục cấp cao nhất của tài liệu đính kèm", () => {
+  const answer = buildDeterministicDocumentOutlineAnswer("có mấy nguyên tắc làm việc", {
+    name: "Nguyen_tac_lam_viec.md",
+    approvalStatus: "draft",
+    content: [
+      "# NGUYÊN TẮC LÀM VIỆC",
+      "## 1. Chủ động",
+      "### 1.1. Chủ động quản lý đầu việc cá nhân",
+      "## 2. Hợp tác",
+      "### 2.1. Chia sẻ thông tin",
+      "## 3. Trách nhiệm",
+    ].join("\n"),
+  })
+
+  assert.match(answer, /3 nguyên tắc làm việc/)
+  assert.match(answer, /Chủ động/)
+  assert.match(answer, /Hợp tác/)
+  assert.match(answer, /Trách nhiệm/)
+  assert.doesNotMatch(answer, /Chủ động quản lý đầu việc cá nhân/)
+  assert.match(answer, /chưa được đánh dấu là quy định đã phê duyệt/)
+})
+
+test("Không tự đếm tài liệu khi người dùng không hỏi số lượng", () => {
+  const answer = buildDeterministicDocumentOutlineAnswer("giải thích nguyên tắc chủ động", {
+    name: "Nguyen_tac_lam_viec.md",
+    content: "## 1. Chủ động",
+  })
+  assert.equal(answer, "")
 })
 
 test("Đánh giá sức khỏe task dùng deadline, tiến độ và độ mới cập nhật", () => {

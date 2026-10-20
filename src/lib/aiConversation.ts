@@ -930,3 +930,41 @@ export function groundAIResponse(
 
   return { content: safeContent, unknownTaskReferences }
 }
+
+/**
+ * Answer simple outline-count questions from the active attachment without
+ * asking the model to infer a number. Only integer top-level Markdown headings
+ * are counted; nested headings such as "1.1" are deliberately ignored.
+ */
+export function buildDeterministicDocumentOutlineAnswer(
+  query: string,
+  document: { name: string; content?: string; approvalStatus?: string } | null | undefined
+): string {
+  if (!document?.content?.trim()) return ""
+
+  const normalizedQuery = normalizeConversationText(query)
+  const isCountQuestion = /\b(co may|bao nhieu|so luong)\b/.test(normalizedQuery)
+  if (!isCountQuestion) return ""
+
+  const sections = document.content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => line.match(/^#{1,6}\s+(\d+)[.)]\s+(.+?)\s*$/))
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map((match) => ({ order: Number(match[1]), title: match[2].replace(/[*_`]/g, "").trim() }))
+    .filter((section) => Number.isInteger(section.order) && section.title.length > 0)
+
+  if (sections.length === 0) return ""
+
+  const uniqueSections = sections.filter(
+    (section, index, all) => all.findIndex((candidate) => candidate.order === section.order) === index
+  )
+  const subject = /nguyen tac/.test(normalizedQuery) ? "nguyên tắc làm việc" : "mục chính"
+  const approvalNote = document.approvalStatus && document.approvalStatus !== "approved"
+    ? "\n\n> Đây là nội dung của tài liệu đang đính kèm; tài liệu chưa được đánh dấu là quy định đã phê duyệt."
+    : ""
+
+  return `Tài liệu **${document.name}** có **${uniqueSections.length} ${subject}**:\n\n${uniqueSections
+    .map((section, index) => `${index + 1}. **${section.title}**`)
+    .join("\n")}${approvalNote}`
+}
