@@ -69,7 +69,7 @@ function getCorsHeaders(origin: string | null | undefined): Record<string, strin
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, X-Custom-API-Key",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   }
@@ -397,15 +397,39 @@ export default async function handler(req: Request): Promise<Response> {
     let rateLimit: { configured?: boolean; allowed: boolean; remaining: number; retryAfterSeconds: number }
     const hasUpstash = Boolean(getEnv("UPSTASH_REDIS_REST_URL") && getEnv("UPSTASH_REDIS_REST_TOKEN"))
 
-    if (runtimeEnv === "production" && hasUpstash) {
+    if (runtimeEnv === "production" && !hasUpstash) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: "AI service is unavailable because the distributed rate limiter is not configured.",
+            code: "RATE_LIMITER_UNAVAILABLE",
+          },
+          success: false,
+          code: "RATE_LIMITER_UNAVAILABLE",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
+    if (runtimeEnv === "production") {
       try {
         rateLimit = await checkDistributedRateLimit(rateLimitIdentifier)
         if (!rateLimit.configured) {
-          rateLimit = checkRateLimit(rateLimitIdentifier)
+          throw new Error("Distributed rate limiter is not configured")
         }
       } catch (err) {
-        console.warn("[AI Gateway] Distributed rate limit check failed, falling back to in-memory limiter:", err)
-        rateLimit = checkRateLimit(rateLimitIdentifier)
+        console.error("[AI Gateway] Distributed rate limit check failed:", err)
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "AI service is temporarily unavailable because rate limiting could not be verified.",
+              code: "RATE_LIMITER_UNAVAILABLE",
+            },
+            success: false,
+            code: "RATE_LIMITER_UNAVAILABLE",
+          }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
       }
     } else {
       rateLimit = checkRateLimit(rateLimitIdentifier)
@@ -442,16 +466,8 @@ export default async function handler(req: Request): Promise<Response> {
       max_tokens = 1024,
     } = body
 
-    // 6. Check Server API Key & Client Admin Custom Key
+    // 6. Provider credentials are server-managed only.
     const availableKeys = buildKeyPool()
-    const customKeyHeader = req.headers.get("x-custom-api-key")?.trim()
-    const customKeyFromBody = (typeof body?.apiKey === "string" ? body.apiKey.trim() : "") ||
-      (typeof body?.customApiKey === "string" ? body.customApiKey.trim() : "")
-    const clientProvidedKey = customKeyHeader || customKeyFromBody
-
-    if (clientProvidedKey && !availableKeys.includes(clientProvidedKey)) {
-      availableKeys.unshift(clientProvidedKey)
-    }
 
     if (availableKeys.length === 0) {
       return new Response(

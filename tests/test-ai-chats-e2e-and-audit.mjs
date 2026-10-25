@@ -2150,7 +2150,7 @@ if (fs.existsSync(aiPromptsPath) && fs.existsSync(aiArtifactsPath)) {
   })
 
   // INT-PROMPT-05: approved custom documents are searchable; unapproved custom docs are excluded.
-  runTest("Integration", "INT-PROMPT-05", "src/config/aiPrompts.ts: searchArtifactsByQuery matches approved custom uploaded docs", () => {
+  runTest("Integration", "INT-PROMPT-05", "src/config/aiPrompts.ts: searchArtifactsByQuery only matches approved custom docs", () => {
     const mockArtifacts = [
       {
         id: "art-custom-1",
@@ -2624,10 +2624,10 @@ runTest("Integration", "INT-DUALPOOL-04", "aiService: direct provider fallback h
   assert.ok(!serviceSrc.includes("generativelanguage.googleapis.com"), "Must not fall back to Gemini from the browser")
 })
 
-runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: OpenRouter API key entry is supported with managed gateway", () => {
+runTest("Integration", "INT-DUALPOOL-05", "OpenRouterSettingsCard: provider keys are server-managed only", () => {
   const cardSrc = fs.readFileSync(path.join(projectRoot, "src/components/admin/OpenRouterSettingsCard.tsx"), "utf-8").replace(/\r\n/g, "\n")
   assert.ok(!cardSrc.includes("getStoredGeminiKeys"), "Admin UI must not load legacy browser Gemini keys")
-  assert.ok(cardSrc.includes("OpenRouter API Key"), "Admin UI must support OpenRouter API key configuration")
+  assert.ok(!cardSrc.includes("addCustomAIKey"), "Admin UI must not accept provider keys")
   assert.ok(cardSrc.includes("Provider key được quản lý ở máy chủ"))
 })
 

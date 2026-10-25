@@ -155,9 +155,9 @@ git diff --check
 
 Kỳ vọng hiện tại:
 
-- Conversation intelligence: `47/47`.
+- Conversation intelligence: `52/52`.
 - Offline evaluation quality gate: `18/18`, tổng điểm `100%`, security và grounding `100%`.
-- AI E2E & security audit: `177/177`.
+- AI E2E & security audit: `179/179`.
 - Production build: pass.
 - Production dependency audit: không có vulnerability đã biết.
 

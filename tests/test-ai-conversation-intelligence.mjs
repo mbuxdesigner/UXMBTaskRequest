@@ -27,6 +27,7 @@ import {
   summarizeConversation,
   updateConversationSummary,
 } from "../src/lib/aiRetrievalPipeline.ts"
+import { buildProjectState } from "../src/lib/aiProjectState.ts"
 
 const task = (id, nickname, product, extras = {}) => ({
   request_id: id,
@@ -80,6 +81,36 @@ test("Structured tool execution trả source id và payload có schema", () => {
   assert.ok(result.sources.some((source) => source.id.startsWith("T")))
   assert.ok(result.sources.some((source) => source.id.startsWith("D")))
   assert.equal(JSON.parse(result.promptPayload).schema, "uxmb.tool-results.v1")
+})
+
+test("Project State tính KPI xác định và gắn version dữ liệu", () => {
+  const state = buildProjectState([
+    task("UXMB-301", "Quá hạn", "App", { status: "Đang làm", progress: 50, design_deadline: "2025-01-01", assigned_designer: "An" }),
+    task("UXMB-302", "Chờ PO", "App", { status: "PO Pending", progress: 20 }),
+    task("UXMB-303", "Đã xong", "App", { status: "Hoàn thành", progress: 100, design_deadline: "2024-01-01" }),
+  ], new Date("2026-10-24T00:00:00.000Z"))
+  assert.equal(state.metrics.total, 3)
+  assert.equal(state.metrics.completed, 1)
+  assert.equal(state.metrics.overdue, 1)
+  assert.equal(state.metrics.poPending, 1)
+  assert.match(state.version, /^ps-[a-f0-9]{8}$/)
+})
+
+test("Structured payload chứa Project State của đúng phạm vi task đã cấp quyền", () => {
+  const result = executeQueryPlan(createQueryPlan("bao nhiêu task quá hạn"), tasks, [])
+  const payload = JSON.parse(result.promptPayload)
+  assert.equal(payload.tool_results.project_state.scope, "authorized_tasks")
+  assert.equal(payload.tool_results.project_state.metrics.total, tasks.length)
+  assert.equal(result.projectState.version, payload.tool_results.project_state.version)
+})
+
+test("RAG tự động loại tài liệu custom chưa được duyệt", () => {
+  const artifacts = [
+    { id: "draft", name: "Quy định nháp", content: "quy định bàn giao", isCustomUploaded: true, approvalStatus: "draft" },
+    { id: "approved", name: "Quy định chính thức", content: "quy định bàn giao", isCustomUploaded: true, approvalStatus: "approved" },
+  ]
+  const result = executeQueryPlan(createQueryPlan("tìm quy định bàn giao"), [], artifacts)
+  assert.deepEqual(result.documents.map((item) => item.id), ["approved"])
 })
 
 test("Conversation summary giữ các lượt gần nhất trong ngân sách", () => {

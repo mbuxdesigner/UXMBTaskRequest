@@ -14,7 +14,7 @@
 
 import type { ExecutiveIntelligenceData } from "@/lib/executiveIntelligence"
 import type { UXRequest } from "@/data/mockData"
-import type { UXArtifact } from "@/services/aiArtifactsService"
+import { isArtifactApprovedForAI, type UXArtifact } from "../services/aiArtifactsService.ts"
 import type { PlannerEntry } from "@/services/calendarService"
 import { sanitizeContextText } from "../lib/piiMasker.ts"
 
@@ -336,10 +336,7 @@ export function searchArtifactsByQuery(query: string, artifacts: UXArtifact[]): 
   if (!query || !artifacts || artifacts.length === 0) return []
 
   // Tài liệu hệ thống mặc định được phép tra cứu; tài liệu custom phải được duyệt rõ ràng.
-  const candidateArtifacts = artifacts.filter(
-    (artifact) => artifact.approvalStatus !== "retired"
-      && (!artifact.isCustomUploaded || artifact.approvalStatus === "approved")
-  )
+  const candidateArtifacts = artifacts.filter(isArtifactApprovedForAI)
   
   const q = query.toLowerCase().trim()
   const normalizeVi = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d")
