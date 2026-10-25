@@ -4,7 +4,7 @@
 > **Owner:** UX Platform / Design Ops
 > **Thời gian đọc mục tiêu:** 15 phút
 > **Trạng thái:** Read-only, gateway-managed, fail-closed
-> **Last Updated:** 2026-10-20
+> **Last Updated:** 2026-10-24
 
 ## 1. Tổng quan và kiến trúc
 
@@ -18,7 +18,11 @@ AI Chats không cập nhật task, không phê duyệt, không gửi thông báo
 ```mermaid
 flowchart LR
   U[Người dùng đã đăng nhập] --> UI[AIChatPage]
-  UI --> CTX[Task resolver + document retrieval]
+  UI --> QR[Query Router]
+  QR --> SQ[Structured Query + Project State]
+  QR --> RAG[RAG tài liệu đã duyệt]
+  SQ --> CTX[Context Builder]
+  RAG --> CTX
   CTX --> P[Prompt builder + PII redaction]
   P --> GW[AI Gateway API]
   GW --> AUTH[Kiểm tra session qua GAS]
@@ -46,6 +50,8 @@ flowchart LR
 | `src/pages/AIChatPage.tsx` | UI, thread, composer, task context, cloud sync | Chỉ hiển thị hai nhóm OP; cloud sync là opt-in |
 | `src/config/aiPrompts.ts` | Phạm vi, prompt, metrics, retrieval tài liệu | Không đưa action/task-update schema vào prompt chat |
 | `src/lib/aiConversation.ts` | Resolve task, memory, grounding | Không tự chọn task khi có nhiều ứng viên |
+| `src/lib/aiProjectState.ts` | Snapshot KPI task xác định, version hóa | Chỉ tính trên task scope đã được cấp quyền |
+| `src/lib/aiRetrievalPipeline.ts` | Query router, structured task payload, RAG | Tách số liệu chính xác khỏi phần diễn đạt của LLM |
 | `src/services/aiService.ts` | Streaming qua gateway và fallback an toàn | Không gọi trực tiếp provider từ browser |
 | `src/services/aiArtifactsService.ts` | Kho artifact và metadata phê duyệt | Custom artifact chưa duyệt không phải nguồn quy chuẩn |
 | `src/services/googleSheetService.ts` | Đồng bộ task đã xác thực | Cache task tách theo danh tính người dùng |
@@ -61,11 +67,13 @@ flowchart LR
 1. UI lấy session hiện tại và danh sách task đã được backend lọc quyền.
 2. `resolveTaskReference` xác định task theo mã, nickname hoặc ngữ cảnh hội thoại.
 3. Nếu mơ hồ, UI yêu cầu người dùng chọn tối đa ba ứng viên.
-4. `buildChatPrompt` nạp task liên quan và tài liệu phù hợp; dữ liệu tham chiếu không được coi là instruction.
-5. `aiService` gửi request tới `/api/ai-gateway` kèm bearer session.
-6. Gateway xác minh session bằng POST tới GAS, áp rate limit và model allowlist.
-7. `groundAIResponse` kiểm tra mã task và gắn danh sách nguồn tham chiếu đã nạp.
-8. Thread được lưu cục bộ; chỉ đồng bộ cloud sau khi người dùng chủ động bật.
+4. `buildProjectState` tính KPI/deadline từ đúng task scope và tạo `version` ổn định cho snapshot.
+5. RAG chỉ nạp tài liệu seed được quản trị hoặc custom artifact có `approvalStatus === "approved"`.
+6. Context Builder ghép Project State, task liên quan và trích đoạn tài liệu; dữ liệu tham chiếu không được coi là instruction.
+7. `aiService` gửi request tới `/api/ai-gateway` kèm bearer session, không kèm provider key.
+8. Gateway xác minh session bằng POST tới GAS, áp rate limit và model allowlist.
+9. `groundAIResponse` kiểm tra mã task và gắn danh sách nguồn tham chiếu đã nạp.
+10. Thread được lưu cục bộ; chỉ đồng bộ cloud sau khi người dùng chủ động bật.
 
 ### Phân tích sức khỏe task có thể kiểm chứng
 
@@ -157,14 +165,15 @@ Kỳ vọng hiện tại:
 
 ## 7. Tài liệu liên quan
 
-- [Báo cáo audit và hardening 2026-10-05](../reports/2026-10-05_AI_CHATS_AUDIT_AND_HARDENING_REPORT.md)
-- [Runbook bảo mật và triển khai](../AI_CHAT_SECURITY_AND_DEPLOYMENT_RUNBOOK.md)
-- [Checklist UAT và nghiệm thu](../AI_CHAT_UAT_AND_ACCEPTANCE_CHECKLIST.md)
-- [Quy chuẩn Artifact](../AI_CHAT_ARTIFACT_FORMAT_GUIDE.md)
-- [UI Design System](../UI_DESIGN_SYSTEM.md)
+- [Báo cáo audit và hardening 2026-10-05](../../reports/2026/10/2026-10-05-ai-chat-audit-hardening.md)
+- [Runbook bảo mật và triển khai](../../operations/ai-copilot/security-deployment-runbook.md)
+- [Checklist UAT và nghiệm thu](../../quality/uat/ai-copilot-acceptance.md)
+- [Quy chuẩn Artifact](artifact-format.md)
+- [UI Design System](../../design-system/foundations-and-components.md)
 
 ### Changelog
 
+- `2026-10-24`: Bổ sung Query Router → Structured Project State → governed RAG; snapshot KPI có version; custom artifact mặc định là draft; loại provider key khỏi client và chuyển rate limiter production sang fail-closed thực sự.
 - `2026-10-20`: Bổ sung rule engine phân tích sức khỏe task, trả lời deterministic cho câu hỏi deadline/rủi ro và tổng hợp task cần chú ý; thêm kiểm thử ngày, tiến độ, stale update và grounding nguồn task.
 - `2026-10-20`: Bổ sung evaluation harness offline, báo cáo tự động và CI quality gate; sửa resolver phạm vi sản phẩm và chặn tài liệu custom `draft` khỏi retrieval quy định.
 - `2026-10-20`: Bổ sung regression case từ hội thoại thật “tổng hợp task của Phong”; thêm deterministic summary dạng bảng và giữ entity scope cho câu hỏi nối tiếp về chi tiết/tiến độ/task đang thực hiện.

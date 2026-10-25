@@ -104,16 +104,16 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
   - **Ô 3 (Dưới - Trái):** `Dates` (Ngày tạo và Hạn hoàn thành với bộ chọn ReUI Date Picker).
   - **Ô 4 (Dưới - Phải):** `Priority` (Độ ưu tiên: High / Medium / Low).
 
-### 3.3. Chuẩn Hóa Định Dạng Hạn Chót (Due Date) Chuẩn `DD/MM/YYYY` Trên Biểu Đồ Gantt
+### 3.7. Chuẩn Hóa Định Dạng Hạn Chót (Due Date) Chuẩn `DD/MM/YYYY` Trên Biểu Đồ Gantt
 - Toàn bộ cột **Due date** trên biểu đồ Gantt (`ReUIGanttChart`) được chuyển đổi triệt để từ định dạng tiếng Anh (`Sep 16`, `Oct 1`,...) sang định dạng số **`DD/MM/YYYY`** (ví dụ: `16/09/2026`, `01/10/2026`).
 - Cột Due date được mở rộng từ `w-20` (80px) lên `w-24` (96px) ở cả Header và các dòng Task để hiển thị trọn vẹn chuỗi 10 ký tự mà không bị cắt chữ (truncate).
 - Tooltip hover trên timeline Gantt đồng bộ định dạng `DD/MM/YYYY`.
 
-### 3.4. Tích Hợp UI Component Kbd Chuẩn ReUI (`@reui/c-kbd-1`) Trong Khung Trao Đổi
+### 3.8. Tích Hợp UI Component Kbd Chuẩn ReUI (`@reui/c-kbd-1`) Trong Khung Trao Đổi
 - Tạo component `src/components/ui/kbd.tsx` chuẩn ReUI / shadcn với hiệu ứng đổ bóng viền 3D keycap tactile.
 - Khung trao đổi `ai-prompt-box.tsx` sử dụng thẻ `<Kbd size="xs">Enter ↵</Kbd> gửi` và `<Kbd size="xs">Shift</Kbd> + <Kbd size="xs">Enter ↵</Kbd> xuống dòng` thay cho text thuần trước đây.
 
-### 3.5. Cơ Chế Bảo Mật & Mã Hóa Task PO / Business Trên Dashboard (Data Privacy RBAC)
+### 3.9. Cơ Chế Bảo Mật & Mã Hóa Task PO / Business Trên Dashboard (Data Privacy RBAC)
 - **Mục tiêu:** Dashboard hiển thị toàn bộ bài toán của tất cả Squads/Sản phẩm nhằm phục vụ điều phối và tiến độ chung, nhưng phải đảm bảo an toàn bí mật đề bài giữa các đơn vị kinh doanh.
 - **Quy chuẩn mã hóa:**
   - Đối với người dùng có vai trò **PO** hoặc **Business**: Các bài toán **KHÔNG DO CHÍNH HỌ TẠO** sẽ tự động được mã hóa tiêu đề thành chuỗi `********` có độ dài ngẫu nhiên khác nhau (`generateMaskedTitle()` cố định theo hash ID để tránh giật giao diện).
@@ -124,7 +124,7 @@ Nhằm giải quyết triệt để sự nhầm lẫn trong quản lý tiến đ
     - Huy hiệu mã bài toán + Icon khóa `ShieldAlert` nổi bật.
     - Tiêu đề: **"Không có quyền truy cập"**.
     - Hướng dẫn: **"Bài toán này thuộc quyền quản lý của đơn vị khác. Vui lòng liên hệ Quản trị viên (Admin) để được cấp quyền theo dõi hoặc phê duyệt."**
-### 3.6. Cải Tiến Giao Diện NewsFeed Release Timeline & Chuẩn Hóa Màn Hình Không Có Quyền Truy Cập
+### 3.10. Cải Tiến Giao Diện NewsFeed Release Timeline & Chuẩn Hóa Màn Hình Không Có Quyền Truy Cập
 - **Căn chỉnh NewsFeed Release Timeline (`ReleaseNewsfeedTimeline.tsx`):**
   - Khắc phục triệt để hiện tượng lệch dòng và xô lệch trục ngang giữa số thứ tự `[ 1 ]`, tiêu đề bài toán mã hóa `*******` và thông tin Designer.
   - Cấu trúc flexbox `items-center justify-between` với 2 cột:

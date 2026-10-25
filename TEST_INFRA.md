@@ -30,7 +30,7 @@ UXMBTaskRequest-main/
 ├── TEST_READY.md                     # Readiness publication & runner checklist
 ├── test-e2e-design-system.mjs        # The 4-tier automated E2E test suite runner
 ├── doc/
-│   └── UI_DESIGN_SYSTEM.md           # Design system tokens and pattern specifications
+│   └── design-system/foundations-and-components.md # Design system tokens and pattern specifications
 ├── src/
 │   ├── components/
 │   │   ├── ui/

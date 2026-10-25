@@ -35,13 +35,13 @@ Hệ thống tài liệu Onboarding được chia thành 3 cấp độ rõ ràng
 
 ```
 Tài liệu Onboarding
-├── 🌟 Cấp 1: Global Onboarding (Toàn dự án) -> 00_OVERVIEW_AND_ONBOARDING.md
+├── 🌟 Cấp 1: Global Onboarding (Toàn dự án) -> doc/README.md
 │   └── Dành cho: Người mới vào dự án ngày đầu tiên.
 │
-├── 📦 Cấp 2: Module/Feature Onboarding -> doc/features/XX_[MODULE_NAME].md
+├── 📦 Cấp 2: Module/Feature Onboarding -> doc/features/[module-name].md
 │   └── Dành cho: Người bắt đầu sửa hoặc làm một tính năng cụ thể (Auth, Kanban, Admin...).
 │
-└── 🛠️ Cấp 3: Ops & Workflow Onboarding -> doc/GIT_WORKFLOW_..., CLOUDFLARE_...
+└── 🛠️ Cấp 3: Ops & Workflow Onboarding -> doc/operations/
     └── Dành cho: Quy trình hạ tầng, deploy, bảo mật, CI/CD và quy tắc Git.
 ```
 
@@ -130,8 +130,8 @@ Một tài liệu ONB chỉ được duyệt (Approved) đưa vào thư mục `d
 ## VI. QUY TRÌNH DUYỆT & CẬP NHẬT TÀI LIỆU ONBOARDING (LIFECYCLE)
 
 1. **Khi phát triển tính năng mới (New Feature):**
-   * Bắt buộc đính kèm 1 file `doc/features/XX_[FEATURE_NAME].md` tuân thủ đúng khung chuẩn ở Mục III.
-   * Cập nhật thêm 1 dòng vào Bản đồ tra cứu nhanh tại `00_OVERVIEW_AND_ONBOARDING.md`.
+   * Bắt buộc đính kèm 1 file `doc/features/[feature-name].md` tuân thủ đúng khung chuẩn ở Mục III.
+   * Cập nhật thêm một mục vào Bản đồ tra cứu nhanh tại `doc/README.md`.
 
 2. **Khi refactor hoặc đổi kiến trúc (Refactoring):**
    * Nghiêm cấm chỉ sửa code mà quên sửa doc. Bắt buộc cập nhật file doc liên quan trước khi merge Pull Request vào nhánh `main`.

@@ -112,10 +112,10 @@ runTest("Environment variables conform to architecture specifications", () => {
 })
 
 // -----------------------------------------------------------------------------
-// Group 3: Documentation (doc/GIT_WORKFLOW_VERCEL_PIPELINE.md)
+// Group 3: Documentation (doc/operations/deployment/git-vercel-workflow.md)
 // -----------------------------------------------------------------------------
-runTest("doc/GIT_WORKFLOW_VERCEL_PIPELINE.md is complete and production-ready", () => {
-  const docPath = path.join(rootDir, "doc", "GIT_WORKFLOW_VERCEL_PIPELINE.md")
+runTest("Git/Vercel workflow documentation is complete and production-ready", () => {
+  const docPath = path.join(rootDir, "doc", "operations", "deployment", "git-vercel-workflow.md")
   assert.ok(fs.existsSync(docPath), "Operational doc must exist")
   const content = fs.readFileSync(docPath, "utf-8")
 

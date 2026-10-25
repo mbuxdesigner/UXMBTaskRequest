@@ -74,7 +74,7 @@ Mỗi bài toán là 1 hàng duy nhất. Cột `Payload` chứa toàn bộ objec
 ---
 
 ### 📦 BẢNG 2: `RAW_SETTINGS` (Lưu Trữ Cấu Hình Hệ Thống & Master Data)
-*(Xem chi tiết cơ chế đồng bộ 2 chiều tại `features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md`)*
+*(Xem chi tiết cơ chế đồng bộ 2 chiều tại [`master-data-sync.md`](master-data-sync.md).)*
 
 | Cột | Tên Cột Header | Kiểu Dữ Liệu | Ví dụ Key | Nội dung Payload |
 | :---: | :--- | :--- | :--- | :--- |

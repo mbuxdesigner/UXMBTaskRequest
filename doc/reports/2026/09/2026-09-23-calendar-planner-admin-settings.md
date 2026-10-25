@@ -51,7 +51,7 @@ Trong ngày làm việc 23/09/2026, đội ngũ kỹ thuật đã tập trung tr
 | **7** | **Tab Cấu hình Lịch trong Admin** | `src/components/admin/CalendarConfigTab.tsx` | ✅ Đạt 100% | 4 khối chức năng: Quy tắc hiển thị, RBAC Roles, CRUD Danh mục sự kiện, Giám sát cổng đồng bộ Lịch nghỉ. |
 | **8** | **Khắc phục lỗi Crash Quản trị hệ thống** | `src/pages/QuanLyPage.tsx`<br>`src/components/admin/CalendarConfigTab.tsx` | ✅ Đạt 100% | Khai báo `calendar_config` vào `type AdminTab`; sửa triệt để lỗi `.length` trên các mảng chưa khởi tạo. |
 | **9** | **Full-bleed Routing trong App.tsx** | `src/App.tsx` | ✅ Đạt 100% | Render `page === "calendar"` ở chế độ toàn khung nhìn không padding ngoài, triệt tiêu lỗi cuộn kép (double scrollbars). |
-| **10** | **Tài liệu Tính năng & Báo cáo** | `doc/features/13_UX_TEAM_PLANNER_AND_CALENDAR.md`<br>`doc/reports/2026-09-23_CALENDAR_PLANNER_AND_ADMIN_SETTINGS_REPORT.md` | ✅ Đạt 100% | Biên soạn tài liệu kiến trúc, luồng dữ liệu, hướng dẫn vận hành và nhật ký khắc phục sự cố chi tiết. |
+| **10** | **Tài liệu Tính năng & Báo cáo** | `doc/features/planner-and-calendar.md`<br>`doc/reports/2026/09/2026-09-23-calendar-planner-admin-settings.md` | ✅ Đạt 100% | Biên soạn tài liệu kiến trúc, luồng dữ liệu, hướng dẫn vận hành và nhật ký khắc phục sự cố chi tiết. |
 
 ---
 
@@ -186,8 +186,8 @@ dist/assets/QuanLyPage-CcYCWoah.js           395.33 kB │ gzip:  74.67 kB
 ## 📂 DANH MỤC CÁC TỆP ĐÃ TẠO MỚI & CHỈNH SỬA
 
 ### Tệp Tạo Mới:
-1. `doc/features/13_UX_TEAM_PLANNER_AND_CALENDAR.md`: Tài liệu đặc tả kiến trúc, 4 tầng dữ liệu, cấu hình Admin và nguyên tắc phòng vệ cho module Calendar Planner.
-2. `doc/reports/2026-09-23_CALENDAR_PLANNER_AND_ADMIN_SETTINGS_REPORT.md`: Báo cáo chi tiết công việc, nguyên nhân và biện pháp khắc phục sự cố ngày 23/09/2026.
+1. `doc/features/planner-and-calendar.md`: Tài liệu đặc tả kiến trúc, 4 tầng dữ liệu, cấu hình Admin và nguyên tắc phòng vệ cho module Calendar Planner.
+2. `doc/reports/2026/09/2026-09-23-calendar-planner-admin-settings.md`: Báo cáo chi tiết công việc, nguyên nhân và biện pháp khắc phục sự cố ngày 23/09/2026.
 
 ### Tệp Chỉnh Sửa & Tối Ưu:
 1. `src/components/admin/CalendarConfigTab.tsx`: Chuẩn hóa state `leavesList`, bổ sung deep fallbacks cho cấu hình, phòng vệ role permissions và event categories.

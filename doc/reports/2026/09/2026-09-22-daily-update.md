@@ -86,7 +86,7 @@
 | **31** | **Xây Dựng Component TimePicker Chuẩn reUI** | `src/components/reui/time-picker.tsx`<br>`src/components/admin/SystemParamsTab.tsx` | ✅ Hoàn thành 100% | Tạo component TimePicker chuẩn mực reUI (2 dòng LED container, 2 cột cuộn Giờ 00-23 & Phút 00-59, presets); thay thế 4 input time cơ bản trong Cài đặt lịch làm việc. |
 | **32** | **Hoàn Thiện Staggered Fade & Motion Animation (Technical Spec 100%)** | `src/lib/motion.ts`<br>`src/components/form/RequestForm.tsx`<br>`src/pages/TrackRequestPage.tsx`<br>`src/components/track/SolutionAgentsTable.tsx`<br>`src/components/kanban/KanbanBoard.tsx` | ✅ Hoàn thành 100% | Sửa lỗi giật cả trang (bỏ `y: 24` trên `pageContainerVariants`); công thức trễ $T_i = 50\text{ms} + i \times 70\text{ms}$; trượt tịnh tiến êm ái với `easeOutExpo` (720ms, blur 4px -> 0px, zero bounce); stagger 5 khối Form tạo task và từng dòng bảng `SolutionAgentsTable` qua `cascadeWaveTableRowVariants`. |
 | **33** | **Khảo Sát & Lập Danh Mục Dữ Liệu Tiềm Năng Toàn Hệ Thống** | `google-apps-script-backend.js`<br>`src/services/googleSheetService.ts`<br>`src/mockData.ts` | ✅ Hoàn thành 100% | Lập danh mục chi tiết các nguồn dữ liệu có sẵn trên Google Sheets/Backend nhưng chưa có UI hiển thị (`get_tests`, `get_submissions`, `spec_url`, `prototype_url`, `USERS.Last Active At`, `ping`, `fix_duplicate_ids`). |
-| **34** | **Phân Tích Kiến Trúc Mô Hình Lịch Đôi (Dual-Calendar Layout)** | `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` | ✅ Hoàn thành 100% | Phân tích chuyên sâu cơ chế Google Calendar: Lịch bé (Mini-Calendar Navigator / Monthly Context) kết hợp Lịch to (Main Canvas / Work Coordinator). |
+| **34** | **Phân Tích Kiến Trúc Mô Hình Lịch Đôi (Dual-Calendar Layout)** | `doc/reports/2026/09/2026-09-22-daily-update.md` | ✅ Hoàn thành 100% | Phân tích chuyên sâu cơ chế Google Calendar: Lịch bé (Mini-Calendar Navigator / Monthly Context) kết hợp Lịch to (Main Canvas / Work Coordinator). |
 
 ---
 
@@ -605,19 +605,19 @@ dist/assets/index-DklBgtFH.js                355.77 kB │ gzip:  86.43 kB
 ## 📈 4. DANH MỤC TÀI LIỆU KỸ THUẬT ĐÃ CẬP NHẬT
 
 1. **Báo cáo Ngày Toàn Diện:**
-   - `doc/reports/2026-09-22_DAILY_UPDATE_REPORT.md` (Cập nhật Mục 31-34, Chiến dịch IX & X, Hoạt họa Waterfall Spec và TimePicker reUI).
+   - `doc/reports/2026/09/2026-09-22-daily-update.md` (Cập nhật Mục 31-34, Chiến dịch IX & X, Hoạt họa Waterfall Spec và TimePicker reUI).
 2. **Tài Liệu Đặc Tả Design System & UI/UX Guideline:**
-   - `doc/features/06_DESIGN_SYSTEM_AND_UI_GUIDELINE.md` (Bổ sung Mục 6.1: Component TimePicker chuẩn reUI & Calendar Presets; Mục 6.2: Quy chuẩn Hoạt họa Chuyển động Staggered Waterfall Animation Spec).
+   - `doc/design-system/implementation-guide.md` (Bổ sung Mục 6.1: Component TimePicker chuẩn reUI & Calendar Presets; Mục 6.2: Quy chuẩn Hoạt họa Chuyển động Staggered Waterfall Animation Spec).
 3. **Tài Liệu Đặc Tả Quản Lý Bài Toán & Task Tracking:**
-   - `doc/features/02_TASK_MANAGEMENT_AND_TRACKING.md` (Cập nhật Mục 7.7: Trải nghiệm Chuyển động Cascade mượt mà cho Danh sách Task).
+   - `doc/features/task-management.md` (Cập nhật Mục 7.7: Trải nghiệm Chuyển động Cascade mượt mà cho Danh sách Task).
 4. **Tài Liệu Hướng Dẫn Chuyển Động Hệ Thống (Motion Guidelines):**
-   - `doc/motion-guidelines.md` (Đặc tả 6 pattern chuyển động chuẩn, spring physics, cascade wave và phân tầng nội bộ 3 bậc).
+   - `doc/design-system/motion.md` (Đặc tả 6 pattern chuyển động chuẩn, spring physics, cascade wave và phân tầng nội bộ 3 bậc).
 5. **Tài Liệu Đặc Tả Backend Google Apps Script & Google Sheets Database:**
-   - `doc/features/05_GOOGLE_SHEET_AND_GAS_BACKEND.md` (Cơ chế Auto-Chunking, Auto-Reassembly vượt giới hạn 50.000 ký tự; Double Persistence và Overflow Guard cho lịch sử Task).
+   - `doc/architecture/data-storage/google-sheets-and-gas.md` (Cơ chế Auto-Chunking, Auto-Reassembly vượt giới hạn 50.000 ký tự; Double Persistence và Overflow Guard cho lịch sử Task).
 6. **Tài Liệu Đặc Tả Tính Năng IA Map:**
-   - `doc/features/10_INFORMATION_ARCHITECTURE_AND_MINDMAP.md` (Phân cấp Lv5, Squad badge, Ultra-compact cards, Title 15px bold, Viewport Culling 256+ nodes).
+   - `doc/features/information-architecture.md` (Phân cấp Lv5, Squad badge, Ultra-compact cards, Title 15px bold, Viewport Culling 256+ nodes).
 7. **Tài Liệu Cấu Hình Quản Trị Hệ Thống:**
-   - `doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md` (Đặc tả chi tiết 8 phân hệ tham số nghiệp vụ và 14 mẫu thông báo đa kênh).
+   - `doc/features/system-configuration.md` (Đặc tả chi tiết 8 phân hệ tham số nghiệp vụ và 14 mẫu thông báo đa kênh).
 8. **Bản Đồ Tra Cứu Tổng Thể:**
-   - `doc/00_OVERVIEW_AND_ONBOARDING.md` và `doc/features/04_ADMIN_PORTAL_AND_RBAC.md`.
+   - `doc/README.md` và `doc/features/admin-portal.md`.
 

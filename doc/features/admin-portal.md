@@ -75,21 +75,21 @@ src/pages/QuanLyPage.tsx (Admin & Design Owner Gate)
 │       └── Đồng bộ 2 chiều (Push/Pull) với RAW_SETTINGS trên Google Sheets
 │
 └── 📂 NHÓM 3: HỆ THỐNG & KẾT NỐI
-    ├── ⚙️ Tab 7: system_params - Thông số Hệ thống & Tiêu chuẩn SLA (Xem doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md)
+    ├── ⚙️ Tab 7: system_params - Thông số Hệ thống & Tiêu chuẩn SLA (Xem doc/features/system-configuration.md)
     │   ├── Quản lý 6 phân khu: SLA ngày, Tải trọng & Định mức Designer, Ma trận Độ ưu tiên Lv1-Lv5
     │   ├── Kiểm tra tự động tổng trọng số Đánh giá KPI = 100%
     │   ├── Thể lệ đề thi & bài test năng lực UX
     │   ├── Cổng thông tin & Cấu hình Banner Khẩn cấp Toàn cầu (Global Announcement Banner)
     │   └── Lưu trữ phản ứng thời gian thực (CustomEvent mbbank_system_config_changed), Xuất/Nhập JSON
     │
-    ├── 🔔 Tab 8: notifications_config - Cấu hình Mẫu Thông báo Đa Kênh (Xem doc/features/12_ADMIN_SYSTEM_CONFIG_AND_NOTIFICATION_TEMPLATES.md)
+    ├── 🔔 Tab 8: notifications_config - Cấu hình Mẫu Thông báo Đa Kênh (Xem doc/features/system-configuration.md)
     │   ├── Quản lý 14 mẫu thông báo nghiệp vụ thuộc 6 nhóm tương tác
     │   ├── Chip click-to-insert placeholder biến số động ({requestId}, {taskTitle}, {actorName}, v.v.)
     │   ├── Bật/tắt 4 kênh phân phối độc lập: In-app Pop-up Toast, MS Teams Webhook, Email, Mobile Push
     │   ├── Thẻ mô phỏng xem trước hiển thị thời gian thực
     │   └── Nút "Bắn thử Toast trên màn hình" kiểm chứng trải nghiệm trực quan
     │
-    ├── 📦 Tab 9: masterdata - Squads & Sản phẩm (Xem chi tiết doc/features/09_MASTERDATA_AND_TWO_WAY_SYNC_SETTINGS.md)
+    ├── 📦 Tab 9: masterdata - Squads & Sản phẩm (Xem chi tiết doc/architecture/data-storage/master-data-sync.md)
     │   ├── Giao diện ReUI Card Grid tối ưu kèm bộ lọc & tìm kiếm nhanh
     │   ├── Quản lý danh mục UX Squads: Tên, Mã Code, Hạn mức tasks, Sản phẩm phụ trách
     │   ├── Phân bổ nhân sự Squad theo Vai trò chuẩn (Role-Based Pickers): PO, Business, UX/UI Designers

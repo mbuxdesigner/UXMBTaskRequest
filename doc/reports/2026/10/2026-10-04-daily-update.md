@@ -122,9 +122,9 @@ Tại `api/ai-gateway.ts`:
 | `src/lib/figmaExportUtils.ts` | Tạo mới | Bộ công cụ format Markdown sạch và xuất bảng dữ liệu sang TSV phục vụ Figma/Excel. |
 | `api/ai-gateway.ts` | Nâng cấp lớn | Tích hợp xác thực Session Token OTP, Rate Limiting 20 req/phút/IP, kiểm tra biến môi trường server an toàn. |
 | `tests/test-ai-chats-e2e-and-audit.mjs` | Bổ sung lớn | Bộ test tự động 4 tầng gồm 148 test cases kiểm thử PII, Gateway Auth, Rate Limit, Context Clipping, Figma Export, Dynamic Router và Audit bảo mật. |
-| `doc/features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md` | Bổ sung | Thêm mục 11 (Agentic Dynamic Router), mục 12 (Persona & Tone of Voice), mục 13 (Honest Activity Trace), mục 14 (Lộ trình 3 cấp độ mở rộng kho tài liệu), và mục 15 (Tối ưu hóa ngữ cảnh chuyên sâu & Trải nghiệm vi mô). |
-| `doc/00_OVERVIEW_AND_ONBOARDING.md` | Cập nhật | Bổ sung báo cáo ngày 03/10 và 04/10/2026 vào danh mục Onboarding trung tâm. |
-| `doc/reports/2026-10-04_DAILY_UPDATE_REPORT.md` | Tạo mới | Báo cáo chi tiết toàn bộ các hạng mục công việc hoàn thành trong ngày 04/10/2026. |
+| `doc/features/ai-copilot/overview.md` | Bổ sung | Thêm mục 11 (Agentic Dynamic Router), mục 12 (Persona & Tone of Voice), mục 13 (Honest Activity Trace), mục 14 (Lộ trình 3 cấp độ mở rộng kho tài liệu), và mục 15 (Tối ưu hóa ngữ cảnh chuyên sâu & Trải nghiệm vi mô). |
+| `doc/README.md` | Cập nhật | Bổ sung báo cáo ngày 03/10 và 04/10/2026 vào danh mục Onboarding trung tâm. |
+| `doc/reports/2026/10/2026-10-04-daily-update.md` | Tạo mới | Báo cáo chi tiết toàn bộ các hạng mục công việc hoàn thành trong ngày 04/10/2026. |
 
 ---
 

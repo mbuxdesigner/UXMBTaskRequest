@@ -34,9 +34,9 @@ function runTest(name, fn) {
 // -----------------------------------------------------------------------------
 // Group 1: Item 19 - Cloudflare Proxy & WAF Configuration Guide
 // -----------------------------------------------------------------------------
-runTest("Item 19: doc/CLOUDFLARE_HARDENING_GUIDE.md exists and contains complete hardening setup", () => {
-  const guidePath = path.join(rootDir, "doc", "CLOUDFLARE_HARDENING_GUIDE.md")
-  assert.ok(fs.existsSync(guidePath), "CLOUDFLARE_HARDENING_GUIDE.md must exist in doc/")
+runTest("Item 19: Cloudflare hardening guide exists and contains complete hardening setup", () => {
+  const guidePath = path.join(rootDir, "doc", "operations", "security", "cloudflare-hardening.md")
+  assert.ok(fs.existsSync(guidePath), "cloudflare-hardening.md must exist in doc/operations/security/")
   const content = fs.readFileSync(guidePath, "utf-8")
 
   // CNAME proxy to Vercel

@@ -2,7 +2,7 @@
 
 > **Đối tượng:** DevOps, SecOps, Backend và người trực vận hành  
 > **Môi trường:** Vercel Edge/Serverless + Google Apps Script + Upstash Redis  
-> **Last Updated:** 2026-10-05
+> **Last Updated:** 2026-10-24
 
 ## 1. Biến môi trường bắt buộc
 
@@ -21,6 +21,7 @@ Không tạo biến `VITE_*` chứa provider key. Mọi biến có tiền tố `
 
 - [ ] GAS version mới đã deploy thành Web App và `GAS_EXEC_URL` trỏ đúng deployment.
 - [ ] `OPENROUTER_API_KEY` chỉ tồn tại trong server environment.
+- [ ] Admin UI không có ô nhập provider key; request client không có `X-Custom-API-Key`, `apiKey` hoặc `customApiKey`.
 - [ ] Upstash URL/token đúng môi trường, không dùng chung production với test nếu không có namespace riêng.
 - [ ] `ALLOW_UNAUTHENTICATED_AI_DEV` unset hoặc `false` trên preview/production.
 - [ ] Origin production nằm trong allowlist gateway.
@@ -103,4 +104,5 @@ Production 503 khi thiếu rate-limit store là fail-closed đúng thiết kế.
 
 ### Changelog
 
+- `2026-10-24`: Production trả `RATE_LIMITER_UNAVAILABLE`/503 khi thiếu hoặc lỗi Upstash; loại hoàn toàn provider key do client cung cấp.
 - `2026-10-05`: Tạo runbook cho kiến trúc gateway-only, distributed rate limit và private cloud data.

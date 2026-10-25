@@ -153,4 +153,4 @@ Quy tắc vận hành:
 ## 📂 5. LIÊN HỆ & THAM CHIẾU HỆ THỐNG
 - **Component Render:** `src/components/chat/EchoArtifactSplitViewer.tsx`
 - **Dữ liệu Artifact:** `src/services/aiArtifactsService.ts`
-- **Tài liệu tính năng AI Copilot:** [14_AI_CHATS_AND_INTELLIGENT_COPILOT.md](features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md)
+- **Tài liệu tính năng AI Copilot:** [overview.md](overview.md)
