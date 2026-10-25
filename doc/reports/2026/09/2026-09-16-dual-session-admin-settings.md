@@ -166,8 +166,8 @@ Quá trình triển khai tuân thủ quy trình kiểm thử đối kháng (Adve
 | `src/pages/QuanLyPage.tsx` | Frontend Page | Bổ sung giao diện cấu hình phiên Role tại Tab RBAC và hiển thị nhãn tại Tab Team. |
 | `src/components/common/AddMemberModal.tsx` | Frontend Component | Dropdown chọn chính sách phiên cá nhân khi thêm/sửa thành viên. |
 | `google-apps-script-backend.js` | Backend Script | Xử lý 14 cột, API kiểm tra/gia hạn phiên, cơ chế RAM Cache + Sheet fallback. |
-| `doc/features/01_AUTH_AND_SESSION_MANAGEMENT.md` | Tài liệu hệ thống | Cập nhật toàn diện đặc tả tính năng Quản lý phiên song song. |
-| `doc/00_OVERVIEW_AND_ONBOARDING.md` | Tài liệu hệ thống | Cập nhật bản đồ tra cứu tài liệu kỹ thuật. |
+| `doc/features/auth-and-session.md` | Tài liệu hệ thống | Cập nhật toàn diện đặc tả tính năng Quản lý phiên song song. |
+| `doc/README.md` | Tài liệu hệ thống | Cập nhật bản đồ tra cứu tài liệu kỹ thuật. |
 
 ---
 

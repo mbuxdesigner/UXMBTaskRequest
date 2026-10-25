@@ -1,6 +1,7 @@
 import type { UXRequest } from "../data/mockData.ts"
-import type { UXArtifact } from "../services/aiArtifactsService.ts"
+import { isArtifactApprovedForAI, type UXArtifact } from "../services/aiArtifactsService.ts"
 import { normalizeConversationText, taskId, taskSearchText } from "./aiConversation.ts"
+import { buildProjectState, type ProjectStateSnapshot } from "./aiProjectState.ts"
 
 export type RetrievalSource = "tasks" | "documents" | "calendar"
 export type QueryOperation = "lookup" | "count" | "list" | "compare" | "summarize"
@@ -33,6 +34,7 @@ export interface StructuredToolResult {
   tasks: UXRequest[]
   documents: UXArtifact[]
   sources: AISourceReference[]
+  projectState?: ProjectStateSnapshot
   promptPayload: string
 }
 
@@ -173,15 +175,13 @@ export function executeQueryPlan(
     : plan.sources.includes("tasks")
     ? semanticSearch(plan.query, tasks, taskSearchText, 8)
     : []
-  const approvedArtifacts = artifacts.filter((artifact) =>
-    artifact.approvalStatus !== "retired"
-    && (!artifact.isCustomUploaded || artifact.approvalStatus === "approved")
-  )
+  const approvedArtifacts = artifacts.filter(isArtifactApprovedForAI)
   const rankedDocuments = plan.sources.includes("documents")
     ? semanticSearch(plan.query, approvedArtifacts, artifactText, 4)
     : []
   const selectedTasks = rankedTasks.map((result) => result.item)
   const selectedDocuments = rankedDocuments.map((result) => result.item)
+  const projectState = plan.sources.includes("tasks") ? buildProjectState(tasks) : undefined
   const sources: AISourceReference[] = [
     ...rankedTasks.map((result, index) => ({
       id: `T${index + 1}`,
@@ -200,6 +200,7 @@ export function executeQueryPlan(
     schema: "uxmb.tool-results.v1",
     query_plan: plan,
     tool_results: {
+      project_state: projectState,
       search_tasks: rankedTasks.map((result, index) => ({ source_id: `T${index + 1}`, relevance: Number(result.score.toFixed(3)), data: taskRecord(result.item) })),
       search_documents: rankedDocuments.map((result, index) => ({
         source_id: `D${index + 1}`,
@@ -208,7 +209,7 @@ export function executeQueryPlan(
       })),
     },
   }
-  return { plan, tasks: selectedTasks, documents: selectedDocuments, sources, promptPayload: JSON.stringify(payload) }
+  return { plan, tasks: selectedTasks, documents: selectedDocuments, sources, projectState, promptPayload: JSON.stringify(payload) }
 }
 
 export function summarizeConversation(messages: Array<{ role: "user" | "assistant"; content: string }>, maxItems = 8): string {

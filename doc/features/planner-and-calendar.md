@@ -52,7 +52,7 @@ src/
 
 ## 🎨 3. BỐ CỤC DUAL-CALENDAR & TRẢI NGHIỆM NGƯỜI DÙNG (UX/UI)
 
-Module được thiết kế theo đúng quy chuẩn [UI_DESIGN_SYSTEM.md](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md), [motion-guidelines.md](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/motion-guidelines.md) và tham chiếu thực tế giao diện ClickUp Planner / Vertex Studio:
+Module được thiết kế theo đúng quy chuẩn [Design System](../design-system/foundations-and-components.md), [Motion Guidelines](../design-system/motion.md) và tham chiếu thực tế giao diện ClickUp Planner / Vertex Studio:
 
 ### 3.1. Cột Trái (Planner Sidebar — Chiều rộng cố định 285px)
 - **Header Sidebar:** Tiêu đề `Planner` kèm các nút phím tắt Tìm kiếm (`Ctrl+K`), Thu gọn thanh bên (`⌘ \`), Tạo sự kiện mới (`+`).

@@ -63,9 +63,9 @@ Set server-side `OPENROUTER_API_KEY`, `GAS_EXEC_URL`, `UPSTASH_REDIS_REST_URL` a
 
 ## Related documents
 
-- `doc/features/14_AI_CHATS_AND_INTELLIGENT_COPILOT.md`
-- `doc/reports/2026-10-05_AI_CHATS_AUDIT_AND_HARDENING_REPORT.md`
-- `doc/AI_CHAT_SECURITY_AND_DEPLOYMENT_RUNBOOK.md`
-- `doc/AI_CHAT_UAT_AND_ACCEPTANCE_CHECKLIST.md`
+- `doc/features/ai-copilot/overview.md`
+- `doc/reports/2026/10/2026-10-05-ai-chat-audit-hardening.md`
+- `doc/operations/ai-copilot/security-deployment-runbook.md`
+- `doc/quality/uat/ai-copilot-acceptance.md`
 
 **Last Updated:** 2026-10-05

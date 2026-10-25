@@ -57,6 +57,10 @@ export function purgeClientAIKeys(): void {
     localStorage.removeItem(STORAGE_GEMINI_KEY)
     localStorage.removeItem(STORAGE_GEMINI_KEYS_KEY)
     localStorage.removeItem(STORAGE_AI_GATEWAY_KEY)
+    localStorage.removeItem("ux_portal_ai_api_key")
+    localStorage.removeItem("ux_portal_ai_keys_pool")
+    localStorage.removeItem("ux_portal_custom_gemini_key")
+    localStorage.removeItem("ux_portal_custom_gemini_keys_pool")
   } catch {}
 }
 
@@ -664,29 +668,13 @@ export const STORAGE_CUSTOM_AI_KEYS_POOL = "ux_portal_ai_keys_pool"
 export const STORAGE_CUSTOM_GEMINI_KEY = "ux_portal_custom_gemini_key"
 
 export function getCustomApiKey(): string {
-  if (typeof window === "undefined") return ""
-  try {
-    const direct = localStorage.getItem(STORAGE_CUSTOM_AI_KEY)
-    if (direct) return direct
-    const pool = getCustomAIKeysPool()
-    if (pool.length > 0) return pool[0].key
-    return ""
-  } catch {
-    return ""
-  }
+  purgeClientAIKeys()
+  return ""
 }
 
 export function saveCustomApiKey(key: string): void {
-  if (typeof window === "undefined") return
-  try {
-    const clean = key.trim()
-    if (clean) {
-      localStorage.setItem(STORAGE_CUSTOM_AI_KEY, clean)
-      addCustomAIKey(clean, "Key chính")
-    } else {
-      localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
-    }
-  } catch {}
+  void key
+  purgeClientAIKeys()
 }
 
 export function removeCustomApiKey(): void {
@@ -698,57 +686,20 @@ export function removeCustomApiKey(): void {
 }
 
 export function getCustomAIKeysPool(): AIKeyEntry[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(STORAGE_CUSTOM_AI_KEYS_POOL)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-    const single = localStorage.getItem(STORAGE_CUSTOM_AI_KEY)
-    if (single) {
-      return [{
-        id: "key-primary",
-        key: single,
-        label: "Key chính",
-        status: "active",
-        createdAt: new Date().toISOString()
-      }]
-    }
-    return []
-  } catch {
-    return []
-  }
+  purgeClientAIKeys()
+  return []
 }
 
 export function saveCustomAIKeysPool(keys: AIKeyEntry[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_CUSTOM_AI_KEYS_POOL, JSON.stringify(keys))
-    if (keys.length > 0) {
-      localStorage.setItem(STORAGE_CUSTOM_AI_KEY, keys[0].key)
-    } else {
-      localStorage.removeItem(STORAGE_CUSTOM_AI_KEY)
-    }
-  } catch {}
+  void keys
+  purgeClientAIKeys()
 }
 
 export function addCustomAIKey(rawKey: string, label: string = "API Key"): AIKeyEntry[] {
-  const clean = rawKey.trim()
-  if (!clean) return getCustomAIKeysPool()
-  const current = getCustomAIKeysPool()
-  const exists = current.some(k => k.key === clean)
-  if (exists) return current
-  const newEntry: AIKeyEntry = {
-    id: "key-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-    key: clean,
-    label: label.trim() || `Key #${current.length + 1}`,
-    status: "active",
-    createdAt: new Date().toISOString()
-  }
-  const updated = [...current, newEntry]
-  saveCustomAIKeysPool(updated)
-  return updated
+  void rawKey
+  void label
+  purgeClientAIKeys()
+  return []
 }
 
 export function removeCustomAIKey(id: string): AIKeyEntry[] {
@@ -761,57 +712,20 @@ export function removeCustomAIKey(id: string): AIKeyEntry[] {
 export const STORAGE_CUSTOM_GEMINI_KEYS_POOL = "ux_portal_custom_gemini_keys_pool"
 
 export function getCustomGeminiKeysPool(): GeminiKeyEntry[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEYS_POOL)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-    const single = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY)
-    if (single) {
-      return [{
-        id: "gemini-primary",
-        key: single,
-        label: "Google Key chính",
-        status: "active",
-        createdAt: new Date().toISOString()
-      }]
-    }
-    return []
-  } catch {
-    return []
-  }
+  purgeClientAIKeys()
+  return []
 }
 
 export function saveCustomGeminiKeysPool(keys: GeminiKeyEntry[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEYS_POOL, JSON.stringify(keys))
-    if (keys.length > 0) {
-      localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEY, keys[0].key)
-    } else {
-      localStorage.removeItem(STORAGE_CUSTOM_GEMINI_KEY)
-    }
-  } catch {}
+  void keys
+  purgeClientAIKeys()
 }
 
 export function addCustomGeminiKey(rawKey: string, label: string = "Google Key"): GeminiKeyEntry[] {
-  const clean = rawKey.trim()
-  if (!clean) return getCustomGeminiKeysPool()
-  const current = getCustomGeminiKeysPool()
-  const exists = current.some(k => k.key === clean)
-  if (exists) return current
-  const newEntry: GeminiKeyEntry = {
-    id: "gkey-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-    key: clean,
-    label: label.trim() || `Google Key #${current.length + 1}`,
-    status: "active",
-    createdAt: new Date().toISOString()
-  }
-  const updated = [...current, newEntry]
-  saveCustomGeminiKeysPool(updated)
-  return updated
+  void rawKey
+  void label
+  purgeClientAIKeys()
+  return []
 }
 
 export function removeCustomGeminiKey(id: string): GeminiKeyEntry[] {
@@ -822,48 +736,29 @@ export function removeCustomGeminiKey(id: string): GeminiKeyEntry[] {
 }
 
 export function getCustomGeminiKey(): string {
-  if (typeof window === "undefined") return ""
-  try {
-    const direct = localStorage.getItem(STORAGE_CUSTOM_GEMINI_KEY)
-    if (direct) return direct
-    const pool = getCustomGeminiKeysPool()
-    if (pool.length > 0) return pool[0].key
-    return ""
-  } catch {
-    return ""
-  }
+  purgeClientAIKeys()
+  return ""
 }
 
 export function saveCustomGeminiKey(key: string): void {
-  if (typeof window === "undefined") return
-  try {
-    const clean = key.trim()
-    if (clean) {
-      localStorage.setItem(STORAGE_CUSTOM_GEMINI_KEY, clean)
-      addCustomGeminiKey(clean, "Google Key chính")
-    } else {
-      localStorage.removeItem(STORAGE_CUSTOM_GEMINI_KEY)
-    }
-  } catch {}
+  void key
+  purgeClientAIKeys()
 }
 
 /**
  * Test kết nối thử nghiệm đến OpenRouter với 1 API Key cụ thể
  */
-export async function testAIConnection(apiKey?: string, model: string = DEFAULT_AI_MODEL): Promise<{ success: boolean; message: string; latencyMs: number }> {
-  const activeKey = (apiKey !== undefined ? apiKey : getCustomApiKey()).trim()
+export async function testAIConnection(_apiKey?: string, model: string = DEFAULT_AI_MODEL): Promise<{ success: boolean; message: string; latencyMs: number }> {
   const startTime = Date.now()
   const sessionToken = getStoredSessionToken()
   const headers: Record<string, string> = { "Content-Type": "application/json" }
   if (sessionToken) headers["Authorization"] = `Bearer ${sessionToken}`
-  if (activeKey) headers["x-custom-api-key"] = activeKey
   try {
     const res = await fetch("/api/ai-gateway", {
       method: "POST",
       headers,
       body: JSON.stringify({
         model,
-        apiKey: activeKey || undefined,
         messages: [{ role: "user", content: "Ping" }],
         max_tokens: 64,
       }),
@@ -978,19 +873,12 @@ export async function streamAICompletion(
       // Trong Production (!isDev), BẮT BUỘC 100% phải gọi qua gateway và đính kèm session token
       if (!response) {
         const sessionToken = getStoredSessionToken()
-        const customKey = isGeminiTargetForUsage
-          ? (getNextActiveGeminiKey() || getCustomGeminiKey() || getCustomApiKey())
-          : (getCustomApiKey() || getNextActiveGeminiKey())
         const gatewayHeaders: Record<string, string> = {
           "Content-Type": "application/json",
         }
         if (sessionToken) {
           gatewayHeaders["Authorization"] = `Bearer ${sessionToken}`
         }
-        if (customKey) {
-          gatewayHeaders["x-custom-api-key"] = customKey
-        }
-
         try {
           const gRes = await fetch("/api/ai-gateway", {
             method: "POST",
@@ -1001,7 +889,6 @@ export async function streamAICompletion(
               models: fallbackModels,
               route: "fallback",
               stream: true,
-              apiKey: customKey || undefined,
               temperature: config.temperature ?? 0.7,
               max_tokens: config.max_tokens ?? 2048,
             }),

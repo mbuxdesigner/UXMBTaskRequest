@@ -20,7 +20,7 @@
 | **6** | **Khắc Phục Triệt Để Lỗi Responsive & Vỡ Bố Cục** | ✅ Hoàn thành 100% | • Ngăn chặn tràn khung ngang với `overflow-x-clip` tại `App.tsx` trên cả 4 breakpoint (375px, 768px, 1024px, 1440px).<br>• Khắc phục lỗi tràn 24px của Drawer trên tablet 768px (`sm:max-w-[calc(100vw-24px)] md:w-[720px]`).<br>• Giải phóng không gian bảng Quản trị trên 1024px (tăng +64.3% bề rộng hiển thị bằng cách chuyển sidebar phụ thành tab cuộn ngang).<br>• Form 2-cột tự động xếp chồng trên mobile/tablet và phân chia 8/4 trên desktop $\ge 1280\text{px}$.<br>• Xử lý ngắt dòng thông minh (`whitespace-nowrap`, text truncation, tooltip). |
 | **7** | **Nâng Cấp Hệ Thống Toast Sang ReUI Sonner** | ✅ Hoàn thành 100% | Cài đặt `sonner@2.0.8`, khởi tạo [`src/components/reui/sonner.tsx`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/src/components/reui/sonner.tsx) chuẩn ReUI (https://reui.io/components/sonner). Khắc phục tình trạng chỉ thấy số chưa thấy toast bằng cách tự động bắn toast khi có thông báo mới/chưa đọc và đồng bộ qua BroadcastChannel. |
 | **8** | **Xử Lý Thông Báo Xếp Chồng 3D (Stacked Toasts)** | ✅ Hoàn thành 100% | Cấu hình `visibleToasts={4}` và `expand={false}`: Khi có nhiều thông báo xuất hiện liên tiếp, các thẻ tự động co gọn thành một tập thẻ 3D xếp tầng đẹp mắt ở góc dưới phải màn hình với hiệu ứng chiều sâu (drop shadow & scale down), tự động bung mở mượt mà khi rê chuột (hover expand) và tích hợp nút bấm Dark Navy *"Xem chi tiết"*. |
-| **9** | **Ban Hành Tài Liệu UI Design System Guidelines** | ✅ Hoàn thành 100% | Biên soạn và ban hành bộ tài liệu chuẩn [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md) gồm 6 chương chuyên sâu, 834 dòng, 49.6 KB quy định toàn bộ Design Tokens, Component Specs, Motion Guidelines, Responsive Layouts, Do's & Don'ts và ReUI Sonner Toast Architecture. |
+| **9** | **Ban Hành Tài Liệu UI Design System Guidelines** | ✅ Hoàn thành 100% | Biên soạn và ban hành bộ tài liệu chuẩn [`doc/design-system/foundations-and-components.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/design-system/foundations-and-components.md) gồm 6 chương chuyên sâu, 834 dòng, 49.6 KB quy định toàn bộ Design Tokens, Component Specs, Motion Guidelines, Responsive Layouts, Do's & Don'ts và ReUI Sonner Toast Architecture. |
 
 ---
 
@@ -101,7 +101,7 @@
 
 ## 📖 4. DANH MỤC TÀI LIỆU & TÀI NGUYÊN QUAN TRỌNG
 
-1. **Cẩm nang Design System chuẩn:** [`doc/UI_DESIGN_SYSTEM.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/UI_DESIGN_SYSTEM.md)
+1. **Cẩm nang Design System chuẩn:** [`doc/design-system/foundations-and-components.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/doc/design-system/foundations-and-components.md)
    - Mục 3.7: Quy chuẩn kiến trúc ReUI Sonner Toast Notification.
    - Bảng mã màu Tokens, Typography, Component Specs, Motion Physics và Do's & Don'ts.
 2. **Quy chuẩn kiểm thử E2E:** [`TEST_INFRA.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/TEST_INFRA.md) & [`TEST_READY.md`](file:///d:/AI%20dev/MBBank/UXMBTaskRequest-main/UXMBTaskRequest-main/TEST_READY.md).
