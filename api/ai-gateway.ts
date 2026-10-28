@@ -464,6 +464,8 @@ export default async function handler(req: Request): Promise<Response> {
       stream = false,
       temperature = 0.7,
       max_tokens = 1024,
+      tools,
+      tool_choice,
     } = body
 
     // 6. Provider credentials are server-managed only.
@@ -496,20 +498,95 @@ export default async function handler(req: Request): Promise<Response> {
       )
     }
 
-    const normalizedMessages = messages.map((message: any) => ({
-      role: message?.role,
-      content: message?.content,
-    }))
+    const TOOL_NAMES = new Set(["search_tasks", "get_task_detail", "search_documents", "read_calendar", "compute_risks"])
+    const invalidToolMessage = messages.some((message: any) => {
+      if (message?.role === "assistant" && Array.isArray(message?.tool_calls)) {
+        return message.tool_calls.length > 8 || message.tool_calls.some((call: any) =>
+          call?.type !== "function" ||
+          typeof call?.id !== "string" || call.id.length === 0 || call.id.length > 128 ||
+          typeof call?.function?.name !== "string" || !TOOL_NAMES.has(call.function.name) ||
+          typeof call?.function?.arguments !== "string" || call.function.arguments.length > 4_000
+        )
+      }
+      if (message?.role === "tool") {
+        const toolCallId = String(message?.tool_call_id || "").trim()
+        return !toolCallId || toolCallId.length > 128 || typeof message?.content !== "string"
+      }
+      return false
+    })
+    if (invalidToolMessage) {
+      return new Response(
+        JSON.stringify({ success: false, error: { message: "Tool call hoặc kết quả tool không hợp lệ." } }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
+    const normalizedMessages = messages.map((message: any) => {
+      const normalized: Record<string, unknown> = {
+        role: message?.role,
+        content: message?.content,
+      }
+      if (message?.role === "assistant" && Array.isArray(message?.tool_calls)) {
+        normalized.tool_calls = message.tool_calls.slice(0, 8)
+      }
+      if (message?.role === "tool") {
+        normalized.tool_call_id = String(message.tool_call_id).trim()
+      }
+      return normalized
+    })
     const serializedMessages = JSON.stringify(normalizedMessages)
     const hasInvalidMessage = normalizedMessages.some((message: any) =>
-      !["system", "user", "assistant"].includes(message.role) ||
-      !(typeof message.content === "string" || Array.isArray(message.content))
+      !["system", "user", "assistant", "tool"].includes(message.role) ||
+      !(typeof message.content === "string" || message.content === null || Array.isArray(message.content))
     )
     if (hasInvalidMessage || serializedMessages.length > MAX_REQUEST_CHARS) {
       return new Response(
         JSON.stringify({ success: false, error: { message: "Nội dung hội thoại không hợp lệ hoặc vượt giới hạn." } }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
+    }
+
+    // Tool definitions do client gửi lên; chỉ cho phép function tools với schema tối giản.
+    let normalizedTools: Array<Record<string, unknown>> | undefined
+    if (tools !== undefined) {
+      if (!Array.isArray(tools) || tools.length > 5) {
+        return new Response(
+          JSON.stringify({ success: false, error: { message: "Định nghĩa tools không hợp lệ." } }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+      normalizedTools = []
+      for (const tool of tools) {
+        const fn = (tool as any)?.function
+        const name = typeof fn?.name === "string" ? fn.name : ""
+        if ((tool as any)?.type !== "function" || !TOOL_NAMES.has(name)) {
+          return new Response(
+            JSON.stringify({ success: false, error: { message: `Tool không được phép: ${name || "unknown"}` } }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          )
+        }
+        normalizedTools.push({
+          type: "function",
+          function: {
+            name,
+            description: String(fn?.description || "").slice(0, 1000),
+            parameters: fn?.parameters && typeof fn.parameters === "object" ? fn.parameters : { type: "object", properties: {} },
+          },
+        })
+      }
+    }
+    let normalizedToolChoice: unknown
+    if (tool_choice !== undefined) {
+      if (tool_choice === "auto" || tool_choice === "none") {
+        normalizedToolChoice = tool_choice
+      } else if (tool_choice && typeof tool_choice === "object") {
+        normalizedToolChoice = tool_choice
+      } else {
+        return new Response(
+          JSON.stringify({ success: false, error: { message: "tool_choice không hợp lệ." } }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
     }
 
     const requestedModel = String(model || DEFAULT_MODEL).trim()
@@ -536,6 +613,7 @@ export default async function handler(req: Request): Promise<Response> {
       stream: Boolean(stream),
       temperature: safeTemperature,
       max_tokens: safeMaxTokens,
+      ...(normalizedTools?.length ? { tools: normalizedTools, tool_choice: normalizedToolChoice || "auto" } : {}),
     }
 
     // 7. Key Rotation Execution
@@ -577,6 +655,7 @@ export default async function handler(req: Request): Promise<Response> {
             stream: Boolean(stream),
             temperature: safeTemperature,
             max_tokens: safeMaxTokens,
+            ...(normalizedTools?.length ? { tools: normalizedTools, tool_choice: normalizedToolChoice || "auto" } : {}),
           }
         : openRouterPayload
 

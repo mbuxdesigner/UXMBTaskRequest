@@ -10,6 +10,9 @@ export interface AIConversationMemory {
   lastUserQuery?: string
   conversationSummary?: string
   summarizedMessageCount?: number
+  preferredSquads?: string[]
+  preferredTopics?: string[]
+  totalInteractions?: number
   updatedAt: string
 }
 
@@ -901,6 +904,9 @@ export function createConversationMemory(options: {
     lastUserQuery: options.userQuery,
     conversationSummary: options.conversationSummary ?? options.previous?.conversationSummary,
     summarizedMessageCount: options.summarizedMessageCount ?? options.previous?.summarizedMessageCount,
+    preferredSquads: options.previous?.preferredSquads || [],
+    preferredTopics: options.previous?.preferredTopics || [],
+    totalInteractions: (options.previous?.totalInteractions || 0) + 1,
     updatedAt: (options.now || new Date()).toISOString(),
   }
 }

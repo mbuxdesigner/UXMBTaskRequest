@@ -13,7 +13,7 @@ import {
   PanelLeft,
   ArrowUp,
   ArrowLeft,
-  Bookmark,
+  MessageSquare,
   Download,
   MoreHorizontal,
   Edit2,
@@ -33,7 +33,6 @@ import {
   ZoomOut,
   Send,
   ExternalLink,
-  MessageSquare,
   CheckCircle2,
   AtSign,
   Command as CommandIcon,
@@ -67,6 +66,8 @@ import { Dialog } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { MBRobotHead, type RobotHeadState } from "@/components/common/MBRobotHead"
+import { getAgentToolDefinitions, executeAgentTool } from "@/lib/aiTools"
+import { getStoredSessionToken } from "@/services/aiService"
 import {
   buildAggregateClarification,
   buildDeterministicAggregateAnswer,
@@ -111,8 +112,8 @@ import { loadAllCalendarItems, type PlannerEntry } from "@/services/calendarServ
 import { fetchRequests } from "@/api/api"
 import {
   buildChatPrompt,
-  serializeContext,
   buildEnrichedContext,
+  computeTaskMetrics,
   detectUserIntent,
   searchArtifactsByQuery,
   serializeArtifactsContext,
@@ -732,8 +733,30 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
     return EMPTY_STATE_CATEGORIES.find((c) => c.id === emptyCategory) || EMPTY_STATE_CATEGORIES[0]
   }, [emptyCategory])
 
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [visibleQuestionId, setVisibleQuestionId] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  const handleChatScroll = useCallback(() => {
+    const viewport = chatScrollRef.current
+    if (!viewport) return
+    const questions = Array.from(viewport.querySelectorAll<HTMLElement>('[data-chat-role="user"]'))
+    if (questions.length === 0) return
+    const viewportTop = viewport.getBoundingClientRect().top
+    const threshold = viewportTop + 76
+    const current = questions.filter((question) => question.getBoundingClientRect().top <= threshold).at(-1)
+    const id = current && current.getBoundingClientRect().top < viewportTop
+      ? current.id.replace(/^chat-message-/, "")
+      : null
+    setVisibleQuestionId((previous) => previous === id ? previous : id)
+  }, [])
+
+  useEffect(() => {
+    setVisibleQuestionId(null)
+    const frame = requestAnimationFrame(() => handleChatScroll())
+    return () => cancelAnimationFrame(frame)
+  }, [activeThreadId, handleChatScroll])
 
   // Unmount cleanup hook: prevent fetch stream memory leak
   useEffect(() => {
@@ -1513,6 +1536,84 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       `💡 *Mẹo:* Bạn có thể gõ các lệnh **\`/tiendo\`**, **\`/chart\`**, **\`/flow\`**, **\`/doc\`** để nhận báo cáo hoặc sơ đồ tức thì!`
   }
 
+  // Agentic retrieval: giới hạn tối đa 3 vòng model và 5 tool call/lượt.
+  const runAgenticRetrieval = async (
+    baseMessages: PromptMessage[],
+    context: { tasks: UXRequest[]; artifacts: UXArtifact[]; events: PlannerEntry[] },
+    signal: AbortSignal,
+    model: string,
+    temperature: number,
+    maxTokens: number,
+    onProgress: (summary: string) => void
+  ): Promise<{ messages: PromptMessage[]; toolSummaries: string[] }> => {
+    const messages: any[] = baseMessages.map((message) => ({ role: message.role, content: message.content }))
+    const toolSummaries: string[] = []
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    const sessionToken = getStoredSessionToken()
+    if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`
+
+    for (let round = 0; round < 3 && toolSummaries.length < 5; round += 1) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+      const response = await fetch("/api/ai-gateway", {
+        method: "POST",
+        headers,
+        signal,
+        body: JSON.stringify({
+          model,
+          messages,
+          tools: getAgentToolDefinitions(),
+          tool_choice: "auto",
+          stream: false,
+          temperature,
+          max_tokens: Math.min(maxTokens, 1400),
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error?.message || `AI agent gateway error (${response.status})`)
+      }
+      const envelope = await response.json()
+      const choice = envelope?.data?.choices?.[0]
+      const assistantMessage = choice?.message
+      const calls = Array.isArray(assistantMessage?.tool_calls) ? assistantMessage.tool_calls : []
+      if (!calls.length) break
+
+      messages.push({
+        role: "assistant",
+        content: assistantMessage.content || null,
+        tool_calls: calls.slice(0, 5 - toolSummaries.length).map((call: any) => ({
+          id: String(call.id || "").slice(0, 128),
+          type: "function",
+          function: {
+            name: String(call.function?.name || ""),
+            arguments: String(call.function?.arguments || "{}"),
+          },
+        })),
+      })
+
+      for (const call of calls.slice(0, 5 - toolSummaries.length)) {
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+        const id = String(call.id || `tool-${round}-${toolSummaries.length}`)
+        const name = String(call.function?.name || "")
+        let args: Record<string, unknown> = {}
+        try {
+          const parsed = JSON.parse(String(call.function?.arguments || "{}"))
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed
+        } catch {}
+        const result = executeAgentTool({ id, name, arguments: args }, {
+          tasks: context.tasks,
+          artifacts: context.artifacts,
+          events: context.events,
+          todayYMD: new Date().toISOString().slice(0, 10),
+        })
+        toolSummaries.push(result.summary)
+        onProgress(result.summary)
+        messages.push({ role: "tool", tool_call_id: id, content: result.content.slice(0, 12000) })
+      }
+    }
+    return { messages: messages as PromptMessage[], toolSummaries }
+  }
+
   // Send message & Stream reply
   const handleSendMessage = async (
     text: string,
@@ -1595,6 +1696,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       senderAvatar,
       senderEmail,
     }
+    setVisibleQuestionId(userMsgId)
 
     const previousThread = threads.find((thread) => thread.id === activeThreadId)
     const previousMemory = previousThread?.conversationMemory
@@ -1736,6 +1838,14 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       { role: "user" as const, content: cleanText },
     ]
     const conversationSummary = updateConversationSummary(previousMemory?.conversationSummary, summaryMessages)
+    const normalizedQuery = cleanText.toLocaleLowerCase("vi")
+    const squadPreference = tasks
+      .map((task) => task.squad_name || task.preferred_squad || "")
+      .find((squad) => squad && normalizedQuery.includes(squad.toLocaleLowerCase("vi")))
+    const conversationProfile = {
+      preferredSquads: Array.from(new Set([...(previousMemory?.preferredSquads || []), ...(squadPreference ? [squadPreference] : [])])).slice(-5),
+      preferredTopics: Array.from(new Set([...(previousMemory?.preferredTopics || []), ...(questionIntent.isDoc ? ["documents"] : questionIntent.isCalendar ? ["calendar"] : questionIntent.isTask ? ["tasks"] : [])])).slice(-8),
+    }
     const conversationMemory = createConversationMemory({
       previous: previousMemory,
       activeTask: resolvedTask,
@@ -1753,6 +1863,8 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       conversationSummary,
       summarizedMessageCount: summaryMessages.length,
     })
+    conversationMemory.preferredSquads = conversationProfile.preferredSquads
+    conversationMemory.preferredTopics = conversationProfile.preferredTopics
     if (aggregateTaskQuery) conversationMemory.activeTaskId = undefined
     const aggregateClarificationText = aggregateResolution
       ? buildAggregateClarification(aggregateResolution)
@@ -1938,9 +2050,17 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         content: m.content,
       }))
       const history: PromptMessage[] = [...baseHistory, { role: "user", content: text }]
-      const memoryContext = conversationMemory.conversationSummary
-        ? `=== CONVERSATION_SUMMARY ===\n${conversationMemory.conversationSummary}\n=== END_CONVERSATION_SUMMARY ===`
-        : ""
+      const memoryContext = [
+        conversationMemory.conversationSummary
+          ? `=== CONVERSATION_SUMMARY ===\n${conversationMemory.conversationSummary}\n=== END_CONVERSATION_SUMMARY ===`
+          : "",
+        conversationMemory.preferredSquads?.length
+          ? `Sở thích trong hội thoại này (do người dùng thể hiện): squad ${conversationMemory.preferredSquads.join(", ")}. Chỉ dùng để ưu tiên trình bày, không mở rộng quyền truy cập.`
+          : "",
+        conversationMemory.preferredTopics?.length
+          ? `Chủ đề thường hỏi trong hội thoại này: ${conversationMemory.preferredTopics.join(", ")}. Đây chỉ là gợi ý cá nhân hóa, không phải dữ kiện.`
+          : "",
+      ].filter(Boolean).join("\n\n")
       const structuredToolContext = `=== STRUCTURED_TOOL_RESULTS ===\n${toolResult.promptPayload}\n=== END_STRUCTURED_TOOL_RESULTS ===\n` +
         "Mọi kết luận dùng dữ liệu nội bộ phải kết thúc bằng mã nguồn tương ứng như [T1] hoặc [D1]. Không viện dẫn nguồn ngoài danh sách."
 
@@ -2054,6 +2174,40 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
       }
 
       const promptMessages = buildChatPrompt(contextStr, history)
+      const shouldRunAgent =
+        !customContext &&
+        !attachedImage &&
+        !isChartCommand &&
+        !isFlowCommand &&
+        (questionIntent.isTask || questionIntent.isDoc || questionIntent.isCalendar || isTiendoCommand)
+      let finalPromptMessages = promptMessages
+      if (shouldRunAgent) {
+        try {
+          const agentResult = await runAgenticRetrieval(
+            promptMessages,
+            {
+              tasks: focusedTasks.length > 0 ? focusedTasks : tasks,
+              artifacts: allArtifacts,
+              events: events as PlannerEntry[],
+            },
+            abortController.signal,
+            currentModel,
+            usesTaskContext || questionIntent.isDoc ? 0.2 : 0.35,
+            aiMode === "fast" ? 1200 : 1800,
+            (summary) => {
+              traceData.retrievalSummary = `${traceData.retrievalSummary} ${summary}`.trim()
+            }
+          )
+          finalPromptMessages = agentResult.messages
+          if (agentResult.toolSummaries.length > 0) {
+            traceData.retrievalSummary = `${traceData.retrievalSummary} Đã dùng tools: ${agentResult.toolSummaries.join("; ")}.`.trim()
+          }
+        } catch (agentError) {
+          if (abortController.signal.aborted) throw agentError
+          console.warn("[AIChatPage] Agentic retrieval unavailable; using standard prompt.", agentError)
+          finalPromptMessages = promptMessages
+        }
+      }
 
       let accumulated = ""
       let lastRenderTime = 0
@@ -2073,7 +2227,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
         abortController.signal.addEventListener("abort", onAbort, { once: true })
 
         streamAICompletion(
-          promptMessages,
+          finalPromptMessages,
           {
             onReasoningChunk: () => {
               if (abortController.signal.aborted) return
@@ -2850,7 +3004,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   transition={{ duration: 0.18, ease: easings.easeOutExpo }}
                   className="flex items-center gap-2 min-w-0"
                 >
-                  <h1 className="min-w-0 truncate text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  <h1 className="min-w-0 truncate text-sm sm:text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
                     {activeThread?.title || "Cuộc trò chuyện mới"}
                   </h1>
                 </motion.div>
@@ -2874,24 +3028,6 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
             >
               <Key className="size-3.5 text-slate-600" />
             </motion.button>
-
-            {/* Bookmark button */}
-            {!selectedArtifact && (
-              <motion.button
-                type="button"
-                onClick={() => activeThread && handleTogglePin(activeThread.id)}
-                {...tactileProps.iconButton}
-                className={cn(
-                  "inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 text-xs font-semibold cursor-pointer transition-all shadow-2xs",
-                  activeThread?.isPinned
-                    ? "bg-slate-100 text-slate-900 border-slate-300"
-                    : "bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                )}
-                title="Ghim đoạn chat"
-              >
-                <Bookmark className={cn("size-3.5", activeThread?.isPinned && "fill-current text-slate-900")} />
-              </motion.button>
-            )}
 
             {/* Return to MB Portal button */}
             {onBackToPortal && (
@@ -3104,7 +3240,11 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
               className="flex-1 min-h-0 flex flex-col overflow-hidden w-full h-full relative"
             >
             {/* Scrollable Message Viewport */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 sm:px-5">
+            <div
+              ref={chatScrollRef}
+              onScroll={handleChatScroll}
+              className="flex-1 min-h-0 overflow-y-auto px-3 py-2 sm:px-5"
+            >
               {!activeThread?.messages || activeThread.messages.length === 0 ? (
                 /* Empty State (Exact match to Echo Chat UI with 100% MBBank UX Domain Content) */
                 <div className="mx-auto flex w-full max-w-4xl lg:max-w-5xl flex-col justify-center py-6 sm:py-10">
@@ -3133,6 +3273,38 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                       </p>
                     </div>
                   </div>
+
+                  {tasks.length > 0 && (() => {
+                    const metrics = computeTaskMetrics(tasks)
+                    const urgent = tasks
+                      .filter((task) => {
+                        const deadline = String(task.expected_deadline || (task as any).design_deadline || "").slice(0, 10)
+                        return deadline && deadline < metrics.todayYMD && Number(task.progress) < 100
+                      })
+                      .slice(0, 3)
+                    return (
+                      <div className="mt-4 rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                        <div className="text-xs font-semibold text-amber-900 dark:text-amber-200">Điểm cần chú ý hôm nay</div>
+                        <div className="mt-1 text-xs text-amber-800/90 dark:text-amber-200/80">
+                          {metrics.overdueTasksCount} task quá hạn · {metrics.dueTodayTasksCount} đến hạn hôm nay · {metrics.poPendingOver24hCount} PO Pending trên 24h
+                        </div>
+                        {urgent.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {urgent.map((task) => (
+                              <button
+                                key={task.request_id}
+                                type="button"
+                                onClick={() => handleSendMessage(`Phân tích rủi ro và bước tiếp theo cho task ${task.request_id}`)}
+                                className="block max-w-full truncate text-left text-xs font-medium text-amber-950 underline decoration-amber-500/40 underline-offset-2 dark:text-amber-100"
+                              >
+                                [{task.request_id}] {task.nickname || task.title}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* 4 Category Pill Buttons with Floating Active Indicator */}
                   <div
@@ -3244,69 +3416,118 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
                   aria-label="Lịch sử tin nhắn cuộc trò chuyện"
                   className="mx-auto max-w-4xl lg:max-w-5xl space-y-4 py-1"
                 >
-                  {/* Single ReUI Sticky Top Box for active question */}
                   {(() => {
-                    const latestUserMsg = [...activeThread.messages]
-                      .reverse()
-                      .find((m) => m.sender === "user" || m.senderName !== "Echo Assistant");
-                    if (!latestUserMsg) return null;
+                    const chatTurns: Array<{ id: string; question: ChatMessage | null; answers: ChatMessage[] }> = []
+                    activeThread.messages.forEach((message) => {
+                      if (message.role === "user") {
+                        chatTurns.push({ id: message.id, question: message, answers: [] })
+                      } else {
+                        const current = chatTurns[chatTurns.length - 1]
+                        if (current) current.answers.push(message)
+                        else chatTurns.push({ id: `solo-${message.id}`, question: null, answers: [message] })
+                      }
+                    })
+                    const stickyTurn = visibleQuestionId ? chatTurns.find((turn) => turn.id === visibleQuestionId) : undefined
+                    const stickyAvatarName = stickyTurn?.question?.senderName
+                      ?? activeThread.messages.find((item) => item.role === "user")?.senderName
+                      ?? "Bạn"
+                    const stickyAvatarUrl = stickyTurn?.question?.senderAvatar
+                      ?? activeThread.messages.find((item) => item.role === "user")?.senderAvatar
                     return (
-                      <div
-                        className="sticky top-0 z-20 w-full rounded-xl border border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-card/95 backdrop-blur-md px-3.5 py-2 shadow-xs transition-all"
-                        aria-label="Câu hỏi đang đọc"
-                        data-testid="sticky-user-question"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200/70 dark:border-blue-800 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 select-none">
-                              <MessageSquare className="size-3 text-blue-600 dark:text-blue-400" />
-                              <span>Câu hỏi đang đọc</span>
-                            </span>
-                            <span
-                              className="truncate text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200"
-                              title={latestUserMsg.content}
-                            >
-                              {latestUserMsg.content}
-                            </span>
+                      <>
+                        {stickyTurn?.question ? (
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`chat-message-${stickyTurn.question!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                            className="sticky top-0 z-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-left shadow-xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                            data-testid="sticky-turn-question"
+                            aria-live="polite"
+                            aria-label="Về câu hỏi đang đọc"
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <UserAvatar
+                                name={stickyAvatarName}
+                                avatarUrl={stickyAvatarUrl}
+                                size="sm"
+                                className="ring-1 ring-slate-200 dark:ring-neutral-700"
+                              />
+                              <span className="max-w-full truncate text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-[13px]" title={stickyTurn.question.content}>
+                                {stickyTurn.question.content}
+                              </span>
+                            </div>
+                          </button>
+                        ) : null}
+                        {chatTurns.map((turn, turnIndex) => (
+                          <div key={turn.id} id={`chat-turn-${turn.id}`} className="scroll-mt-16 space-y-3 py-1">
+                            {turn.question && (
+                              <motion.div
+                                id={`chat-message-${turn.question.id}`}
+                                data-chat-role="user"
+                                data-chat-turn={turn.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: durations.fast, ease: easings.easeOutCubic }}
+                                className="scroll-mt-20"
+                              >
+                                <EchoMessageRow
+                                  message={turn.question}
+                                  isCopied={copiedMsgId === turn.question.id}
+                                  onCopy={handleCopyMessage}
+                                  isStreaming={false}
+                                  tasks={tasks}
+                                  intelligence={intelligence}
+                                  onEditPrompt={(newText) => handleEditUserPrompt(activeThread.messages.findIndex((item) => item.id === turn.question!.id), newText)}
+                                />
+                              </motion.div>
+                            )}
+                            {turn.answers.map((answer) => {
+                              const answerIndex = activeThread.messages.findIndex((item) => item.id === answer.id)
+                              return (
+                                <motion.div
+                                  key={answer.id}
+                                  id={`chat-message-${answer.id}`}
+                                  data-chat-role="assistant"
+                                  data-chat-turn={turn.id}
+                                  initial={{ opacity: 0, y: 6 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: durations.fast, ease: easings.easeOutCubic }}
+                                  className="scroll-mt-20"
+                                >
+                                  <EchoMessageRow
+                                    message={answer}
+                                    isCopied={copiedMsgId === answer.id}
+                                    onCopy={handleCopyMessage}
+                                    isStreaming={isStreaming && answerIndex === activeThread.messages.length - 1}
+                                    tasks={tasks}
+                                    intelligence={intelligence}
+                                    onOpenTask={(task) => setActiveDetailTask(task)}
+                                    onSendSuggestion={(text) => handleSendMessage(text)}
+                                    onRegenerate={() => handleRegenerateMessage(answerIndex)}
+                                    onRetry={() => handleRetryMessage(answerIndex)}
+                                    onEditPrompt={(newText) => handleEditUserPrompt(answerIndex, newText)}
+                                    onJumpToQuestion={turn.question ? () => {
+                                      document.getElementById(`chat-message-${turn.question!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+                                    } : undefined}
+                                    onFeedback={(feedback) => handleMessageFeedback(answer.id, feedback)}
+                                    onOpenArtifact={() => {
+                                      if (answer.attachedArtifactName) {
+                                        const matched = artifacts.find(
+                                          (a) => a.name.toLowerCase() === answer.attachedArtifactName?.toLowerCase()
+                                        )
+                                        if (matched) setSelectedArtifactId(matched.id)
+                                      } else if (selectedArtifactId) {
+                                        // Already open
+                                      }
+                                    }}
+                                  />
+                                </motion.div>
+                              )
+                            })}
                           </div>
-                          <div className="shrink-0 flex items-center gap-2">
-                            <EchoUserAvatar
-                              name={latestUserMsg.senderName}
-                              avatarUrl={latestUserMsg.senderAvatar}
-                              className="size-6"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
+                        ))}
+                      </>
+                    )
                   })()}
-                  {activeThread.messages.map((m, idx) => (
-                    <EchoMessageRow
-                      key={m.id || `msg-${idx}`}
-                      message={m}
-                      isCopied={copiedMsgId === m.id}
-                      onCopy={handleCopyMessage}
-                      isStreaming={isStreaming && idx === activeThread.messages.length - 1}
-                      tasks={tasks}
-                      intelligence={intelligence}
-                      onOpenTask={(task) => setActiveDetailTask(task)}
-                      onSendSuggestion={(text) => handleSendMessage(text)}
-                      onRegenerate={() => handleRegenerateMessage(idx)}
-                      onRetry={() => handleRetryMessage(idx)}
-                      onEditPrompt={(newText) => handleEditUserPrompt(idx, newText)}
-                      onFeedback={(feedback) => handleMessageFeedback(m.id, feedback)}
-                      onOpenArtifact={() => {
-                        if (m.attachedArtifactName) {
-                          const matched = artifacts.find(
-                            (a) => a.name.toLowerCase() === m.attachedArtifactName?.toLowerCase()
-                          )
-                          if (matched) setSelectedArtifactId(matched.id)
-                        } else if (selectedArtifactId) {
-                          // Already open
-                        }
-                      }}
-                    />
-                  ))}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -3936,41 +4157,6 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUBCOMPONENTS: USER AVATAR (ACTUAL USER AVATAR OR INITIALS - NO UNSPLASH)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function EchoUserAvatar({
-  className = "size-8",
-  name,
-  avatarUrl,
-}: {
-  className?: string
-  name?: string
-  avatarUrl?: string
-}) {
-  const session = getStoredSession()
-  const resolvedName = name || session?.displayName || (session as any)?.name || (session as any)?.username || "User"
-  const resolvedUrl = avatarUrl !== undefined ? avatarUrl : (session?.avatarUrl || (session as any)?.avatar || "")
-
-  // Sanitize if legacy Unsplash woman avatar
-  const cleanUrl =
-    resolvedUrl &&
-    (resolvedUrl.includes("photo-1534528741775-53994a69daeb") ||
-      resolvedUrl.includes("photo-1534528741775"))
-      ? ""
-      : resolvedUrl
-
-  return (
-    <UserAvatar
-      name={resolvedName}
-      avatarUrl={cleanUrl}
-      size="lg"
-      className={cn("size-8 rounded-full shrink-0 shadow-2xs border border-border/40", className)}
-    />
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // SUBCOMPONENTS: SIDEBAR ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -4173,6 +4359,7 @@ interface EchoMessageRowProps {
   onRegenerate?: () => void
   onRetry?: () => void
   onEditPrompt?: (newText: string) => void
+  onJumpToQuestion?: () => void
   onOpenArtifact?: () => void
   onFeedback?: (feedback: "up" | "down") => void
 }
@@ -5729,6 +5916,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
   onRegenerate,
   onRetry,
   onEditPrompt,
+  onJumpToQuestion,
   onOpenArtifact,
   onFeedback,
 }: EchoMessageRowProps) {
@@ -6116,20 +6304,19 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
     : "idle"
 
   return (
-    <div className="flex items-start gap-3">
-      {/* Bot 3D Animated Avatar */}
-      <div className="size-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 mt-0.5 border border-blue-200/80 dark:border-blue-900/60 shadow-2xs bg-blue-50/50 dark:bg-slate-900">
-        <MBRobotHead
-          shape="rectangle"
-          size={32}
-          state={robotAvatarState}
-          antenna={false}
-          floorShadow={false}
-          interactive={false}
-        />
-      </div>
-
-      <div className="flex-1 min-w-0 pt-0.5">
+    <div className="w-full">
+      <div className="flex items-start gap-2.5">
+        <div className="mt-0.5 grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg border border-blue-200/80 bg-blue-50/80 shadow-2xs dark:border-blue-900/60 dark:bg-slate-900">
+          <MBRobotHead
+            shape="rectangle"
+            size={30}
+            state={robotAvatarState}
+            antenna={false}
+            floorShadow={false}
+            interactive={false}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
         {/* Khối quy trình phân tích & mạch suy nghĩ (AgentActivityTrace của Executive Summary) */}
         {(isStreaming || message.traceData || message.isThinkingComplete || message.processSteps) && (
           <div className="mb-2 rounded-xl border border-neutral-200/80 dark:border-border/70 bg-white/95 dark:bg-card/95 p-2 shadow-2xs overflow-hidden">
@@ -6182,6 +6369,17 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           )
         )}
 
+        {onJumpToQuestion && message.content.length > 420 && (
+          <button
+            type="button"
+            onClick={onJumpToQuestion}
+            className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-slate-300 dark:hover:bg-neutral-800 dark:hover:text-white"
+          >
+            <ArrowUp className="size-3.5" aria-hidden="true" />
+            Về câu hỏi
+          </button>
+        )}
+
         {message.grounding && message.content && (
           <details className="group mt-2 rounded-lg border border-border/70 bg-muted/35 text-xs" data-testid="ai-grounding-sources">
             <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-foreground outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-slate-900/20 [&::-webkit-details-marker]:hidden">
@@ -6229,6 +6427,7 @@ const EchoMessageRow = React.memo(function EchoMessageRow({
           feedback={message.feedback}
           onFeedback={onFeedback}
         />
+        </div>
       </div>
     </div>
   )

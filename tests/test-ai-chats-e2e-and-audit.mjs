@@ -2765,11 +2765,17 @@ runTest("Integration", "INT-SIDEBAR-PORTAL-01", "EchoSidebarRow: verify thread a
   assert.ok(pageSrc.includes("zIndex: 99999"), "Must elevate dropdown z-index to top level")
 })
 
-runTest("UX", "UX-READING-SPACE-01", "AIChatPage: keep the active user question visible while reading a long answer", () => {
+runTest("UX", "UX-READING-SPACE-01", "AIChatPage: sticky follows the question at the scroll position", () => {
   const pageSrc = fs.readFileSync(path.join(projectRoot, "src/pages/AIChatPage.tsx"), "utf-8").replace(/\r\n/g, "\n")
-  assert.ok(pageSrc.includes('data-testid="sticky-user-question"'), "Must expose a stable sticky-question hook")
-  assert.ok(pageSrc.includes('className="sticky top-0'), "User question must stick to the top of the chat viewport")
-  assert.ok(pageSrc.includes('aria-label="Câu hỏi đang đọc"'), "Sticky question must have an accessible label")
+  assert.ok(pageSrc.includes("handleChatScroll"), "Sticky question must update while scrolling")
+  assert.ok(pageSrc.includes("onJumpToQuestion"), "Long assistant answers must offer question navigation")
+  assert.ok(pageSrc.includes('scrollIntoView({ behavior: "smooth", block: "center" })'), "Navigation must scroll to the corresponding question")
+  assert.ok(!pageSrc.includes('data-testid="sticky-user-question"'), "A global sticky question must not show a different turn's question")
+})
+
+runTest("UX", "UX-CHAT-ALIGNMENT-01", "AIChatPage: right-align user questions and keep assistant left", () => {
+  const bubbleSrc = fs.readFileSync(path.join(projectRoot, "src/components/chat/EchoUserMessageBubble.tsx"), "utf-8").replace(/\r\n/g, "\n")
+  assert.ok(bubbleSrc.includes("flex w-full justify-end"), "User questions must sit on the right like standard chats")
 })
 
 runTest("UX", "UX-READING-SPACE-02", "AIChatPage: collapse supporting evidence and lay follow-up suggestions out compactly", () => {

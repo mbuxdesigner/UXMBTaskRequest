@@ -28,6 +28,11 @@ import {
   updateConversationSummary,
 } from "../src/lib/aiRetrievalPipeline.ts"
 import { buildProjectState } from "../src/lib/aiProjectState.ts"
+import {
+  AGENT_TOOLS,
+  executeAgentTool,
+  getAgentToolDefinitions,
+} from "../src/lib/aiTools.ts"
 
 const task = (id, nickname, product, extras = {}) => ({
   request_id: id,
@@ -547,6 +552,48 @@ test("Hội thoại thật của Phong giữ phạm vi và trả chi tiết ti�
   assert.match(followUpAnswer, /Update UI chuyển nhượng CDs/)
   assert.doesNotMatch(followUpAnswer, /Tích hợp DIGI x BeeRich/)
   assert.doesNotMatch(followUpAnswer, /chưa tìm thấy task nào/i)
+})
+
+test("Agent tools chỉ phơi các tool được allowlist", () => {
+  assert.equal(AGENT_TOOLS.length, 5)
+  assert.deepEqual(
+    getAgentToolDefinitions().map((tool) => tool.function.name),
+    ["search_tasks", "get_task_detail", "search_documents", "read_calendar", "compute_risks"]
+  )
+})
+
+test("Agent task tools không trả task ngoài scope và từ chối query rỗng", () => {
+  const scopedTasks = [tasks[0]]
+  const missingQuery = executeAgentTool(
+    { id: "call-1", name: "search_tasks", arguments: {} },
+    { tasks: scopedTasks, artifacts: [], events: [], todayYMD: "2026-10-28" }
+  )
+  assert.equal(missingQuery.ok, false)
+  assert.deepEqual(JSON.parse(missingQuery.content), { error: "missing_query" })
+
+  const outsideScope = executeAgentTool(
+    { id: "call-2", name: "get_task_detail", arguments: { request_id: tasks[1].request_id } },
+    { tasks: scopedTasks, artifacts: [], events: [], todayYMD: "2026-10-28" }
+  )
+  assert.equal(outsideScope.ok, false)
+  assert.match(outsideScope.error, /phạm vi quyền/)
+})
+
+test("Agent document search không trả artifact draft", () => {
+  const result = executeAgentTool(
+    { id: "call-3", name: "search_documents", arguments: { query: "quy định bàn giao" } },
+    {
+      tasks: [],
+      artifacts: [
+        { id: "draft", name: "Quy định bàn giao nháp", content: "quy định bàn giao", isCustomUploaded: true, approvalStatus: "draft" },
+        { id: "approved", name: "Quy định bàn giao chính thức", content: "quy định bàn giao", isCustomUploaded: true, approvalStatus: "approved" },
+      ],
+      events: [],
+      todayYMD: "2026-10-28",
+    }
+  )
+  const documents = JSON.parse(result.content).documents
+  assert.ok(documents.every((document) => document.name !== "Quy định bàn giao nháp"))
 })
 
 test("File đang xem được tách khỏi file chủ động gắn vào chat", () => {

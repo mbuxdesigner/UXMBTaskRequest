@@ -1,41 +1,13 @@
-# figma-make-app
+# AGENTS.md — UXMB Task Request Portal
 
-React + Vite + Tailwind CSS project running inside Figma Make.
+Use `.ai/project-map.yaml` for verified repository boundaries and `.ai/task-routes.yaml` to load only task-relevant context. Read the module note before source edits; verify current implementation because docs can be stale.
 
-## Development Server
+- App: React 19 + TypeScript + Vite 8 SPA; HTML entry `index.html` loads `src/main.tsx`, which mounts `src/App.tsx`.
+- Routes/pages are lazy-loaded from `src/App.tsx`; page ids live in `src/components/Sidebar.tsx`.
+- API boundaries: browser services under `src/services/`; Vercel handlers under `api/`; Google Apps Script source is root `google-apps-script-backend.js` and deploys separately.
+- Before changing behavior, inspect the current source and run the targeted test(s); then `pnpm run build`. `pnpm test` runs the repository aggregate suite.
+- Do not put secrets in source or metadata. `.env.example` documents variable names; `.env*` local values are not documentation inputs.
+- Do not treat `doc/archive/` as current specification. Use current feature docs as orientation, then verify behavior in source.
+- Avoid loading all of `src/` or all docs by default. Follow `.ai/task-routes.yaml` and imports from the affected public boundary.
 
-A Vite development server is **already running** on `$PORT` (default 8443). You don't need to start it manually.
-
-- Preview URL: The user can access the running app through the preview panel
-- Hot reload: Changes to source files are reflected immediately
-
-## Project Structure
-
-This is the canonical project structure. Start with task-relevant files below. Only follow imports or inspect other files when required, when a documented path is missing, or when the repository contradicts this guide.
-
-- `src/main.tsx` - React entrypoint; imports `src/index.css` and mounts `src/App.tsx` into the `#root` element
-- `src/App.tsx` - Primary application component and the usual starting point for UI work
-- `src/index.css` - Global CSS entrypoint and Tailwind CSS v4 import
-- `index.html` - Vite HTML shell containing the `#root` element and loading `src/main.tsx`
-- `package.json` - Project dependencies and the Vite build, development, preview, and formatting scripts
-- `vite.config.ts` - Vite configuration with React, Tailwind CSS v4, and Figma Make plugins plus the `@` alias for `src`
-- `.mise.toml` - Toolchain versions for Node.js and pnpm
-
-## Dependencies
-
-- Runtime: React 19 and React DOM 19
-- Styling: Tailwind CSS v4 with the `@tailwindcss/vite` plugin
-- Build tooling: Vite 8, TypeScript 5.7, and `@vitejs/plugin-react`
-- Formatting: oxfmt
-
-## Styling
-
-This project uses **Tailwind CSS v4** through the `@tailwindcss/vite` plugin configured in `vite.config.ts`. `src/index.css` imports Tailwind with `@import 'tailwindcss';`. Use Tailwind utility classes directly in JSX and put global CSS or Tailwind v4 theme customization in `src/index.css`. This scaffold does not need a Tailwind config file or PostCSS config.
-
-`src/main.tsx` imports `src/index.css`, so global font wiring belongs in `src/index.css`. Keep CSS `@import` statements first, then add any `@font-face` rules and font-family defaults there.
-
-## Code quality
-
-- Use double quotes for strings containing apostrophes (`"We're here to help"`), or escape them in single-quoted strings. An unescaped apostrophe in a single-quoted string breaks the build.
-- Ensure JSX tags are closed and braces are balanced.
-- Export components as default exports.
+Metadata confidence is explicit: `verified` means checked against current source/manifests; `documented` means stated in project docs only; `unverified` means not independently established.

@@ -1,0 +1,84 @@
+version: 0.1
+routes:
+  - task: route/hash/navigation, app bootstrap, shell, lazy loading, global events
+    read_first: [src/App.tsx, src/main.tsx, src/components/Sidebar.tsx]
+    then_if_needed: [src/config/navVisibilityConfig.ts, src/components/common/AppHeader.tsx]
+    tests: [package.json scripts, relevant tests/*]
+    module: .ai/modules/app-shell-routing.md
+
+  - task: auth, OTP, session expiry, role/capability, task visibility/access
+    read_first: [src/services/otpAuthService.ts, src/lib/accessControl.ts]
+    then_if_needed: [src/config/navVisibilityConfig.ts, src/components/auth/, api/ai-gateway.ts, google-apps-script-backend.js]
+    tests: [tests/test-designer-access.mjs, tests/test-m2-core-security.mjs, tests/test-m3-m4-security-and-infrastructure.mjs]
+    module: .ai/modules/auth-session-rbac.md
+
+  - task: task lifecycle, Kanban, detail drawer, comments, freeze/reject, deadlines
+    read_first: [src/pages/TrackRequestPage.tsx, src/components/track/RequestDetail.tsx, src/config/statusConfig.ts]
+    then_if_needed: [src/components/kanban/, src/services/googleSheetService.ts, src/lib/accessControl.ts]
+    tests: [tests/test-freeze-and-reject-task.mjs, tests/test-phase-deadline-activity-log.mjs, tests/test-nickname-sync.mjs]
+    module: .ai/modules/tasks-tracking.md
+
+  - task: request form, validation, uploads, create request
+    read_first: [src/pages/CreateRequestPage.tsx, src/components/form/RequestForm.tsx, src/config/formConfig.ts]
+    then_if_needed: [src/services/googleSheetService.ts, google-apps-script-backend.js]
+    tests: [test-form-config.mjs, test-form-config-cloud-sync.mjs]
+    module: .ai/modules/request-creation.md
+
+  - task: admin settings, roles, people, squads/products, workflow, system config
+    read_first: [src/pages/QuanLyPage.tsx, src/config/systemConfig.ts, src/config/navVisibilityConfig.ts]
+    then_if_needed: [src/components/admin/, src/services/googleSheetService.ts, src/config/formConfig.ts]
+    tests: [test-system-config.mjs, test-work-schedule-engine.mjs, test-form-config.mjs]
+    module: .ai/modules/admin-masterdata.md
+
+  - task: dashboard, KPI, charts, restricted task titles
+    read_first: [src/pages/TongQuanPage.tsx, src/components/dashboard/ai-ops/, src/lib/accessControl.ts]
+    then_if_needed: [src/data/aiOpsMockData.ts, src/services/googleSheetService.ts]
+    tests: [test-e2e-design-system.mjs, tests/test-designer-access.mjs]
+    module: .ai/modules/dashboard-analytics.md
+
+  - task: planner, calendar, meeting/event, leave, work schedule, planned date
+    read_first: [src/pages/DesignerPlannerPage.tsx, src/services/calendarService.ts, src/services/leaveService.ts, src/lib/designerPlanner.ts]
+    then_if_needed: [src/config/systemConfig.ts, src/components/planner/, google-apps-script-backend.js]
+    tests: [tests/test-designer-planner.mjs, tests/test-calendar-planner.test.ts, tests/test-leave-sync.test.ts]
+    module: .ai/modules/planner-calendar.md
+
+  - task: IA canvas, tree structure/layout, Task-IA link, Cloud chunking
+    read_first: [src/pages/IAPage.tsx, src/hooks/useIATreeState.ts, src/types/ia.ts]
+    then_if_needed: [src/components/ia/, src/lib/iaTaskLink.ts, src/services/googleSheetService.ts, google-apps-script-backend.js]
+    tests: [tests/test-ia-map-magnific.mjs, tests/test-ia-figjam-trackpad.mjs, tests/test-ia-node-tier-resolution.mjs, tests/test-ia-node-disabled.mjs, tests/test-task-ia-linking.mjs, test-ia-cloud-autochunk-and-sanitizer.mjs]
+    module: .ai/modules/ia-map.md
+
+  - task: AI chat, retrieval, prompt, artifact trust, gateway, streaming/security
+    read_first: [src/pages/AIChatPage.tsx, src/services/aiService.ts, src/config/aiPrompts.ts]
+    then_if_needed: [src/lib/aiConversation.ts, src/lib/aiRetrievalPipeline.ts, src/lib/aiProjectState.ts, src/services/aiArtifactsService.ts, api/ai-gateway.ts, google-apps-script-backend.js]
+    tests: [tests/test-ai-conversation-intelligence.mjs, tests/test-ai-chats-e2e-and-audit.mjs, scripts/run-ai-evaluation.mjs]
+    module: .ai/modules/ai-copilot.md
+
+  - task: GAS API action, Sheets schema, Drive storage, cloud sync
+    read_first: [src/services/googleSheetService.ts, src/config/googleSheetConfig.ts, google-apps-script-backend.js]
+    then_if_needed: [api/gateway.ts, api/ai-gateway.ts, src/services/otpAuthService.ts]
+    tests: [test-m1-vercel-pipeline-and-sheet-isolation.mjs, tests/test-m2-core-security.mjs, tests/test-m3-m4-security-and-infrastructure.mjs]
+    module: .ai/modules/backend-gas-data.md
+
+  - task: shared UI primitive, styling, responsive, motion
+    read_first: [src/index.css, src/lib/motion.ts, src/components/ui/]
+    then_if_needed: [src/components/reui/, doc/design-system/]
+    tests: [test-e2e-design-system.mjs, test-sonner-stacked-toast.mjs, tests/test-silky-smooth-motion.mjs]
+    module: .ai/modules/design-system.md
+
+  - task: tests, build, CI/deployment, security operations
+    read_first: [package.json, .github/, vercel.json, TEST_READY.md]
+    then_if_needed: [TEST_INFRA.md, doc/operations/, api/]
+    tests: [pnpm run build, pnpm test]
+    module: .ai/modules/operations-testing.md
+
+workflow:
+  before_behavior_change:
+    - Resolve route above and read that module note.
+    - Verify relevant source/interfaces now; module notes are indexes, not contracts.
+    - Read nearest caller/callee only as imports require.
+    - Run targeted tests, then build when practical.
+  avoid:
+    - Loading all source or archived docs by default.
+    - Treating client RBAC as backend authorization without inspecting API enforcement.
+    - Assuming local Google Apps Script source is deployed.

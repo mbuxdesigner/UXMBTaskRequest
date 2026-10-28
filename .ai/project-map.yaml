@@ -1,0 +1,127 @@
+version: 0.1
+project: uxmb-task-request
+confidence_legend:
+  verified: checked against current source or manifests
+  documented: stated in project docs, not rechecked in source
+  unverified: not independently established
+
+entrypoints:
+  html_shell:
+    path: index.html
+    confidence: verified
+    loads: src/main.tsx
+  react_root:
+    path: src/main.tsx
+    confidence: verified
+    mounts: src/App.tsx
+  app_shell:
+    path: src/App.tsx
+    confidence: verified
+    notes: lazy-loads pages; hash/page routing with Page ids from src/components/Sidebar.tsx
+
+runtime:
+  framework: React 19 + TypeScript 5.7 + Vite 8
+  styling: Tailwind CSS v4 via @tailwindcss/vite
+  alias: "@/* maps to ./src/*"
+  confidence: verified
+  sources:
+    - package.json
+    - vite.config.ts
+    - tsconfig.json
+    - src/main.tsx
+
+pages:
+  root: src/pages
+  confidence: verified
+  items:
+    - { page: overview, path: src/pages/TongQuanPage.tsx }
+    - { page: track, path: src/pages/TrackRequestPage.tsx }
+    - { page: create, path: src/pages/CreateRequestPage.tsx }
+    - { page: manage, path: src/pages/QuanLyPage.tsx }
+    - { page: calendar, path: src/pages/DesignerPlannerPage.tsx }
+    - { page: calendar_legacy, path: src/pages/CalendarPage.tsx, confidence: documented }
+    - { page: ia, path: src/pages/IAPage.tsx }
+    - { page: aichat, path: src/pages/AIChatPage.tsx }
+    - { page: test, path: src/pages/TestAssessmentPage.tsx }
+    - { page: compressor, path: src/pages/ImageCompressorPage.tsx }
+  page_ids_source:
+    path: src/components/Sidebar.tsx:41
+    confidence: verified
+
+boundaries:
+  browser_services:
+    path: src/services/
+    confidence: verified
+  app_config:
+    path: src/config/
+    confidence: verified
+  shared_lib:
+    path: src/lib/
+    confidence: verified
+  hooks:
+    path: src/hooks/
+    confidence: verified
+  types_data:
+    paths: [src/types/, src/data/]
+    confidence: verified
+  ui_components:
+    path: src/components/
+    confidence: verified
+  vercel_apis:
+    path: api/
+    files: [api/ai-gateway.ts, api/gateway.ts]
+    confidence: verified
+  cloud_backend_source:
+    path: google-apps-script-backend.js
+    confidence: verified
+    deployment_note: local source only; production requires separate GAS New Version deploy
+    deployment_note_confidence: documented
+
+external_dependencies:
+  frontend_vendor_chunks:
+    confidence: verified
+    source: vite.config.ts
+    chunks: [vendor-react, vendor-icons, vendor-motion, vendor-xlsx, vendor-jszip, vendor-matter, vendor-charts, vendor-ui, vendor-core]
+  backend_data_plane:
+    confidence: documented
+    items:
+      - Google Apps Script Web App
+      - Google Sheets RAW_REQUESTS / RAW_SETTINGS plus views
+      - Google Drive attachments/avatars
+      - Microsoft Teams webhook/OTP
+      - OpenRouter via api/ai-gateway.ts
+      - Upstash Redis rate limiting
+  env_names_only:
+    confidence: verified
+    source: .env.example
+    names: [VITE_APP_ENV, VITE_APPS_SCRIPT_URL, VITE_GOOGLE_SHEET_ID, VITE_LEAVE_SHEET_URL, VITE_LEAVE_SHEET_GID, VITE_ENABLE_DEV_OTP_BYPASS, OPENROUTER_API_KEY, GAS_EXEC_URL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, ALLOW_UNAUTHENTICATED_AI_DEV]
+
+key_files:
+  - { path: package.json, provides: scripts and dependencies, confidence: verified }
+  - { path: vite.config.ts, provides: build/chunk/CSP/dev-server behavior, confidence: verified }
+  - { path: vercel.json, provides: SPA rewrite plus security headers, confidence: verified }
+  - { path: tsconfig.json, provides: TS strict/bundler paths, confidence: verified }
+  - { path: token.json, provides: design tokens data file, confidence: verified }
+  - { path: src/api/api.ts, provides: frontend data-access boundary, confidence: verified }
+  - { path: src/data/mockData.ts, provides: UXRequest and related domain types, confidence: verified }
+  - { path: PROJECT.md, provides: historical milestone/feature inventory, confidence: documented }
+  - { path: TEST_INFRA.md, provides: historical 114-case E2E methodology, confidence: documented }
+
+modules_index:
+  app-shell-routing: .ai/modules/app-shell-routing.md
+  auth-session-rbac: .ai/modules/auth-session-rbac.md
+  tasks-tracking: .ai/modules/tasks-tracking.md
+  request-creation: .ai/modules/request-creation.md
+  admin-masterdata: .ai/modules/admin-masterdata.md
+  dashboard-analytics: .ai/modules/dashboard-analytics.md
+  planner-calendar: .ai/modules/planner-calendar.md
+  ia-map: .ai/modules/ia-map.md
+  ai-copilot: .ai/modules/ai-copilot.md
+  backend-gas-data: .ai/modules/backend-gas-data.md
+  design-system: .ai/modules/design-system.md
+  operations-testing: .ai/modules/operations-testing.md
+
+known_staleness_risks:
+  - PROJECT.md and TEST_INFRA.md describe older milestones and suites; verify current package.json scripts and tests/ before relying on counts.
+  - doc/archive/ is explicitly historical; do not use as current spec.
+  - Backend docs assume GAS deployment steps; local backend file changes are not live until deployed.
