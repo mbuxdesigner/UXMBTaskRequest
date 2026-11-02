@@ -547,7 +547,8 @@ export default function App() {
         {/* Container chính: Offset theo sidebar w-60 (240px) */}
         <div
           className={cn(
-            "md:ml-60 bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1",
+            "bg-[#FCFCFD] flex flex-col min-w-0 max-w-full flex-1 transition-[margin] duration-300 ease-out",
+            sidebarCollapsed ? "md:ml-[72px]" : "md:ml-60",
             page === "aichat" || page === "ia"
               ? "h-screen max-h-screen overflow-hidden"
               : "min-h-screen"

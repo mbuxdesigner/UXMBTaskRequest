@@ -19,6 +19,8 @@ import {
   Calendar,
   Bot,
   Sparkles,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -87,6 +89,8 @@ export function DynamicCalendarIcon({ className, day }: { className?: string; da
 export default function Sidebar({ 
   currentPage, 
   onNavigate,
+  isCollapsed = false,
+  onToggleCollapse,
   onLogout,
 }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -260,14 +264,19 @@ export default function Sidebar({
   const hasResourceItems = Boolean(currentRoleVisibility.compressor) || (currentRoleVisibility.test ?? true) || isAdmin
 
   const renderSidebarContent = (isMobile = false) => {
+    const collapsed = !isMobile && isCollapsed
     const activeLayoutId = `sidebar-active-indicator${isMobile ? "-mobile" : ""}`
     const hoverLayoutId = `sidebar-hover-indicator${isMobile ? "-mobile" : ""}`
 
     return (
-      <nav aria-label="Menu điều hướng ứng dụng" className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80">
+      <nav
+        aria-label="Menu điều hướng ứng dụng"
+        data-collapsed={collapsed}
+        className="flex flex-col h-full bg-[#F9FAFB] text-slate-800 select-none text-[13px] font-normal border-r border-slate-200/80"
+      >
         
         {/* 1. Header / Workspace Brand */}
-        <div className="px-4 pt-5 pb-3">
+        <div className={collapsed ? "relative flex h-[72px] items-center justify-center px-2" : "relative flex h-[72px] items-center px-4"}>
           <button
             type="button"
             onClick={() => {
@@ -284,23 +293,41 @@ export default function Sidebar({
               height="28"
               className="w-7 h-7 object-contain rounded-lg shrink-0 group-hover:scale-105 transition-transform"
             />
-            <span className="text-[15px] font-bold text-slate-900 tracking-tight">
-              Workspace
-            </span>
+            {!collapsed && (
+              <span className="text-[15px] font-bold text-slate-900 tracking-tight">
+                Workspace
+              </span>
+            )}
           </button>
+          {!isMobile && onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+              className="absolute -right-3 top-1/2 z-50 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1057FB]/30"
+            >
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </button>
+          )}
         </div>
 
         {/* 2. Scrollable Navigation Body */}
         <div 
-          className="flex-1 overflow-y-auto px-3 pt-3 pb-2 space-y-6"
+          className={collapsed ? "flex-1 overflow-y-auto px-2 pt-3 pb-2 space-y-4" : "flex-1 overflow-y-auto px-3 pt-3 pb-2 space-y-6"}
           onMouseLeave={() => setHoveredNav(null)}
         >
           {/* SECTION 1: QUẢN LÝ CÔNG VIỆC (Platform) */}
           {hasPlatformItems && (
             <div className="space-y-1.5">
-              <p className="px-3 pt-1 pb-1.5 text-xs font-semibold text-slate-600 tracking-normal">
-                {APP_CONTENT.sidebar.sections.platform}
-              </p>
+              {collapsed ? (
+                <div className="mx-2 mb-2 h-px bg-slate-200/80" aria-hidden="true" />
+              ) : (
+                <p className="px-3 pt-1 pb-1.5 text-xs font-semibold text-slate-600 tracking-normal">
+                  {APP_CONTENT.sidebar.sections.platform}
+                </p>
+              )}
 
               {navOrder.platform.map((itemKey) => {
                 if (itemKey === "overview" && currentRoleVisibility.overview) {
@@ -310,6 +337,7 @@ export default function Sidebar({
                     <button
                       key="nav-overview"
                       type="button"
+                      title={collapsed ? APP_CONTENT.sidebar.navItems.overview.title : undefined}
                       onClick={() => {
                         onNavigate("overview")
                         if (isMobile) setMobileOpen(false)
@@ -318,7 +346,7 @@ export default function Sidebar({
                         setHoveredNav("overview")
                         preloadPage("overview")
                       }}
-                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -337,7 +365,7 @@ export default function Sidebar({
                         />
                       )}
                       <BarChart3 className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.overview.title}</span>
+                      {!collapsed && <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.overview.title}</span>}
                     </button>
                   )
                 }
@@ -349,6 +377,7 @@ export default function Sidebar({
                     <button
                       key="nav-track"
                       type="button"
+                      title={collapsed ? APP_CONTENT.sidebar.navItems.track.title : undefined}
                       onClick={() => {
                         onNavigate("track")
                         if (isMobile) setMobileOpen(false)
@@ -357,7 +386,7 @@ export default function Sidebar({
                         setHoveredNav("track")
                         preloadPage("track")
                       }}
-                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center px-0" : "justify-between px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -375,11 +404,14 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                      <div className={`flex items-center min-w-0 relative z-10 ${collapsed ? "justify-center gap-0" : "gap-3"}`}>
                         <CheckSquare className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                        <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>
+                        {!collapsed && <span className="truncate">{APP_CONTENT.sidebar.navItems.track.title}</span>}
                       </div>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0 relative z-10">
+                      <span className={collapsed
+                        ? "absolute right-0.5 top-0 z-20 min-w-4 rounded-full bg-emerald-500 px-1 text-center text-[9px] font-semibold leading-4 text-white ring-2 ring-[#F9FAFB]"
+                        : "px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-xs shrink-0 relative z-10"
+                      }>
                         {activeTaskCount}
                       </span>
                     </button>
@@ -393,6 +425,7 @@ export default function Sidebar({
                     <button
                       key="nav-calendar"
                       type="button"
+                      title={collapsed ? "Planner" : undefined}
                       onClick={() => {
                         onNavigate("calendar")
                         if (isMobile) setMobileOpen(false)
@@ -401,7 +434,7 @@ export default function Sidebar({
                         setHoveredNav("calendar")
                         preloadPage("calendar")
                       }}
-                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -420,7 +453,7 @@ export default function Sidebar({
                         />
                       )}
                       <DynamicCalendarIcon className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">Planner</span>
+                      {!collapsed && <span className="truncate relative z-10">Planner</span>}
                     </button>
                   )
                 }
@@ -432,6 +465,7 @@ export default function Sidebar({
                     <button
                       key="nav-aichat"
                       type="button"
+                      title={collapsed ? "AI Chats" : undefined}
                       onClick={() => {
                         onNavigate("aichat")
                         if (isMobile) setMobileOpen(false)
@@ -440,7 +474,7 @@ export default function Sidebar({
                         setHoveredNav("aichat")
                         preloadPage("aichat")
                       }}
-                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center px-0" : "justify-between px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -458,9 +492,9 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <div className="flex items-center gap-3 min-w-0 relative z-10">
+                      <div className={`flex items-center min-w-0 relative z-10 ${collapsed ? "justify-center gap-0" : "gap-3"}`}>
                         <img src="/ai-default.png" alt="AI" className="w-5 h-5 shrink-0 object-contain" />
-                        <span className="truncate">AI Chats</span>
+                        {!collapsed && <span className="truncate">AI Chats</span>}
                       </div>
                     </button>
                   )
@@ -473,6 +507,7 @@ export default function Sidebar({
                     <button
                       key="nav-create"
                       type="button"
+                      title={collapsed ? APP_CONTENT.sidebar.navItems.create.title : undefined}
                       onClick={() => {
                         onNavigate("create")
                         if (isMobile) setMobileOpen(false)
@@ -481,7 +516,7 @@ export default function Sidebar({
                         setHoveredNav("create")
                         preloadPage("create")
                       }}
-                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -500,7 +535,7 @@ export default function Sidebar({
                         />
                       )}
                       <PlusCircle className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.create.title}</span>
+                      {!collapsed && <span className="truncate relative z-10">{APP_CONTENT.sidebar.navItems.create.title}</span>}
                     </button>
                   )
                 }
@@ -512,6 +547,7 @@ export default function Sidebar({
                     <button
                       key="nav-ia"
                       type="button"
+                      title={collapsed ? "IA Map" : undefined}
                       onClick={() => {
                         onNavigate("ia")
                         if (isMobile) setMobileOpen(false)
@@ -520,7 +556,7 @@ export default function Sidebar({
                         setHoveredNav("ia")
                         preloadPage("ia")
                       }}
-                      className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -539,7 +575,7 @@ export default function Sidebar({
                         />
                       )}
                       <Network className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                      <span className="truncate relative z-10" title="IA Map">IA Map</span>
+                      {!collapsed && <span className="truncate relative z-10" title="IA Map">IA Map</span>}
                     </button>
                   )
                 }
@@ -552,9 +588,13 @@ export default function Sidebar({
           {/* SECTION 2: TOOLS (Resources) */}
           {hasResourceItems && (
             <div className="space-y-1">
-              <p className="px-3 py-1 text-xs font-semibold text-slate-600 tracking-normal">
-                {APP_CONTENT.sidebar.sections.resources}
-              </p>
+              {collapsed ? (
+                <div className="mx-2 my-2 h-px bg-slate-200/80" aria-hidden="true" />
+              ) : (
+                <p className="px-3 py-1 text-xs font-semibold text-slate-600 tracking-normal">
+                  {APP_CONTENT.sidebar.sections.resources}
+                </p>
+              )}
 
               {navOrder.resources.map((itemKey) => {
                 if (itemKey === "compressor" && currentRoleVisibility.compressor) {
@@ -564,6 +604,7 @@ export default function Sidebar({
                     <button
                       key="nav-compressor"
                       type="button"
+                      title={collapsed ? APP_CONTENT.sidebar.navItems.compressor.title : undefined}
                       onClick={() => {
                         onNavigate("compressor")
                         if (isMobile) setMobileOpen(false)
@@ -572,7 +613,7 @@ export default function Sidebar({
                         setHoveredNav("compressor")
                         preloadPage("compressor")
                       }}
-                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${collapsed ? "justify-center px-0" : "justify-between px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -590,13 +631,19 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <div className="flex items-center gap-3 min-w-0 relative z-10">
-                        <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${isActive ? "ring-2 ring-emerald-200" : ""}`} />
-                        <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
-                      </div>
-                      <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-medium text-slate-600 relative z-10">
-                        Tool
-                      </span>
+                      {collapsed ? (
+                        <Camera className={`relative z-10 size-5 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0 relative z-10">
+                            <span className={`w-2 h-2 rounded-full shrink-0 bg-emerald-500 ${isActive ? "ring-2 ring-emerald-200" : ""}`} />
+                            <span className="truncate text-slate-700 group-hover:text-slate-900">{APP_CONTENT.sidebar.navItems.compressor.title}</span>
+                          </div>
+                          <span className="px-1.5 py-0.2 rounded bg-slate-200/70 text-[10px] font-medium text-slate-600 relative z-10">
+                            Tool
+                          </span>
+                        </>
+                      )}
                     </button>
                   )
                 }
@@ -608,6 +655,7 @@ export default function Sidebar({
                     <button
                       key="nav-test"
                       type="button"
+                      title={collapsed ? "Bài test" : undefined}
                       onClick={() => {
                         onNavigate("test")
                         if (isMobile) setMobileOpen(false)
@@ -616,7 +664,7 @@ export default function Sidebar({
                         setHoveredNav("test")
                         preloadPage("test")
                       }}
-                      className={`relative isolate w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${
+                      className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer group text-sm font-medium ${collapsed ? "justify-center px-0" : "justify-between px-3"} ${
                         isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -634,13 +682,19 @@ export default function Sidebar({
                           transition={springs.snappy}
                         />
                       )}
-                      <div className="flex items-center gap-3 min-w-0 relative z-10">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                        <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
-                      </div>
-                      <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-medium text-blue-700 relative z-10">
-                        Exam
-                      </span>
+                      {collapsed ? (
+                        <Layers className={`relative z-10 size-5 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0 relative z-10">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                            <span className="truncate text-slate-700 group-hover:text-slate-900">Bài test</span>
+                          </div>
+                          <span className="px-1.5 py-0.2 rounded bg-blue-100 text-[10px] font-medium text-blue-700 relative z-10">
+                            Exam
+                          </span>
+                        </>
+                      )}
                     </button>
                   )
                 }
@@ -653,7 +707,7 @@ export default function Sidebar({
 
         {/* 3. Bottom Footer (Admin Setting + User Profile Card) */}
         <div 
-          className="p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" 
+          className={collapsed ? "px-2 py-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2" : "p-3 border-t border-slate-200/70 bg-[#F9FAFB] relative space-y-2"}
           ref={userMenuRef}
           onMouseLeave={() => setHoveredNav(null)}
         >
@@ -668,12 +722,13 @@ export default function Sidebar({
                   <button
                     key="nav-manage"
                     type="button"
+                    title={collapsed ? "Admin setting" : undefined}
                     onClick={() => {
                       onNavigate("manage")
                       if (isMobile) setMobileOpen(false)
                     }}
                     onMouseEnter={() => setHoveredNav("manage")}
-                    className={`relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${
+                    className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"} ${
                       isActive ? "text-slate-900 font-semibold" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -692,7 +747,7 @@ export default function Sidebar({
                       />
                     )}
                     <ShieldCheck className={`w-5 h-5 shrink-0 relative z-10 ${isActive ? "text-slate-900" : "text-slate-500"}`} />
-                    <span className="truncate relative z-10">Admin setting</span>
+                    {!collapsed && <span className="truncate relative z-10">Admin setting</span>}
                   </button>
                 )
               }
@@ -703,12 +758,13 @@ export default function Sidebar({
                   <button
                     key="nav-invite"
                     type="button"
+                    title={collapsed ? "Invite Team" : undefined}
                     onClick={() => {
                       setInviteOpen(true)
                       if (isMobile) setMobileOpen(false)
                     }}
                     onMouseEnter={() => setHoveredNav("invite")}
-                    className="relative isolate w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900"
+                    className={`relative isolate w-full flex items-center py-2 rounded-xl transition-colors text-left cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-900 ${collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3"}`}
                   >
                     {isHovered && (
                       <motion.div
@@ -718,7 +774,7 @@ export default function Sidebar({
                       />
                     )}
                     <UserPlus className="w-5 h-5 shrink-0 text-slate-500 relative z-10" />
-                    <span className="truncate relative z-10">Invite Team</span>
+                    {!collapsed && <span className="truncate relative z-10">Invite Team</span>}
                   </button>
                 )
               }
@@ -774,7 +830,9 @@ export default function Sidebar({
       </AnimatePresence>
 
       {/* Desktop Sidebar (ReUI App Shell 1 Exact Style) */}
-      <aside className="hidden md:flex fixed top-0 left-0 h-full w-60 bg-[#F9FAFB] border-r border-slate-200/80 z-30 flex-col">
+      <aside
+        className={`hidden md:flex fixed top-0 left-0 h-full bg-[#F9FAFB] border-r border-slate-200/80 z-30 flex-col transition-[width] duration-300 ease-out ${isCollapsed ? "w-[72px]" : "w-60"}`}
+      >
         {renderSidebarContent(false)}
       </aside>
 
