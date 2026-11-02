@@ -746,6 +746,8 @@ export interface OnTimeDeliveryStats {
   completedOnTimeCount: number
   inProgressOnTimeCount: number
   delayedItems: DelayedDesignDeliveryItem[]
+  missingDeadlineCount: number
+  missingDeadlineItems: MissingDesignDeadlineItem[]
 }
 
 export interface DelayedDesignDeliveryItem {
@@ -755,6 +757,14 @@ export interface DelayedDesignDeliveryItem {
   phase: DesignDeliveryPhase
   deadlineMs: number
   transitionedAtMs?: number
+  currentStatus: string
+}
+
+export interface MissingDesignDeadlineItem {
+  requestId: string
+  title: string
+  designer: string
+  phase: DesignDeliveryPhase
   currentStatus: string
 }
 
@@ -835,12 +845,35 @@ function isExcludedKpiStatus(value: unknown): boolean {
   return (
     status === "pending" ||
     status === "po pending" ||
+    status === "pending po" ||
     status === "tam dung" ||
     status === "da dung" ||
     status === "freeze" ||
     status === "frozen" ||
-    status === "stopped"
+    status === "stopped" ||
+    status === "tu choi" ||
+    status === "rejected" ||
+    status === "hoan thanh" ||
+    status === "da hoan thanh" ||
+    status === "complete" ||
+    status === "completed" ||
+    status === "done"
   )
+}
+
+function isExcludedOnTimeDeliveryTask(request: UXRequest): boolean {
+  if (isCompletedTask(request)) return true
+
+  const currentPhase = normalizeMetricText(request.current_phase)
+  if (
+    currentPhase === "hoan thanh" ||
+    currentPhase === "ban giao" ||
+    /^7(?:\.|\s|$)/.test(currentPhase)
+  ) {
+    return true
+  }
+
+  return isExcludedKpiStatus(request.status)
 }
 
 function isWorkflowTransition(
@@ -896,6 +929,10 @@ function getDesignDeliveryCommitments(
   request: UXRequest,
   nowMs: number
 ): DesignDeliveryCommitment[] {
+  // On-time Delivery only evaluates active tasks. Once a task is completed,
+  // pending, frozen/stopped, or rejected, all of its commitments leave the KPI.
+  if (isExcludedOnTimeDeliveryTask(request)) return []
+
   const commitments: DesignDeliveryCommitment[] = []
   const openByPhase = new Map<DesignDeliveryPhase, DesignDeliveryCommitment>()
   const updates = Array.isArray(request.task_updates)
@@ -1022,8 +1059,23 @@ export function calculateOnTimeDelivery(
   let delayedCount = 0
   let completedOnTimeCount = 0
   const delayedItems: DelayedDesignDeliveryItem[] = []
+  const missingDeadlineItems: MissingDesignDeadlineItem[] = []
 
   safeReqs.forEach((request) => {
+    if (!isExcludedOnTimeDeliveryTask(request)) {
+      const currentPhase = getDesignDeliveryPhase(request.current_phase)
+      const currentDeadlineMs = toEndOfDayMs(request.design_deadline, nowMs)
+      if (currentPhase && !currentDeadlineMs) {
+        missingDeadlineItems.push({
+          requestId: toSafeString(request.request_id || request.id),
+          title: toSafeString(request.nickname || request.title) || "Chưa đặt tiêu đề",
+          designer: resolveTaskDesigner(request) || "Chưa phân công",
+          phase: currentPhase,
+          currentStatus: toSafeString(request.status),
+        })
+      }
+    }
+
     getDesignDeliveryCommitments(request, nowMs).forEach((commitment) => {
       if (commitment.deliveredAtMs) {
         if (commitment.deliveredAtMs <= commitment.deadlineMs) {
@@ -1086,6 +1138,8 @@ export function calculateOnTimeDelivery(
     completedOnTimeCount,
     inProgressOnTimeCount: 0,
     delayedItems,
+    missingDeadlineCount: missingDeadlineItems.length,
+    missingDeadlineItems,
   }
 }
 

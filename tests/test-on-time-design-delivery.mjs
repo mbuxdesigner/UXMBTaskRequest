@@ -39,6 +39,18 @@ const currentRequests = [
     expected_deadline: "10/09/2026",
     release_date: "16/09/2026",
   },
+  {
+    title: "Active UI task without a commitment",
+    request_id: "UXMB-NO-DEADLINE-001",
+    status: "Đang thực hiện",
+    current_phase: "UI Design",
+    assigned_designer: "Phong",
+  },
+  {
+    title: "Early phase without a commitment",
+    status: "Đang thực hiện",
+    current_phase: "Define đầu bài",
+  },
 ]
 
 const currentStats = calculateOnTimeDelivery(currentRequests, nowMs)
@@ -52,6 +64,9 @@ assert.equal(currentStats.delayedItems[0].phase, "ui-design")
 assert.ok(currentStats.delayedItems[0].transitionedAtMs)
 assert.equal(currentStats.delayedItems[1].title, "Overdue and not sent")
 assert.equal(currentStats.delayedItems[1].transitionedAtMs, undefined)
+assert.equal(currentStats.missingDeadlineCount, 1)
+assert.equal(currentStats.missingDeadlineItems[0].requestId, "UXMB-NO-DEADLINE-001")
+assert.equal(currentStats.missingDeadlineItems[0].phase, "ui-design")
 
 const historicalStats = calculateOnTimeDelivery([
   {
@@ -132,5 +147,63 @@ const stoppedStats = calculateOnTimeDelivery([
 
 assert.equal(stoppedStats.totalEvaluated, 0)
 assert.equal(stoppedStats.delayedCount, 0)
+
+const inactiveTaskStats = calculateOnTimeDelivery([
+  {
+    title: "Completed task with an old late commitment",
+    status: "Hoàn thành",
+    current_phase: "Hoàn thành",
+    progress: 100,
+    design_deadline: "10/09/2026",
+    task_updates: [
+      {
+        timestamp: "12/09/2026 09:00:00",
+        previous_phase: "UI Design",
+        new_phase: "Ready to dev",
+        previous_status: "Đang thực hiện",
+        new_status: "Đang thực hiện",
+        design_deadline: "10/09/2026",
+        note: "Chuyển sang Ready to dev",
+      },
+    ],
+  },
+  {
+    title: "Pending task with a previously delivered commitment",
+    status: "Pending",
+    current_phase: "UI Design",
+    design_deadline: "10/09/2026",
+    task_updates: [
+      {
+        timestamp: "12/09/2026 09:00:00",
+        previous_phase: "Wireframe",
+        new_phase: "UI Design",
+        previous_status: "Đang thực hiện",
+        new_status: "Đang thực hiện",
+        design_deadline: "10/09/2026",
+        note: "Chuyển sang UI Design",
+      },
+    ],
+  },
+  {
+    title: "Rejected task",
+    status: "Từ chối",
+    current_phase: "Wireframe",
+    design_deadline: "10/09/2026",
+    rejected_reason: "Không tiếp tục triển khai",
+  },
+  {
+    title: "Completed phase with stale active status",
+    status: "Đang thực hiện",
+    current_phase: "7. Hoàn thành",
+    progress: 80,
+    design_deadline: "10/09/2026",
+  },
+], nowMs)
+
+assert.equal(inactiveTaskStats.totalEvaluated, 0)
+assert.equal(inactiveTaskStats.onTimeCount, 0)
+assert.equal(inactiveTaskStats.delayedCount, 0)
+assert.equal(inactiveTaskStats.delayedItems.length, 0)
+assert.equal(inactiveTaskStats.missingDeadlineCount, 0)
 
 console.log("✓ On-time delivery uses the next transition and excludes Pending/stopped commitments")

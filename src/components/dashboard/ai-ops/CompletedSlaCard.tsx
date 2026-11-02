@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react"
-import { AlertTriangle, ChevronRight, ShieldCheck } from "lucide-react"
+import { AlertTriangle, CalendarClock, ChevronRight, ShieldCheck } from "lucide-react"
 import type { UXRequest } from "@/data/mockData"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
 import { RightSheet } from "@/components/ui/right-sheet"
@@ -79,7 +79,7 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
             type="button"
             onClick={() => setShowDelayedReport(true)}
             className="font-semibold text-neutral-700 bg-white px-1.5 sm:px-2 py-0.5 rounded border border-neutral-200/70 text-[11px] inline-flex items-center gap-1 shadow-2xs shrink-0 transition-colors hover:border-rose-200 hover:bg-rose-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-            aria-label={`Xem báo cáo ${stats.delayedCount} task trễ`}
+            aria-label={`Xem báo cáo ${stats.delayedCount} task trễ và ${stats.missingDeadlineCount} task chưa có ngày hẹn`}
           >
             <span className="font-mono font-bold text-neutral-900 tabular-nums text-xs">
               {stats.onTimeCount}/{stats.totalEvaluated}
@@ -104,16 +104,16 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
         open={showDelayedReport}
         onClose={() => setShowDelayedReport(false)}
         size="xl"
-        title="Báo cáo task trễ"
-        description={`${stats.delayedCount} lần hẹn chuyển trạng thái bị trễ. Pending, PO pending và task đã dừng không được tính.`}
+        title="Báo cáo cam kết gửi"
+        description={`${stats.delayedCount} lần hẹn bị trễ · ${stats.missingDeadlineCount} task chưa có ngày hẹn. Task hoàn thành, Pending, PO pending và task đã dừng không được tính.`}
         icon={<AlertTriangle className="size-4 text-rose-600" aria-hidden="true" />}
         bodyClassName="overflow-auto"
       >
-        {stats.delayedItems.length === 0 ? (
+        {stats.delayedItems.length === 0 && stats.missingDeadlineItems.length === 0 ? (
           <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
             <ShieldCheck className="mb-3 size-9 text-emerald-500" aria-hidden="true" />
-            <p className="text-sm font-semibold text-slate-900">Không có task trễ</p>
-            <p className="mt-1 text-xs text-slate-500">Các lần hẹn đã đánh giá đều đúng hạn.</p>
+            <p className="text-sm font-semibold text-slate-900">Không có task cần xử lý</p>
+            <p className="mt-1 text-xs text-slate-500">Không có task trễ hoặc thiếu ngày hẹn.</p>
           </div>
         ) : (
           <div className="min-h-full overflow-x-auto">
@@ -128,6 +128,13 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                  {stats.delayedItems.length > 0 && (
+                    <tr className="bg-rose-50/70">
+                      <td colSpan={5} className="px-5 py-2 text-xs font-semibold text-rose-700">
+                        Trễ hạn ({stats.delayedCount})
+                      </td>
+                    </tr>
+                  )}
                   {stats.delayedItems.map((item, index) => (
                     <tr key={`${item.requestId}-${item.phase}-${item.deadlineMs}-${index}`} className="hover:bg-slate-50/70">
                       <td className="px-5 py-3.5">
@@ -152,6 +159,39 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
                         {!item.transitionedAtMs && (
                           <p className="mt-0.5 text-xs text-slate-500">Hiện tại: {item.currentStatus || "Đang thực hiện"}</p>
                         )}
+                      </td>
+                    </tr>
+                  ))}
+                  {stats.missingDeadlineItems.length > 0 && (
+                    <tr className="bg-amber-50/80">
+                      <td colSpan={5} className="px-5 py-2 text-xs font-semibold text-amber-800">
+                        Chưa có ngày hẹn ({stats.missingDeadlineCount})
+                      </td>
+                    </tr>
+                  )}
+                  {stats.missingDeadlineItems.map((item, index) => (
+                    <tr key={`missing-${item.requestId}-${item.phase}-${index}`} className="bg-amber-50/20 hover:bg-amber-50/50">
+                      <td className="px-5 py-3.5">
+                        <p className="max-w-[280px] truncate font-semibold text-slate-900" title={item.title}>
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">{item.requestId || "Chưa có mã task"}</p>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-700">{item.designer}</td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          {getPhaseLabel(item.phase)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700">
+                          <CalendarClock className="size-3.5" aria-hidden="true" />
+                          Chưa có ngày hẹn
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium text-amber-700">Cần đặt lịch gửi</p>
+                        <p className="mt-0.5 text-xs text-slate-500">Hiện tại: {item.currentStatus || "Đang thực hiện"}</p>
                       </td>
                     </tr>
                   ))}
