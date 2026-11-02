@@ -117,8 +117,6 @@ function loadColumnWidths(storageKey: string): ColumnWidths {
 interface StatusGroupDef {
   id: string
   label: string
-  summary: string
-  focus: string
   order: number
   dotClass: string
   badgeClass: string
@@ -277,8 +275,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "overload",
     label: "Overload",
-    summary: "Gồm bài toán Chờ xác nhận đã quá ngày Release, hoặc bài toán Wireframe/UI Design đã quá hạn gửi của Designer",
-    focus: "Cảnh báo",
     order: 1,
     dotClass: "bg-rose-500",
     headerBg: "bg-rose-50/80 hover:bg-rose-100/70 border-rose-200/90",
@@ -291,8 +287,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "unassigned",
     label: "Chờ phân bổ",
-    summary: "Bài toán mới tiếp nhận đang chờ rà soát hồ sơ & phân bổ UX Designer",
-    focus: "Phân công",
     order: 2,
     dotClass: "bg-purple-600",
     headerBg: "bg-purple-50/80 hover:bg-purple-100/70 border-purple-200/90",
@@ -305,8 +299,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "running",
     label: "Đang thực hiện",
-    summary: "Các bài toán đang trong quy trình thiết kế UX & triển khai giải pháp",
-    focus: "Tiến độ",
     order: 3,
     dotClass: "bg-[#1057FB]",
     headerBg: "bg-blue-50/80 hover:bg-blue-100/70 border-blue-200/90",
@@ -319,8 +311,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "pending",
     label: "Pending",
-    summary: "Đã gửi phương án thiết kế, đang chờ PO duyệt nghiệm thu hoặc phản hồi",
-    focus: "Phê duyệt",
     order: 4,
     dotClass: "bg-amber-500",
     headerBg: "bg-amber-50/80 hover:bg-amber-100/70 border-amber-200/90",
@@ -333,8 +323,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "completed",
     label: "Hoàn thành",
-    summary: "Đã nghiệm thu thiết kế và đóng gói bàn giao thành công cho Squad",
-    focus: "Nghiệm thu",
     order: 5,
     dotClass: "bg-emerald-600",
     headerBg: "bg-emerald-50/80 hover:bg-emerald-100/70 border-emerald-200/90",
@@ -347,8 +335,6 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   {
     id: "frozen_rejected",
     label: "Tạm dừng & Từ chối",
-    summary: "Các bài toán đã đóng băng tiến độ hoặc từ chối thực hiện theo yêu cầu",
-    focus: "Đóng / Dừng",
     order: 6,
     dotClass: "bg-slate-500",
     headerBg: "bg-slate-100/90 hover:bg-slate-200/80 border-slate-200/90",
@@ -1217,13 +1203,6 @@ export default function SolutionAgentsTable({
                                 </span>
                               </div>
 
-                              {/* Right: Group description */}
-                              <span
-                                className="text-xs text-slate-500 font-medium truncate max-w-md lg:max-w-xl hidden md:inline-block pr-2"
-                                title={group.summary}
-                              >
-                                {group.summary}
-                              </span>
                             </div>
                           </td>
                         </motion.tr>
