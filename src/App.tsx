@@ -51,46 +51,57 @@ import { RolePreviewBanner } from "./components/common/RolePreviewBanner"
 import { getRoleNavConfig, DEFAULT_ROLE_NAV_CONFIG } from "@/config/navVisibilityConfig"
 import { canRoleAccessCapability } from "@/lib/accessControl"
 import type { UserRole } from "./data/mockData"
+import { importWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 
-const TongQuanPage = lazy(() => import("./pages/TongQuanPage"))
-const CreateRequestPage = lazy(() => import("./pages/CreateRequestPage"))
-const TrackRequestPage = lazy(() => import("./pages/TrackRequestPage"))
-const QuanLyPage = lazy(() => import("./pages/QuanLyPage"))
-const TestAssessmentPage = lazy(() => import("./pages/TestAssessmentPage"))
-const ImageCompressorPage = lazy(() => import("./pages/ImageCompressorPage"))
-const IAPage = lazy(() => import("./pages/IAPage"))
-const CalendarPage = lazy(() => import("./pages/DesignerPlannerPage"))
-const AIChatPage = lazy(() => import("./pages/AIChatPage"))
+const loadTongQuanPage = () => importWithChunkRecovery(() => import("./pages/TongQuanPage"))
+const loadCreateRequestPage = () => importWithChunkRecovery(() => import("./pages/CreateRequestPage"))
+const loadTrackRequestPage = () => importWithChunkRecovery(() => import("./pages/TrackRequestPage"))
+const loadQuanLyPage = () => importWithChunkRecovery(() => import("./pages/QuanLyPage"))
+const loadTestAssessmentPage = () => importWithChunkRecovery(() => import("./pages/TestAssessmentPage"))
+const loadImageCompressorPage = () => importWithChunkRecovery(() => import("./pages/ImageCompressorPage"))
+const loadIAPage = () => importWithChunkRecovery(() => import("./pages/IAPage"))
+const loadCalendarPage = () => importWithChunkRecovery(() => import("./pages/DesignerPlannerPage"))
+const loadAIChatPage = () => importWithChunkRecovery(() => import("./pages/AIChatPage"))
+
+const TongQuanPage = lazy(loadTongQuanPage)
+const CreateRequestPage = lazy(loadCreateRequestPage)
+const TrackRequestPage = lazy(loadTrackRequestPage)
+const QuanLyPage = lazy(loadQuanLyPage)
+const TestAssessmentPage = lazy(loadTestAssessmentPage)
+const ImageCompressorPage = lazy(loadImageCompressorPage)
+const IAPage = lazy(loadIAPage)
+const CalendarPage = lazy(loadCalendarPage)
+const AIChatPage = lazy(loadAIChatPage)
 
 // Route Preloaders (dynamic import on demand)
 export const preloadPage = (targetPage: Page) => {
   switch (targetPage) {
     case "overview":
-      import("./pages/TongQuanPage")
+      void loadTongQuanPage().catch(() => {})
       break
     case "create":
-      import("./pages/CreateRequestPage")
+      void loadCreateRequestPage().catch(() => {})
       break
     case "track":
-      import("./pages/TrackRequestPage")
+      void loadTrackRequestPage().catch(() => {})
       break
     case "calendar":
-      import("./pages/DesignerPlannerPage")
+      void loadCalendarPage().catch(() => {})
       break
     case "aichat":
-      import("./pages/AIChatPage")
+      void loadAIChatPage().catch(() => {})
       break
     case "manage":
-      import("./pages/QuanLyPage")
+      void loadQuanLyPage().catch(() => {})
       break
     case "test":
-      import("./pages/TestAssessmentPage")
+      void loadTestAssessmentPage().catch(() => {})
       break
     case "compressor":
-      import("./pages/ImageCompressorPage")
+      void loadImageCompressorPage().catch(() => {})
       break
     case "ia":
-      import("./pages/IAPage")
+      void loadIAPage().catch(() => {})
       break
   }
 }

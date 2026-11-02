@@ -907,11 +907,27 @@ export async function streamAICompletion(
             const errCode = errJson?.code || errJson?.error?.code
             const errMsg = errJson?.error?.message || errJson?.error || errJson?.message
 
-            if (gRes.status === 503 || errCode === "MISSING_SERVER_API_KEY") {
+            if (errCode === "RATE_LIMITER_UNAVAILABLE") {
+              const rateLimiterMsg =
+                "Bộ giới hạn tần suất AI chưa được cấu hình hoặc không thể kết nối. Vui lòng kiểm tra UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN trên Vercel."
+              const err = new Error(rateLimiterMsg)
+              ;(err as any).code = "RATE_LIMITER_UNAVAILABLE"
+              ;(err as any).status = 503
+              throw err
+            }
+
+            if (errCode === "MISSING_SERVER_API_KEY") {
               const missingKeyMsg =
                 "Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường."
               const err = new Error(missingKeyMsg)
               ;(err as any).code = "MISSING_SERVER_API_KEY"
+              ;(err as any).status = 503
+              throw err
+            }
+
+            if (gRes.status === 503) {
+              const err = new Error(errMsg || "Dịch vụ AI đang tạm thời không khả dụng. Vui lòng thử lại sau.")
+              ;(err as any).code = errCode || "AI_SERVICE_UNAVAILABLE"
               ;(err as any).status = 503
               throw err
             }
@@ -1059,10 +1075,18 @@ export async function streamAICompletion(
         finalErr = new Error("Quá giới hạn tần suất yêu cầu (tối đa 20 yêu cầu/phút). Vui lòng thử lại sau giây lát.")
         ;(finalErr as any).status = 429
         ;(finalErr as any).code = "RATE_LIMITED"
-      } else if (status === 503 || code === "MISSING_SERVER_API_KEY" || rawMsg.includes("OPENROUTER_API_KEY")) {
+      } else if (code === "RATE_LIMITER_UNAVAILABLE" || rawMsg.includes("UPSTASH_REDIS_REST_")) {
+        finalErr = new Error("Bộ giới hạn tần suất AI chưa được cấu hình hoặc không thể kết nối. Vui lòng kiểm tra UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN trên Vercel.")
+        ;(finalErr as any).status = 503
+        ;(finalErr as any).code = "RATE_LIMITER_UNAVAILABLE"
+      } else if (code === "MISSING_SERVER_API_KEY" || rawMsg.includes("OPENROUTER_API_KEY")) {
         finalErr = new Error("Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường.")
         ;(finalErr as any).status = 503
         ;(finalErr as any).code = "MISSING_SERVER_API_KEY"
+      } else if (status === 503) {
+        finalErr = new Error(rawMsg || "Dịch vụ AI đang tạm thời không khả dụng. Vui lòng thử lại sau.")
+        ;(finalErr as any).status = 503
+        ;(finalErr as any).code = code || "AI_SERVICE_UNAVAILABLE"
       } else if (status === 500 || status === 502 || status === 504 || rawMsg.includes("500") || rawMsg.includes("502") || rawMsg.includes("504")) {
         finalErr = new Error(`Máy chủ AI gặp sự cố xử lý (mã lỗi HTTP ${status || 500}). Vui lòng thử lại sau giây lát.`)
         ;(finalErr as any).status = status || 500

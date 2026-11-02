@@ -844,7 +844,7 @@ export default function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 sm:px-6 lg:px-8 flex items-center justify-between select-none">
+      <header className="sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 pl-3 pr-3.5 sm:pr-6 lg:pr-8 flex items-center justify-between select-none">
         {/* Left: Mobile hamburger + ReUI Breadcrumb (Dashboards > Overview style) */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onToggleMobileMenu && (

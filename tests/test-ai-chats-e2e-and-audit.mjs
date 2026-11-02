@@ -451,12 +451,29 @@ function mapErrorToVietnamese(error) {
     }
   }
 
-  if (status === 503 || code === "MISSING_SERVER_API_KEY") {
+  if (code === "RATE_LIMITER_UNAVAILABLE") {
+    return {
+      title: "Chưa cấu hình giới hạn tần suất AI",
+      message: "Cổng AI chưa có kết nối tới bộ giới hạn tần suất dùng chung trên môi trường Production.",
+      adminNote: "Kiểm tra UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN trong Vercel Production, sau đó redeploy.",
+      canRetry: false
+    }
+  }
+
+  if (code === "MISSING_SERVER_API_KEY") {
     return {
       title: "Chưa cấu hình dịch vụ AI",
       message: "Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ.",
       adminNote: "Hệ thống chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ Vercel. Vui lòng liên hệ quản trị viên để thiết lập biến môi trường.",
       canRetry: false
+    }
+  }
+
+  if (status === 503) {
+    return {
+      title: "Dịch vụ AI tạm thời không khả dụng",
+      message: message || "Máy chủ AI đang tạm thời không phản hồi. Vui lòng thử lại sau.",
+      canRetry: true
     }
   }
 
@@ -561,12 +578,25 @@ runTest("Tier 1", "F1-05", "Friendly Vietnamese error message for missing server
   assert.equal(mapped.canRetry, false)
 })
 
+runTest("Tier 1", "F1-05b", "503 rate limiter failure is not mislabeled as a missing OpenRouter key", () => {
+  const mapped = mapErrorToVietnamese({ status: 503, code: "RATE_LIMITER_UNAVAILABLE" })
+  assert.ok(mapped.title.includes("giới hạn tần suất"))
+  assert.ok(mapped.adminNote.includes("UPSTASH_REDIS_REST_URL"))
+  assert.ok(!mapped.message.includes("OPENROUTER_API_KEY"))
+  assert.equal(mapped.canRetry, false)
+})
+
 runTest("Tier 1", "F1-06", "Gemini provider access is server-only", () => {
   assert.ok(aiServiceModule, "aiService.ts module must load successfully")
   assert.equal(aiServiceModule.INITIAL_GEMINI_KEY, "")
   const aiServiceSource = fs.readFileSync(aiServicePath, "utf-8")
   assert.ok(!aiServiceSource.includes("generativelanguage.googleapis.com"))
   assert.ok(aiServiceSource.includes('return "openrouter"'), "Gateway selection must be server-managed")
+  const gatewaySource = fs.readFileSync(path.join(projectRoot, "api", "ai-gateway.ts"), "utf-8")
+  assert.ok(gatewaySource.includes('buildKeyPool("GEMINI_API_KEY")'), "Gateway must load the server-side Gemini key pool")
+  assert.ok(gatewaySource.includes('buildKeyPool("OPENROUTER_API_KEY")'), "Gateway must keep OpenRouter credentials separate")
+  assert.ok(gatewaySource.includes('provider: "google" as const'), "Gemini keys must route explicitly to Google AI Studio")
+  assert.ok(gatewaySource.includes('provider: "openrouter" as const'), "OpenRouter keys must route explicitly to OpenRouter")
 })
 
 // F2: Gateway caller auth is fail-closed regardless of legacy feature flags.

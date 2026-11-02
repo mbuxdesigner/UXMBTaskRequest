@@ -1,5 +1,6 @@
 ﻿import React, { Component, ErrorInfo, ReactNode } from "react"
 import { AlertTriangle, RefreshCw, Trash2 } from "lucide-react"
+import { isChunkLoadError, reloadForFreshBuild } from "@/lib/chunkLoadRecovery"
 
 interface Props {
   children: ReactNode
@@ -22,6 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo)
+    if (isChunkLoadError(error)) reloadForFreshBuild()
   }
 
   private handleReload = () => {
@@ -29,13 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleClearCacheAndReload = () => {
-    try {
-      localStorage.removeItem("mbbank_admin_squads")
-      localStorage.removeItem("ux_portal_real_requests")
-      localStorage.removeItem("ux_portal_squads_v2")
-      localStorage.removeItem("mbbank_selections_cache")
-    } catch {}
-    window.location.reload()
+    if (!reloadForFreshBuild()) window.location.reload()
   }
 
   public render() {

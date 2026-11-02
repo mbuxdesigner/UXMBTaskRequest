@@ -248,18 +248,23 @@ export function resetRateLimitMap(): void {
   requestTimestampsMap.clear()
 }
 
-/**
- * Extracts and sanitizes key pool from environment variables
- */
-function buildKeyPool(): string[] {
+/** Extract and sanitize a comma-separated pool plus legacy numbered variables. */
+function buildKeyPool(baseName: "OPENROUTER_API_KEY" | "GEMINI_API_KEY"): string[] {
   const pool: string[] = []
-  const envKey = getEnv("OPENROUTER_API_KEY")
-  if (envKey) {
-    envKey.split(",").forEach((k: string) => {
+  const envNames: string[] = [baseName]
+  for (let index = 1; index <= 10; index++) {
+    const suffix = String(index).padStart(2, "0")
+    envNames.push(`${baseName}${suffix}`, `${baseName}_${suffix}`)
+  }
+
+  envNames.forEach((envName) => {
+    const envValue = getEnv(envName)
+    if (!envValue) return
+    envValue.split(",").forEach((k: string) => {
       const clean = k.trim()
       if (clean && !pool.includes(clean)) pool.push(clean)
     })
-  }
+  })
 
   return pool
 }
@@ -468,26 +473,6 @@ export default async function handler(req: Request): Promise<Response> {
       tool_choice,
     } = body
 
-    // 6. Provider credentials are server-managed only.
-    const availableKeys = buildKeyPool()
-
-    if (availableKeys.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: "Dịch vụ AI chưa được cấu hình khóa API (OPENROUTER_API_KEY) trên máy chủ hoặc qua cấu hình quản trị.",
-            code: "MISSING_SERVER_API_KEY",
-          },
-          success: false,
-          code: "MISSING_SERVER_API_KEY",
-        }),
-        {
-          status: 503,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      )
-    }
-
     if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
       return new Response(
         JSON.stringify({
@@ -596,14 +581,50 @@ export default async function handler(req: Request): Promise<Response> {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
+
+    // 6. Provider credentials are server-managed and separated by provider.
+    const isGeminiModel = /(^|\/)gemini-/i.test(requestedModel)
+    const openRouterKeys = buildKeyPool("OPENROUTER_API_KEY")
+    const geminiKeys = buildKeyPool("GEMINI_API_KEY")
+    const availableKeys = isGeminiModel
+      ? [
+          ...geminiKeys.map((key) => ({ key, provider: "google" as const })),
+          ...openRouterKeys.map((key) => ({ key, provider: "openrouter" as const })),
+        ]
+      : openRouterKeys.map((key) => ({ key, provider: "openrouter" as const }))
+
+    if (availableKeys.length === 0) {
+      const expectedVariable = isGeminiModel
+        ? "GEMINI_API_KEY hoặc OPENROUTER_API_KEY"
+        : "OPENROUTER_API_KEY"
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: `Dịch vụ AI chưa được cấu hình khóa API (${expectedVariable}) trên máy chủ.`,
+            code: "MISSING_SERVER_API_KEY",
+          },
+          success: false,
+          code: "MISSING_SERVER_API_KEY",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      )
+    }
+
     const safeTemperature = Math.min(1, Math.max(0, Number(temperature) || 0.25))
     const safeMaxTokens = Math.min(MAX_OUTPUT_TOKENS, Math.max(64, Number(max_tokens) || 1024))
 
+    const openRouterModel = requestedModel.startsWith("gemini-")
+      ? `google/${requestedModel}`
+      : requestedModel
+
     const openRouterPayload = {
-      model: requestedModel,
+      model: openRouterModel,
       models: Array.from(
         new Set([
-          requestedModel,
+          openRouterModel,
           "google/gemma-4-31b-it:free",
           "openrouter/free",
         ])
@@ -621,13 +642,8 @@ export default async function handler(req: Request): Promise<Response> {
     let lastErrorMessage = "Failed to communicate with AI provider"
 
     for (let i = 0; i < availableKeys.length; i++) {
-      const activeKey = availableKeys[i]
-
-      // Detect if key belongs to Google AI Studio (starts with AQ., AIzaSy, or is testing/using Gemini with non-OpenRouter key)
-      const isGoogleKey =
-        activeKey.startsWith("AQ.") ||
-        activeKey.startsWith("AIzaSy") ||
-        (!activeKey.startsWith("sk-or-") && requestedModel.includes("gemini"))
+      const { key: activeKey, provider } = availableKeys[i]
+      const isGoogleKey = provider === "google"
 
       const upstreamEndpoint = isGoogleKey
         ? `${GOOGLE_AI_ENDPOINT}?key=${encodeURIComponent(activeKey)}`
@@ -698,6 +714,7 @@ export default async function handler(req: Request): Promise<Response> {
               "Cache-Control": "no-cache, no-transform",
               "Connection": "keep-alive",
               "X-Key-Index-Used": String(i),
+              "X-AI-Provider": provider,
             },
           })
         }
@@ -726,7 +743,7 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(
       JSON.stringify({
         error: {
-          message: `All ${availableKeys.length} API key(s) failed or exceeded quota. Last error: ${lastErrorMessage}`,
+          message: `All ${availableKeys.length} eligible API key(s) failed or exceeded quota. Last error: ${lastErrorMessage}`,
         },
         success: false,
         status: lastErrorStatus,

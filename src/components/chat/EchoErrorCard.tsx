@@ -58,11 +58,24 @@ export function mapErrorToVietnamese(error: any): VietnameseErrorInfo {
     }
   }
 
-  // 3. Missing Server API Key / 503 Service Unavailable
+  // 3. Distributed rate limiter is required in production.
   if (
-    status === 503 ||
+    code === "RATE_LIMITER_UNAVAILABLE" ||
+    message.includes("UPSTASH_REDIS_REST_") ||
+    message.toLowerCase().includes("rate limiter")
+  ) {
+    return {
+      title: "Chưa cấu hình giới hạn tần suất AI",
+      message: "Cổng AI chưa có kết nối tới bộ giới hạn tần suất dùng chung trên môi trường Production.",
+      adminNote:
+        "Kiểm tra UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN trong Vercel Production, sau đó redeploy.",
+      canRetry: false,
+    }
+  }
+
+  // 4. Missing Server API Key. Do not classify every generic 503 as a key error.
+  if (
     code === "MISSING_SERVER_API_KEY" ||
-    message.includes("503") ||
     message.includes("OPENROUTER_API_KEY") ||
     message.toLowerCase().includes("chưa được cấu hình khóa api")
   ) {
@@ -75,7 +88,16 @@ export function mapErrorToVietnamese(error: any): VietnameseErrorInfo {
     }
   }
 
-  // 4. Offline / Network / Connection failure
+  // 5. Generic service unavailable.
+  if (status === 503 || code === "AI_SERVICE_UNAVAILABLE" || message.includes("503")) {
+    return {
+      title: "Dịch vụ AI tạm thời không khả dụng",
+      message: message || "Máy chủ AI đang tạm thời không phản hồi. Vui lòng thử lại sau.",
+      canRetry: true,
+    }
+  }
+
+  // 6. Offline / Network / Connection failure
   if (
     message.includes("Failed to fetch") ||
     message.includes("NetworkError") ||
@@ -90,7 +112,7 @@ export function mapErrorToVietnamese(error: any): VietnameseErrorInfo {
     }
   }
 
-  // 5. Default generic error
+  // 7. Default generic error
   const sanitizedMsg = message.replace(/^⚠️\s*/, "").trim()
   return {
     title: "Lỗi xử lý",
