@@ -441,7 +441,7 @@ export default function SolutionAgentsTable({
   } | null>(null)
   const previousBodyStylesRef = React.useRef<{ cursor: string; userSelect: string } | null>(null)
   const [resizingColumn, setResizingColumn] = useState<ResizableColumnId | null>(null)
-  const [resizeGuide, setResizeGuide] = useState<{ left: number; width: number } | null>(null)
+  const [resizeGuide, setResizeGuide] = useState<{ left: number } | null>(null)
   const [actionMenuAnchor, setActionMenuAnchor] = useState<{
     requestId: string
     rect: DOMRect
@@ -484,7 +484,6 @@ export default function SolutionAgentsTable({
     setResizingColumn(columnId)
     setResizeGuide({
       left: (headerCell?.offsetLeft || 0) + measuredWidths[columnId],
-      width: measuredWidths[columnId],
     })
 
     previousBodyStylesRef.current = {
@@ -529,7 +528,6 @@ export default function SolutionAgentsTable({
       setColumnWidths(nextWidths)
       setResizeGuide({
         left: (headerCell?.offsetLeft || 0) + nextWidth,
-        width: nextWidth,
       })
     }
 
@@ -580,33 +578,44 @@ export default function SolutionAgentsTable({
     <th
       ref={(node) => { headerCellRefs.current[columnId] = node }}
       className={cn(
-        "relative py-2 font-medium",
-        alignment === "right" ? "px-3 sm:px-4 text-right" : columnId === "task" ? "px-4 sm:px-5 text-left" : "px-3 sm:px-4 text-left",
+        "p-0 font-medium",
+        alignment === "right" ? "text-right" : "text-left",
         extraClassName
       )}
     >
-      <span className="block truncate" title={label}>{label}</span>
       <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={`Thay đổi độ rộng cột ${label}`}
-        aria-valuemin={COLUMN_MIN_WIDTHS[columnId]}
-        aria-valuemax={COLUMN_MAX_WIDTH}
-        aria-valuenow={columnWidths[columnId]}
-        tabIndex={0}
-        title="Kéo để thay đổi độ rộng cột"
-        onPointerDown={(event) => handleResizeStart(event, columnId)}
-        onKeyDown={(event) => handleResizeKeyDown(event, columnId)}
-        className="group/resize absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize touch-none outline-none"
+        className={cn(
+          "relative flex h-9 min-w-0 items-center",
+          alignment === "right"
+            ? "justify-end px-3 sm:px-4"
+            : columnId === "task"
+              ? "justify-start px-4 sm:px-5"
+              : "justify-start px-3 sm:px-4"
+        )}
       >
-        <span
-          className={cn(
-            "absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 transition-colors",
-            resizingColumn === columnId
-              ? "bg-[#1057FB]"
-              : "bg-transparent group-hover/resize:bg-[#1057FB] group-focus/resize:bg-[#1057FB]"
-          )}
-        />
+        <span className="block min-w-0 truncate" title={label}>{label}</span>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Thay đổi độ rộng cột ${label}`}
+          aria-valuemin={COLUMN_MIN_WIDTHS[columnId]}
+          aria-valuemax={COLUMN_MAX_WIDTH}
+          aria-valuenow={columnWidths[columnId]}
+          tabIndex={0}
+          title={`Kéo để thay đổi độ rộng cột ${label}`}
+          onPointerDown={(event) => handleResizeStart(event, columnId)}
+          onKeyDown={(event) => handleResizeKeyDown(event, columnId)}
+          className="group/resize absolute -right-1.5 inset-y-0 z-30 w-3 cursor-col-resize touch-none outline-none"
+        >
+          <span
+            className={cn(
+              "absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 transition-colors",
+              resizingColumn === columnId
+                ? "bg-[#1057FB]"
+                : "bg-transparent group-hover/resize:bg-[#1057FB] group-focus/resize:bg-[#1057FB]"
+            )}
+          />
+        </div>
       </div>
     </th>
   )
@@ -1748,11 +1757,7 @@ export default function SolutionAgentsTable({
             aria-hidden="true"
             className="pointer-events-none absolute bottom-1 top-0 z-40 w-px bg-[#1057FB] shadow-[0_0_0_1px_rgba(16,87,251,0.08)]"
             style={{ left: `${resizeGuide.left}px` }}
-          >
-            <span className="absolute left-1 top-1 rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-white shadow-lg">
-              {resizeGuide.width}px
-            </span>
-          </div>
+          />
         )}
       </div>
 
