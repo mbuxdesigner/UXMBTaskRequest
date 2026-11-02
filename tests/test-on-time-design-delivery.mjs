@@ -54,10 +54,10 @@ const currentRequests = [
 ]
 
 const currentStats = calculateOnTimeDelivery(currentRequests, nowMs)
-assert.equal(currentStats.totalEvaluated, 3)
+assert.equal(currentStats.totalEvaluated, 2)
 assert.equal(currentStats.onTimeCount, 1)
-assert.equal(currentStats.delayedCount, 2)
-assert.equal(currentStats.onTimeRate, 33.3)
+assert.equal(currentStats.delayedCount, 1)
+assert.equal(currentStats.onTimeRate, 50)
 assert.equal(currentStats.delayedItems.length, 2)
 assert.equal(currentStats.delayedItems[0].title, "Sent late")
 assert.equal(currentStats.delayedItems[0].phase, "ui-design")
@@ -91,9 +91,11 @@ const historicalStats = calculateOnTimeDelivery([
   },
 ], nowMs)
 
-assert.equal(historicalStats.totalEvaluated, 1)
-assert.equal(historicalStats.onTimeCount, 1)
+assert.equal(historicalStats.totalEvaluated, 0)
+assert.equal(historicalStats.onTimeCount, 0)
 assert.equal(historicalStats.delayedCount, 0)
+assert.equal(historicalStats.completedOnTimeCount, 1)
+assert.equal(historicalStats.onTimeRate, 100)
 
 const pendingStats = calculateOnTimeDelivery([
   {

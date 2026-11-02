@@ -79,7 +79,7 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
             type="button"
             onClick={() => setShowDelayedReport(true)}
             className="font-semibold text-neutral-700 bg-white px-1.5 sm:px-2 py-0.5 rounded border border-neutral-200/70 text-[11px] inline-flex items-center gap-1 shadow-2xs shrink-0 transition-colors hover:border-rose-200 hover:bg-rose-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-            aria-label={`Xem báo cáo ${stats.delayedCount} task trễ và ${stats.missingDeadlineCount} task chưa có ngày hẹn`}
+            aria-label={`Xem báo cáo ${stats.delayedItems.length} lần hẹn trễ, ${stats.delayedCount} task đang quá hẹn chưa chuyển và ${stats.missingDeadlineCount} task chưa có ngày hẹn`}
           >
             <span className="font-mono font-bold text-neutral-900 tabular-nums text-xs">
               {stats.onTimeCount}/{stats.totalEvaluated}
@@ -105,7 +105,7 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
         onClose={() => setShowDelayedReport(false)}
         size="xl"
         title="Báo cáo cam kết gửi"
-        description={`${stats.delayedCount} lần hẹn bị trễ · ${stats.missingDeadlineCount} task chưa có ngày hẹn. Task hoàn thành, Pending, PO pending và task đã dừng không được tính.`}
+        description={`${stats.delayedItems.length} lần hẹn bị trễ · ${stats.delayedCount} task đang quá hẹn chưa chuyển · ${stats.missingDeadlineCount} task chưa có ngày hẹn. Task hoàn thành, Pending, PO pending và task đã dừng không được tính.`}
         icon={<AlertTriangle className="size-4 text-rose-600" aria-hidden="true" />}
         bodyClassName="overflow-auto"
       >
@@ -131,7 +131,7 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
                   {stats.delayedItems.length > 0 && (
                     <tr className="bg-rose-50/70">
                       <td colSpan={5} className="px-5 py-2 text-xs font-semibold text-rose-700">
-                        Trễ hạn ({stats.delayedCount})
+                        Trễ hạn ({stats.delayedItems.length})
                       </td>
                     </tr>
                   )}

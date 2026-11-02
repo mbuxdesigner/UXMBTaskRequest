@@ -1079,11 +1079,12 @@ export function calculateOnTimeDelivery(
     getDesignDeliveryCommitments(request, nowMs).forEach((commitment) => {
       if (commitment.deliveredAtMs) {
         if (commitment.deliveredAtMs <= commitment.deadlineMs) {
-          onTimeCount++
-          // Giữ tên field cũ để không phá API của card; đây là số lần đã gửi đúng hạn.
+          // Lịch sử đã chuyển đúng hạn chỉ dùng cho dữ liệu tham chiếu, không
+          // tham gia công thức sức khỏe cam kết đang mở trên card.
           completedOnTimeCount++
         } else {
-          delayedCount++
+          // Vẫn giữ lần chuyển muộn trong báo cáo chi tiết, nhưng không làm
+          // giảm tỷ lệ bên ngoài vì task đã chuyển trạng thái.
           delayedItems.push({
             requestId: toSafeString(request.request_id || request.id),
             title: toSafeString(request.nickname || request.title) || "Chưa đặt tiêu đề",
@@ -1095,6 +1096,7 @@ export function calculateOnTimeDelivery(
           })
         }
       } else if (nowMs > commitment.deadlineMs) {
+        // Card bên ngoài chỉ coi task là trễ khi đã quá hẹn mà vẫn chưa chuyển.
         delayedCount++
         delayedItems.push({
           requestId: toSafeString(request.request_id || request.id),
@@ -1104,6 +1106,9 @@ export function calculateOnTimeDelivery(
           deadlineMs: commitment.deadlineMs,
           currentStatus: toSafeString(request.status),
         })
+      } else {
+        // Cam kết đang mở và chưa tới hạn được coi là đang đúng tiến độ.
+        onTimeCount++
       }
     })
   })
@@ -1136,7 +1141,7 @@ export function calculateOnTimeDelivery(
     badgeText,
     badgeVariant,
     completedOnTimeCount,
-    inProgressOnTimeCount: 0,
+    inProgressOnTimeCount: onTimeCount,
     delayedItems,
     missingDeadlineCount: missingDeadlineItems.length,
     missingDeadlineItems,
