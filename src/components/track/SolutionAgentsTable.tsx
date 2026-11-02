@@ -7,6 +7,7 @@ import { getRequestPendingClassification, getStatusConfig, formatPriority } from
 import { getProductColorDef, getSquadColorDef } from "@/lib/colorUtils"
 import { capitalizeFirstLetter, cn } from "@/lib/utils"
 import { fetchSingleTaskUpdate } from "@/services/googleSheetService"
+import { getStoredSession } from "@/services/otpAuthService"
 
 function formatDesignerDisplayName(rawName?: string): string {
   if (!rawName || rawName === "Chưa phân công" || rawName === "Đang phân công" || rawName.trim() === "") return "Chưa phân công"
@@ -56,6 +57,61 @@ export interface SolutionAgentsTableProps {
   incomingTaskIds?: Set<string>
   incomingTasks?: Map<string, UXRequest>
   filterPredicate?: (req: UXRequest) => boolean
+}
+
+type ResizableColumnId = "task" | "createdBy" | "designer" | "status" | "priority" | "release"
+type ColumnWidths = Record<ResizableColumnId, number>
+
+const RESIZABLE_COLUMNS: ResizableColumnId[] = ["task", "createdBy", "designer", "status", "priority", "release"]
+const ACTION_COLUMN_WIDTH = 48
+const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
+  task: 400,
+  createdBy: 150,
+  designer: 150,
+  status: 140,
+  priority: 90,
+  release: 110,
+}
+const COLUMN_MIN_WIDTHS: ColumnWidths = {
+  task: 280,
+  createdBy: 130,
+  designer: 130,
+  status: 140,
+  priority: 90,
+  release: 110,
+}
+const COLUMN_MAX_WIDTH = 1200
+
+function clampColumnWidth(columnId: ResizableColumnId, width: number): number {
+  return Math.min(COLUMN_MAX_WIDTH, Math.max(COLUMN_MIN_WIDTHS[columnId], Math.round(width)))
+}
+
+function getColumnWidthsStorageKey(): string {
+  let accountId = "anonymous"
+  try {
+    const session = getStoredSession()
+    accountId = (session?.teamsEmail || session?.personalEmail || session?.displayName || accountId)
+      .trim()
+      .toLowerCase()
+  } catch {}
+  return `ux-my-task:table:column-widths:v1:${encodeURIComponent(accountId)}`
+}
+
+function loadColumnWidths(storageKey: string): ColumnWidths {
+  try {
+    const saved = localStorage.getItem(storageKey)
+    if (!saved) return DEFAULT_COLUMN_WIDTHS
+    const parsed = JSON.parse(saved) as Partial<ColumnWidths>
+    return RESIZABLE_COLUMNS.reduce<ColumnWidths>((result, columnId) => {
+      const savedWidth = Number(parsed[columnId])
+      result[columnId] = Number.isFinite(savedWidth)
+        ? clampColumnWidth(columnId, savedWidth)
+        : DEFAULT_COLUMN_WIDTHS[columnId]
+      return result
+    }, { ...DEFAULT_COLUMN_WIDTHS })
+  } catch {
+    return DEFAULT_COLUMN_WIDTHS
+  }
 }
 
 interface StatusGroupDef {
@@ -374,11 +430,186 @@ export default function SolutionAgentsTable({
 }: SolutionAgentsTableProps) {
   const showContext = true // Latest step line
   const density: "comfortable" | "compact" = "comfortable" // Auto bảng thoáng theo yêu cầu người dùng
+  const [columnWidthsStorageKey] = useState(() => getColumnWidthsStorageKey())
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => loadColumnWidths(columnWidthsStorageKey))
+  const columnWidthsRef = React.useRef(columnWidths)
+  const headerCellRefs = React.useRef<Partial<Record<ResizableColumnId, HTMLTableCellElement | null>>>({})
+  const resizeStateRef = React.useRef<{
+    columnId: ResizableColumnId
+    startX: number
+    startWidth: number
+  } | null>(null)
+  const previousBodyStylesRef = React.useRef<{ cursor: string; userSelect: string } | null>(null)
+  const [resizingColumn, setResizingColumn] = useState<ResizableColumnId | null>(null)
+  const [resizeGuide, setResizeGuide] = useState<{ left: number; width: number } | null>(null)
   const [actionMenuAnchor, setActionMenuAnchor] = useState<{
     requestId: string
     rect: DOMRect
     req: UXRequest
   } | null>(null)
+
+  React.useEffect(() => {
+    columnWidthsRef.current = columnWidths
+  }, [columnWidths])
+
+  const persistColumnWidths = useCallback((widths: ColumnWidths) => {
+    try {
+      localStorage.setItem(columnWidthsStorageKey, JSON.stringify(widths))
+    } catch {}
+  }, [columnWidthsStorageKey])
+
+  const getMeasuredColumnWidths = useCallback((): ColumnWidths => {
+    return RESIZABLE_COLUMNS.reduce<ColumnWidths>((result, columnId) => {
+      const measuredWidth = headerCellRefs.current[columnId]?.getBoundingClientRect().width
+      result[columnId] = measuredWidth
+        ? clampColumnWidth(columnId, measuredWidth)
+        : columnWidthsRef.current[columnId]
+      return result
+    }, { ...columnWidthsRef.current })
+  }, [])
+
+  const handleResizeStart = useCallback((event: React.PointerEvent, columnId: ResizableColumnId) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const measuredWidths = getMeasuredColumnWidths()
+    const headerCell = headerCellRefs.current[columnId]
+    columnWidthsRef.current = measuredWidths
+    setColumnWidths(measuredWidths)
+    resizeStateRef.current = {
+      columnId,
+      startX: event.clientX,
+      startWidth: measuredWidths[columnId],
+    }
+    setResizingColumn(columnId)
+    setResizeGuide({
+      left: (headerCell?.offsetLeft || 0) + measuredWidths[columnId],
+      width: measuredWidths[columnId],
+    })
+
+    previousBodyStylesRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    }
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }, [getMeasuredColumnWidths])
+
+  const handleResizeKeyDown = useCallback((event: React.KeyboardEvent, columnId: ResizableColumnId) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const measuredWidths = getMeasuredColumnWidths()
+    const direction = event.key === "ArrowRight" ? 1 : -1
+    const step = event.shiftKey ? 32 : 16
+    const nextWidths = {
+      ...measuredWidths,
+      [columnId]: clampColumnWidth(columnId, measuredWidths[columnId] + direction * step),
+    }
+    columnWidthsRef.current = nextWidths
+    setColumnWidths(nextWidths)
+    persistColumnWidths(nextWidths)
+  }, [getMeasuredColumnWidths, persistColumnWidths])
+
+  React.useEffect(() => {
+    if (!resizingColumn) return
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = resizeStateRef.current
+      if (!resizeState) return
+      event.preventDefault()
+      const nextWidth = clampColumnWidth(
+        resizeState.columnId,
+        resizeState.startWidth + event.clientX - resizeState.startX
+      )
+      const nextWidths = { ...columnWidthsRef.current, [resizeState.columnId]: nextWidth }
+      const headerCell = headerCellRefs.current[resizeState.columnId]
+      columnWidthsRef.current = nextWidths
+      setColumnWidths(nextWidths)
+      setResizeGuide({
+        left: (headerCell?.offsetLeft || 0) + nextWidth,
+        width: nextWidth,
+      })
+    }
+
+    const finishResize = () => {
+      persistColumnWidths(columnWidthsRef.current)
+      resizeStateRef.current = null
+      setResizingColumn(null)
+      setResizeGuide(null)
+      const previousStyles = previousBodyStylesRef.current
+      if (previousStyles) {
+        document.body.style.cursor = previousStyles.cursor
+        document.body.style.userSelect = previousStyles.userSelect
+        previousBodyStylesRef.current = null
+      }
+    }
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false })
+    window.addEventListener("pointerup", finishResize)
+    window.addEventListener("pointercancel", finishResize)
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", finishResize)
+      window.removeEventListener("pointercancel", finishResize)
+    }
+  }, [resizingColumn, persistColumnWidths])
+
+  React.useEffect(() => {
+    return () => {
+      const previousStyles = previousBodyStylesRef.current
+      if (previousStyles) {
+        document.body.style.cursor = previousStyles.cursor
+        document.body.style.userSelect = previousStyles.userSelect
+      }
+    }
+  }, [])
+
+  const tableWidth = useMemo(
+    () => RESIZABLE_COLUMNS.reduce((total, columnId) => total + columnWidths[columnId], ACTION_COLUMN_WIDTH),
+    [columnWidths]
+  )
+
+  const renderResizableHeader = (
+    columnId: ResizableColumnId,
+    label: string,
+    alignment: "left" | "right" = "left",
+    extraClassName?: string
+  ) => (
+    <th
+      ref={(node) => { headerCellRefs.current[columnId] = node }}
+      className={cn(
+        "relative py-2 font-medium",
+        alignment === "right" ? "px-3 sm:px-4 text-right" : columnId === "task" ? "px-4 sm:px-5 text-left" : "px-3 sm:px-4 text-left",
+        extraClassName
+      )}
+    >
+      <span className="block truncate" title={label}>{label}</span>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Thay đổi độ rộng cột ${label}`}
+        aria-valuemin={COLUMN_MIN_WIDTHS[columnId]}
+        aria-valuemax={COLUMN_MAX_WIDTH}
+        aria-valuenow={columnWidths[columnId]}
+        tabIndex={0}
+        title="Kéo để thay đổi độ rộng cột"
+        onPointerDown={(event) => handleResizeStart(event, columnId)}
+        onKeyDown={(event) => handleResizeKeyDown(event, columnId)}
+        className="group/resize absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize touch-none outline-none"
+      >
+        <span
+          className={cn(
+            "absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 transition-colors",
+            resizingColumn === columnId
+              ? "bg-[#1057FB]"
+              : "bg-transparent group-hover/resize:bg-[#1057FB] group-focus/resize:bg-[#1057FB]"
+          )}
+        />
+      </div>
+    </th>
+  )
 
   // Đóng Action Popover khi click ra ngoài hoặc cuộn trang/bảng
   React.useEffect(() => {
@@ -852,25 +1083,26 @@ export default function SolutionAgentsTable({
 
   return (
     <div data-slot="data-grid" className="w-full select-none rounded-b-2xl">
-      <div className="overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
-        <table data-slot="data-grid-table" className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal w-full min-w-[980px] table-fixed border-separate border-spacing-0">
+      <div className="relative overflow-x-auto w-full overscroll-x-contain touch-pan-x min-h-[260px] pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
+        <table
+          data-slot="data-grid-table"
+          className="text-slate-900 caption-bottom text-left align-middle text-sm font-normal table-fixed border-separate border-spacing-0"
+          style={{ width: `${tableWidth}px`, minWidth: "100%" }}
+        >
           <colgroup>
-            <col className="w-[42%]" />
-            <col className="w-[15%]" />
-            <col className="w-[15%]" />
-            <col className="w-[12%]" />
-            <col className="w-[7.5%]" />
-            <col className="w-[8.5%]" />
-            <col className="w-[48px]" />
+            {RESIZABLE_COLUMNS.map((columnId) => (
+              <col key={columnId} style={{ width: `${columnWidths[columnId]}px` }} />
+            ))}
+            <col style={{ width: `${ACTION_COLUMN_WIDTH}px` }} />
           </colgroup>
           <thead className="bg-slate-50/60 border-b border-slate-200 text-[11px] font-medium text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
             <tr className="h-9">
-              <th className="px-4 sm:px-5 py-2 text-left font-medium">Yêu cầu / Task & Luồng nghiệp vụ</th>
-              <th className="px-3 sm:px-4 py-2 text-left font-medium">Created by</th>
-              <th className="px-3 sm:px-4 py-2 text-left font-medium">Designer</th>
-              <th className="px-3 sm:px-4 py-2 text-left font-medium">Trạng thái</th>
-              <th className="px-3 sm:px-4 py-2 text-right font-medium">Priority</th>
-              <th className="px-3 sm:px-4 py-2 text-right font-medium whitespace-nowrap">Release</th>
+              {renderResizableHeader("task", "Yêu cầu / Task & Luồng nghiệp vụ")}
+              {renderResizableHeader("createdBy", "Created by")}
+              {renderResizableHeader("designer", "Designer")}
+              {renderResizableHeader("status", "Trạng thái")}
+              {renderResizableHeader("priority", "Priority", "right")}
+              {renderResizableHeader("release", "Release", "right", "whitespace-nowrap")}
               <th className="px-2 sm:px-3 py-2 text-right font-medium w-[48px] min-w-[48px] sticky right-0 top-0 z-20 bg-slate-50/95 backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.06),inset_0_-1px_0_0_#e2e8f0] border-b border-slate-200" />
             </tr>
           </thead>
@@ -1510,7 +1742,18 @@ export default function SolutionAgentsTable({
             </motion.tbody>
           )}
         </AnimatePresence>
-      </table>
+        </table>
+        {resizeGuide && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-1 top-0 z-40 w-px bg-[#1057FB] shadow-[0_0_0_1px_rgba(16,87,251,0.08)]"
+            style={{ left: `${resizeGuide.left}px` }}
+          >
+            <span className="absolute left-1 top-1 rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-white shadow-lg">
+              {resizeGuide.width}px
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Table Footer - Flux AgentOps Style */}
