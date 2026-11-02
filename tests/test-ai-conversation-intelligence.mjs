@@ -204,6 +204,25 @@ test("Không tự đếm tài liệu khi người dùng không hỏi số lượ
   assert.equal(answer, "")
 })
 
+test("Bộ đếm outline không hardcode loại tài liệu nguyên tắc", () => {
+  const answer = buildDeterministicDocumentOutlineAnswer("quy trình có bao nhiêu bước", {
+    name: "Quy_trinh_phat_hanh.md",
+    approvalStatus: "approved",
+    content: [
+      "# Quy trình phát hành",
+      "## 1. Chuẩn bị",
+      "## 2. Kiểm thử",
+      "## 3. Phê duyệt",
+      "## 4. Phát hành",
+    ].join("\n"),
+  })
+
+  assert.match(answer, /4 bước/)
+  assert.match(answer, /Chuẩn bị/)
+  assert.match(answer, /Phát hành/)
+  assert.doesNotMatch(answer, /nguyên tắc làm việc/)
+})
+
 test("Đánh giá sức khỏe task dùng deadline, tiến độ và độ mới cập nhật", () => {
   const riskyTask = {
     ...tasks[0],

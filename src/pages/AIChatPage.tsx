@@ -2135,7 +2135,7 @@ export default function AIChatPage({ onBackToPortal }: AIChatPageProps) {
           userName,
           userRole: session?.role,
           userQuery: retrievalQuery,
-        }) + `\n\n${activeAttachmentContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời trực tiếp câu hỏi của người dùng. Phân biệt chính xác khái niệm được hỏi; không thay “nguyên tắc” bằng “khâu”, “quy trình” hoặc kiến thức nền khác. Khi câu hỏi hỏi số lượng, hãy đếm các đề mục cấp cao nhất trong chính tài liệu rồi liệt kê tên từng mục. Tài liệu draft được phép dùng để trả lời về chính nội dung của nó, nhưng không được mô tả là quy định chính thức đã phê duyệt.`
+        }) + `\n\n${activeAttachmentContext}\n\n=== CHỈ DẪN TRẢ LỜI ===\nHãy đọc kỹ tài liệu đính kèm ở trên và trả lời trực tiếp câu hỏi của người dùng. Giữ nguyên đối tượng và thao tác mà người dùng hỏi; không tự đổi sang một khái niệm gần nghĩa hoặc kiến thức nền khác. Khi câu hỏi hỏi số lượng các mục cấp cao nhất, hãy đếm trực tiếp outline của tài liệu rồi liệt kê tên từng mục. Với bảng, checklist, điều khoản, bước quy trình hoặc cấu trúc khác, phải dựa trên đúng cấu trúc tương ứng trong tài liệu. Tài liệu draft được phép dùng để trả lời về chính nội dung của nó, nhưng không được mô tả là quy định chính thức đã phê duyệt.`
       } else if (autoFoundDocs.length > 0) {
         // Tự động tìm kiếm và nạp tài liệu phù hợp từ kho Artifacts khi không có tài liệu gắn kèm cụ thể
         const docsSummary = serializeArtifactsContext(autoFoundDocs, "full")

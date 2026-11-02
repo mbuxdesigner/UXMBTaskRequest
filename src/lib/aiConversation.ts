@@ -965,12 +965,16 @@ export function buildDeterministicDocumentOutlineAnswer(
   const uniqueSections = sections.filter(
     (section, index, all) => all.findIndex((candidate) => candidate.order === section.order) === index
   )
-  const subject = /nguyen tac/.test(normalizedQuery) ? "nguyên tắc làm việc" : "mục chính"
+  const cleanQuery = query.trim().replace(/[?!.]+$/g, "")
+  const subjectMatch = cleanQuery.match(/(?:có\s+mấy|bao\s+nhiêu|số\s+lượng)\s+(.+)$/iu)
+  const subject = (subjectMatch?.[1] || "mục chính")
+    .replace(/\s+(?:trong|ở)\s+(?:tài liệu|file)(?:\s+này)?$/iu, "")
+    .trim()
   const approvalNote = document.approvalStatus && document.approvalStatus !== "approved"
     ? "\n\n> Đây là nội dung của tài liệu đang đính kèm; tài liệu chưa được đánh dấu là quy định đã phê duyệt."
     : ""
 
-  return `Tài liệu **${document.name}** có **${uniqueSections.length} ${subject}**:\n\n${uniqueSections
+  return `Tài liệu **${document.name}** có **${uniqueSections.length} ${subject || "mục chính"}**:\n\n${uniqueSections
     .map((section, index) => `${index + 1}. **${section.title}**`)
     .join("\n")}${approvalNote}`
 }
