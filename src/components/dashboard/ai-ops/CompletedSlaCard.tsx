@@ -73,28 +73,14 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
         </div>
 
         {/* Footer details với khung màu nền và badge nổi bật */}
-        <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2 sm:px-2.5 py-1.5 flex items-center justify-between text-xs text-neutral-500 mt-1.5 min-w-0">
-          <span className="truncate mr-1 text-[11px] sm:text-xs font-normal">Cam kết gửi:</span>
+        <div className="rounded-lg bg-neutral-50/60 border border-neutral-100/80 px-2 sm:px-2.5 py-1.5 flex items-center justify-end text-xs text-neutral-500 mt-1.5 min-w-0">
           <button
             type="button"
             onClick={() => setShowDelayedReport(true)}
             className="font-semibold text-neutral-700 bg-white px-1.5 sm:px-2 py-0.5 rounded border border-neutral-200/70 text-[11px] inline-flex items-center gap-1 shadow-2xs shrink-0 transition-colors hover:border-rose-200 hover:bg-rose-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
             aria-label={`Xem báo cáo ${stats.delayedItems.length} lần hẹn trễ, ${stats.delayedCount} task đang quá hẹn chưa chuyển và ${stats.missingDeadlineCount} task chưa có ngày hẹn`}
           >
-            <span className="font-mono font-bold text-neutral-900 tabular-nums text-xs">
-              {stats.onTimeCount}/{stats.totalEvaluated}
-            </span>
-            <span>đúng hạn</span>
-            <span>·</span>
-            <span
-              className={cn(
-                "font-mono font-bold tabular-nums text-xs",
-                stats.delayedCount > 0 ? "text-rose-600" : "text-emerald-600"
-              )}
-            >
-              {stats.delayedCount}
-            </span>
-            <span>trễ</span>
+            <span>Xem lịch sử task</span>
             <ChevronRight className="size-3 text-neutral-400" aria-hidden="true" />
           </button>
         </div>

@@ -1155,8 +1155,8 @@ export function calculateOnTimeDelivery(
 export interface CycleTimeStats {
   avgCycleTime: number // Số ngày trung bình / task (ví dụ: 3.8)
   targetCycleTime: number // Mục tiêu cam kết SLA (5.0 ngày/task)
-  sampleCount: number // Số lượng bài toán dùng tính chu kỳ
-  isCompletedCohort: boolean // true: tính trên task hoàn thành, false: tính trên task đang chạy
+  sampleCount: number // Số task có đủ mốc Define đầu bài và Ready to dev
+  isCompletedCohort: boolean // Giữ tương thích API; true khi đo chu kỳ đã khép kín
   badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện"
   badgeVariant: "emerald" | "blue" | "amber"
 }
@@ -1164,11 +1164,53 @@ export interface CycleTimeStats {
 export const SLA_TARGET_CYCLE_DAYS = 5.0
 
 /**
- * Tính toán thời gian chu kỳ SLA / Cycle Time (R3):
- * - Chu kỳ = (Thời điểm hoàn thành - submitted_at) / (24 * 3600 * 1000).
- * - Nếu số task hoàn thành trong kỳ = 0, tính chu kỳ trung bình các task đang xử lý
- *   (số ngày trôi qua từ ngày gửi đến hiện tại) kèm mốc tham chiếu.
- * - Zero-safe: Không bao giờ bị NaN, chuỗi rỗng hay chia cho 0.
+ * Trả về thời điểm đầu tiên task chuyển vào một mốc quy trình thiết kế.
+ * Chỉ dùng lịch sử chuyển khâu thực tế, không suy diễn từ ngày tạo hoặc ngày cập nhật.
+ */
+function getDesignCycleMilestoneMs(
+  request: UXRequest,
+  milestone: "define" | "ready",
+  nowMs: number,
+  afterMs = 0,
+): number {
+  if (!Array.isArray(request.task_updates)) return 0
+
+  const matchesMilestone = (value: unknown) => {
+    const normalized = normalizeMetricText(value)
+    if (milestone === "define") {
+      return normalized.includes("define") || /^2(?:\.|\s|$)/.test(normalized)
+    }
+    return (
+      normalized.includes("ready to dev") ||
+      normalized.includes("ready for dev") ||
+      /^5(?:\.|\s|$)/.test(normalized)
+    )
+  }
+
+  return request.task_updates
+    .map((update) => {
+      const note = normalizeMetricText(update.note)
+      const noteMarksTransition =
+        matchesMilestone(note) &&
+        (note.includes("chuyen sang") ||
+          note.includes("sang khau") ||
+          note.includes("bat dau"))
+      const phaseMarksTransition =
+        matchesMilestone(update.new_phase) &&
+        !matchesMilestone(update.previous_phase)
+
+      return {
+        timestampMs: parseDateMs(update.timestamp, nowMs),
+        isMatch: !update.is_comment && (phaseMarksTransition || noteMarksTransition),
+      }
+    })
+    .filter((item) => item.isMatch && item.timestampMs > 0 && item.timestampMs >= afterMs)
+    .sort((a, b) => a.timestampMs - b.timestampMs)[0]?.timestampMs || 0
+}
+
+/**
+ * Cycle Time = thời điểm chuyển vào Ready to dev - thời điểm chuyển vào Define đầu bài.
+ * Chỉ task có đủ cả hai mốc hợp lệ mới tham gia trung bình.
  */
 export function calculateCycleTime(
   requests: UXRequest[] = [],
@@ -1192,125 +1234,42 @@ export function calculateCycleTime(
     }
   }
 
-  // 1. Tìm các bài toán đã hoàn thành có ngày bắt đầu và kết thúc hợp lệ
-  const completedTasks = safeReqs.filter(isCompletedTask)
-  let completedDaysSum = 0
-  let completedSampleCount = 0
+  let cycleDaysSum = 0
+  let sampleCount = 0
 
-  completedTasks.forEach((r) => {
-    const rawSubmitted =
-      r.submitted_at ||
-      (r as any).submitted_at_vn ||
-      (r as any).created_at ||
-      (r as any).timestamp
-    const submittedMs = parseDateMs(rawSubmitted, nowMs)
-    const completionStr = getTaskCompletionDate(r)
-    const completionMs = parseDateMs(completionStr, nowMs)
+  safeReqs.forEach((request) => {
+    const defineMs = getDesignCycleMilestoneMs(request, "define", nowMs)
+    if (!defineMs) return
 
-    if (submittedMs > 0 && completionMs > 0) {
-      if (completionMs >= submittedMs) {
-        const days = (completionMs - submittedMs) / MS_PER_DAY
-        completedDaysSum += days
-        completedSampleCount++
-      } else if (submittedMs - completionMs <= MS_PER_DAY) {
-        // Hoàn thành trong ngày hoặc lệch múi giờ nhỏ
-        completedDaysSum += 0
-        completedSampleCount++
-      }
-    }
+    const readyMs = getDesignCycleMilestoneMs(request, "ready", nowMs, defineMs)
+    if (!readyMs || readyMs < defineMs) return
+
+    cycleDaysSum += (readyMs - defineMs) / MS_PER_DAY
+    sampleCount++
   })
 
-  // Nếu có bài toán hoàn thành hợp lệ
-  if (completedSampleCount > 0) {
-    const rawAvg = completedDaysSum / completedSampleCount
-    const avgCycleTime = Number(rawAvg.toFixed(1))
-    const safeAvg = Number.isFinite(avgCycleTime) ? avgCycleTime : 0
+  const avgCycleTime = sampleCount > 0
+    ? Number((cycleDaysSum / sampleCount).toFixed(1))
+    : 0
+  const safeAvg = Number.isFinite(avgCycleTime) ? avgCycleTime : 0
 
-    let badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện" = "Đạt chuẩn SLA"
-    let badgeVariant: "emerald" | "blue" | "amber" = "blue"
+  let badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện" = "Đạt chuẩn SLA"
+  let badgeVariant: "emerald" | "blue" | "amber" = "blue"
 
-    if (safeAvg <= fastCycleTime) {
-      badgeText = "Tốc độ nhanh"
-      badgeVariant = "emerald"
-    } else if (safeAvg <= targetCycleTime) {
-      badgeText = "Đạt chuẩn SLA"
-      badgeVariant = "blue"
-    } else {
-      badgeText = "Cần cải thiện"
-      badgeVariant = "amber"
-    }
-
-    return {
-      avgCycleTime: safeAvg,
-      targetCycleTime,
-      sampleCount: completedSampleCount,
-      isCompletedCohort: true,
-      badgeText,
-      badgeVariant,
-    }
+  if (sampleCount > 0 && safeAvg <= fastCycleTime) {
+    badgeText = "Tốc độ nhanh"
+    badgeVariant = "emerald"
+  } else if (sampleCount > 0 && safeAvg > targetCycleTime) {
+    badgeText = "Cần cải thiện"
+    badgeVariant = "amber"
   }
 
-  // 2. Nếu số task hoàn thành trong kỳ = 0, tính thời gian chu kỳ các task đang xử lý
-  const inProgressTasks = safeReqs.filter(isInProgressTask)
-  let inProgDaysSum = 0
-  let inProgSampleCount = 0
-
-  inProgressTasks.forEach((r) => {
-    const rawSubmitted =
-      r.submitted_at ||
-      (r as any).submitted_at_vn ||
-      (r as any).created_at ||
-      (r as any).timestamp
-    const submittedMs = parseDateMs(rawSubmitted, nowMs)
-    if (submittedMs > 0) {
-      if (nowMs >= submittedMs) {
-        const days = (nowMs - submittedMs) / MS_PER_DAY
-        inProgDaysSum += days
-        inProgSampleCount++
-      } else if (submittedMs - nowMs <= MS_PER_DAY * 30) {
-        // Mới tạo hôm nay hoặc chênh lệch đồng hồ client-server nhẹ
-        inProgDaysSum += 0
-        inProgSampleCount++
-      }
-    }
-  })
-
-  if (inProgSampleCount > 0) {
-    const rawAvg = inProgDaysSum / inProgSampleCount
-    const avgCycleTime = Number(rawAvg.toFixed(1))
-    const safeAvg = Number.isFinite(avgCycleTime) ? avgCycleTime : 0
-
-    let badgeText: "Tốc độ nhanh" | "Đạt chuẩn SLA" | "Cần cải thiện" = "Đạt chuẩn SLA"
-    let badgeVariant: "emerald" | "blue" | "amber" = "blue"
-
-    if (safeAvg <= fastCycleTime) {
-      badgeText = "Tốc độ nhanh"
-      badgeVariant = "emerald"
-    } else if (safeAvg <= targetCycleTime) {
-      badgeText = "Đạt chuẩn SLA"
-      badgeVariant = "blue"
-    } else {
-      badgeText = "Cần cải thiện"
-      badgeVariant = "amber"
-    }
-
-    return {
-      avgCycleTime: safeAvg,
-      targetCycleTime,
-      sampleCount: inProgSampleCount,
-      isCompletedCohort: false,
-      badgeText,
-      badgeVariant,
-    }
-  }
-
-  // 3. Không có dữ liệu ngày hợp lệ (0 bài toán hoặc không có submitted_at)
   return {
-    avgCycleTime: 0,
+    avgCycleTime: safeAvg,
     targetCycleTime,
-    sampleCount: 0,
-    isCompletedCohort: true,
-    badgeText: "Đạt chuẩn SLA",
-    badgeVariant: "blue",
+    sampleCount,
+    isCompletedCohort: sampleCount > 0,
+    badgeText,
+    badgeVariant,
   }
 }
