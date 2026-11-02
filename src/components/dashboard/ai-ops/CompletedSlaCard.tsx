@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react"
-import { AlertTriangle, ChevronRight, ShieldCheck, X } from "lucide-react"
+import { AlertTriangle, ChevronRight, ShieldCheck } from "lucide-react"
 import type { UXRequest } from "@/data/mockData"
 import { NumberTicker } from "@/components/jolyui/number-ticker"
-import { Dialog, DialogBody, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { RightSheet } from "@/components/ui/right-sheet"
 import { cn } from "@/lib/utils"
 import { calculateOnTimeDelivery, type OnTimeDeliveryStats } from "./kpiMetrics"
 
@@ -100,44 +100,25 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
         </div>
       </div>
 
-      <Dialog
+      <RightSheet
         open={showDelayedReport}
         onClose={() => setShowDelayedReport(false)}
-        size="3xl"
+        size="xl"
+        title="Báo cáo task trễ"
+        description={`${stats.delayedCount} lần hẹn chuyển trạng thái bị trễ. Pending, PO pending và task đã dừng không được tính.`}
+        icon={<AlertTriangle className="size-4 text-rose-600" aria-hidden="true" />}
+        bodyClassName="overflow-auto"
       >
-        <DialogHeader>
-          <div className="min-w-0">
-            <DialogTitle className="flex items-center gap-2">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
-                <AlertTriangle className="size-4" aria-hidden="true" />
-              </span>
-              Báo cáo task trễ
-            </DialogTitle>
-            <DialogDescription>
-              {stats.delayedCount} lần hẹn chuyển trạng thái bị trễ. Pending, PO pending và task đã dừng không được tính.
-            </DialogDescription>
+        {stats.delayedItems.length === 0 ? (
+          <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
+            <ShieldCheck className="mb-3 size-9 text-emerald-500" aria-hidden="true" />
+            <p className="text-sm font-semibold text-slate-900">Không có task trễ</p>
+            <p className="mt-1 text-xs text-slate-500">Các lần hẹn đã đánh giá đều đúng hạn.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowDelayedReport(false)}
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-            aria-label="Đóng báo cáo"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        </DialogHeader>
-
-        <DialogBody className="p-0 space-y-0">
-          {stats.delayedItems.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
-              <ShieldCheck className="mb-3 size-9 text-emerald-500" aria-hidden="true" />
-              <p className="text-sm font-semibold text-slate-900">Không có task trễ</p>
-              <p className="mt-1 text-xs text-slate-500">Các lần hẹn đã đánh giá đều đúng hạn.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        ) : (
+          <div className="min-h-full overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgba(226,232,240,0.9)]">
                   <tr>
                     <th className="px-5 py-3">Task</th>
                     <th className="px-4 py-3">Designer</th>
@@ -175,11 +156,10 @@ export default function CompletedSlaCard({ requests = [] }: CompletedSlaCardProp
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          )}
-        </DialogBody>
-      </Dialog>
+            </table>
+          </div>
+        )}
+      </RightSheet>
     </div>
   )
 }
