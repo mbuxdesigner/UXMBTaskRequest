@@ -540,7 +540,6 @@ export default function App() {
           currentPage={page}
           onNavigate={handleNavigate}
           isCollapsed={sidebarCollapsed}
-          onToggleCollapse={toggleSidebarCollapse}
           onLogout={handleLogout}
         />
 
@@ -563,6 +562,8 @@ export default function App() {
             onNavigate={handleNavigate}
             session={session}
             onLogout={handleLogout}
+            isSidebarCollapsed={sidebarCollapsed}
+            onToggleSidebarCollapse={toggleSidebarCollapse}
             onToggleMobileMenu={() =>
               window.dispatchEvent(new Event("toggle_mobile_sidebar"))
             }

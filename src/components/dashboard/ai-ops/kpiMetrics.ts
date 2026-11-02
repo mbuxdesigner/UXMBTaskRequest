@@ -745,6 +745,17 @@ export interface OnTimeDeliveryStats {
   badgeVariant: "emerald" | "amber" | "rose"
   completedOnTimeCount: number
   inProgressOnTimeCount: number
+  delayedItems: DelayedDesignDeliveryItem[]
+}
+
+export interface DelayedDesignDeliveryItem {
+  requestId: string
+  title: string
+  designer: string
+  phase: DesignDeliveryPhase
+  deadlineMs: number
+  transitionedAtMs?: number
+  currentStatus: string
 }
 
 /**
@@ -786,48 +797,263 @@ export function isTaskOnTime(req?: UXRequest | null, nowMs: number = Date.now())
   return nowMs <= endOfDayMs
 }
 
+type DesignDeliveryPhase = "wireframe" | "ui-design" | "design"
+
+interface DesignDeliveryCommitment {
+  phase: DesignDeliveryPhase
+  deadlineMs: number
+  deliveredAtMs?: number
+}
+
+function normalizeMetricText(value: unknown): string {
+  return toSafeString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+}
+
+function getDesignDeliveryPhase(value: unknown): DesignDeliveryPhase | null {
+  const phase = normalizeMetricText(value)
+  if (!phase) return null
+  if (phase.includes("wireframe") || /^3(?:\.|\s|$)/.test(phase)) return "wireframe"
+  if (phase.includes("ui design") || phase.includes("ui-design") || /^4(?:\.|\s|$)/.test(phase)) return "ui-design"
+  return null
+}
+
+function toEndOfDayMs(value: unknown, nowMs: number): number {
+  const parsed = parseDateMs(toSafeString(value), nowMs)
+  if (!parsed) return 0
+  const date = new Date(parsed)
+  date.setHours(23, 59, 59, 999)
+  return date.getTime()
+}
+
+function isExcludedKpiStatus(value: unknown): boolean {
+  const status = normalizeMetricText(value)
+  return (
+    status === "pending" ||
+    status === "po pending" ||
+    status === "tam dung" ||
+    status === "da dung" ||
+    status === "freeze" ||
+    status === "frozen" ||
+    status === "stopped"
+  )
+}
+
+function isWorkflowTransition(
+  update: NonNullable<UXRequest["task_updates"]>[number],
+  fallbackPreviousPhase: string
+): boolean {
+  if (update.is_comment) return false
+
+  const previousStatus = normalizeMetricText(update.previous_status)
+  const nextStatus = normalizeMetricText(update.new_status)
+  if (previousStatus && nextStatus && previousStatus !== nextStatus) return true
+
+  const previousPhase = normalizeMetricText(update.previous_phase || fallbackPreviousPhase)
+  const nextPhase = normalizeMetricText(update.new_phase)
+  if (previousPhase && nextPhase && previousPhase !== nextPhase) return true
+
+  // Compatibility for old logs created before previous/new status were stored.
+  const note = normalizeMetricText(update.note)
+  return (
+    note.includes("[gui po]") ||
+    note.includes("da gui phuong an thiet ke cho po") ||
+    note.includes("/sentopo")
+  )
+}
+
+function getDeadlineChangeFromUpdate(
+  update: NonNullable<UXRequest["task_updates"]>[number],
+  nowMs: number
+): { phase: DesignDeliveryPhase; deadlineMs: number } | null {
+  const note = normalizeMetricText(update.note)
+  const phase = note.includes("ngay gui wireframe")
+    ? "wireframe"
+    : note.includes("ngay gui ui")
+      ? "ui-design"
+      : null
+
+  if (!phase) return null
+  if (note.includes("go bo")) return { phase, deadlineMs: 0 }
+
+  const deadlineMatch = toSafeString(update.note).match(
+    /(?:sang|thành|thanh)\s*:\s*(\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})/i
+  )
+  const deadlineMs = toEndOfDayMs(deadlineMatch?.[1] || update.design_deadline, nowMs)
+  return deadlineMs ? { phase, deadlineMs } : null
+}
+
 /**
- * Tính toán tỷ lệ phần trăm đúng hạn On-time Delivery Rate (R2).
- * - Đúng hạn: Hoàn thành đúng hạn hoặc đang chạy chưa vượt deadline.
- * - Trễ hạn: Đã hoàn thành sau deadline hoặc đang chạy nhưng đã quá hạn deadline.
- * - Zero-safe: Trả về 100% nếu danh sách rỗng, không bị NaN hoặc chia cho 0.
+ * Tạo các lần cam kết giao thiết kế của một task.
+ * Mỗi lần designer đặt ngày gửi được đóng lại khi task chuyển trạng thái tiếp theo.
+ * Dữ liệu có cấu trúc mới được ưu tiên; ghi chú cũ vẫn được đọc để tương thích.
+ */
+function getDesignDeliveryCommitments(
+  request: UXRequest,
+  nowMs: number
+): DesignDeliveryCommitment[] {
+  const commitments: DesignDeliveryCommitment[] = []
+  const openByPhase = new Map<DesignDeliveryPhase, DesignDeliveryCommitment>()
+  const updates = Array.isArray(request.task_updates)
+    ? [...request.task_updates].sort(
+        (a, b) => parseDateMs(a.timestamp, nowMs) - parseDateMs(b.timestamp, nowMs)
+      )
+    : []
+  let lastKnownPhase = ""
+
+  const cancelOpenCommitments = () => {
+    openByPhase.forEach((commitment) => {
+      const index = commitments.indexOf(commitment)
+      if (index >= 0) commitments.splice(index, 1)
+    })
+    openByPhase.clear()
+  }
+
+  updates.forEach((update) => {
+    const fallbackPreviousPhase = update.previous_phase || lastKnownPhase
+    const deadlineChange = getDeadlineChangeFromUpdate(update, nowMs)
+    if (deadlineChange) {
+      if (!deadlineChange.deadlineMs) {
+        openByPhase.delete(deadlineChange.phase)
+      } else {
+        const existing = openByPhase.get(deadlineChange.phase)
+        if (existing) {
+          existing.deadlineMs = deadlineChange.deadlineMs
+        } else {
+          const commitment = { phase: deadlineChange.phase, deadlineMs: deadlineChange.deadlineMs }
+          commitments.push(commitment)
+          openByPhase.set(deadlineChange.phase, commitment)
+        }
+      }
+      lastKnownPhase = update.new_phase || lastKnownPhase
+      return
+    }
+
+    const transitioned = isWorkflowTransition(update, fallbackPreviousPhase)
+    lastKnownPhase = update.new_phase || lastKnownPhase
+    if (!transitioned) return
+
+    if (isExcludedKpiStatus(update.new_status)) {
+      cancelOpenCommitments()
+      return
+    }
+
+    const phase =
+      getDesignDeliveryPhase(update.previous_phase) ||
+      getDesignDeliveryPhase(fallbackPreviousPhase) ||
+      getDesignDeliveryPhase(update.new_phase) ||
+      getDesignDeliveryPhase(request.current_phase) ||
+      "design"
+    let commitment = openByPhase.get(phase)
+
+    if (!commitment && openByPhase.size === 1) {
+      commitment = openByPhase.values().next().value
+    }
+
+    if (!commitment) {
+      const deadlineMs = toEndOfDayMs(update.design_deadline, nowMs)
+      if (deadlineMs) {
+        commitment = { phase, deadlineMs }
+        commitments.push(commitment)
+      }
+    }
+
+    if (commitment) {
+      commitment.deliveredAtMs = parseDateMs(update.timestamp, nowMs) || nowMs
+      openByPhase.delete(phase)
+    }
+  })
+
+  if (isExcludedKpiStatus(request.status)) {
+    cancelOpenCommitments()
+    return commitments
+  }
+
+  const currentDeadlineMs = toEndOfDayMs(request.design_deadline, nowMs)
+  if (currentDeadlineMs) {
+    const currentPhase = getDesignDeliveryPhase(request.current_phase) || "design"
+    const sentAtMs = parseDateMs(request.sent_to_po_at, nowMs)
+    const currentStatus = normalizeMetricText(request.status)
+    const hasCurrentTransitionTimestamp = Boolean(sentAtMs && currentStatus === "da gui po")
+    const alreadyCapturedCurrentDelivery = commitments.some(
+      (item) =>
+        Boolean(item.deliveredAtMs) &&
+        item.deadlineMs === currentDeadlineMs &&
+        (item.phase === currentPhase || currentPhase === "design" || item.phase === "design")
+    )
+
+    if (alreadyCapturedCurrentDelivery) return commitments
+
+    let currentCommitment = openByPhase.get(currentPhase)
+    if (!currentCommitment) {
+      currentCommitment = { phase: currentPhase, deadlineMs: currentDeadlineMs }
+      commitments.push(currentCommitment)
+      openByPhase.set(currentPhase, currentCommitment)
+    } else {
+      currentCommitment.deadlineMs = currentDeadlineMs
+    }
+
+    if (hasCurrentTransitionTimestamp) {
+      currentCommitment.deliveredAtMs = sentAtMs
+      openByPhase.delete(currentPhase)
+    }
+  }
+
+  return commitments
+}
+
+/**
+ * Tỷ lệ đúng hạn dựa trên cam kết gửi của designer, không dựa vào task Done:
+ * - Đúng hạn: chuyển sang trạng thái tiếp theo trước hoặc trong ngày đã đặt lịch gửi.
+ * - Trễ: chuyển trạng thái sau ngày đã hẹn, hoặc đã quá ngày hẹn nhưng chưa chuyển.
+ * - Chuyển sang Pending/PO pending hoặc trạng thái dừng: hủy lần hẹn đang mở, không đưa vào KPI.
+ * - Chưa đến ngày hẹn và chưa chuyển: chưa đưa vào mẫu số.
  */
 export function calculateOnTimeDelivery(
   requests: UXRequest[] = [],
   nowMs: number = Date.now()
 ): OnTimeDeliveryStats {
   const safeReqs = Array.isArray(requests) ? requests.filter(isValidTask) : []
-
-  if (safeReqs.length === 0) {
-    return {
-      onTimeRate: 100,
-      onTimeCount: 0,
-      delayedCount: 0,
-      totalEvaluated: 0,
-      badgeText: "Đúng cam kết",
-      badgeVariant: "emerald",
-      completedOnTimeCount: 0,
-      inProgressOnTimeCount: 0,
-    }
-  }
-
   let onTimeCount = 0
   let delayedCount = 0
   let completedOnTimeCount = 0
-  let inProgressOnTimeCount = 0
+  const delayedItems: DelayedDesignDeliveryItem[] = []
 
-  safeReqs.forEach((r) => {
-    const onTime = isTaskOnTime(r, nowMs)
-    if (onTime) {
-      onTimeCount++
-      if (isCompletedTask(r)) {
-        completedOnTimeCount++
-      } else {
-        inProgressOnTimeCount++
+  safeReqs.forEach((request) => {
+    getDesignDeliveryCommitments(request, nowMs).forEach((commitment) => {
+      if (commitment.deliveredAtMs) {
+        if (commitment.deliveredAtMs <= commitment.deadlineMs) {
+          onTimeCount++
+          // Giữ tên field cũ để không phá API của card; đây là số lần đã gửi đúng hạn.
+          completedOnTimeCount++
+        } else {
+          delayedCount++
+          delayedItems.push({
+            requestId: toSafeString(request.request_id || request.id),
+            title: toSafeString(request.nickname || request.title) || "Chưa đặt tiêu đề",
+            designer: resolveTaskDesigner(request) || "Chưa phân công",
+            phase: commitment.phase,
+            deadlineMs: commitment.deadlineMs,
+            transitionedAtMs: commitment.deliveredAtMs,
+            currentStatus: toSafeString(request.status),
+          })
+        }
+      } else if (nowMs > commitment.deadlineMs) {
+        delayedCount++
+        delayedItems.push({
+          requestId: toSafeString(request.request_id || request.id),
+          title: toSafeString(request.nickname || request.title) || "Chưa đặt tiêu đề",
+          designer: resolveTaskDesigner(request) || "Chưa phân công",
+          phase: commitment.phase,
+          deadlineMs: commitment.deadlineMs,
+          currentStatus: toSafeString(request.status),
+        })
       }
-    } else {
-      delayedCount++
-    }
+    })
   })
 
   const totalEvaluated = onTimeCount + delayedCount
@@ -858,7 +1084,8 @@ export function calculateOnTimeDelivery(
     badgeText,
     badgeVariant,
     completedOnTimeCount,
-    inProgressOnTimeCount,
+    inProgressOnTimeCount: 0,
+    delayedItems,
   }
 }
 

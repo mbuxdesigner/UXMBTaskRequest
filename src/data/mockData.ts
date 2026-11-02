@@ -53,6 +53,10 @@ export interface TaskUpdateRecord {
   author_role: UserRole
   previous_phase?: string
   new_phase: string
+  previous_status?: string
+  new_status?: string
+  /** Ngày designer cam kết gửi tại thời điểm bản ghi được tạo. */
+  design_deadline?: string
   previous_progress?: number
   new_progress: number
   note: string

@@ -35,6 +35,8 @@ import {
   SearchX,
   Shield,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import type { Page } from "../Sidebar"
 import { UserRole, UXRequest, getRequestDisplayTitle } from "@/data/mockData"
@@ -65,6 +67,8 @@ interface AppHeaderProps {
   session: UserSession | null
   onLogout?: () => void
   onToggleMobileMenu?: () => void
+  isSidebarCollapsed?: boolean
+  onToggleSidebarCollapse?: () => void
 }
 
 const PAGE_METADATA: Record<Page, { title: string; section: string }> = {
@@ -85,6 +89,8 @@ export default function AppHeader({
   session,
   onLogout,
   onToggleMobileMenu,
+  isSidebarCollapsed = false,
+  onToggleSidebarCollapse,
 }: AppHeaderProps) {
   const [appsOpen, setAppsOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -850,6 +856,22 @@ export default function AppHeader({
             >
               <Menu className="w-4 h-4" />
             </button>
+          )}
+
+          {onToggleSidebarCollapse && (
+            <>
+              <button
+                type="button"
+                onClick={onToggleSidebarCollapse}
+                aria-label={isSidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+                aria-expanded={!isSidebarCollapsed}
+                title={isSidebarCollapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+                className="hidden md:flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1057FB]/30"
+              >
+                {isSidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              </button>
+              <span className="hidden h-5 w-px shrink-0 bg-slate-200 md:block" aria-hidden="true" />
+            </>
           )}
 
           {/* Breadcrumb matching ReUI app-shell-12: Dashboards > Overview */}

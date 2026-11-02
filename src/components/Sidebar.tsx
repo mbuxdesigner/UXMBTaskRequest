@@ -19,8 +19,6 @@ import {
   Calendar,
   Bot,
   Sparkles,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react"
 import { getStoredSession, logoutTeamsSession, UserSession, startRolePreview, stopRolePreview } from "../services/otpAuthService"
 import { uploadAvatarToDrive } from "../services/googleSheetService"
@@ -46,7 +44,6 @@ interface SidebarProps {
   currentPage: Page
   onNavigate: (page: Page) => void
   isCollapsed?: boolean
-  onToggleCollapse?: () => void
   onLogout?: () => void
 }
 
@@ -90,7 +87,6 @@ export default function Sidebar({
   currentPage, 
   onNavigate,
   isCollapsed = false,
-  onToggleCollapse,
   onLogout,
 }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -276,7 +272,7 @@ export default function Sidebar({
       >
         
         {/* 1. Header / Workspace Brand */}
-        <div className={collapsed ? "relative flex h-[72px] items-center justify-center px-2" : "relative flex h-[72px] items-center px-4"}>
+        <div className={collapsed ? "flex h-[72px] items-center justify-center px-2" : "flex h-[72px] items-center px-4"}>
           <button
             type="button"
             onClick={() => {
@@ -299,18 +295,6 @@ export default function Sidebar({
               </span>
             )}
           </button>
-          {!isMobile && onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
-              aria-expanded={!collapsed}
-              title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
-              className="absolute -right-3 top-1/2 z-50 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1057FB]/30"
-            >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-            </button>
-          )}
         </div>
 
         {/* 2. Scrollable Navigation Body */}

@@ -1546,13 +1546,24 @@ function handleUpdateTaskProgress(data) {
           }
         }
 
+        // Snapshot the commitment and transition before mutating the task so
+        // delivery KPIs can compare the scheduled send date with the next transition.
+        const previousPhase = String(item.current_phase || "").trim();
+        const previousStatus = String(item.status || "").trim();
+        const commitmentDeadline = typeof data.design_deadline !== "undefined"
+          ? String(data.design_deadline || "").trim()
+          : String(item.design_deadline || "").trim();
         const newLogRecord = {
           id: "LOG-" + Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd-HHmmss"),
           request_id: requestId,
           timestamp: formattedDate,
           updated_by: user.displayName || userEmail,
           author_role: userRole,
+          previous_phase: previousPhase,
           new_phase: newPhase || item.current_phase || "Ghi nhận",
+          previous_status: previousStatus,
+          new_status: newStatus || previousStatus,
+          design_deadline: commitmentDeadline,
           new_progress: newProgress || item.progress || 0,
           note: note,
           deliverable_link: figmaUrl || "",

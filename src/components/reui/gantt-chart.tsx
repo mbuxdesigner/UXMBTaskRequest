@@ -199,11 +199,13 @@ export default function ReUIGanttChart({
   const [showScaleDropdown, setShowScaleDropdown] = useState(false)
   const [showSquadFilterPopover, setShowSquadFilterPopover] = useState(false)
   const [showUserFilterPopover, setShowUserFilterPopover] = useState(false)
+  const [showStatusFilterPopover, setShowStatusFilterPopover] = useState(false)
   const [showColumnsPopover, setShowColumnsPopover] = useState(false)
   const [userSearchQuery, setUserSearchQuery] = useState("")
 
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
 
   // Columns visibility toggle (Priority hidden by default as requested!)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -286,6 +288,25 @@ export default function ReUIGanttChart({
     return Array.from(userMap.values()).sort((a, b) => b.count - a.count)
   }, [requests])
 
+  const allStatusOptions = useMemo(() => {
+    const statusMap = new Map<string, { label: string; count: number; color: string }>()
+    requests.forEach((request) => {
+      const statusInfo = getTaskStageStatusInfo(request)
+      const label = statusInfo.text.trim() || "Chưa xác định"
+      const existing = statusMap.get(label)
+      if (existing) {
+        existing.count += 1
+      } else {
+        statusMap.set(label, {
+          label,
+          count: 1,
+          color: statusInfo.theme.colorHex,
+        })
+      }
+    })
+    return Array.from(statusMap.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "vi"))
+  }, [requests])
+
   // Filtered users in popover
   const filteredUserOptions = useMemo(() => {
     if (!userSearchQuery.trim()) return allUserOptions
@@ -336,6 +357,10 @@ export default function ReUIGanttChart({
     setSelectedUsers(prev => prev.includes(userName) ? prev.filter(x => x !== userName) : [...prev, userName])
   }
 
+  const handleToggleStatusFilter = (status: string) => {
+    setSelectedStatuses(prev => prev.includes(status) ? prev.filter(x => x !== status) : [...prev, status])
+  }
+
   const toggleGroup = (groupName: string) => {
     setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }))
   }
@@ -373,16 +398,20 @@ export default function ReUIGanttChart({
   const filteredRequests = useMemo(() => {
     return requests.filter((r) => {
       if (selectedSquads.length > 0) {
-        const sq = r.preferred_squad || r.product || ""
+        const sq = r.squad_name || r.preferred_squad || r.product || ""
         if (!selectedSquads.includes(sq)) return false
       }
       if (selectedUsers.length > 0) {
         const u = (r.assigned_designer || "").trim()
         if (!selectedUsers.includes(u)) return false
       }
+      if (selectedStatuses.length > 0) {
+        const status = getTaskStageStatusInfo(r).text.trim() || "Chưa xác định"
+        if (!selectedStatuses.includes(status)) return false
+      }
       return true
     })
-  }, [requests, selectedSquads, selectedUsers])
+  }, [requests, selectedSquads, selectedUsers, selectedStatuses])
 
   // 2-level Grouping: Product -> Squad -> Tasks
   const productGroups = useMemo(() => {
@@ -882,7 +911,13 @@ export default function ReUIGanttChart({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowScaleDropdown(!showScaleDropdown)}
+              onClick={() => {
+                setShowScaleDropdown(!showScaleDropdown)
+                setShowUserFilterPopover(false)
+                setShowStatusFilterPopover(false)
+                setShowSquadFilterPopover(false)
+                setShowColumnsPopover(false)
+              }}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200/90 hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
             >
               <span>{viewScale}</span>
@@ -943,7 +978,13 @@ export default function ReUIGanttChart({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowUserFilterPopover(!showUserFilterPopover)}
+              onClick={() => {
+                setShowUserFilterPopover(!showUserFilterPopover)
+                setShowStatusFilterPopover(false)
+                setShowSquadFilterPopover(false)
+                setShowScaleDropdown(false)
+                setShowColumnsPopover(false)
+              }}
               className={`h-8 px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
                 selectedUsers.length > 0
                   ? "bg-blue-50/80 border-[#1057FB]"
@@ -1042,11 +1083,93 @@ export default function ReUIGanttChart({
             )}
           </div>
 
+          {/* Status Filter */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowStatusFilterPopover(!showStatusFilterPopover)
+                setShowUserFilterPopover(false)
+                setShowSquadFilterPopover(false)
+                setShowScaleDropdown(false)
+                setShowColumnsPopover(false)
+              }}
+              className={`h-8 px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                selectedStatuses.length > 0
+                  ? "bg-blue-50 text-[#1057FB] border-[#1057FB]"
+                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+              }`}
+              aria-expanded={showStatusFilterPopover}
+            >
+              <Flag className="w-3.5 h-3.5" />
+              <span>Status {selectedStatuses.length > 0 && `(${selectedStatuses.length})`}</span>
+            </button>
+
+            {showStatusFilterPopover && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-800">Lọc theo Status</span>
+                  {selectedStatuses.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStatuses([])}
+                      className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
+                    >
+                      Bỏ lọc
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                  {allStatusOptions.map((status) => {
+                    const isChecked = selectedStatuses.includes(status.label)
+                    return (
+                      <div
+                        key={`status-opt-${status.label}`}
+                        onClick={() => handleToggleStatusFilter(status.label)}
+                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                          <span className="truncate">{status.label}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">{status.count}</span>
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
+                            {isChecked && <Check className="w-2.5 h-2.5" />}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowStatusFilterPopover(false)}
+                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
+                  >
+                    Xong
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Squad Filter */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowSquadFilterPopover(!showSquadFilterPopover)}
+              onClick={() => {
+                setShowSquadFilterPopover(!showSquadFilterPopover)
+                setShowUserFilterPopover(false)
+                setShowStatusFilterPopover(false)
+                setShowScaleDropdown(false)
+                setShowColumnsPopover(false)
+              }}
               className={`h-8 px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
                 selectedSquads.length > 0
                   ? "bg-blue-50 text-[#1057FB] border-[#1057FB]"
@@ -1076,7 +1199,7 @@ export default function ReUIGanttChart({
                   {allSquadOptions.map((sq, sIdx) => {
                     const isChecked = selectedSquads.includes(sq)
                     const count = requests.filter(
-                      (r) => r.preferred_squad === sq || r.product === sq
+                      (r) => r.squad_name === sq || r.preferred_squad === sq || r.product === sq
                     ).length
 
                     return (
@@ -1163,7 +1286,13 @@ export default function ReUIGanttChart({
             <div className="relative w-7 flex items-center justify-center shrink-0">
               <button
                 type="button"
-                onClick={() => setShowColumnsPopover(!showColumnsPopover)}
+                onClick={() => {
+                  setShowColumnsPopover(!showColumnsPopover)
+                  setShowUserFilterPopover(false)
+                  setShowStatusFilterPopover(false)
+                  setShowSquadFilterPopover(false)
+                  setShowScaleDropdown(false)
+                }}
                 className="w-5 h-5 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
                 title="Add or remove columns"
               >

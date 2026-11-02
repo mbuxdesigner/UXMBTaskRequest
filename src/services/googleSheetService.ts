@@ -1118,6 +1118,7 @@ export async function updateTaskProgressInSheet(
     updated_by: session ? session.teamsEmail : "nam.designer@mbbank.com.vn",
     author_role: session ? session.role : "Designer",
     new_phase: params.new_phase,
+    new_status: params.new_status,
     new_progress: params.new_progress,
     note: params.note,
     deliverable_link: params.figma_url || "",
@@ -1133,6 +1134,11 @@ export async function updateTaskProgressInSheet(
 
     if (targetIdx !== -1) {
       const oldReq = existingList[targetIdx]
+      newLogRecord.previous_phase = oldReq.current_phase
+      newLogRecord.previous_status = oldReq.status
+      newLogRecord.design_deadline = params.design_deadline !== undefined
+        ? params.design_deadline
+        : (oldReq.design_deadline || "")
       const rawDocLink = (params.doc_links && params.doc_links.length > 0) ? params.doc_links.join("\n") : oldReq.doc_link
       const isEnteringDesignPhase = (
         (params.new_phase === "Wireframe" || params.new_phase === "UI Design" ||

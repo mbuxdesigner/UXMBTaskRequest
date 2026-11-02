@@ -612,7 +612,7 @@ export default function SolutionAgentsTable({
               "absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 transition-colors",
               resizingColumn === columnId
                 ? "bg-[#1057FB]"
-                : "bg-transparent group-hover/resize:bg-[#1057FB] group-focus/resize:bg-[#1057FB]"
+                : "bg-slate-200/80 group-hover/resize:bg-[#1057FB] group-focus/resize:bg-[#1057FB]"
             )}
           />
         </div>
