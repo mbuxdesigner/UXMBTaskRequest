@@ -145,7 +145,7 @@ export default function SquadDetailModal({ squad, onClose }: SquadDetailModalPro
             <div>
               <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                 <Clock className="w-4 h-4 text-amber-500" />
-                Hàng đợi chờ phân bổ ({squad.queued_task_titles.length})
+                Hàng đợi chờ xác nhận ({squad.queued_task_titles.length})
               </p>
               <ul className="space-y-2">
                 {squad.queued_task_titles.map((t, i) => (

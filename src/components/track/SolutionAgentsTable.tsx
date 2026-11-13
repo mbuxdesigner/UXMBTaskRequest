@@ -244,7 +244,7 @@ export function getTaskGroup(r: UXRequest): TaskGroupId {
     return "overload"
   }
 
-  // 5. Chờ phân bổ (Chưa có Designer hoặc khâu tiếp nhận/phân loại/chờ xác nhận)
+  // 5. Chờ xác nhận (Chưa có Designer hoặc khâu tiếp nhận/phân loại/chờ xác nhận)
   const isUnassigned =
     !r.assigned_designer ||
     r.assigned_designer === "Chưa phân công" ||
@@ -286,7 +286,7 @@ const STATUS_GROUPS: StatusGroupDef[] = [
   },
   {
     id: "unassigned",
-    label: "Chờ phân bổ",
+    label: "Chờ xác nhận",
     order: 2,
     dotClass: "bg-purple-600",
     headerBg: "bg-purple-50/80 hover:bg-purple-100/70 border-purple-200/90",
@@ -1048,7 +1048,7 @@ export default function SolutionAgentsTable({
     }
     if (s.includes("chờ phân bổ") || s.includes("phân loại") || s.includes("chờ tiếp nhận") || group === "unassigned") {
       return {
-        label: "Chờ phân bổ",
+        label: "Chờ xác nhận",
         bgClass: "bg-purple-50 text-purple-700 border-purple-200",
         dotClass: "bg-purple-500",
       }

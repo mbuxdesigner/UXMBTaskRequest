@@ -803,10 +803,10 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               </div>
             )}
 
-            {/* Chờ phân bổ */}
+            {/* Chờ xác nhận */}
             {unassignedCount > 0 && (
               <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="truncate text-xs font-normal text-slate-500">Chờ phân bổ</span>
+                <span className="truncate text-xs font-normal text-slate-500">Chờ xác nhận</span>
                 <span className="rounded-4xl border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
                   {unassignedCount}
                 </span>
