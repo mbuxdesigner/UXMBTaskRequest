@@ -2116,9 +2116,16 @@ export default function RequestDetail({
             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
           </div>
           <UserAvatar name={m.name} avatarUrl={m.avatar} size="sm" />
-          <span className={`font-semibold truncate text-xs ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
-            {m.name}
-          </span>
+          <div className="flex-1 min-w-0">
+            <p className={`font-semibold truncate text-xs leading-tight ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
+              {m.name}
+            </p>
+            {m.email && (
+              <p className="text-[10.5px] text-slate-400 truncate leading-tight">
+                {m.email}
+              </p>
+            )}
+          </div>
         </button>
       )
     }
@@ -4736,9 +4743,16 @@ export default function RequestDetail({
                                           {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                                         </div>
                                         <UserAvatar name={des.name} avatarUrl={des.avatar} size="sm" />
-                                        <span className={`font-semibold truncate text-xs ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
-                                          {des.name}
-                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <p className={`font-semibold truncate text-xs leading-tight ${isSelected ? "text-blue-900" : "text-slate-900"}`}>
+                                            {des.name}
+                                          </p>
+                                          {des.email && (
+                                            <p className="text-[10.5px] text-slate-400 truncate leading-tight">
+                                              {des.email}
+                                            </p>
+                                          )}
+                                        </div>
                                       </button>
                                     )
                                   }
