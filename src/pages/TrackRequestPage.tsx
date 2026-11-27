@@ -7,7 +7,7 @@ import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
-import TaskFilterPopover from "@/components/reui/task-filter-popover"
+import TaskFilterPopover, { extractTaskDesigners } from "@/components/reui/task-filter-popover"
 import SolutionAgentsTable, { getTaskGroup } from "@/components/track/SolutionAgentsTable"
 import { useRealtimeTasksSync } from "@/hooks/useRealtimeTasksSync"
 import { GridCardsSkeleton } from "@/components/common/ReuiSkeletons"
@@ -566,16 +566,35 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [selectedPhases, setSelectedPhases] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
+  const [selectedDesigners, setSelectedDesigners] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<"all" | "doing" | "pending" | "completed" | "stop">("all")
 
   const hasActiveFilters = Boolean(
     query.trim() ||
     selectedPhases.length > 0 ||
     selectedProducts.length > 0 ||
-    selectedSquads.length > 0
+    selectedSquads.length > 0 ||
+    selectedDesigners.length > 0 ||
+    activeTab !== "all"
   )
 
-  // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
-  const filteredRequests = useMemo(() => {
+  const matchesActiveTab = useCallback(
+    (req: UXRequest, tab: "all" | "doing" | "pending" | "completed" | "stop") => {
+      if (tab === "all") return true
+      const group = getTaskGroup(req)
+      if (tab === "doing") {
+        return group === "overload" || group === "unassigned" || group === "running"
+      }
+      if (tab === "pending") return group === "pending"
+      if (tab === "completed") return group === "completed"
+      if (tab === "stop") return group === "frozen_rejected"
+      return true
+    },
+    []
+  )
+
+  // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm, Squad, Designer và Từ khóa tìm kiếm (chưa lọc theo Tab để giữ số đếm chuẩn cho 5 Tab)
+  const baseFilteredRequests = useMemo(() => {
     // 1. Lọc theo Phân quyền Vai trò người dùng (Admin: tất cả; PO & Business: do mình tạo; Designer: được gán; Design Owner: theo sản phẩm & squad)
     let list = filterRequestsByRole(allRequests, session)
 
@@ -599,7 +618,15 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       list = list.filter((r) => selectedSquads.includes(r.squad_name || r.preferred_squad || "Khác"))
     }
 
-    // 5. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
+    // 5. Lọc theo Designer
+    if (selectedDesigners.length > 0) {
+      list = list.filter((r) => {
+        const assignees = extractTaskDesigners(r)
+        return assignees.some((name) => selectedDesigners.includes(name))
+      })
+    }
+
+    // 6. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
     if (query.trim()) {
       const q = query.toLowerCase().trim()
       list = list.filter(
@@ -614,12 +641,19 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     }
 
     return list
-  }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, query])
+  }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, selectedDesigners, query])
+
+  // Danh sách hiển thị cuối cùng sau khi lọc thêm theo Tab (All / Doing / Pending / Hoàn thành / Stop)
+  const filteredRequests = useMemo(() => {
+    if (activeTab === "all") return baseFilteredRequests
+    return baseFilteredRequests.filter((r) => matchesActiveTab(r, activeTab))
+  }, [baseFilteredRequests, activeTab, matchesActiveTab])
 
   // Filter predicate for incoming new tasks to determine if skeleton placeholder should render (R3)
   const filterPredicate = useCallback(
     (req: UXRequest) => {
       if (!canUserAccessRequest(req, session)) return false
+      if (!matchesActiveTab(req, activeTab)) return false
 
       if (selectedPhases.length > 0 && !selectedPhases.includes(getRequestKanbanPhase(req))) {
         return false
@@ -634,6 +668,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
       if (selectedSquads.length > 0 && !selectedSquads.includes(req.squad_name || req.preferred_squad || "Khác")) {
         return false
+      }
+
+      if (selectedDesigners.length > 0) {
+        const assignees = extractTaskDesigners(req)
+        if (!assignees.some((name) => selectedDesigners.includes(name))) return false
       }
 
       if (query.trim()) {
@@ -651,7 +690,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
       return true
     },
-    [session, selectedPhases, selectedProducts, selectedSquads, query]
+    [session, activeTab, matchesActiveTab, selectedPhases, selectedProducts, selectedSquads, selectedDesigners, query]
   )
 
   const handleClearAllFilters = () => {
@@ -659,6 +698,8 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     setSelectedPhases([])
     setSelectedProducts([])
     setSelectedSquads([])
+    setSelectedDesigners([])
+    setActiveTab("all")
   }
 
   const getCount = (status: string) => {
@@ -725,36 +766,36 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     return clean
   }
 
-  const activeCount = filteredRequests.filter((r) => r.status === "Đang thực hiện" || r.status === "Đã gửi PO").length
-  const runsCount = filteredRequests.length
-
   const groupCounts = useMemo(() => {
-    const counts = { overload: 0, unassigned: 0, running: 0, pending: 0, completed: 0 }
-    filteredRequests.forEach((r) => {
+    const counts = {
+      overload: 0,
+      unassigned: 0,
+      running: 0,
+      pending: 0,
+      completed: 0,
+      frozen_rejected: 0,
+    }
+    baseFilteredRequests.forEach((r) => {
       const g = getTaskGroup(r)
       counts[g] = (counts[g] || 0) + 1
     })
     return counts
-  }, [filteredRequests])
+  }, [baseFilteredRequests])
 
-  const { poPendingCount, designerPendingCount } = useMemo(() => {
-    let po = 0
-    let des = 0
-    filteredRequests.forEach((r) => {
-      const p = getRequestPendingClassification(r)
-      if (p.isPending) {
-        if (p.type === "po_pending") po++
-        else if (p.type === "designer_pending") des++
-      }
-    })
-    return { poPendingCount: po, designerPendingCount: des }
-  }, [filteredRequests])
-
-  const overloadCount = groupCounts.overload
-  const unassignedCount = groupCounts.unassigned
-  const runningCount = groupCounts.running
-  const pendingCount = groupCounts.pending
-  const completedCount = groupCounts.completed
+  const statusTabs = useMemo(
+    () => [
+      { id: "all" as const, label: "All", count: baseFilteredRequests.length },
+      {
+        id: "doing" as const,
+        label: "Doing",
+        count: groupCounts.overload + groupCounts.unassigned + groupCounts.running,
+      },
+      { id: "pending" as const, label: "Pending", count: groupCounts.pending },
+      { id: "completed" as const, label: "Hoàn thành", count: groupCounts.completed },
+      { id: "stop" as const, label: "Stop", count: groupCounts.frozen_rejected },
+    ],
+    [baseFilteredRequests.length, groupCounts]
+  )
 
   return (
     <motion.main
@@ -782,75 +823,6 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Live Sync
           </span>
-        }
-        subtitle={
-          <div className="flex min-w-0 flex-wrap items-center gap-2.5 pt-0.5">
-            {/* Runs */}
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-xs font-normal text-slate-500">Runs</span>
-              <span className="rounded-4xl bg-slate-100 text-slate-800 border border-slate-200/80 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {runsCount}
-              </span>
-            </div>
-
-            {/* Overload */}
-            {overloadCount > 0 && (
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="truncate text-xs font-normal text-slate-500">Overload</span>
-                <span className="rounded-4xl border border-rose-200 bg-rose-50 text-rose-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {overloadCount}
-                </span>
-              </div>
-            )}
-
-            {/* Chờ xác nhận */}
-            {unassignedCount > 0 && (
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="truncate text-xs font-normal text-slate-500">Chờ xác nhận</span>
-                <span className="rounded-4xl border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {unassignedCount}
-                </span>
-              </div>
-            )}
-
-            {/* Đang thực hiện */}
-            <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-              <span className="truncate text-xs font-normal text-slate-500">Đang thực hiện</span>
-              <span className="rounded-4xl border border-blue-200 bg-blue-50 text-[#1057FB] px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                {runningCount}
-              </span>
-            </div>
-
-            {/* PO Pending */}
-            {poPendingCount > 0 && (
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="PO Pending: Sau 24h kể từ khi Designer gửi lại Figma cho PO nhưng chưa phản hồi">
-                <span className="truncate text-xs font-normal text-slate-500">Needs approval</span>
-                <span className="rounded-4xl border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {poPendingCount}
-                </span>
-              </div>
-            )}
-
-            {/* Pending Designer */}
-            {designerPendingCount > 0 && (
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5" title="Tạm dừng theo chat @pending">
-                <span className="truncate text-xs font-normal text-slate-500">Pending</span>
-                <span className="rounded-4xl border border-slate-300 bg-slate-100 text-slate-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {designerPendingCount}
-                </span>
-              </div>
-            )}
-
-            {/* Hoàn thành */}
-            {completedCount > 0 && (
-              <div className="flex min-w-0 items-center gap-1.5 sm:border-l sm:border-slate-200 sm:pl-2.5">
-                <span className="truncate text-xs font-normal text-slate-500">Hoàn thành</span>
-                <span className="rounded-4xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs h-5 min-w-5 inline-flex items-center justify-center font-medium">
-                  {completedCount}
-                </span>
-              </div>
-            )}
-          </div>
         }
         actions={
           <div className="flex items-center gap-2">
@@ -888,8 +860,51 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         style={{ willChange: "opacity, transform" }}
         className="relative flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-xs"
       >
+        {/* Top Underline Tabs: All | Doing | Pending | Hoàn thành | Stop */}
+        <div
+          role="tablist"
+          aria-label="Phân nhóm trạng thái bài toán"
+          className="flex items-center gap-5 px-4 sm:px-5 border-b border-slate-200/80 bg-white rounded-t-2xl overflow-x-auto select-none"
+        >
+          {statusTabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                type="button"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative py-3 text-[13px] flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  isActive
+                    ? "font-semibold text-slate-900"
+                    : "font-medium text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-medium transition-colors ${
+                    isActive
+                      ? "bg-slate-100 text-slate-900 font-semibold"
+                      : "bg-slate-100/80 text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="track-status-tab-underline"
+                    transition={springs.indicator}
+                    className="absolute left-0 right-0 bottom-0 h-[2px] bg-slate-900 rounded-full"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Frame Panel Header / Toolbar - Flux AgentOps Style */}
-        <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between rounded-t-2xl relative z-20">
+        <div className="flex flex-col gap-3 bg-slate-50/50 px-3 sm:px-4 py-2.5 border-b border-slate-200/80 lg:flex-row lg:items-center lg:justify-between relative z-20">
           {/* Left: Search input */}
           <motion.div 
             layout
@@ -984,9 +999,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               selectedPhases={selectedPhases}
               selectedProducts={selectedProducts}
               selectedSquads={selectedSquads}
+              selectedDesigners={selectedDesigners}
               onPhasesChange={setSelectedPhases}
               onProductsChange={setSelectedProducts}
               onSquadsChange={setSelectedSquads}
+              onDesignersChange={setSelectedDesigners}
               onClearAll={handleClearAllFilters}
             />
 
@@ -1000,7 +1017,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 if (onNavigateToCreate) onNavigateToCreate()
                 else window.location.hash = "#create"
               }}
-              className="cursor-pointer"
+              className="rounded-lg cursor-pointer"
             >
               <Plus className="size-3.5" />
               <span>Tạo task</span>
@@ -1117,6 +1134,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 requests={filteredRequests}
                 onSelectRequest={setSelectedRequest}
                 borderless
+                hideFilter
               />
             </motion.div>
           ) : (

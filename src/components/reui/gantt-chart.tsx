@@ -4,18 +4,18 @@ import { UXRequest, getRequestDisplayTitle } from "../../data/mockData"
 import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
+import { getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
+import { getTaskGroup } from "@/components/track/SolutionAgentsTable"
+import { springs } from "@/lib/motion"
+import TaskFilterPopover, { extractTaskDesigners } from "./task-filter-popover"
 import { 
   ChevronLeft, 
   ChevronRight, 
   ChevronDown, 
   MoreHorizontal, 
-  Search, 
-  Filter, 
   Check, 
   Plus, 
   Minus, 
-  Users, 
-  Flag,
   Folder
 } from "lucide-react"
 
@@ -23,6 +23,7 @@ interface ReUIGanttChartProps {
   requests: UXRequest[]
   onSelectRequest?: (req: UXRequest) => void
   borderless?: boolean
+  hideFilter?: boolean
   className?: string
 }
 
@@ -193,19 +194,18 @@ export default function ReUIGanttChart({
   requests, 
   onSelectRequest, 
   borderless = false, 
+  hideFilter = false,
   className: customClassName = "" 
 }: ReUIGanttChartProps) {
   const [viewScale, setViewScale] = useState<ViewScale>("Month")
   const [showScaleDropdown, setShowScaleDropdown] = useState(false)
-  const [showSquadFilterPopover, setShowSquadFilterPopover] = useState(false)
-  const [showUserFilterPopover, setShowUserFilterPopover] = useState(false)
-  const [showStatusFilterPopover, setShowStatusFilterPopover] = useState(false)
   const [showColumnsPopover, setShowColumnsPopover] = useState(false)
-  const [userSearchQuery, setUserSearchQuery] = useState("")
 
+  const [selectedPhases, setSelectedPhases] = useState<string[]>([])
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [selectedDesigners, setSelectedDesigners] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<"all" | "doing" | "pending" | "completed" | "stop">("all")
 
   // Columns visibility toggle (Priority hidden by default as requested!)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -261,59 +261,6 @@ export default function ReUIGanttChart({
     return d
   }, [])
 
-  // Squad list from requests
-  const allSquadOptions = useMemo(() => {
-    const set = new Set<string>()
-    requests.forEach((r) => {
-      const sq = (r.squad_name || r.preferred_squad || "").trim()
-      if (sq && sq !== "Chưa phân công" && sq !== "Triage Squad" && sq !== "Khác") set.add(sq)
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"))
-  }, [requests])
-
-  // Assignee user list from requests
-  const allUserOptions = useMemo(() => {
-    const userMap = new Map<string, { name: string; count: number }>()
-    requests.forEach((r) => {
-      const u = (r.assigned_designer || "").trim()
-      if (u && u !== "Chưa phân công") {
-        const existing = userMap.get(u)
-        if (existing) {
-          existing.count++
-        } else {
-          userMap.set(u, { name: u, count: 1 })
-        }
-      }
-    })
-    return Array.from(userMap.values()).sort((a, b) => b.count - a.count)
-  }, [requests])
-
-  const allStatusOptions = useMemo(() => {
-    const statusMap = new Map<string, { label: string; count: number; color: string }>()
-    requests.forEach((request) => {
-      const statusInfo = getTaskStageStatusInfo(request)
-      const label = statusInfo.text.trim() || "Chưa xác định"
-      const existing = statusMap.get(label)
-      if (existing) {
-        existing.count += 1
-      } else {
-        statusMap.set(label, {
-          label,
-          count: 1,
-          color: statusInfo.theme.colorHex,
-        })
-      }
-    })
-    return Array.from(statusMap.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "vi"))
-  }, [requests])
-
-  // Filtered users in popover
-  const filteredUserOptions = useMemo(() => {
-    if (!userSearchQuery.trim()) return allUserOptions
-    const q = userSearchQuery.toLowerCase().trim()
-    return allUserOptions.filter(u => u.name.toLowerCase().includes(q))
-  }, [allUserOptions, userSearchQuery])
-
   // Navigation handlers (smoothly scrolls the timeline pane & updates viewport date)
   const handlePrev = () => {
     const container = timelineScrollRef.current
@@ -348,17 +295,12 @@ export default function ReUIGanttChart({
     setZoomLevel(prev => Math.max(0.5, +(prev - 0.25).toFixed(2)))
   }
 
-  // Filter handlers
-  const handleToggleSquadFilter = (sq: string) => {
-    setSelectedSquads(prev => prev.includes(sq) ? prev.filter(x => x !== sq) : [...prev, sq])
-  }
-
-  const handleToggleUserFilter = (userName: string) => {
-    setSelectedUsers(prev => prev.includes(userName) ? prev.filter(x => x !== userName) : [...prev, userName])
-  }
-
-  const handleToggleStatusFilter = (status: string) => {
-    setSelectedStatuses(prev => prev.includes(status) ? prev.filter(x => x !== status) : [...prev, status])
+  const handleClearAllFilters = () => {
+    setSelectedPhases([])
+    setSelectedProducts([])
+    setSelectedSquads([])
+    setSelectedDesigners([])
+    setActiveTab("all")
   }
 
   const toggleGroup = (groupName: string) => {
@@ -394,24 +336,70 @@ export default function ReUIGanttChart({
     window.addEventListener("pointerup", onPointerUp)
   }
 
-  // Filter requests
-  const filteredRequests = useMemo(() => {
+  // Base filtered requests (Phase, Product, Squad, Designer — before Tab filter so tab badges stay accurate)
+  const baseFilteredRequests = useMemo(() => {
     return requests.filter((r) => {
+      if (selectedPhases.length > 0 && !selectedPhases.includes(getRequestKanbanPhase(r))) {
+        return false
+      }
+      if (selectedProducts.length > 0) {
+        let p = (r.product && r.product.trim()) || "Khác"
+        const pLower = p.toLowerCase().replace(/[\s\-_]+/g, "")
+        if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") p = "APP MB"
+        if (!selectedProducts.includes(p)) return false
+      }
       if (selectedSquads.length > 0) {
         const sq = r.squad_name || r.preferred_squad || r.product || ""
         if (!selectedSquads.includes(sq)) return false
       }
-      if (selectedUsers.length > 0) {
-        const u = (r.assigned_designer || "").trim()
-        if (!selectedUsers.includes(u)) return false
-      }
-      if (selectedStatuses.length > 0) {
-        const status = getTaskStageStatusInfo(r).text.trim() || "Chưa xác định"
-        if (!selectedStatuses.includes(status)) return false
+      if (selectedDesigners.length > 0) {
+        const assignees = extractTaskDesigners(r)
+        if (!assignees.some((name) => selectedDesigners.includes(name))) return false
       }
       return true
     })
-  }, [requests, selectedSquads, selectedUsers, selectedStatuses])
+  }, [requests, selectedPhases, selectedProducts, selectedSquads, selectedDesigners])
+
+  const statusTabs = useMemo(() => {
+    const counts = {
+      overload: 0,
+      unassigned: 0,
+      running: 0,
+      pending: 0,
+      completed: 0,
+      frozen_rejected: 0,
+    }
+    baseFilteredRequests.forEach((r) => {
+      const g = getTaskGroup(r)
+      counts[g] = (counts[g] || 0) + 1
+    })
+    return [
+      { id: "all" as const, label: "All", count: baseFilteredRequests.length },
+      {
+        id: "doing" as const,
+        label: "Doing",
+        count: counts.overload + counts.unassigned + counts.running,
+      },
+      { id: "pending" as const, label: "Pending", count: counts.pending },
+      { id: "completed" as const, label: "Hoàn thành", count: counts.completed },
+      { id: "stop" as const, label: "Stop", count: counts.frozen_rejected },
+    ]
+  }, [baseFilteredRequests])
+
+  // Final filtered requests after applying active underline tab
+  const filteredRequests = useMemo(() => {
+    if (hideFilter || activeTab === "all") return baseFilteredRequests
+    return baseFilteredRequests.filter((r) => {
+      const group = getTaskGroup(r)
+      if (activeTab === "doing") {
+        return group === "overload" || group === "unassigned" || group === "running"
+      }
+      if (activeTab === "pending") return group === "pending"
+      if (activeTab === "completed") return group === "completed"
+      if (activeTab === "stop") return group === "frozen_rejected"
+      return true
+    })
+  }, [baseFilteredRequests, hideFilter, activeTab])
 
   // 2-level Grouping: Product -> Squad -> Tasks
   const productGroups = useMemo(() => {
@@ -894,6 +882,53 @@ export default function ReUIGanttChart({
       borderless ? "rounded-b-2xl border-0 shadow-none" : "rounded-2xl border border-slate-200/90 shadow-sm"
     } ${customClassName}`}>
       {/* =========================================================================
+          TOP UNDERLINE STATUS TABS (Overview Gantt - synchronized with My task)
+          ========================================================================= */}
+      {!hideFilter && (
+        <div
+          role="tablist"
+          aria-label="Phân nhóm trạng thái bài toán trên Gantt"
+          className="flex items-center gap-5 px-4 sm:px-5 border-b border-slate-200/80 bg-white overflow-x-auto select-none"
+        >
+          {statusTabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                type="button"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative py-3 text-[13px] flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  isActive
+                    ? "font-semibold text-slate-900"
+                    : "font-medium text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-medium transition-colors ${
+                    isActive
+                      ? "bg-slate-100 text-slate-900 font-semibold"
+                      : "bg-slate-100/80 text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="gantt-status-tab-underline"
+                    transition={springs.indicator}
+                    className="absolute left-0 right-0 bottom-0 h-[2px] bg-slate-900 rounded-full"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* =========================================================================
           TOP TOOLBAR (Exact ReUI Style: Today | Month ⌵ | < > | Title | Assignee Filter | Split Button)
           ========================================================================= */}
       <div className="h-14 px-4 sm:px-5 border-b border-slate-200/80 bg-white flex items-center justify-between gap-4">
@@ -913,9 +948,6 @@ export default function ReUIGanttChart({
               type="button"
               onClick={() => {
                 setShowScaleDropdown(!showScaleDropdown)
-                setShowUserFilterPopover(false)
-                setShowStatusFilterPopover(false)
-                setShowSquadFilterPopover(false)
                 setShowColumnsPopover(false)
               }}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200/90 hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
@@ -972,269 +1004,23 @@ export default function ReUIGanttChart({
           </span>
         </div>
 
-        {/* Right Controls: User Filter Capsule + Squad Filter + Split Button */}
-        <div className="flex items-center gap-2">
-          {/* User Filter Avatar Capsule (Exact Tempo Tasks aa Component) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowUserFilterPopover(!showUserFilterPopover)
-                setShowStatusFilterPopover(false)
-                setShowSquadFilterPopover(false)
-                setShowScaleDropdown(false)
-                setShowColumnsPopover(false)
-              }}
-              className={`h-8 px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                selectedUsers.length > 0
-                  ? "bg-blue-50/80 border-[#1057FB]"
-                  : "bg-white hover:bg-slate-50 border-slate-200"
-              }`}
-              title="Filter by assignee"
-            >
-              {selectedUsers.length === 0 ? (
-                <>
-                  <Users className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-xs font-medium text-slate-500">All Assignees</span>
-                </>
-              ) : (
-                <div className="flex items-center -space-x-1.5">
-                  {selectedUsers.slice(0, 4).map((uName) => (
-                    <UserAvatar
-                      key={`sel-${uName}`}
-                      name={uName}
-                      avatarUrl={getDesignerAvatar(uName)}
-                      size="xs"
-                      className="w-5 h-5 text-[9px] ring-2 ring-white"
-                    />
-                  ))}
-                  {selectedUsers.length > 4 && (
-                    <span className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-600 flex items-center justify-center ring-2 ring-white">
-                      +{selectedUsers.length - 4}
-                    </span>
-                  )}
-                </div>
-              )}
-            </button>
-
-            {/* User Filter Popover */}
-            {showUserFilterPopover && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-800">Lọc theo nhân sự</span>
-                  {selectedUsers.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedUsers([])}
-                      className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
-                    >
-                      Bỏ chọn tất cả
-                    </button>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={userSearchQuery}
-                    onChange={(e) => setUserSearchQuery(e.target.value)}
-                    placeholder="Tìm nhân sự..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                  {filteredUserOptions.map((u) => {
-                    const isChecked = selectedUsers.includes(u.name)
-                    return (
-                      <div
-                        key={`user-opt-${u.name}`}
-                        onClick={() => handleToggleUserFilter(u.name)}
-                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <UserAvatar name={u.name} avatarUrl={getDesignerAvatar(u.name)} size="xs" className="w-5 h-5 text-[9px] shrink-0" />
-                          <span className="truncate">{u.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] font-mono text-slate-400 font-bold">{u.count}</span>
-                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
-                            {isChecked && <Check className="w-2.5 h-2.5" />}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowUserFilterPopover(false)}
-                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
-                  >
-                    Xong
-                  </button>
-                </div>
-              </div>
-            )}
+        {/* Right Controls: Unified TaskFilterPopover (identical to TrackRequestPage) */}
+        {!hideFilter && (
+          <div className="flex items-center gap-2">
+            <TaskFilterPopover
+              requests={requests}
+              selectedPhases={selectedPhases}
+              selectedProducts={selectedProducts}
+              selectedSquads={selectedSquads}
+              selectedDesigners={selectedDesigners}
+              onPhasesChange={setSelectedPhases}
+              onProductsChange={setSelectedProducts}
+              onSquadsChange={setSelectedSquads}
+              onDesignersChange={setSelectedDesigners}
+              onClearAll={handleClearAllFilters}
+            />
           </div>
-
-          {/* Status Filter */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowStatusFilterPopover(!showStatusFilterPopover)
-                setShowUserFilterPopover(false)
-                setShowSquadFilterPopover(false)
-                setShowScaleDropdown(false)
-                setShowColumnsPopover(false)
-              }}
-              className={`h-8 px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                selectedStatuses.length > 0
-                  ? "bg-blue-50 text-[#1057FB] border-[#1057FB]"
-                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
-              }`}
-              aria-expanded={showStatusFilterPopover}
-            >
-              <Flag className="w-3.5 h-3.5" />
-              <span>Status {selectedStatuses.length > 0 && `(${selectedStatuses.length})`}</span>
-            </button>
-
-            {showStatusFilterPopover && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-800">Lọc theo Status</span>
-                  {selectedStatuses.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStatuses([])}
-                      className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
-                    >
-                      Bỏ lọc
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                  {allStatusOptions.map((status) => {
-                    const isChecked = selectedStatuses.includes(status.label)
-                    return (
-                      <div
-                        key={`status-opt-${status.label}`}
-                        onClick={() => handleToggleStatusFilter(status.label)}
-                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
-                          <span className="truncate">{status.label}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] font-mono text-slate-400 font-bold">{status.count}</span>
-                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
-                            {isChecked && <Check className="w-2.5 h-2.5" />}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowStatusFilterPopover(false)}
-                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
-                  >
-                    Xong
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Squad Filter */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowSquadFilterPopover(!showSquadFilterPopover)
-                setShowUserFilterPopover(false)
-                setShowStatusFilterPopover(false)
-                setShowScaleDropdown(false)
-                setShowColumnsPopover(false)
-              }}
-              className={`h-8 px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                selectedSquads.length > 0
-                  ? "bg-blue-50 text-[#1057FB] border-[#1057FB]"
-                  : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>Squad {selectedSquads.length > 0 && `(${selectedSquads.length})`}</span>
-            </button>
-
-            {showSquadFilterPopover && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50 animate-in fade-in-50 space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-800">Lọc theo Squad / Dự án</span>
-                  {selectedSquads.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSquads([])}
-                      className="text-[11px] text-blue-600 hover:underline cursor-pointer"
-                    >
-                      Bỏ lọc
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-                  {allSquadOptions.map((sq, sIdx) => {
-                    const isChecked = selectedSquads.includes(sq)
-                    const count = requests.filter(
-                      (r) => r.squad_name === sq || r.preferred_squad === sq || r.product === sq
-                    ).length
-
-                    return (
-                      <div
-                        key={`sq-opt-${sq}-${sIdx}`}
-                        onClick={() => handleToggleSquadFilter(sq)}
-                        className={`flex items-center justify-between p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                          isChecked ? "bg-blue-50 text-[#1057FB]" : "hover:bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        <span className="truncate">{sq}</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] font-mono text-slate-400 font-bold">{count}</span>
-                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isChecked ? "bg-[#1057FB] border-[#1057FB] text-white" : "border-slate-300"}`}>
-                            {isChecked && <Check className="w-2.5 h-2.5" />}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowSquadFilterPopover(false)}
-                    className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-800"
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* =========================================================================
@@ -1288,9 +1074,6 @@ export default function ReUIGanttChart({
                 type="button"
                 onClick={() => {
                   setShowColumnsPopover(!showColumnsPopover)
-                  setShowUserFilterPopover(false)
-                  setShowStatusFilterPopover(false)
-                  setShowSquadFilterPopover(false)
                   setShowScaleDropdown(false)
                 }}
                 className="w-5 h-5 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
