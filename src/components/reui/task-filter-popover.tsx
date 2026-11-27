@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Filter, Check, X, Search, CircleDot, Layers, Users, UserCheck, UserX } from "lucide-react"
+import { Filter, Check, X, Search, CircleDot, Users, UserCheck, UserX } from "lucide-react"
 import { getKanbanColumns, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
 import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { UXRequest } from "@/data/mockData"
@@ -41,9 +41,52 @@ export interface TaskFilterPopoverProps {
   onClearAll: () => void
 }
 
-type FilterCategoryKey = "phases" | "products" | "squads" | "designers"
+type FilterCategoryKey = "phases" | "squads" | "designers"
 
 const FALLBACK_PRODUCTS = ["APP MB", "Digi invest", "MBseller", "CRM", "BaaS", "Backoffice"]
+
+const CANONICAL_SQUAD_PRODUCT_MAP: Record<string, string> = {
+  core: "APP MB",
+  base: "APP MB",
+  card: "APP MB",
+  lending: "APP MB",
+  esaving: "APP MB",
+  onboarding: "APP MB",
+  upsale: "APP MB",
+  partnership: "APP MB",
+  billing: "APP MB",
+  csop: "APP MB",
+  junior: "APP MB",
+  vietqr: "APP MB",
+  sub: "APP MB",
+  "app mb": "APP MB",
+  beerich: "Digi invest",
+  "chứng chỉ quỹ": "Digi invest",
+  transferd: "Digi invest",
+  gold: "Digi invest",
+  "trái phiếu": "Digi invest",
+  "digi invest": "Digi invest",
+  web: "MBseller",
+  app: "MBseller",
+  visual: "Backoffice",
+  ai: "Backoffice",
+  "designe system": "Backoffice",
+  "design system mb": "Backoffice",
+  "nội bộ": "Backoffice",
+  crm: "CRM",
+  api: "BaaS",
+  baas: "BaaS",
+  "mini app/ web view": "BaaS",
+}
+
+function normalizeProductName(raw?: string): string {
+  const prod = (raw && raw.trim()) || "Khác"
+  const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
+  if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") return "APP MB"
+  if (pLower === "mbseller") return "MBseller"
+  if (pLower === "digiinvest") return "Digi invest"
+  return prod
+}
 
 function normalizeSearchText(value: string): string {
   return value
@@ -145,15 +188,11 @@ export default function TaskFilterPopover({
     return counts
   }, [requests, kanbanColumns])
 
-  // 2. Unique Products & count (always keep configured products even when requests = 0)
+  // 2. Unique Products & count (shown as top chips inside Squad tab)
   const productCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
-      let prod = (r.product && r.product.trim()) || "Khác"
-      const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
-      if (pLower === "appmb" || pLower === "appmbbank" || pLower === "mbapp") {
-        prod = "APP MB"
-      }
+      const prod = normalizeProductName(r.product)
       counts[prod] = (counts[prod] || 0) + 1
     })
     return counts
@@ -171,9 +210,10 @@ export default function TaskFilterPopover({
           parsed.forEach((p: any, idx: number) => {
             const name = String(p?.name || "").trim()
             if (name) {
-              const lower = name.toLowerCase()
+              const norm = normalizeProductName(name)
+              const lower = norm.toLowerCase()
               orderMap.set(lower, idx)
-              if (!keyMap.has(lower)) keyMap.set(lower, name)
+              if (!keyMap.has(lower)) keyMap.set(lower, norm)
             }
           })
         }
@@ -201,16 +241,42 @@ export default function TaskFilterPopover({
     })
   }, [productCounts])
 
-  // 3. Unique Squads & count (merge admin squads + request squads)
-  const squadCounts = useMemo(() => {
+  // 3. Squads + Product-to-Squad relationship mapping
+  const { squadCounts, squadToProducts } = useMemo(() => {
     const counts: Record<string, number> = {}
+    const map: Record<string, Set<string>> = {}
+
+    const addMapping = (squadName: string, productName?: string) => {
+      if (!squadName || squadName === "Chưa phân công" || squadName === "Triage Squad") return
+      if (!map[squadName]) map[squadName] = new Set()
+      if (productName) {
+        map[squadName].add(normalizeProductName(productName))
+      }
+    }
+
+    try {
+      const raw = localStorage.getItem("mbbank_admin_squads")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          parsed.forEach((s: any) => {
+            const name = String(s?.name || s?.squad_name || "").trim()
+            const prod = String(s?.productName || s?.product_name || "").trim()
+            if (name) addMapping(name, prod || CANONICAL_SQUAD_PRODUCT_MAP[name.toLowerCase()])
+          })
+        }
+      }
+    } catch {}
+
     requests.forEach((r) => {
       const squad = (r.squad_name && r.squad_name.trim()) || (r.preferred_squad && r.preferred_squad.trim()) || ""
       if (squad && squad !== "Chưa phân công" && squad !== "Triage Squad") {
         counts[squad] = (counts[squad] || 0) + 1
+        addMapping(squad, r.product || CANONICAL_SQUAD_PRODUCT_MAP[squad.toLowerCase()])
       }
     })
-    return counts
+
+    return { squadCounts: counts, squadToProducts: map }
   }, [requests])
 
   const availableSquads = useMemo(() => {
@@ -247,7 +313,44 @@ export default function TaskFilterPopover({
     })
   }, [squadCounts])
 
-  // 4. Unique Designers & count (split multi-assignees + include unassigned + merge admin designers)
+  // Helper: get primary product(s) for a squad
+  const getSquadProducts = useCallback(
+    (squad: string): string[] => {
+      const mapped = squadToProducts[squad]
+      if (mapped && mapped.size > 0) return Array.from(mapped)
+      const fallback = CANONICAL_SQUAD_PRODUCT_MAP[squad.toLowerCase()]
+      return fallback ? [fallback] : []
+    },
+    [squadToProducts]
+  )
+
+  // Squads narrowed by selected Product chips (when any Product chip is active)
+  const squadsForSelectedProducts = useMemo(() => {
+    if (selectedProducts.length === 0) return availableSquads
+    const selectedSet = new Set(selectedProducts.map((p) => p.toLowerCase()))
+    return availableSquads.filter((squad) => {
+      const prods = getSquadProducts(squad)
+      return prods.some((p) => selectedSet.has(p.toLowerCase()))
+    })
+  }, [availableSquads, selectedProducts, getSquadProducts])
+
+  // Count tasks per squad scoped to selected products when product chips are active
+  const scopedSquadCounts = useMemo(() => {
+    if (selectedProducts.length === 0) return squadCounts
+    const selectedSet = new Set(selectedProducts.map((p) => p.toLowerCase()))
+    const counts: Record<string, number> = {}
+    requests.forEach((r) => {
+      const prod = normalizeProductName(r.product)
+      if (!selectedSet.has(prod.toLowerCase())) return
+      const squad = (r.squad_name && r.squad_name.trim()) || (r.preferred_squad && r.preferred_squad.trim()) || ""
+      if (squad && squad !== "Chưa phân công" && squad !== "Triage Squad") {
+        counts[squad] = (counts[squad] || 0) + 1
+      }
+    })
+    return counts
+  }, [requests, selectedProducts, squadCounts])
+
+  // 4. Unique Designers & count
   const designerCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
@@ -300,13 +403,14 @@ export default function TaskFilterPopover({
     return list
   }, [designerCounts, requests.length])
 
-  const hasProductsTab = Boolean(onProductsChange)
+  const hasProductsControl = Boolean(onProductsChange)
   const hasDesignersTab = Boolean(onDesignersChange)
 
   useEffect(() => {
-    if (activeCategory === "products" && !hasProductsTab) setActiveCategory("phases")
     if (activeCategory === "designers" && !hasDesignersTab) setActiveCategory("phases")
-  }, [activeCategory, hasProductsTab, hasDesignersTab])
+  }, [activeCategory, hasDesignersTab])
+
+  const squadTabSelectedCount = selectedProducts.length + selectedSquads.length
 
   const categories = useMemo(() => {
     const list: Array<{
@@ -325,27 +429,15 @@ export default function TaskFilterPopover({
         totalCount: kanbanColumns.length,
         searchPlaceholder: "Tìm trạng thái...",
       },
+      {
+        key: "squads",
+        label: "Squad",
+        icon: Users,
+        selectedCount: squadTabSelectedCount,
+        totalCount: squadsForSelectedProducts.length,
+        searchPlaceholder: "Tìm squad...",
+      },
     ]
-
-    if (hasProductsTab) {
-      list.push({
-        key: "products",
-        label: "Sản phẩm",
-        icon: Layers,
-        selectedCount: selectedProducts.length,
-        totalCount: availableProducts.length,
-        searchPlaceholder: "Tìm sản phẩm...",
-      })
-    }
-
-    list.push({
-      key: "squads",
-      label: "Squad",
-      icon: Users,
-      selectedCount: selectedSquads.length,
-      totalCount: availableSquads.length,
-      searchPlaceholder: "Tìm squad...",
-    })
 
     if (hasDesignersTab) {
       list.push({
@@ -360,15 +452,12 @@ export default function TaskFilterPopover({
 
     return list
   }, [
-    hasProductsTab,
     hasDesignersTab,
     selectedPhases.length,
-    selectedProducts.length,
-    selectedSquads.length,
+    squadTabSelectedCount,
     selectedDesigners.length,
     kanbanColumns.length,
-    availableProducts.length,
-    availableSquads.length,
+    squadsForSelectedProducts.length,
     availableDesigners.length,
   ])
 
@@ -384,10 +473,20 @@ export default function TaskFilterPopover({
 
   const toggleProduct = (prod: string) => {
     if (!onProductsChange) return
-    if (selectedProducts.includes(prod)) {
-      onProductsChange(selectedProducts.filter((p) => p !== prod))
-    } else {
-      onProductsChange([...selectedProducts, prod])
+    const nextProducts = selectedProducts.includes(prod)
+      ? selectedProducts.filter((p) => p !== prod)
+      : [...selectedProducts, prod]
+    onProductsChange(nextProducts)
+
+    // Keep selectedSquads consistent with remaining selected products
+    if (nextProducts.length > 0 && selectedSquads.length > 0) {
+      const allowedProds = new Set(nextProducts.map((p) => p.toLowerCase()))
+      const validSquads = selectedSquads.filter((sq) =>
+        getSquadProducts(sq).some((p) => allowedProds.has(p.toLowerCase()))
+      )
+      if (validSquads.length !== selectedSquads.length) {
+        onSquadsChange(validSquads)
+      }
     }
   }
 
@@ -409,10 +508,14 @@ export default function TaskFilterPopover({
   }
 
   const clearCurrentCategory = () => {
-    if (activeCategory === "phases") onPhasesChange([])
-    else if (activeCategory === "products" && onProductsChange) onProductsChange([])
-    else if (activeCategory === "squads") onSquadsChange([])
-    else if (activeCategory === "designers" && onDesignersChange) onDesignersChange([])
+    if (activeCategory === "phases") {
+      onPhasesChange([])
+    } else if (activeCategory === "squads") {
+      if (onProductsChange) onProductsChange([])
+      onSquadsChange([])
+    } else if (activeCategory === "designers" && onDesignersChange) {
+      onDesignersChange([])
+    }
   }
 
   const normalizedQuery = normalizeSearchText(searchQuery)
@@ -426,15 +529,13 @@ export default function TaskFilterPopover({
     )
   }, [kanbanColumns, normalizedQuery])
 
-  const filteredProducts = useMemo(() => {
-    if (!normalizedQuery) return availableProducts
-    return availableProducts.filter((prod) => normalizeSearchText(prod).includes(normalizedQuery))
-  }, [availableProducts, normalizedQuery])
-
   const filteredSquads = useMemo(() => {
-    if (!normalizedQuery) return availableSquads
-    return availableSquads.filter((squad) => normalizeSearchText(squad).includes(normalizedQuery))
-  }, [availableSquads, normalizedQuery])
+    if (!normalizedQuery) return squadsForSelectedProducts
+    return squadsForSelectedProducts.filter((squad) => {
+      if (normalizeSearchText(squad).includes(normalizedQuery)) return true
+      return getSquadProducts(squad).some((p) => normalizeSearchText(p).includes(normalizedQuery))
+    })
+  }, [squadsForSelectedProducts, normalizedQuery, getSquadProducts])
 
   const filteredDesigners = useMemo(() => {
     if (!normalizedQuery) return availableDesigners
@@ -489,341 +590,377 @@ export default function TaskFilterPopover({
                   top: popoverPos.top,
                   right: popoverPos.right,
                 }}
-                className="fixed w-[min(512px,calc(100vw-2rem))] max-h-[min(460px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-[9999]"
+                className="fixed w-[min(524px,calc(100vw-2rem))] max-h-[min(480px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-[9999]"
               >
-            {/* Fixed Header */}
-            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <div className="flex items-center gap-2 min-w-0">
-                <h4 className="font-bold text-sm text-slate-900">Bộ lọc</h4>
-                {activeFilterCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold">
-                    {activeFilterCount} đang chọn
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                {activeFilterCount > 0 && (
+                {/* Fixed Header */}
+                <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h4 className="font-bold text-sm text-slate-900">Bộ lọc</h4>
+                    {activeFilterCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold">
+                        {activeFilterCount} đang chọn
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={onClearAll}
+                        className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        Xóa lọc
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsOpen(false)}
+                      aria-label="Đóng bộ lọc"
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2-Column Body: Left Category Nav + Right Single-Scroll Options Pane */}
+                <div className="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
+                  {/* Left Sidebar (Desktop) / Top Tab Strip (Mobile) */}
+                  <div className="sm:w-[152px] shrink-0 bg-slate-50/80 border-b sm:border-b-0 sm:border-r border-slate-100 p-2 flex sm:flex-col gap-1 overflow-x-auto sm:overflow-x-visible">
+                    {categories.map((cat) => {
+                      const Icon = cat.icon
+                      const isActive = activeCategory === cat.key
+                      return (
+                        <button
+                          key={cat.key}
+                          type="button"
+                          onClick={() => handleSelectCategory(cat.key)}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs transition-all cursor-pointer select-none whitespace-nowrap shrink-0 sm:w-full ${
+                            isActive
+                              ? "bg-white text-slate-900 font-semibold shadow-2xs ring-1 ring-slate-200/80"
+                              : "text-slate-600 font-medium hover:text-slate-900 hover:bg-slate-100/80"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Icon
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                isActive ? "text-slate-900" : "text-slate-400"
+                              }`}
+                            />
+                            <span className="truncate">{cat.label}</span>
+                          </span>
+                          {cat.selectedCount > 0 ? (
+                            <span
+                              className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                                isActive
+                                  ? "bg-slate-900 text-white"
+                                  : "bg-slate-200/90 text-slate-700"
+                              }`}
+                            >
+                              {cat.selectedCount}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-mono text-slate-400 shrink-0 hidden sm:inline">
+                              {cat.totalCount}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Right Options Pane (Search + Optional Product Chips + Single Scroll Container) */}
+                  <div className="flex-1 min-w-0 flex flex-col min-h-0 h-[312px] sm:h-[340px]">
+                    {/* Search Input + Active Group Clear */}
+                    <div className="shrink-0 px-3 pt-2.5 pb-2 border-b border-slate-100 flex items-center gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={activeCategoryMeta.searchPlaceholder}
+                          className="w-full h-8 pl-8 pr-7 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 transition-colors"
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery("")}
+                            aria-label="Xóa từ khóa tìm kiếm"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {activeCategoryMeta.selectedCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={clearCurrentCategory}
+                          className="text-[11px] font-medium text-slate-500 hover:text-slate-900 whitespace-nowrap cursor-pointer shrink-0 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors"
+                        >
+                          Bỏ chọn ({activeCategoryMeta.selectedCount})
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Product Chips Bar inside Squad Tab */}
+                    {activeCategory === "squads" && hasProductsControl && availableProducts.length > 0 && (
+                      <div className="shrink-0 px-3 py-2 border-b border-slate-100 bg-slate-50/50 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Sản phẩm
+                          </span>
+                          {selectedProducts.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => onProductsChange && onProductsChange([])}
+                              className="text-[11px] font-medium text-slate-500 hover:text-slate-900 cursor-pointer"
+                            >
+                              Tất cả sản phẩm
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onProductsChange && onProductsChange([])}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer select-none ${
+                              selectedProducts.length === 0
+                                ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900"
+                            }`}
+                          >
+                            <span>Tất cả</span>
+                          </button>
+                          {availableProducts.map((prod) => {
+                            const isSelected = selectedProducts.includes(prod)
+                            const count = productCounts[prod] || 0
+                            const colorDef = getProductColorDef(prod)
+                            return (
+                              <button
+                                key={`chip-prod-${prod}`}
+                                type="button"
+                                onClick={() => toggleProduct(prod)}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer select-none ${
+                                  isSelected
+                                    ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                }`}
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor: isSelected
+                                      ? "#ffffff"
+                                      : (colorDef as any).dotColor || colorDef.hex,
+                                  }}
+                                />
+                                <span>{prod}</span>
+                                <span
+                                  className={`text-[10px] font-mono ${
+                                    isSelected ? "text-white/75" : "text-slate-400"
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Single Scrollable Options List */}
+                    <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-2 space-y-0.5">
+                      {activeCategory === "phases" && (
+                        filteredPhases.length > 0 ? (
+                          filteredPhases.map((col) => {
+                            const isChecked = selectedPhases.includes(col.phase)
+                            const count = phaseCounts[col.phase] || 0
+                            const statusCfg = getStatusConfig(col.phase)
+
+                            return (
+                              <label
+                                key={col.id}
+                                onClick={() => togglePhase(col.phase)}
+                                className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
+                                  isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                      isChecked
+                                        ? "bg-slate-900 border-slate-900 text-white"
+                                        : "border-slate-300 bg-white"
+                                    }`}
+                                  >
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs whitespace-nowrap ${statusCfg.inlineClasses.bg} ${statusCfg.inlineClasses.text} ${statusCfg.inlineClasses.border}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.inlineClasses.dot} shrink-0`} />
+                                    <span className="truncate">{col.title}</span>
+                                  </span>
+                                </div>
+                                <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
+                                  {count}
+                                </span>
+                              </label>
+                            )
+                          })
+                        ) : (
+                          <div className="py-10 text-center text-xs text-slate-400">
+                            Không tìm thấy trạng thái phù hợp
+                          </div>
+                        )
+                      )}
+
+                      {activeCategory === "squads" && (
+                        filteredSquads.length > 0 ? (
+                          filteredSquads.map((squad, sIdx) => {
+                            const isChecked = selectedSquads.includes(squad)
+                            const count = scopedSquadCounts[squad] || 0
+                            const prods = getSquadProducts(squad)
+                            const primaryProd = prods[0]
+                            const colorDef = primaryProd ? getProductColorDef(primaryProd) : null
+
+                            return (
+                              <label
+                                key={`sq-opt-${squad || sIdx}-${sIdx}`}
+                                onClick={() => toggleSquad(squad)}
+                                className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
+                                  isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                      isChecked
+                                        ? "bg-slate-900 border-slate-900 text-white"
+                                        : "border-slate-300 bg-white"
+                                    }`}
+                                  >
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  <span className="text-xs font-medium text-slate-800 truncate">
+                                    {squad}
+                                  </span>
+                                  {selectedProducts.length !== 1 && primaryProd && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100/90 text-[10px] font-medium text-slate-500 shrink-0">
+                                      <span
+                                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                                        style={{
+                                          backgroundColor:
+                                            (colorDef as any)?.dotColor || colorDef?.hex || "#94a3b8",
+                                        }}
+                                      />
+                                      <span>{primaryProd}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
+                                  {count}
+                                </span>
+                              </label>
+                            )
+                          })
+                        ) : (
+                          <div className="py-10 text-center text-xs text-slate-400">
+                            Không tìm thấy squad phù hợp
+                          </div>
+                        )
+                      )}
+
+                      {activeCategory === "designers" && hasDesignersTab && (
+                        filteredDesigners.length > 0 ? (
+                          filteredDesigners.map((designer, dIdx) => {
+                            const isChecked = selectedDesigners.includes(designer)
+                            const count = designerCounts[designer] || 0
+                            const isUnassigned = designer === UNASSIGNED_DESIGNER_LABEL
+                            const avatarUrl = isUnassigned ? undefined : getDesignerAvatar(designer)
+
+                            return (
+                              <label
+                                key={`des-opt-${designer}-${dIdx}`}
+                                onClick={() => toggleDesigner(designer)}
+                                className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
+                                  isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                      isChecked
+                                        ? "bg-slate-900 border-slate-900 text-white"
+                                        : "border-slate-300 bg-white"
+                                    }`}
+                                  >
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  {isUnassigned ? (
+                                    <span className="w-5 h-5 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
+                                      <UserX className="w-3 h-3" />
+                                    </span>
+                                  ) : (
+                                    <UserAvatar
+                                      name={designer}
+                                      avatarUrl={avatarUrl}
+                                      size="xs"
+                                      className="w-5 h-5 shrink-0"
+                                      showBorder={false}
+                                    />
+                                  )}
+                                  <span
+                                    className={`text-xs truncate ${
+                                      isUnassigned ? "text-slate-500 italic font-normal" : "font-medium text-slate-800"
+                                    }`}
+                                  >
+                                    {designer}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
+                                  {count}
+                                </span>
+                              </label>
+                            )
+                          })
+                        ) : (
+                          <div className="py-10 text-center text-xs text-slate-400">
+                            Không tìm thấy designer phù hợp
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fixed Sticky Footer: Reset & Apply CTAs Always Visible */}
+                <div className="shrink-0 px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={onClearAll}
-                    className="px-2 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                    disabled={activeFilterCount === 0}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
                   >
-                    Xóa lọc
+                    Đặt lại
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  aria-label="Đóng bộ lọc"
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* 2-Column Body: Left Category Nav + Right Single-Scroll Options Pane */}
-            <div className="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
-              {/* Left Sidebar (Desktop) / Top Tab Strip (Mobile) */}
-              <div className="sm:w-[164px] shrink-0 bg-slate-50/80 border-b sm:border-b-0 sm:border-r border-slate-100 p-2 flex sm:flex-col gap-1 overflow-x-auto sm:overflow-x-visible">
-                {categories.map((cat) => {
-                  const Icon = cat.icon
-                  const isActive = activeCategory === cat.key
-                  return (
-                    <button
-                      key={cat.key}
-                      type="button"
-                      onClick={() => handleSelectCategory(cat.key)}
-                      className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs transition-all cursor-pointer select-none whitespace-nowrap shrink-0 sm:w-full ${
-                        isActive
-                          ? "bg-white text-slate-900 font-semibold shadow-2xs ring-1 ring-slate-200/80"
-                          : "text-slate-600 font-medium hover:text-slate-900 hover:bg-slate-100/80"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2 min-w-0">
-                        <Icon
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive ? "text-slate-900" : "text-slate-400"
-                          }`}
-                        />
-                        <span className="truncate">{cat.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Áp dụng</span>
+                    {activeFilterCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-mono leading-none">
+                        {activeFilterCount}
                       </span>
-                      {cat.selectedCount > 0 ? (
-                        <span
-                          className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                            isActive
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-200/90 text-slate-700"
-                          }`}
-                        >
-                          {cat.selectedCount}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-mono text-slate-400 shrink-0 hidden sm:inline">
-                          {cat.totalCount}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Right Options Pane (Search + Single Scroll Container) */}
-              <div className="flex-1 min-w-0 flex flex-col min-h-0 h-[296px] sm:h-[316px]">
-                {/* Search Input + Active Group Clear */}
-                <div className="shrink-0 px-3 pt-2.5 pb-2 border-b border-slate-100 flex items-center gap-2">
-                  <div className="relative flex-1 min-w-0">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={activeCategoryMeta.searchPlaceholder}
-                      className="w-full h-8 pl-8 pr-7 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 transition-colors"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        aria-label="Xóa từ khóa tìm kiếm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
                     )}
-                  </div>
-                  {activeCategoryMeta.selectedCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={clearCurrentCategory}
-                      className="text-[11px] font-medium text-slate-500 hover:text-slate-900 whitespace-nowrap cursor-pointer shrink-0 px-1.5 py-1 rounded-md hover:bg-slate-100 transition-colors"
-                    >
-                      Bỏ chọn ({activeCategoryMeta.selectedCount})
-                    </button>
-                  )}
+                  </button>
                 </div>
-
-                {/* Single Scrollable Options List */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-2 space-y-0.5">
-                  {activeCategory === "phases" && (
-                    filteredPhases.length > 0 ? (
-                      filteredPhases.map((col) => {
-                        const isChecked = selectedPhases.includes(col.phase)
-                        const count = phaseCounts[col.phase] || 0
-                        const statusCfg = getStatusConfig(col.phase)
-
-                        return (
-                          <label
-                            key={col.id}
-                            onClick={() => togglePhase(col.phase)}
-                            className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
-                              isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                                  isChecked
-                                    ? "bg-slate-900 border-slate-900 text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs whitespace-nowrap ${statusCfg.inlineClasses.bg} ${statusCfg.inlineClasses.text} ${statusCfg.inlineClasses.border}`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.inlineClasses.dot} shrink-0`} />
-                                <span className="truncate">{col.title}</span>
-                              </span>
-                            </div>
-                            <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
-                              {count}
-                            </span>
-                          </label>
-                        )
-                      })
-                    ) : (
-                      <div className="py-10 text-center text-xs text-slate-400">
-                        Không tìm thấy trạng thái phù hợp
-                      </div>
-                    )
-                  )}
-
-                  {activeCategory === "products" && hasProductsTab && (
-                    filteredProducts.length > 0 ? (
-                      filteredProducts.map((prod, pIdx) => {
-                        const isChecked = selectedProducts.includes(prod)
-                        const count = productCounts[prod] || 0
-                        const colorDef = getProductColorDef(prod)
-
-                        return (
-                          <label
-                            key={`prod-opt-${prod}-${pIdx}`}
-                            onClick={() => toggleProduct(prod)}
-                            className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
-                              isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                                  isChecked
-                                    ? "bg-slate-900 border-slate-900 text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: (colorDef as any).dotColor || colorDef.hex }}
-                              />
-                              <span className="text-xs font-medium text-slate-800 truncate">
-                                {prod}
-                              </span>
-                            </div>
-                            <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
-                              {count}
-                            </span>
-                          </label>
-                        )
-                      })
-                    ) : (
-                      <div className="py-10 text-center text-xs text-slate-400">
-                        Không tìm thấy sản phẩm phù hợp
-                      </div>
-                    )
-                  )}
-
-                  {activeCategory === "squads" && (
-                    filteredSquads.length > 0 ? (
-                      filteredSquads.map((squad, sIdx) => {
-                        const isChecked = selectedSquads.includes(squad)
-                        const count = squadCounts[squad] || 0
-
-                        return (
-                          <label
-                            key={`sq-opt-${squad || sIdx}-${sIdx}`}
-                            onClick={() => toggleSquad(squad)}
-                            className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
-                              isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                                  isChecked
-                                    ? "bg-slate-900 border-slate-900 text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                              <span className="text-xs font-medium text-slate-800 truncate">
-                                {squad}
-                              </span>
-                            </div>
-                            <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
-                              {count}
-                            </span>
-                          </label>
-                        )
-                      })
-                    ) : (
-                      <div className="py-10 text-center text-xs text-slate-400">
-                        Không tìm thấy squad phù hợp
-                      </div>
-                    )
-                  )}
-
-                  {activeCategory === "designers" && hasDesignersTab && (
-                    filteredDesigners.length > 0 ? (
-                      filteredDesigners.map((designer, dIdx) => {
-                        const isChecked = selectedDesigners.includes(designer)
-                        const count = designerCounts[designer] || 0
-                        const isUnassigned = designer === UNASSIGNED_DESIGNER_LABEL
-                        const avatarUrl = isUnassigned ? undefined : getDesignerAvatar(designer)
-
-                        return (
-                          <label
-                            key={`des-opt-${designer}-${dIdx}`}
-                            onClick={() => toggleDesigner(designer)}
-                            className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
-                              isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                                  isChecked
-                                    ? "bg-slate-900 border-slate-900 text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                              {isUnassigned ? (
-                                <span className="w-5 h-5 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
-                                  <UserX className="w-3 h-3" />
-                                </span>
-                              ) : (
-                                <UserAvatar
-                                  name={designer}
-                                  avatarUrl={avatarUrl}
-                                  size="xs"
-                                  className="w-5 h-5 shrink-0"
-                                  showBorder={false}
-                                />
-                              )}
-                              <span
-                                className={`text-xs truncate ${
-                                  isUnassigned ? "text-slate-500 italic font-normal" : "font-medium text-slate-800"
-                                }`}
-                              >
-                                {designer}
-                              </span>
-                            </div>
-                            <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
-                              {count}
-                            </span>
-                          </label>
-                        )
-                      })
-                    ) : (
-                      <div className="py-10 text-center text-xs text-slate-400">
-                        Không tìm thấy designer phù hợp
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Fixed Sticky Footer: Reset & Apply CTAs Always Visible */}
-            <div className="shrink-0 px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={onClearAll}
-                disabled={activeFilterCount === 0}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
-              >
-                Đặt lại
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <span>Áp dụng</span>
-                {activeFilterCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-mono leading-none">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            </div>
               </motion.div>
             )}
           </AnimatePresence>,
