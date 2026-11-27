@@ -1135,6 +1135,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 requests={filteredRequests}
                 onSelectRequest={setSelectedRequest}
                 borderless
+                hideFilter
               />
             </motion.div>
           ) : (
