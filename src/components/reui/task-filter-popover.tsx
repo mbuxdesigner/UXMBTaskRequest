@@ -1,16 +1,30 @@
 import React, { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Filter, Check, X, Search, CircleDot, Layers, Users } from "lucide-react"
+import { Filter, Check, X, Search, CircleDot, Layers, Users, UserCheck, UserX } from "lucide-react"
 import { getKanbanColumns, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
+import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { UXRequest } from "@/data/mockData"
 import { getProductColorDef } from "@/lib/colorUtils"
 import { getStatusConfig } from "@/config/statusConfig"
 import { springs, originPopoverVariants, useAnchorOrigin } from "@/lib/motion"
 
+export const UNASSIGNED_DESIGNER_LABEL = "Chưa phân công"
+
+export function extractTaskDesigners(req: Pick<UXRequest, "assigned_designer" | "ux_owner">): string[] {
+  const raw = String(req.assigned_designer || "").trim() || String(req.ux_owner || "").trim()
+  if (!raw) return [UNASSIGNED_DESIGNER_LABEL]
+  const names = raw
+    .split(/[,;]+/)
+    .map((n) => n.trim())
+    .filter((n) => n && !/^chưa phân công$/i.test(n) && !/^đang phân công$/i.test(n))
+  return names.length > 0 ? names : [UNASSIGNED_DESIGNER_LABEL]
+}
+
 export interface FilterState {
   phases: string[]
   products: string[]
   squads: string[]
+  designers: string[]
 }
 
 export interface TaskFilterPopoverProps {
@@ -18,13 +32,17 @@ export interface TaskFilterPopoverProps {
   selectedPhases: string[]
   selectedProducts?: string[]
   selectedSquads: string[]
+  selectedDesigners?: string[]
   onPhasesChange: (phases: string[]) => void
   onProductsChange?: (products: string[]) => void
   onSquadsChange: (squads: string[]) => void
+  onDesignersChange?: (designers: string[]) => void
   onClearAll: () => void
 }
 
-type FilterCategoryKey = "phases" | "products" | "squads"
+type FilterCategoryKey = "phases" | "products" | "squads" | "designers"
+
+const FALLBACK_PRODUCTS = ["APP MB", "Digi invest", "MBseller", "CRM", "BaaS", "Backoffice"]
 
 function normalizeSearchText(value: string): string {
   return value
@@ -40,9 +58,11 @@ export default function TaskFilterPopover({
   selectedPhases,
   selectedProducts = [],
   selectedSquads,
+  selectedDesigners = [],
   onPhasesChange,
   onProductsChange,
   onSquadsChange,
+  onDesignersChange,
   onClearAll,
 }: TaskFilterPopoverProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -85,16 +105,14 @@ export default function TaskFilterPopover({
     }
   }, [isOpen])
 
-  // Clear search when switching filter category
   const handleSelectCategory = (key: FilterCategoryKey) => {
     setActiveCategory(key)
     setSearchQuery("")
   }
 
-  // Dynamic columns based on latest admin UX phases
+  // 1. Dynamic columns based on latest admin UX phases
   const kanbanColumns = useMemo(() => getKanbanColumns(), [requests])
 
-  // Count items per phase
   const phaseCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     kanbanColumns.forEach((col) => {
@@ -103,7 +121,7 @@ export default function TaskFilterPopover({
     return counts
   }, [requests, kanbanColumns])
 
-  // Unique Products & count
+  // 2. Unique Products & count (always keep configured products even when requests = 0)
   const productCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
@@ -118,30 +136,48 @@ export default function TaskFilterPopover({
   }, [requests])
 
   const availableProducts = useMemo(() => {
-    const keys = Object.keys(productCounts)
+    const keyMap = new Map<string, string>()
+    const orderMap = new Map<string, number>()
+
     try {
       const raw = localStorage.getItem("mbbank_admin_products")
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const orderMap = new Map<string, number>()
+        if (Array.isArray(parsed)) {
           parsed.forEach((p: any, idx: number) => {
-            const name = (p?.name || "").trim().toLowerCase()
-            if (name) orderMap.set(name, idx)
-          })
-          return [...keys].sort((a, b) => {
-            const idxA = orderMap.has(a.trim().toLowerCase()) ? orderMap.get(a.trim().toLowerCase())! : 9999
-            const idxB = orderMap.has(b.trim().toLowerCase()) ? orderMap.get(b.trim().toLowerCase())! : 9999
-            if (idxA !== idxB) return idxA - idxB
-            return a.localeCompare(b)
+            const name = String(p?.name || "").trim()
+            if (name) {
+              const lower = name.toLowerCase()
+              orderMap.set(lower, idx)
+              if (!keyMap.has(lower)) keyMap.set(lower, name)
+            }
           })
         }
       }
     } catch {}
-    return keys
+
+    Object.keys(productCounts).forEach((prod) => {
+      const lower = prod.toLowerCase()
+      if (!keyMap.has(lower)) keyMap.set(lower, prod)
+    })
+
+    if (keyMap.size === 0) {
+      FALLBACK_PRODUCTS.forEach((prod, idx) => {
+        const lower = prod.toLowerCase()
+        keyMap.set(lower, prod)
+        orderMap.set(lower, idx)
+      })
+    }
+
+    return Array.from(keyMap.values()).sort((a, b) => {
+      const idxA = orderMap.has(a.toLowerCase()) ? orderMap.get(a.toLowerCase())! : 9999
+      const idxB = orderMap.has(b.toLowerCase()) ? orderMap.get(b.toLowerCase())! : 9999
+      if (idxA !== idxB) return idxA - idxB
+      return a.localeCompare(b, "vi")
+    })
   }, [productCounts])
 
-  // Unique Squads & count
+  // 3. Unique Squads & count (merge admin squads + request squads)
   const squadCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     requests.forEach((r) => {
@@ -154,43 +190,104 @@ export default function TaskFilterPopover({
   }, [requests])
 
   const availableSquads = useMemo(() => {
-    const keys = Object.keys(squadCounts)
+    const keyMap = new Map<string, string>()
+    const orderMap = new Map<string, number>()
+
     try {
       const raw = localStorage.getItem("mbbank_admin_squads")
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const orderMap = new Map<string, number>()
+        if (Array.isArray(parsed)) {
           parsed.forEach((s: any, idx: number) => {
-            const name = (s?.name || s?.squad_name || "").trim().toLowerCase()
-            if (name) orderMap.set(name, idx)
-          })
-          return [...keys].sort((a, b) => {
-            const idxA = orderMap.has(a.trim().toLowerCase()) ? orderMap.get(a.trim().toLowerCase())! : 9999
-            const idxB = orderMap.has(b.trim().toLowerCase()) ? orderMap.get(b.trim().toLowerCase())! : 9999
-            if (idxA !== idxB) return idxA - idxB
-            return a.localeCompare(b)
+            const name = String(s?.name || s?.squad_name || "").trim()
+            if (name) {
+              const lower = name.toLowerCase()
+              orderMap.set(lower, idx)
+              if (!keyMap.has(lower)) keyMap.set(lower, name)
+            }
           })
         }
       }
     } catch {}
-    return keys
+
+    Object.keys(squadCounts).forEach((sq) => {
+      const lower = sq.toLowerCase()
+      if (!keyMap.has(lower)) keyMap.set(lower, sq)
+    })
+
+    return Array.from(keyMap.values()).sort((a, b) => {
+      const idxA = orderMap.has(a.toLowerCase()) ? orderMap.get(a.toLowerCase())! : 9999
+      const idxB = orderMap.has(b.toLowerCase()) ? orderMap.get(b.toLowerCase())! : 9999
+      if (idxA !== idxB) return idxA - idxB
+      return a.localeCompare(b, "vi")
+    })
   }, [squadCounts])
 
-  const hasProductsTab = availableProducts.length > 0 && Boolean(onProductsChange)
+  // 4. Unique Designers & count (split multi-assignees + include unassigned + merge admin designers)
+  const designerCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    requests.forEach((r) => {
+      const assignees = extractTaskDesigners(r)
+      assignees.forEach((name) => {
+        counts[name] = (counts[name] || 0) + 1
+      })
+    })
+    return counts
+  }, [requests])
 
-  // Ensure activeCategory stays valid if products tab disappears
-  useEffect(() => {
-    if (activeCategory === "products" && !hasProductsTab) {
-      setActiveCategory("phases")
+  const availableDesigners = useMemo(() => {
+    const keyMap = new Map<string, string>()
+
+    Object.keys(designerCounts).forEach((name) => {
+      keyMap.set(name.toLowerCase(), name)
+    })
+
+    try {
+      const raw = localStorage.getItem("mbbank_admin_users")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          parsed.forEach((u: any) => {
+            const role = String(u?.role || "").toLowerCase()
+            const status = String(u?.status || "Active").toLowerCase()
+            if (status === "inactive") return
+            if (role.includes("designer") || role.includes("owner") || role.includes("admin")) {
+              const name = String(u?.displayName || u?.name || "").trim()
+              if (name && !keyMap.has(name.toLowerCase())) {
+                keyMap.set(name.toLowerCase(), name)
+              }
+            }
+          })
+        }
+      }
+    } catch {}
+
+    const list = Array.from(keyMap.values()).filter((n) => n !== UNASSIGNED_DESIGNER_LABEL)
+    list.sort((a, b) => {
+      const countDiff = (designerCounts[b] || 0) - (designerCounts[a] || 0)
+      if (countDiff !== 0) return countDiff
+      return a.localeCompare(b, "vi")
+    })
+
+    if (designerCounts[UNASSIGNED_DESIGNER_LABEL] > 0 || requests.length === 0) {
+      list.push(UNASSIGNED_DESIGNER_LABEL)
     }
-  }, [activeCategory, hasProductsTab])
+
+    return list
+  }, [designerCounts, requests.length])
+
+  const hasProductsTab = Boolean(onProductsChange)
+  const hasDesignersTab = Boolean(onDesignersChange)
+
+  useEffect(() => {
+    if (activeCategory === "products" && !hasProductsTab) setActiveCategory("phases")
+    if (activeCategory === "designers" && !hasDesignersTab) setActiveCategory("phases")
+  }, [activeCategory, hasProductsTab, hasDesignersTab])
 
   const categories = useMemo(() => {
     const list: Array<{
       key: FilterCategoryKey
       label: string
-      shortLabel: string
       icon: React.ComponentType<{ className?: string }>
       selectedCount: number
       totalCount: number
@@ -199,7 +296,6 @@ export default function TaskFilterPopover({
       {
         key: "phases",
         label: "Trạng thái",
-        shortLabel: "Trạng thái",
         icon: CircleDot,
         selectedCount: selectedPhases.length,
         totalCount: kanbanColumns.length,
@@ -211,7 +307,6 @@ export default function TaskFilterPopover({
       list.push({
         key: "products",
         label: "Sản phẩm",
-        shortLabel: "Sản phẩm",
         icon: Layers,
         selectedCount: selectedProducts.length,
         totalCount: availableProducts.length,
@@ -222,22 +317,35 @@ export default function TaskFilterPopover({
     list.push({
       key: "squads",
       label: "Squad",
-      shortLabel: "Squad",
       icon: Users,
       selectedCount: selectedSquads.length,
       totalCount: availableSquads.length,
       searchPlaceholder: "Tìm squad...",
     })
 
+    if (hasDesignersTab) {
+      list.push({
+        key: "designers",
+        label: "Designer",
+        icon: UserCheck,
+        selectedCount: selectedDesigners.length,
+        totalCount: availableDesigners.length,
+        searchPlaceholder: "Tìm designer...",
+      })
+    }
+
     return list
   }, [
     hasProductsTab,
+    hasDesignersTab,
     selectedPhases.length,
     selectedProducts.length,
     selectedSquads.length,
+    selectedDesigners.length,
     kanbanColumns.length,
     availableProducts.length,
     availableSquads.length,
+    availableDesigners.length,
   ])
 
   const activeCategoryMeta = categories.find((c) => c.key === activeCategory) || categories[0]
@@ -267,10 +375,20 @@ export default function TaskFilterPopover({
     }
   }
 
+  const toggleDesigner = (designer: string) => {
+    if (!onDesignersChange) return
+    if (selectedDesigners.includes(designer)) {
+      onDesignersChange(selectedDesigners.filter((d) => d !== designer))
+    } else {
+      onDesignersChange([...selectedDesigners, designer])
+    }
+  }
+
   const clearCurrentCategory = () => {
     if (activeCategory === "phases") onPhasesChange([])
     else if (activeCategory === "products" && onProductsChange) onProductsChange([])
     else if (activeCategory === "squads") onSquadsChange([])
+    else if (activeCategory === "designers" && onDesignersChange) onDesignersChange([])
   }
 
   const normalizedQuery = normalizeSearchText(searchQuery)
@@ -294,7 +412,16 @@ export default function TaskFilterPopover({
     return availableSquads.filter((squad) => normalizeSearchText(squad).includes(normalizedQuery))
   }, [availableSquads, normalizedQuery])
 
-  const activeFilterCount = selectedPhases.length + selectedProducts.length + selectedSquads.length
+  const filteredDesigners = useMemo(() => {
+    if (!normalizedQuery) return availableDesigners
+    return availableDesigners.filter((d) => normalizeSearchText(d).includes(normalizedQuery))
+  }, [availableDesigners, normalizedQuery])
+
+  const activeFilterCount =
+    selectedPhases.length +
+    selectedProducts.length +
+    selectedSquads.length +
+    selectedDesigners.length
 
   return (
     <div className="relative" ref={containerRef}>
@@ -332,7 +459,7 @@ export default function TaskFilterPopover({
             exit="exit"
             transition={springs.popover}
             style={{ transformOrigin }}
-            className="absolute right-0 top-full mt-2 w-[min(496px,calc(100vw-2rem))] max-h-[min(460px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-50"
+            className="absolute right-0 top-full mt-2 w-[min(512px,calc(100vw-2rem))] max-h-[min(460px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-50"
           >
             {/* Fixed Header */}
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -412,7 +539,7 @@ export default function TaskFilterPopover({
               </div>
 
               {/* Right Options Pane (Search + Single Scroll Container) */}
-              <div className="flex-1 min-w-0 flex flex-col min-h-0 h-[296px] sm:h-[312px]">
+              <div className="flex-1 min-w-0 flex flex-col min-h-0 h-[296px] sm:h-[316px]">
                 {/* Search Input + Active Group Clear */}
                 <div className="shrink-0 px-3 pt-2.5 pb-2 border-b border-slate-100 flex items-center gap-2">
                   <div className="relative flex-1 min-w-0">
@@ -577,6 +704,66 @@ export default function TaskFilterPopover({
                     ) : (
                       <div className="py-10 text-center text-xs text-slate-400">
                         Không tìm thấy squad phù hợp
+                      </div>
+                    )
+                  )}
+
+                  {activeCategory === "designers" && hasDesignersTab && (
+                    filteredDesigners.length > 0 ? (
+                      filteredDesigners.map((designer, dIdx) => {
+                        const isChecked = selectedDesigners.includes(designer)
+                        const count = designerCounts[designer] || 0
+                        const isUnassigned = designer === UNASSIGNED_DESIGNER_LABEL
+                        const avatarUrl = isUnassigned ? undefined : getDesignerAvatar(designer)
+
+                        return (
+                          <label
+                            key={`des-opt-${designer}-${dIdx}`}
+                            onClick={() => toggleDesigner(designer)}
+                            className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer select-none transition-colors ${
+                              isChecked ? "bg-slate-50/90" : "hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                  isChecked
+                                    ? "bg-slate-900 border-slate-900 text-white"
+                                    : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                              </div>
+                              {isUnassigned ? (
+                                <span className="w-5 h-5 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
+                                  <UserX className="w-3 h-3" />
+                                </span>
+                              ) : (
+                                <UserAvatar
+                                  name={designer}
+                                  avatarUrl={avatarUrl}
+                                  size="xs"
+                                  className="w-5 h-5 shrink-0"
+                                  showBorder={false}
+                                />
+                              )}
+                              <span
+                                className={`text-xs truncate ${
+                                  isUnassigned ? "text-slate-500 italic font-normal" : "font-medium text-slate-800"
+                                }`}
+                              >
+                                {designer}
+                              </span>
+                            </div>
+                            <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
+                              {count}
+                            </span>
+                          </label>
+                        )
+                      })
+                    ) : (
+                      <div className="py-10 text-center text-xs text-slate-400">
+                        Không tìm thấy designer phù hợp
                       </div>
                     )
                   )}

@@ -7,7 +7,7 @@ import { fetchRequests, updateTaskProgress } from "../api/api"
 import RequestDetail from "../components/track/RequestDetail"
 import RequestCard from "../components/track/RequestCard"
 import KanbanBoard, { getRequestKanbanPhase } from "../components/kanban/KanbanBoard"
-import TaskFilterPopover from "@/components/reui/task-filter-popover"
+import TaskFilterPopover, { extractTaskDesigners } from "@/components/reui/task-filter-popover"
 import SolutionAgentsTable, { getTaskGroup } from "@/components/track/SolutionAgentsTable"
 import { useRealtimeTasksSync } from "@/hooks/useRealtimeTasksSync"
 import { GridCardsSkeleton } from "@/components/common/ReuiSkeletons"
@@ -566,15 +566,17 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
   const [selectedPhases, setSelectedPhases] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
+  const [selectedDesigners, setSelectedDesigners] = useState<string[]>([])
 
   const hasActiveFilters = Boolean(
     query.trim() ||
     selectedPhases.length > 0 ||
     selectedProducts.length > 0 ||
-    selectedSquads.length > 0
+    selectedSquads.length > 0 ||
+    selectedDesigners.length > 0
   )
 
-  // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm và Từ khóa tìm kiếm
+  // Lọc dữ liệu theo Role, Trạng thái, Sản phẩm, Squad, Designer và Từ khóa tìm kiếm
   const filteredRequests = useMemo(() => {
     // 1. Lọc theo Phân quyền Vai trò người dùng (Admin: tất cả; PO & Business: do mình tạo; Designer: được gán; Design Owner: theo sản phẩm & squad)
     let list = filterRequestsByRole(allRequests, session)
@@ -599,7 +601,15 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
       list = list.filter((r) => selectedSquads.includes(r.squad_name || r.preferred_squad || "Khác"))
     }
 
-    // 5. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
+    // 5. Lọc theo Designer
+    if (selectedDesigners.length > 0) {
+      list = list.filter((r) => {
+        const assignees = extractTaskDesigners(r)
+        return assignees.some((name) => selectedDesigners.includes(name))
+      })
+    }
+
+    // 6. Tìm kiếm theo Tên task (title), Mã yêu cầu (request_id), Designer, Sản phẩm
     if (query.trim()) {
       const q = query.toLowerCase().trim()
       list = list.filter(
@@ -614,7 +624,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     }
 
     return list
-  }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, query])
+  }, [allRequests, session, selectedPhases, selectedProducts, selectedSquads, selectedDesigners, query])
 
   // Filter predicate for incoming new tasks to determine if skeleton placeholder should render (R3)
   const filterPredicate = useCallback(
@@ -636,6 +646,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
         return false
       }
 
+      if (selectedDesigners.length > 0) {
+        const assignees = extractTaskDesigners(req)
+        if (!assignees.some((name) => selectedDesigners.includes(name))) return false
+      }
+
       if (query.trim()) {
         const q = query.toLowerCase().trim()
         const match =
@@ -651,7 +666,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
 
       return true
     },
-    [session, selectedPhases, selectedProducts, selectedSquads, query]
+    [session, selectedPhases, selectedProducts, selectedSquads, selectedDesigners, query]
   )
 
   const handleClearAllFilters = () => {
@@ -659,6 +674,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
     setSelectedPhases([])
     setSelectedProducts([])
     setSelectedSquads([])
+    setSelectedDesigners([])
   }
 
   const getCount = (status: string) => {
@@ -984,9 +1000,11 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
               selectedPhases={selectedPhases}
               selectedProducts={selectedProducts}
               selectedSquads={selectedSquads}
+              selectedDesigners={selectedDesigners}
               onPhasesChange={setSelectedPhases}
               onProductsChange={setSelectedProducts}
               onSquadsChange={setSelectedSquads}
+              onDesignersChange={setSelectedDesigners}
               onClearAll={handleClearAllFilters}
             />
 
