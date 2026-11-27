@@ -882,6 +882,53 @@ export default function ReUIGanttChart({
       borderless ? "rounded-b-2xl border-0 shadow-none" : "rounded-2xl border border-slate-200/90 shadow-sm"
     } ${customClassName}`}>
       {/* =========================================================================
+          TOP UNDERLINE STATUS TABS (Overview Gantt - synchronized with My task)
+          ========================================================================= */}
+      {!hideFilter && (
+        <div
+          role="tablist"
+          aria-label="Phân nhóm trạng thái bài toán trên Gantt"
+          className="flex items-center gap-5 px-4 sm:px-5 border-b border-slate-200/80 bg-white overflow-x-auto select-none"
+        >
+          {statusTabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                type="button"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative py-3 text-[13px] flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  isActive
+                    ? "font-semibold text-slate-900"
+                    : "font-medium text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-medium transition-colors ${
+                    isActive
+                      ? "bg-slate-100 text-slate-900 font-semibold"
+                      : "bg-slate-100/80 text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="gantt-status-tab-underline"
+                    transition={springs.indicator}
+                    className="absolute left-0 right-0 bottom-0 h-[2px] bg-slate-900 rounded-full"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* =========================================================================
           TOP TOOLBAR (Exact ReUI Style: Today | Month ⌵ | < > | Title | Assignee Filter | Split Button)
           ========================================================================= */}
       <div className="h-14 px-4 sm:px-5 border-b border-slate-200/80 bg-white flex items-center justify-between gap-4">
