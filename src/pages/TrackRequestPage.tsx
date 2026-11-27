@@ -1018,7 +1018,7 @@ export default function TrackRequestPage({ onNavigateToCreate }: TrackRequestPag
                 if (onNavigateToCreate) onNavigateToCreate()
                 else window.location.hash = "#create"
               }}
-              className="cursor-pointer"
+              className="rounded-lg cursor-pointer"
             >
               <Plus className="size-3.5" />
               <span>Tạo task</span>
