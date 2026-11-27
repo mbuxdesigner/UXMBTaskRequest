@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react"
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Filter, Check, X, Search, CircleDot, Layers, Users, UserCheck, UserX } from "lucide-react"
 import { getKanbanColumns, getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
@@ -68,6 +69,7 @@ export default function TaskFilterPopover({
   const [isOpen, setIsOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<FilterCategoryKey>("phases")
   const [searchQuery, setSearchQuery] = useState("")
+  const [popoverPos, setPopoverPos] = useState<{ top: number; right: number }>({ top: 0, right: 16 })
 
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -81,10 +83,28 @@ export default function TaskFilterPopover({
     isOpen
   )
 
-  // Close when clicking outside or pressing Escape
+  const updatePopoverPosition = useCallback(() => {
+    if (!triggerRef.current || typeof window === "undefined") return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const viewportW = window.innerWidth
+    const viewportH = window.innerHeight
+    const right = Math.max(12, Math.min(viewportW - 12, viewportW - rect.right))
+    const top = Math.min(rect.bottom + 8, Math.max(12, viewportH - 180))
+    setPopoverPos({ top, right })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!isOpen) return
+    updatePopoverPosition()
+  }, [isOpen, updatePopoverPosition])
+
+  // Close when clicking outside (checking both trigger and portaled popover) or pressing Escape
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const inTrigger = containerRef.current?.contains(target)
+      const inPopover = popoverContentRef.current?.contains(target)
+      if (!inTrigger && !inPopover) {
         setIsOpen(false)
       }
     }
@@ -96,14 +116,18 @@ export default function TaskFilterPopover({
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside)
       document.addEventListener("keydown", handleKeyDown)
+      window.addEventListener("resize", updatePopoverPosition)
+      window.addEventListener("scroll", updatePopoverPosition, true)
     } else {
       setSearchQuery("")
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
       document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("resize", updatePopoverPosition)
+      window.removeEventListener("scroll", updatePopoverPosition, true)
     }
-  }, [isOpen])
+  }, [isOpen, updatePopoverPosition])
 
   const handleSelectCategory = (key: FilterCategoryKey) => {
     setActiveCategory(key)
@@ -448,19 +472,25 @@ export default function TaskFilterPopover({
         )}
       </motion.button>
 
-      {/* Master-Detail 2-Column Popover Card (No Nested Scrollbars + Sticky Header/Footer) */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            ref={popoverContentRef}
-            variants={originPopoverVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={springs.popover}
-            style={{ transformOrigin }}
-            className="absolute right-0 top-full mt-2 w-[min(512px,calc(100vw-2rem))] max-h-[min(460px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-50"
-          >
+      {/* Master-Detail 2-Column Popover Card portaled to document.body (immune to Gantt/Table sticky z-index) */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div
+                ref={popoverContentRef}
+                variants={originPopoverVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={springs.popover}
+                style={{
+                  transformOrigin,
+                  top: popoverPos.top,
+                  right: popoverPos.right,
+                }}
+                className="fixed w-[min(512px,calc(100vw-2rem))] max-h-[min(460px,calc(100vh-120px))] flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-[9999]"
+              >
             {/* Fixed Header */}
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div className="flex items-center gap-2 min-w-0">
@@ -794,9 +824,11 @@ export default function TaskFilterPopover({
                 )}
               </button>
             </div>
-          </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
     </div>
   )
 }
