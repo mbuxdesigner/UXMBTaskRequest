@@ -5,6 +5,8 @@ import { UserAvatar, getDesignerAvatar } from "@/components/common/UserAvatar"
 import { getStatusConfig, getRequestPendingClassification } from "@/config/statusConfig"
 import { getSquadColorDef } from "@/lib/colorUtils"
 import { getRequestKanbanPhase } from "@/components/kanban/KanbanBoard"
+import { getTaskGroup } from "@/components/track/SolutionAgentsTable"
+import { springs } from "@/lib/motion"
 import TaskFilterPopover, { extractTaskDesigners } from "./task-filter-popover"
 import { 
   ChevronLeft, 
@@ -203,6 +205,7 @@ export default function ReUIGanttChart({
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedSquads, setSelectedSquads] = useState<string[]>([])
   const [selectedDesigners, setSelectedDesigners] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<"all" | "doing" | "pending" | "completed" | "stop">("all")
 
   // Columns visibility toggle (Priority hidden by default as requested!)
   const [visibleColumns, setVisibleColumns] = useState({
@@ -297,6 +300,7 @@ export default function ReUIGanttChart({
     setSelectedProducts([])
     setSelectedSquads([])
     setSelectedDesigners([])
+    setActiveTab("all")
   }
 
   const toggleGroup = (groupName: string) => {
@@ -332,8 +336,8 @@ export default function ReUIGanttChart({
     window.addEventListener("pointerup", onPointerUp)
   }
 
-  // Filter requests (unified with TaskFilterPopover: Phase, Product, Squad, Designer)
-  const filteredRequests = useMemo(() => {
+  // Base filtered requests (Phase, Product, Squad, Designer — before Tab filter so tab badges stay accurate)
+  const baseFilteredRequests = useMemo(() => {
     return requests.filter((r) => {
       if (selectedPhases.length > 0 && !selectedPhases.includes(getRequestKanbanPhase(r))) {
         return false
@@ -355,6 +359,47 @@ export default function ReUIGanttChart({
       return true
     })
   }, [requests, selectedPhases, selectedProducts, selectedSquads, selectedDesigners])
+
+  const statusTabs = useMemo(() => {
+    const counts = {
+      overload: 0,
+      unassigned: 0,
+      running: 0,
+      pending: 0,
+      completed: 0,
+      frozen_rejected: 0,
+    }
+    baseFilteredRequests.forEach((r) => {
+      const g = getTaskGroup(r)
+      counts[g] = (counts[g] || 0) + 1
+    })
+    return [
+      { id: "all" as const, label: "All", count: baseFilteredRequests.length },
+      {
+        id: "doing" as const,
+        label: "Doing",
+        count: counts.overload + counts.unassigned + counts.running,
+      },
+      { id: "pending" as const, label: "Pending", count: counts.pending },
+      { id: "completed" as const, label: "Hoàn thành", count: counts.completed },
+      { id: "stop" as const, label: "Stop", count: counts.frozen_rejected },
+    ]
+  }, [baseFilteredRequests])
+
+  // Final filtered requests after applying active underline tab
+  const filteredRequests = useMemo(() => {
+    if (hideFilter || activeTab === "all") return baseFilteredRequests
+    return baseFilteredRequests.filter((r) => {
+      const group = getTaskGroup(r)
+      if (activeTab === "doing") {
+        return group === "overload" || group === "unassigned" || group === "running"
+      }
+      if (activeTab === "pending") return group === "pending"
+      if (activeTab === "completed") return group === "completed"
+      if (activeTab === "stop") return group === "frozen_rejected"
+      return true
+    })
+  }, [baseFilteredRequests, hideFilter, activeTab])
 
   // 2-level Grouping: Product -> Squad -> Tasks
   const productGroups = useMemo(() => {
