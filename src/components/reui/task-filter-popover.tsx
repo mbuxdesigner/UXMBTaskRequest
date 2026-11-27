@@ -79,6 +79,25 @@ const CANONICAL_SQUAD_PRODUCT_MAP: Record<string, string> = {
   "mini app/ web view": "BaaS",
 }
 
+const CANONICAL_DESIGNER_EMAIL_MAP: Record<string, string> = {
+  "cường": "cuongdm5@mbbank.com.vn",
+  "trường": "truongns@mbbank.com.vn",
+  "minh": "minhth1@mbbank.com.vn",
+  "hiệp": "hiepct2.os@mbbank.com.vn",
+  "đạt": "dattt5@mbbank.com.vn",
+  "triết": "trietnm1@mbbank.com.vn",
+  "mai anh": "anhptm7@mbbank.com.vn",
+  "sương": "suongntb.os@mbbank.com.vn",
+  "phong": "phongdt.os@mbbank.com.vn",
+  "hà": "haht.os@mbbank.com.vn",
+  "phương": "phuongltm2.os@mbbank.com.vn",
+  "mạnh": "manhpv.os@mbbank.com.vn",
+  "chính": "chinhdt.os@mbbank.com.vn",
+  "hồng": "hongnt6.os@mbbank.com.vn",
+  "trang": "trangbt9@mbbank.com.vn",
+  "lê thùy linh": "linhlt.ho@mbbank.com.vn",
+}
+
 function normalizeProductName(raw?: string): string {
   const prod = (raw && raw.trim()) || "Khác"
   const pLower = prod.toLowerCase().replace(/[\s\-_]+/g, "")
@@ -350,16 +369,54 @@ export default function TaskFilterPopover({
     return counts
   }, [requests, selectedProducts, squadCounts])
 
-  // 4. Unique Designers & count
-  const designerCounts = useMemo(() => {
+  // 4. Unique Designers, counts & email lookup
+  const { designerCounts, designerEmailMap } = useMemo(() => {
     const counts: Record<string, number> = {}
+    const emailMap: Record<string, string> = {}
+
+    const registerEmail = (name: string, email?: string) => {
+      const cleanName = name.trim().toLowerCase()
+      const cleanEmail = String(email || "").trim()
+      if (!cleanName || !cleanEmail) return
+      // Prefer corporate @mbbank.com.vn email when multiple exist
+      if (!emailMap[cleanName] || (cleanEmail.toLowerCase().endsWith("@mbbank.com.vn") && !emailMap[cleanName].toLowerCase().endsWith("@mbbank.com.vn"))) {
+        emailMap[cleanName] = cleanEmail
+      }
+    }
+
+    for (const storageKey of ["mbbank_admin_users", "mbbank_team_members"]) {
+      try {
+        const raw = localStorage.getItem(storageKey)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            parsed.forEach((u: any) => {
+              const name = String(u?.displayName || u?.name || "").trim()
+              if (name) {
+                registerEmail(name, u?.personalEmail || u?.email || u?.teamsEmail)
+              }
+            })
+          }
+        }
+      } catch {}
+    }
+
     requests.forEach((r) => {
       const assignees = extractTaskDesigners(r)
       assignees.forEach((name) => {
         counts[name] = (counts[name] || 0) + 1
       })
+      const reqEmail = String((r as any).assigned_designer_email || "").trim()
+      if (assignees.length === 1 && assignees[0] !== UNASSIGNED_DESIGNER_LABEL && reqEmail) {
+        registerEmail(assignees[0], reqEmail)
+      }
     })
-    return counts
+
+    Object.entries(CANONICAL_DESIGNER_EMAIL_MAP).forEach(([k, v]) => {
+      if (!emailMap[k]) emailMap[k] = v
+    })
+
+    return { designerCounts: counts, designerEmailMap: emailMap }
   }, [requests])
 
   const availableDesigners = useMemo(() => {
@@ -446,7 +503,7 @@ export default function TaskFilterPopover({
         icon: UserCheck,
         selectedCount: selectedDesigners.length,
         totalCount: availableDesigners.length,
-        searchPlaceholder: "Tìm designer...",
+        searchPlaceholder: "Tìm designer hoặc email...",
       })
     }
 
@@ -539,8 +596,12 @@ export default function TaskFilterPopover({
 
   const filteredDesigners = useMemo(() => {
     if (!normalizedQuery) return availableDesigners
-    return availableDesigners.filter((d) => normalizeSearchText(d).includes(normalizedQuery))
-  }, [availableDesigners, normalizedQuery])
+    return availableDesigners.filter((d) => {
+      if (normalizeSearchText(d).includes(normalizedQuery)) return true
+      const email = designerEmailMap[d.toLowerCase()] || ""
+      return email ? normalizeSearchText(email).includes(normalizedQuery) : false
+    })
+  }, [availableDesigners, normalizedQuery, designerEmailMap])
 
   const activeFilterCount =
     selectedPhases.length +
@@ -882,6 +943,7 @@ export default function TaskFilterPopover({
                             const count = designerCounts[designer] || 0
                             const isUnassigned = designer === UNASSIGNED_DESIGNER_LABEL
                             const avatarUrl = isUnassigned ? undefined : getDesignerAvatar(designer)
+                            const email = isUnassigned ? "" : designerEmailMap[designer.toLowerCase()] || ""
 
                             return (
                               <label
@@ -902,25 +964,32 @@ export default function TaskFilterPopover({
                                     {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                                   </div>
                                   {isUnassigned ? (
-                                    <span className="w-5 h-5 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
+                                    <span className="w-6 h-6 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 flex items-center justify-center shrink-0">
                                       <UserX className="w-3 h-3" />
                                     </span>
                                   ) : (
                                     <UserAvatar
                                       name={designer}
                                       avatarUrl={avatarUrl}
-                                      size="xs"
-                                      className="w-5 h-5 shrink-0"
+                                      size="sm"
+                                      className="w-6 h-6 shrink-0"
                                       showBorder={false}
                                     />
                                   )}
-                                  <span
-                                    className={`text-xs truncate ${
-                                      isUnassigned ? "text-slate-500 italic font-normal" : "font-medium text-slate-800"
-                                    }`}
-                                  >
-                                    {designer}
-                                  </span>
+                                  <div className="min-w-0 flex flex-col">
+                                    <span
+                                      className={`text-xs leading-tight truncate ${
+                                        isUnassigned ? "text-slate-500 italic font-normal" : "font-medium text-slate-800"
+                                      }`}
+                                    >
+                                      {designer}
+                                    </span>
+                                    {email && (
+                                      <span className="text-[11px] leading-tight text-slate-400 truncate mt-0.5">
+                                        {email}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <span className="text-xs font-mono text-slate-400 font-medium pl-2 shrink-0">
                                   {count}
